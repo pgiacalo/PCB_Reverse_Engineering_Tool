@@ -64,8 +64,17 @@
 
 .button-group {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.5rem;
+}
+
+.button-group button {
+  flex: 1;
+  min-width: 0;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .button-group.compact {
