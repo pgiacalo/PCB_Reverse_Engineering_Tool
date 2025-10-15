@@ -98,6 +98,7 @@ function App() {
     } else if (currentTool === 'erase') {
       setIsDrawing(true);
       setCurrentStroke([{ x, y }]);
+      console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
@@ -127,10 +128,14 @@ function App() {
               return distance <= brushSize; // Use full brush size for more forgiving erasing
             });
             
+            if (hasIntersection) {
+              console.log('Erasing stroke at position:', x, y, 'brushSize:', brushSize, 'selectedLayer:', selectedDrawingLayer);
+            }
+            
             return !hasIntersection;
           });
           
-          
+          console.log('Strokes before:', prev.length, 'after:', filtered.length);
           return filtered;
         });
       }
@@ -598,7 +603,7 @@ function App() {
               </button>
             </div>
 
-            <div className="radio-group compact">
+            <div className="radio-group horizontal">
               <label className="radio-label">
                 <input
                   type="radio"
@@ -729,7 +734,7 @@ function App() {
               </button>
             </div>
 
-            <div className="radio-group">
+            <div className="radio-group horizontal">
               <label className="radio-label">
                 <input
                   type="radio"
