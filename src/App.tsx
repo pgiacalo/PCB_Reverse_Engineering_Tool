@@ -48,6 +48,7 @@ function App() {
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
   const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate'>('nudge');
+  const [isGrayscale, setIsGrayscale] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
@@ -163,6 +164,11 @@ function App() {
         ctx.save();
         ctx.globalAlpha = 1;
         
+        // Apply grayscale filter if enabled
+        if (isGrayscale) {
+          ctx.filter = 'grayscale(100%)';
+        }
+        
         // Apply transformations
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -188,6 +194,11 @@ function App() {
         ctx.save();
         ctx.globalAlpha = currentView === 'overlay' ? (transparency / 100) : 1;
         
+        // Apply grayscale filter if enabled
+        if (isGrayscale) {
+          ctx.filter = 'grayscale(100%)';
+        }
+        
         // Apply transformations
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -210,7 +221,7 @@ function App() {
     if (currentView === 'overlay' && topImage) {
       drawStrokes(ctx);
     }
-  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize]);
+  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
@@ -604,6 +615,12 @@ function App() {
 
 
                 <div className="button-group">
+                  <button 
+                    onClick={() => setIsGrayscale(!isGrayscale)}
+                    className={`grayscale-button ${isGrayscale ? 'active' : ''}`}
+                  >
+                    {isGrayscale ? 'Color Mode' : 'Grayscale Mode'}
+                  </button>
                   <button 
                     onClick={resetImageTransform}
                     className="reset-button small"

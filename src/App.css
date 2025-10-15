@@ -150,6 +150,32 @@ button:disabled:hover {
   width: auto;
 }
 
+.grayscale-button {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  width: auto;
+  margin-bottom: 0.5rem;
+}
+
+.grayscale-button:hover {
+  background: linear-gradient(135deg, #5a6268 0%, #343a40 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.4);
+}
+
+.grayscale-button.active {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  transform: scale(1.05);
+  border: 2px solid #2e7d32;
+}
+
 .nudge-instructions {
   margin-top: 1rem;
   padding: 0.75rem;
