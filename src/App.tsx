@@ -39,7 +39,7 @@ function App() {
   const [transparency, setTransparency] = useState(50);
   const [currentTool, setCurrentTool] = useState<Tool>('draw');
   const [brushColor, setBrushColor] = useState('#ff0000');
-  const [brushSize, setBrushSize] = useState(3);
+  const [brushSize, setBrushSize] = useState(10);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [drawingStrokes, setDrawingStrokes] = useState<DrawingStroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -49,6 +49,8 @@ function App() {
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
   const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate'>('nudge');
   const [isGrayscale, setIsGrayscale] = useState(false);
+  const [selectedDrawingLayer, setSelectedDrawingLayer] = useState<'top' | 'bottom'>('top');
+  const [showBothLayers, setShowBothLayers] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
@@ -90,14 +92,17 @@ function App() {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    if (currentTool === 'draw' || currentTool === 'erase') {
+    if (currentTool === 'draw') {
+      setIsDrawing(true);
+      setCurrentStroke([{ x, y }]);
+    } else if (currentTool === 'erase') {
       setIsDrawing(true);
       setCurrentStroke([{ x, y }]);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     }
-  }, [currentTool, selectedImageForTransform]);
+  }, [currentTool, selectedImageForTransform, brushSize, selectedDrawingLayer, drawingStrokes.length]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -108,6 +113,27 @@ function App() {
 
     if (isDrawing && currentStroke.length > 0) {
       setCurrentStroke(prev => [...prev, { x, y }]);
+      
+      // For erasing, check if we're intersecting with any strokes and remove them
+      if (currentTool === 'erase') {
+        setDrawingStrokes(prev => {
+          const filtered = prev.filter(stroke => {
+            // Only check strokes on the selected drawing layer
+            if (stroke.layer !== selectedDrawingLayer) return true;
+            
+            // Check if any point in the stroke is within the eraser radius
+            const hasIntersection = stroke.points.some(point => {
+              const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
+              return distance <= brushSize; // Use full brush size for more forgiving erasing
+            });
+            
+            return !hasIntersection;
+          });
+          
+          
+          return filtered;
+        });
+      }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
       const deltaX = x - transformStartPos.x;
       const deltaY = y - transformStartPos.y;
@@ -128,24 +154,29 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage]);
 
   const handleCanvasMouseUp = useCallback(() => {
     if (isDrawing && currentStroke.length > 0) {
-      const newStroke: DrawingStroke = {
-        id: Date.now().toString(),
-        points: currentStroke,
-        color: currentTool === 'erase' ? '#ffffff' : brushColor,
-        size: brushSize,
-        layer: currentView === 'top' ? 'top' : 'bottom',
-      };
-      setDrawingStrokes(prev => [...prev, newStroke]);
+      if (currentTool === 'draw') {
+        // For drawing, store the stroke normally
+        const newStroke: DrawingStroke = {
+          id: Date.now().toString(),
+          points: currentStroke,
+          color: brushColor,
+          size: brushSize,
+          layer: selectedDrawingLayer,
+        };
+        setDrawingStrokes(prev => [...prev, newStroke]);
+      }
+      // For erasing, we don't store the stroke - it directly removes other strokes
       setCurrentStroke([]);
     }
     setIsDrawing(false);
     setIsTransforming(false);
     setTransformStartPos(null);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, currentView]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer]);
+
 
   const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
@@ -181,9 +212,8 @@ function App() {
         ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
         ctx.restore();
         
-        if (currentView === 'top') {
-          drawStrokes(ctx);
-        }
+        // Draw strokes after image is loaded
+        drawStrokes(ctx);
       };
       img.src = topImage.url;
     }
@@ -211,21 +241,28 @@ function App() {
         ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
         ctx.restore();
         
-        if (currentView === 'bottom') {
-          drawStrokes(ctx);
-        }
+        // Draw strokes after image is loaded
+        drawStrokes(ctx);
       };
       img.src = bottomImage.url;
     }
 
-    if (currentView === 'overlay' && topImage) {
+    // If no images are loaded, still draw strokes
+    if (!topImage && !bottomImage) {
       drawStrokes(ctx);
     }
-  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale]);
+  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, showBothLayers]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
-      if (stroke.layer === currentView || currentView === 'overlay') {
+      // Show strokes based on current view, layer assignment, and visibility settings
+      const shouldShowStroke = 
+        (currentView === 'overlay' && 
+         (showBothLayers || stroke.layer === selectedDrawingLayer)) ||
+        (currentView === 'top' && stroke.layer === 'top' && (showBothLayers || selectedDrawingLayer === 'top')) ||
+        (currentView === 'bottom' && stroke.layer === 'bottom' && (showBothLayers || selectedDrawingLayer === 'bottom'));
+        
+      if (shouldShowStroke) {
         ctx.strokeStyle = stroke.color;
         ctx.lineWidth = stroke.size;
         ctx.lineCap = 'round';
@@ -244,23 +281,51 @@ function App() {
       }
     });
 
-    // Draw current stroke
+    // Draw current stroke if it's on the appropriate layer and visible
     if (currentStroke.length > 0) {
-      ctx.strokeStyle = currentTool === 'erase' ? '#ffffff' : brushColor;
-      ctx.lineWidth = brushSize;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = 1;
+      const currentLayer = selectedDrawingLayer; // Use the selected drawing layer
+      const shouldShowCurrentStroke = 
+        (currentView === 'overlay' && 
+         (showBothLayers || currentLayer === selectedDrawingLayer)) ||
+        (currentView === 'top' && currentLayer === 'top' && (showBothLayers || selectedDrawingLayer === 'top')) ||
+        (currentView === 'bottom' && currentLayer === 'bottom' && (showBothLayers || selectedDrawingLayer === 'bottom'));
+        
+      if (shouldShowCurrentStroke) {
+        if (currentTool === 'draw') {
+          ctx.strokeStyle = brushColor;
+          ctx.lineWidth = brushSize;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.globalAlpha = 1;
 
-      ctx.beginPath();
-      currentStroke.forEach((point, index) => {
-        if (index === 0) {
-          ctx.moveTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
+          ctx.beginPath();
+          currentStroke.forEach((point, index) => {
+            if (index === 0) {
+              ctx.moveTo(point.x, point.y);
+            } else {
+              ctx.lineTo(point.x, point.y);
+            }
+          });
+          ctx.stroke();
+        } else if (currentTool === 'erase') {
+          // Show eraser path as a semi-transparent red line
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = brushSize;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.globalAlpha = 0.5;
+
+          ctx.beginPath();
+          currentStroke.forEach((point, index) => {
+            if (index === 0) {
+              ctx.moveTo(point.x, point.y);
+            } else {
+              ctx.lineTo(point.x, point.y);
+            }
+          });
+          ctx.stroke();
         }
-      });
-      ctx.stroke();
+      }
     }
   };
 
@@ -433,6 +498,11 @@ function App() {
   React.useEffect(() => {
     drawCanvas();
   }, [drawCanvas]);
+
+  // Force redraw when drawingStrokes change (for eraser)
+  React.useEffect(() => {
+    drawCanvas();
+  }, [drawingStrokes]);
 
   return (
     <div className="app">
@@ -646,12 +716,51 @@ function App() {
               </button>
               <button 
                 onClick={() => setCurrentTool(currentTool === 'erase' ? 'draw' : 'erase')}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDrawingStrokes(prev => prev.filter(stroke => stroke.layer !== selectedDrawingLayer));
+                }}
                 className={currentTool === 'erase' ? 'active' : ''}
-                title="Eraser tool"
+                title="Eraser tool (double-click to clear selected layer)"
               >
                 <Eraser size={14} />
                 Erase
               </button>
+            </div>
+
+            <div className="radio-group">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="drawingLayer"
+                  value="top"
+                  checked={selectedDrawingLayer === 'top'}
+                  onChange={() => setSelectedDrawingLayer('top')}
+                />
+                <span>Top Layer</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="drawingLayer"
+                  value="bottom"
+                  checked={selectedDrawingLayer === 'bottom'}
+                  onChange={() => setSelectedDrawingLayer('bottom')}
+                />
+                <span>Bottom Layer</span>
+              </label>
+            </div>
+
+            <div className="radio-group">
+              <label className="radio-label">
+                <input
+                  type="checkbox"
+                  checked={showBothLayers}
+                  onChange={(e) => setShowBothLayers(e.target.checked)}
+                />
+                <span>Show Both Layers</span>
+              </label>
             </div>
             
             <div className="slider-group">
