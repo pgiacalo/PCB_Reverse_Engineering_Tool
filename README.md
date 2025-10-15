@@ -17,7 +17,7 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
 
 1. **Clone or download the project**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool.git
    cd PCB_reverse_engineer
    ```
 
