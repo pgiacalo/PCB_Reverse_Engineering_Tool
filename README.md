@@ -1,10 +1,10 @@
 # PCB Reverse Engineering Tool
 
-A web-based photo editing tool designed to aid in the reverse engineering of 2-sided printed circuit boards (PCBs). This tool allows engineers and hobbyists to load top and bottom PCB photos, overlay them with precise alignment, and add annotations to facilitate the reverse engineering process.
+A browser-based photo editing tool designed to aid in the reverse engineering of 2-sided printed circuit boards (PCBs). This tool allows engineers and hobbyists to load top and bottom PCB photos, overlay them with precise alignment, and add annotations to facilitate the reverse engineering process.
 
 ## Project Description
 
-The PCB Reverse Engineering Tool solves the challenge of analyzing complex 2-sided PCBs by providing a digital workspace where both sides can be viewed simultaneously with variable transparency. The tool includes drawing capabilities, zoom controls, and layer management to help identify components, trace connections, and document findings during the reverse engineering process.
+This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs by providing a digital workspace where images of both sides can be viewed simultaneously with variable transparency. The tool includes image alignment tools, variable transparency levels, and drawing layers to help identify components, trace connections, and document findings during the reverse engineering process.
 
 ## Installation Instructions
 
