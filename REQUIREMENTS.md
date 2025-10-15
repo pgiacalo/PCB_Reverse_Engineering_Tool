@@ -3,6 +3,137 @@
 ## Project Overview
 A web-based photo editing tool designed to aid in the reverse engineering of 2-sided printed circuit boards (PCBs).
 
+## System Setup Requirements
+
+### Computer Setup for New Users
+
+#### Prerequisites
+Before installing and running the PCB Reverse Engineering Tool, ensure your computer meets the following requirements:
+
+**Operating System Support:**
+- Windows 10/11 (64-bit)
+- macOS 10.15 (Catalina) or later
+- Linux (Ubuntu 18.04+, CentOS 7+, or equivalent)
+
+**Hardware Requirements:**
+- **RAM**: Minimum 4GB, Recommended 8GB+
+- **Storage**: 500MB free space for installation
+- **CPU**: Modern multi-core processor (Intel i3/AMD Ryzen 3 or better)
+- **Display**: 1024x768 minimum resolution, 1920x1080 recommended
+
+#### Software Installation Steps
+
+**Step 1: Install Node.js**
+1. Visit [nodejs.org](https://nodejs.org/)
+2. Download the LTS (Long Term Support) version
+3. Run the installer and follow the setup wizard
+4. Verify installation by opening a terminal/command prompt and running:
+   ```bash
+   node --version
+   npm --version
+   ```
+   Both commands should return version numbers (Node.js 16+ and npm 8+)
+
+**Step 2: Install Git (Optional but Recommended)**
+1. Visit [git-scm.com](https://git-scm.com/)
+2. Download and install Git for your operating system
+3. Verify installation:
+   ```bash
+   git --version
+   ```
+
+**Step 3: Download the Project**
+**Option A: Using Git (Recommended)**
+```bash
+git clone <repository-url>
+cd PCB_reverse_engineer
+```
+
+**Option B: Direct Download**
+1. Download the project ZIP file
+2. Extract to your desired location
+3. Open terminal/command prompt in the project folder
+
+**Step 4: Install Dependencies**
+```bash
+npm install
+```
+This will install all required packages listed in package.json
+
+**Step 5: Start the Application**
+```bash
+npm run dev
+```
+The application will start and display a local URL (typically http://localhost:5173)
+
+**Step 6: Open in Browser**
+1. Copy the URL from the terminal output
+2. Open your web browser
+3. Navigate to the provided URL
+
+#### Browser Requirements
+The application requires a modern web browser with the following features:
+- **Chrome**: Version 90 or later
+- **Firefox**: Version 88 or later  
+- **Safari**: Version 14 or later
+- **Edge**: Version 90 or later
+
+**Required Browser Features:**
+- Canvas API support
+- File API for image uploads
+- ES6+ JavaScript support
+- CSS Grid and Flexbox support
+
+#### Troubleshooting Common Issues
+
+**Node.js Installation Issues:**
+- Ensure you have administrator/root privileges
+- Try using the official installer instead of package managers
+- Restart your computer after installation
+
+**npm install Failures:**
+- Clear npm cache: `npm cache clean --force`
+- Delete node_modules folder and package-lock.json, then run `npm install` again
+- Check your internet connection
+- Try using a different npm registry: `npm config set registry https://registry.npmjs.org/`
+
+**Port Already in Use:**
+- The application will automatically try a different port if 5173 is occupied
+- Check the terminal output for the actual URL to use
+
+**Browser Compatibility Issues:**
+- Update your browser to the latest version
+- Enable JavaScript in your browser settings
+- Disable browser extensions that might interfere
+
+#### Development vs Production Setup
+
+**Development Mode (Default):**
+- Hot reloading enabled
+- Source maps for debugging
+- Development server on localhost
+- Start with: `npm run dev`
+
+**Production Build:**
+- Optimized and minified code
+- Static files ready for deployment
+- Build with: `npm run build`
+- Preview with: `npm run preview`
+
+#### File Structure After Installation
+```
+PCB_reverse_engineer/
+├── node_modules/          # Dependencies (auto-generated)
+├── public/                # Static assets
+├── src/                   # Source code
+│   ├── App.tsx           # Main application
+│   ├── App.css           # Styles
+│   └── types/            # TypeScript definitions
+├── package.json          # Project configuration
+├── vite.config.ts        # Build configuration
+└── README.md             # Documentation
+```
+
 ## Core Functional Requirements
 
 ### 1. Image Management

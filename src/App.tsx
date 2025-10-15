@@ -395,17 +395,21 @@ function App() {
           } : null);
         }
       } else if (transformMode === 'scale') {
-        // Scaling: 1% changes
+        // Scaling: 1% for up/down, 0.1% for left/right
         let scaleDelta = 0;
 
         switch (e.key) {
-          case 'ArrowRight':
           case 'ArrowUp':
             scaleDelta = 0.01; // Increase by 1%
             break;
-          case 'ArrowLeft':
           case 'ArrowDown':
             scaleDelta = -0.01; // Decrease by 1%
+            break;
+          case 'ArrowRight':
+            scaleDelta = 0.001; // Increase by 0.1%
+            break;
+          case 'ArrowLeft':
+            scaleDelta = -0.001; // Decrease by 0.1%
             break;
           default:
             return;
@@ -423,17 +427,21 @@ function App() {
           } : null);
         }
       } else if (transformMode === 'rotate') {
-        // Rotation: 1 degree changes
+        // Rotation: 1 degree for up/down, 0.1 degree for left/right
         let rotationDelta = 0;
 
         switch (e.key) {
-          case 'ArrowRight':
           case 'ArrowUp':
             rotationDelta = 1; // Increase by 1 degree
             break;
-          case 'ArrowLeft':
           case 'ArrowDown':
             rotationDelta = -1; // Decrease by 1 degree
+            break;
+          case 'ArrowRight':
+            rotationDelta = 0.1; // Increase by 0.1 degree
+            break;
+          case 'ArrowLeft':
+            rotationDelta = -0.1; // Decrease by 0.1 degree
             break;
           default:
             return;

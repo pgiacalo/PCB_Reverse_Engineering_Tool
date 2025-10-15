@@ -41,60 +41,112 @@ npm run build
 npm run preview
 ```
 
-## Usage Examples
+## Usage Instructions
 
-### Basic Workflow
+### Getting Started
 
 1. **Load PCB Images**
-   ```typescript
-   // Click "Load Top PCB" and "Load Bottom PCB" buttons
-   // Select your PCB photos from your device
-   ```
+   - Click "Load Top PCB" button and select your top-side PCB photo
+   - Click "Load Bottom PCB" button and select your bottom-side PCB photo
+   - Images will appear in the canvas area
 
-2. **Align and Scale Images**
-   ```typescript
-   // Use the alignment tools to match the physical PCB dimensions
-   // Adjust scale to match actual PCB size
-   ```
+2. **Switch Between Views**
+   - **Top View**: Shows only the top PCB image
+   - **Bottom View**: Shows only the bottom PCB image  
+   - **Overlay View**: Shows both images overlaid with transparency control
 
-3. **Switch Between Views**
-   ```typescript
-   // Toggle between "Top View" and "Bottom View" buttons
-   // Use transparency slider to see through layers
-   ```
+3. **Adjust Transparency**
+   - Use the "Transparency" slider to control bottom image visibility
+   - 0% = bottom image completely hidden
+   - 100% = bottom image fully visible
+   - **Double-click the slider** to reset to 50%
 
-4. **Add Annotations**
-   ```typescript
-   // Select drawing tool and choose color
-   // Draw directly on the PCB images
-   // Use eraser to remove annotations
-   ```
+### Image Transform Controls
 
-### Advanced Features
+#### Transform Mode Selection
+1. Click the "Transform" button to enter transform mode
+2. Select which image to transform:
+   - **Top Image**: Transform the top PCB image
+   - **Bottom Image**: Transform the bottom PCB image
 
-**Transparency Control**
-- Adjust bottom layer transparency (0-100%)
-- See component connections through layers
-- Maintain drawing visibility
+#### Transform Operations
 
-**Drawing Tools**
-- Multiple colors with color picker
-- Adjustable brush sizes
-- Draw on both top and bottom layers
-- Eraser with configurable size
+**Move (Drag)**
+- Click and drag on the selected image to reposition it
+- Use for rough alignment
 
-**Image Transform Controls**
-- **Move**: Click and drag to reposition images
-- **Scale**: Resize images from 0.1x to 3x
-- **Rotate**: Rotate images from -180° to +180°
-- **Flip X/Y**: Flip images horizontally or vertically to correct orientation
-- **Nudge**: Use arrow keys for pixel-perfect positioning
+**Nudge (Arrow Keys)**
+- Select "Nudge" radio button
+- Use arrow keys for pixel-perfect positioning:
+  - ↑↓←→ = 1 pixel movement in each direction
 
-**Keyboard Controls**
-- **Arrow Keys on Sliders**: Use ← → arrows to adjust slider values precisely
-- **Arrow Keys in Transform Mode**: Use ↑↓←→ to nudge selected image pixel by pixel
-- **Double-Click Reset**: Double-click any slider to reset to default value
-- **Slider Focus**: Click on a slider first, then use arrow keys for fine control
+**Scale (Arrow Keys)**
+- Select "Scale" radio button  
+- Use arrow keys for precise scaling:
+  - ↑ = +1% scaling
+  - ↓ = -1% scaling
+  - → = +0.1% scaling (fine adjustment)
+  - ← = -0.1% scaling (fine adjustment)
+
+**Rotate (Arrow Keys)**
+- Select "Rotate" radio button
+- Use arrow keys for precise rotation:
+  - ↑ = +1 degree rotation
+  - ↓ = -1 degree rotation
+  - → = +0.1 degree rotation (fine adjustment)
+  - ← = -0.1 degree rotation (fine adjustment)
+
+**Flip Controls**
+- **Horizontal Flip**: Flip image left-to-right
+- **Vertical Flip**: Flip image top-to-bottom
+- Use these to correct image orientation
+
+**Reset Transform**
+- Click "Reset Transform" to restore both images to original position, scale, and rotation
+
+### Drawing Tools
+
+#### Drawing Setup
+1. Select drawing layer:
+   - **Top Layer**: Draw on the top PCB image
+   - **Bottom Layer**: Draw on the bottom PCB image
+2. Choose "Show Both Layers" to see drawings on both layers simultaneously
+
+#### Drawing Operations
+- **Draw Tool**: Click and drag to draw lines
+- **Eraser Tool**: Click and drag to erase drawn lines
+- **Double-click Erase button**: Clear all drawings on the selected layer
+
+#### Color and Brush Controls
+- **Color Picker**: Click to open color selection dialog
+- **Brush Size**: Adjust with the brush size slider
+  - **Double-click the slider** to reset to default size
+
+### Grayscale Mode
+- Click "Color Mode" / "Grayscale Mode" button to toggle between color and grayscale views
+- Useful for analyzing PCB traces and components
+
+### Double-Click Functionality
+
+**Sliders**
+- **Transparency Slider**: Double-click to reset to 50%
+- **Brush Size Slider**: Double-click to reset to default size
+
+**Buttons**
+- **Erase Button**: Double-click to clear all drawings on the selected layer
+
+### Keyboard Shortcuts
+
+**Arrow Key Controls**
+- **On Sliders**: Click slider first, then use ← → arrows for precise adjustment
+- **In Transform Mode**: Use ↑↓←→ arrows based on selected transform operation
+- **Nudge**: 1 pixel movement
+- **Scale**: 1% (up/down) or 0.1% (left/right) changes
+- **Rotate**: 1° (up/down) or 0.1° (left/right) changes
+
+**Reset Functions**
+- **Double-click any slider**: Reset to default value
+- **Double-click Erase button**: Clear selected drawing layer
 
 ## API Documentation
 
