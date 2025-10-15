@@ -787,7 +787,7 @@ function App() {
                 className="color-button"
                 style={{ backgroundColor: brushColor }}
               >
-                Color
+                Color Picker
         </button>
               {showColorPicker && (
                 <div className="color-picker-popup">
