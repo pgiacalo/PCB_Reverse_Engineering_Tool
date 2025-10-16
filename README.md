@@ -36,7 +36,7 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
 
 ## Live Demo
 
-🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_reverse_engineer](https://pgiacalo.github.io/PCB_reverse_engineer)
+🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool](https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool)
 
 The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser!
 
@@ -67,7 +67,7 @@ git push origin main
 #### Step 3: Automatic Deployment
 - GitHub Actions will automatically build and deploy your app
 - Check the **Actions** tab in your repository to monitor deployment
-- Your app will be available at: `https://[your-username].github.io/PCB_reverse_engineer`
+- Your app will be available at: `https://[your-username].github.io/PCB_Reverse_Engineering_Tool`
 
 ### Manual Deployment
 

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://pgiacalo.github.io/PCB_reverse_engineer",
+  "homepage": "https://pgiacalo.github.io/PCB_Reverse_Engineering_Web_App",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
