@@ -5,4 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/PCB_Reverse_Engineering_Tool/',
+  server: {
+    port: 5173,
+    strictPort: false, // If port is in use, try next available port
+  },
 })
