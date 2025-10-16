@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Upload, Eye, EyeOff, ZoomIn, ZoomOut, Palette, Eraser, Download, Move, RotateCw, Scale, Target } from 'lucide-react';
+import { Palette, Eraser, Move } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import './App.css';
 
@@ -462,7 +462,7 @@ function App() {
     } else {
       // Handle slider controls with arrow keys
       const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' && target.type === 'range') {
+      if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'range') {
         const slider = target as HTMLInputElement;
         const currentValue = Number(slider.value);
         const min = Number(slider.min);
