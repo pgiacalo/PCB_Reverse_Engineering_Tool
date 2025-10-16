@@ -46,10 +46,12 @@ echo "🔗 Inspecting git remote to compute dynamic public URL..."
 ORIGIN_URL="$(git remote get-url origin 2>/dev/null || echo)"
 if [[ "$ORIGIN_URL" == http* ]]; then
   ORIGIN_OWNER="$(echo "$ORIGIN_URL" | sed -E 's#https?://github.com/([^/]+)/.*#\1#')"
-  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#https?://github.com/[^/]+/([^/]+)(\.git)?#\1#')"
+  # take last path segment and strip .git
+  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#^.*/##' | sed -E 's/\.git$//')"
 elif [[ "$ORIGIN_URL" == git@github.com:* ]]; then
   ORIGIN_OWNER="$(echo "$ORIGIN_URL" | sed -E 's#git@github.com:([^/]+)/.*#\1#')"
-  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#git@github.com:[^/]+/([^/]+)(\.git)?#\1#')"
+  # remove prefix and strip .git
+  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#^git@github.com:[^/]+/##' | sed -E 's/\.git$//')"
 fi
 
 BASE_PATH="/${ORIGIN_REPO}/"
