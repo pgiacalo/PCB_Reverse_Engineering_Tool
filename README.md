@@ -34,6 +34,70 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
 4. **Open your browser**
    Navigate to `http://localhost:5173` (or the URL shown in your terminal)
 
+## Live Demo
+
+🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_reverse_engineer](https://pgiacalo.github.io/PCB_reverse_engineer)
+
+The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser!
+
+## Publishing to GitHub Pages
+
+### Automatic Deployment (Recommended)
+
+The project is configured for automatic deployment to GitHub Pages using GitHub Actions. Here's how to set it up:
+
+#### Step 1: Enable GitHub Pages
+1. Go to your repository on GitHub
+2. Click on **Settings** tab
+3. Scroll down to **Pages** section
+4. Under **Source**, select **GitHub Actions**
+
+#### Step 2: Push Your Code
+```bash
+# Add all files to git
+git add .
+
+# Commit your changes
+git commit -m "Initial commit with GitHub Pages setup"
+
+# Push to GitHub
+git push origin main
+```
+
+#### Step 3: Automatic Deployment
+- GitHub Actions will automatically build and deploy your app
+- Check the **Actions** tab in your repository to monitor deployment
+- Your app will be available at: `https://[your-username].github.io/PCB_reverse_engineer`
+
+### Manual Deployment
+
+If you prefer manual deployment:
+
+1. **Build the application**
+   ```bash
+   npm run build
+   ```
+
+2. **Deploy to GitHub Pages**
+   ```bash
+   # Install gh-pages package
+   npm install --save-dev gh-pages
+   
+   # Add deploy script to package.json
+   # "deploy": "gh-pages -d dist"
+   
+   # Deploy
+   npm run deploy
+   ```
+
+### Custom Domain (Optional)
+
+To use a custom domain:
+
+1. Create a `CNAME` file in the `public` folder with your domain name
+2. Configure your domain's DNS to point to GitHub Pages
+3. Enable custom domain in GitHub Pages settings
+
 ### Production Build
 To create a production build:
 ```bash
