@@ -4,5 +4,5 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/PCB_Reverse_Engineering_Web_App/',
+  base: '/PCB_Reverse_Engineering_Tool/',
 })
