@@ -27,12 +27,52 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
    ```
 
 3. **Start the development server**
+   
+   **Option A: Using the convenience script (Recommended)**
+   ```bash
+   ./run_local.sh
+   ```
+   
+   **Option B: Using npm directly**
    ```bash
    npm run dev
    ```
 
 4. **Open your browser**
    Navigate to `http://localhost:5173` (or the URL shown in your terminal)
+
+## Quick Start with run_local.sh
+
+For the easiest development experience, use the included convenience script:
+
+### **What the script does:**
+- ✅ **Checks dependencies** and installs them automatically if needed
+- ✅ **Starts the development server** with hot reload
+- ✅ **Shows helpful information** about the local URL
+- ✅ **Provides clear instructions** for stopping the server
+
+### **How to use:**
+```bash
+# Make sure you're in the project directory
+cd PCB_reverse_engineer
+
+# Run the convenience script
+./run_local.sh
+```
+
+### **Script output:**
+```
+🔧 Starting PCB Reverse Engineering Tool...
+📁 Project directory: /path/to/PCB_reverse_engineer
+🚀 Starting development server...
+🌐 Your app will be available at: http://localhost:5173/
+📝 Press Ctrl+C to stop the server
+```
+
+### **Port handling:**
+- The script automatically handles port conflicts
+- If port 5173 is in use, it will find the next available port
+- The actual URL will be displayed in the terminal output
 
 ## Live Demo
 
