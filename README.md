@@ -13,6 +13,12 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
 - npm (version 8 or higher)
 - Modern web browser (Chrome 90+, Firefox 88+, Safari 14+)
 
+### Project Dependencies
+- Runtime: `react`, `react-dom`, `react-colorful`, `lucide-react`
+- Dev: `vite`, `typescript`, ESLint tooling, `gh-pages` (for manual Pages deploy)
+
+Note: Previously included canvas libraries (`fabric`, `konva`, `react-konva`) have been removed to avoid transitive deprecation warnings and are not required by this project.
+
 ### Step-by-Step Installation
 
 1. **Clone or download the project**
