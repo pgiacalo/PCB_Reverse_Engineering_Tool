@@ -42,14 +42,42 @@ else
   npm install
 fi
 
-echo "🏗️  Building production bundle..."
-npm run build
+echo "🔗 Inspecting git remote to compute dynamic public URL..."
+ORIGIN_URL="$(git remote get-url origin 2>/dev/null || echo)"
+if [[ "$ORIGIN_URL" == http* ]]; then
+  ORIGIN_OWNER="$(echo "$ORIGIN_URL" | sed -E 's#https?://github.com/([^/]+)/.*#\1#')"
+  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#https?://github.com/[^/]+/([^/]+)(\.git)?#\1#')"
+elif [[ "$ORIGIN_URL" == git@github.com:* ]]; then
+  ORIGIN_OWNER="$(echo "$ORIGIN_URL" | sed -E 's#git@github.com:([^/]+)/.*#\1#')"
+  ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#git@github.com:[^/]+/([^/]+)(\.git)?#\1#')"
+fi
 
-echo "🚀 Deploying to gh-pages branch..."
-npm run deploy
+BASE_PATH="/${ORIGIN_REPO}/"
+PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
 
-echo "✅ Deployment complete. Your site should be available at:"
-echo "   https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/"
+echo "🏗️  Building production bundle with base: ${BASE_PATH}"
+npx --yes tsc -b
+npx --yes vite build --base "${BASE_PATH}"
+
+echo "🚀 Preparing deployment target..."
+# ORIGIN_URL/OWNER/REPO already determined above
+
+TARGET_REPO="${GH_PAGES_REPO:-$ORIGIN_URL}"
+
+echo "🚀 Deploying to gh-pages branch (repo: $TARGET_REPO)..."
+# Use gh-pages directly so we can pass the repo target safely
+npx --yes gh-pages -d dist -r "$TARGET_REPO"
+
+echo "✅ Deployment complete."
+
+# Public URL derived from remote
+HOMEPAGE_URL="${PUBLIC_URL}"
+
+echo "🌐 Your site should be available at:"
+echo "   ${HOMEPAGE_URL}"
 echo "📌 You are now on branch: $(git rev-parse --abbrev-ref HEAD)"
+
+echo "⏳ Note: GitHub Pages may take 2–10 minutes (sometimes up to ~30) to deploy changes due to CDN caching."
+echo "   If you don't see updates immediately, hard refresh (Cmd+Shift+R) or open in an incognito window."
 
 
