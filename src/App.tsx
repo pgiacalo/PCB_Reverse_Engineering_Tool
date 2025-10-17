@@ -49,6 +49,8 @@ function App() {
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
   const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate'>('nudge');
   const [isGrayscale, setIsGrayscale] = useState(false);
+  const [isBlackAndWhiteEdges, setIsBlackAndWhiteEdges] = useState(false);
+  const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
   const [selectedDrawingLayer, setSelectedDrawingLayer] = useState<'top' | 'bottom'>('top');
   const [showBothLayers, setShowBothLayers] = useState(false);
 
@@ -193,16 +195,86 @@ function App() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Helper to create an edge-detected (black & white) canvas from an image
+    const createEdgeCanvas = (image: HTMLImageElement, invert: boolean): HTMLCanvasElement => {
+      const w = image.width;
+      const h = image.height;
+      const offscreen = document.createElement('canvas');
+      offscreen.width = w;
+      offscreen.height = h;
+      const octx = offscreen.getContext('2d');
+      if (!octx) return offscreen;
+      octx.drawImage(image, 0, 0, w, h);
+      const srcData = octx.getImageData(0, 0, w, h);
+      const src = srcData.data;
+
+      // Convert to grayscale luminance
+      const gray = new Uint8ClampedArray(w * h);
+      for (let i = 0; i < w * h; i++) {
+        const r = src[i * 4 + 0];
+        const g = src[i * 4 + 1];
+        const b = src[i * 4 + 2];
+        // luminance (rounded)
+        gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+      }
+
+      const gxKernel = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
+      const gyKernel = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+      const mag = new Float32Array(w * h);
+
+      // Convolution (Sobel)
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          let gx = 0;
+          let gy = 0;
+          let k = 0;
+          for (let ky = -1; ky <= 1; ky++) {
+            for (let kx = -1; kx <= 1; kx++) {
+              const ix = x + kx;
+              const iy = y + ky;
+              const val = gray[iy * w + ix];
+              gx += val * gxKernel[k];
+              gy += val * gyKernel[k];
+              k++;
+            }
+          }
+          const m = Math.sqrt(gx * gx + gy * gy);
+          mag[y * w + x] = m;
+        }
+      }
+
+      // Normalize and threshold
+      let maxVal = 0;
+      for (let i = 0; i < mag.length; i++) {
+        if (mag[i] > maxVal) maxVal = mag[i];
+      }
+      const outData = octx.createImageData(w, h);
+      const out = outData.data;
+      const threshold = 0.20; // keep stronger edges (20% of max)
+      for (let i = 0; i < w * h; i++) {
+        const normalized = maxVal > 0 ? mag[i] / maxVal : 0;
+        const edge = normalized >= threshold ? 255 : 0; // white edges on black background
+        const value = invert ? 255 - edge : edge;
+        out[i * 4 + 0] = value;
+        out[i * 4 + 1] = value;
+        out[i * 4 + 2] = value;
+        out[i * 4 + 3] = 255;
+      }
+      octx.putImageData(outData, 0, 0);
+      return offscreen;
+    };
+
     // Draw images with transformations
     if (topImage && (currentView === 'top' || currentView === 'overlay')) {
       const img = new Image();
       img.onload = () => {
         ctx.save();
         ctx.globalAlpha = 1;
-        
-        // Apply grayscale filter if enabled
-        if (isGrayscale) {
+        // Apply grayscale filter if enabled and not in edge mode
+        if (isGrayscale && !isBlackAndWhiteEdges) {
           ctx.filter = 'grayscale(100%)';
+        } else {
+          ctx.filter = 'none';
         }
         
         // Apply transformations
@@ -214,7 +286,12 @@ function App() {
         
         const scaledWidth = img.width * topImage.scale;
         const scaledHeight = img.height * topImage.scale;
-        ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        if (isBlackAndWhiteEdges) {
+          const edgeCanvas = createEdgeCanvas(img, isBlackAndWhiteInverted);
+          ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        } else {
+          ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        }
         ctx.restore();
         
         // Draw strokes after image is loaded
@@ -228,10 +305,11 @@ function App() {
       img.onload = () => {
         ctx.save();
         ctx.globalAlpha = currentView === 'overlay' ? (transparency / 100) : 1;
-        
-        // Apply grayscale filter if enabled
-        if (isGrayscale) {
+        // Apply grayscale filter if enabled and not in edge mode
+        if (isGrayscale && !isBlackAndWhiteEdges) {
           ctx.filter = 'grayscale(100%)';
+        } else {
+          ctx.filter = 'none';
         }
         
         // Apply transformations
@@ -243,7 +321,12 @@ function App() {
         
         const scaledWidth = img.width * bottomImage.scale;
         const scaledHeight = img.height * bottomImage.scale;
-        ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        if (isBlackAndWhiteEdges) {
+          const edgeCanvas = createEdgeCanvas(img, isBlackAndWhiteInverted);
+          ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        } else {
+          ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        }
         ctx.restore();
         
         // Draw strokes after image is loaded
@@ -256,7 +339,7 @@ function App() {
     if (!topImage && !bottomImage) {
       drawStrokes(ctx);
     }
-  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, showBothLayers]);
+  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, showBothLayers]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
@@ -697,12 +780,27 @@ function App() {
 
 
 
-                <div className="button-group">
+              <div className="button-group">
                   <button 
                     onClick={() => setIsGrayscale(!isGrayscale)}
                     className={`grayscale-button ${isGrayscale ? 'active' : ''}`}
                   >
                     {isGrayscale ? 'Color Mode' : 'Grayscale Mode'}
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (!isBlackAndWhiteEdges) {
+                        setIsBlackAndWhiteEdges(true);
+                        setIsBlackAndWhiteInverted(false);
+                      } else {
+                        // Toggle inversion while staying in edge mode
+                        setIsBlackAndWhiteInverted(prev => !prev);
+                      }
+                    }}
+                    className={`grayscale-button ${isBlackAndWhiteEdges ? 'active' : ''}`}
+                    title={isBlackAndWhiteEdges ? 'Invert edges' : 'Black & White edge highlight'}
+                  >
+                    {isBlackAndWhiteEdges ? 'Invert' : 'Black & White'}
                   </button>
                   <button 
                     onClick={resetImageTransform}
