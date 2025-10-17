@@ -2,9 +2,16 @@
 
 A browser-based photo editing tool designed to aid in the reverse engineering of 2-sided printed circuit boards (PCBs). This tool allows engineers and hobbyists to load top and bottom PCB photos, overlay them with precise alignment, and add annotations to facilitate the reverse engineering process.
 
-## Project Description
+## Video Instructions
 
-This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs by providing a digital workspace where images of both sides can be viewed simultaneously with variable transparency. The tool includes image alignment tools, variable transparency levels, and drawing layers to help identify components, trace connections, and document findings during the reverse engineering process.
+A short video that explains how to use the tool can be found at the the following link.
+https://youtu.be/X4hGUUNUJ60
+
+## Live Demo
+
+🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool](https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool)
+
+The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser!
 
 ## Installation Instructions
 
@@ -16,8 +23,6 @@ This PCB Reverse Engineering Tool solves the challenge of analyzing 2-sided PCBs
 ### Project Dependencies
 - Runtime: `react`, `react-dom`, `react-colorful`, `lucide-react`
 - Dev: `vite`, `typescript`, ESLint tooling, `gh-pages` (for manual Pages deploy)
-
-Note: Previously included canvas libraries (`fabric`, `konva`, `react-konva`) have been removed to avoid transitive deprecation warnings and are not required by this project.
 
 ### Step-by-Step Installation
 
@@ -80,76 +85,9 @@ cd PCB_reverse_engineer
 - If port 5173 is in use, it will find the next available port
 - The actual URL will be displayed in the terminal output
 
-## Live Demo
+## Deployment to a Web Server (GitHub Pages)
 
-🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool](https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool)
-
-The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser!
-
-## Publishing to GitHub Pages
-
-### Automatic Deployment (Recommended)
-
-The project is configured for automatic deployment to GitHub Pages using GitHub Actions. Here's how to set it up:
-
-#### Step 1: Enable GitHub Pages
-1. Go to your repository on GitHub
-2. Click on **Settings** tab
-3. Scroll down to **Pages** section
-4. Under **Source**, select **GitHub Actions**
-
-#### Step 2: Push Your Code
-```bash
-# Add all files to git
-git add .
-
-# Commit your changes
-git commit -m "Initial commit with GitHub Pages setup"
-
-# Push to GitHub
-git push origin main
-```
-
-#### Step 3: Automatic Deployment
-- GitHub Actions will automatically build and deploy your app
-- Check the **Actions** tab in your repository to monitor deployment
-- Your app will be available at: `https://[your-username].github.io/PCB_Reverse_Engineering_Tool`
-
-### Manual Deployment
-
-If you prefer manual deployment:
-
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
-
-2. **Deploy to GitHub Pages**
-   ```bash
-   # Install gh-pages package
-   npm install --save-dev gh-pages
-   
-   # Add deploy script to package.json
-   # "deploy": "gh-pages -d dist"
-   
-   # Deploy
-   npm run deploy
-   ```
-
-### Custom Domain (Optional)
-
-To use a custom domain:
-
-1. Create a `CNAME` file in the `public` folder with your domain name
-2. Configure your domain's DNS to point to GitHub Pages
-3. Enable custom domain in GitHub Pages settings
-
-### Production Build
-To create a production build:
-```bash
-npm run build
-npm run preview
-```
+See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES.md).
 
 ## Usage Instructions
 

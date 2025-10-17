@@ -3,6 +3,12 @@
 ## Project Overview
 A web-based photo editing tool designed to aid in the reverse engineering of 2-sided printed circuit boards (PCBs).
 
+## Live Demo
+
+🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool](https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool)
+
+The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser!
+
 ## System Setup Requirements
 
 ### Computer Setup for New Users
