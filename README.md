@@ -4,7 +4,7 @@ A browser-based photo editing tool designed to aid in the reverse engineering of
 
 ## Video Instructions
 
-A short video that explains how to use the tool can be found at the the following link.
+A 3 minute video that explains how to use the tool can be found at the the following link.
 https://youtu.be/X4hGUUNUJ60
 
 ## Live Demo
