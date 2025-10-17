@@ -434,6 +434,10 @@ function App() {
     if (bottomImage) {
       updateImageTransform('bottom', { x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false });
     }
+    // Also restore color mode
+    setIsGrayscale(false);
+    setIsBlackAndWhiteEdges(false);
+    setIsBlackAndWhiteInverted(false);
   }, [updateImageTransform, topImage, bottomImage]);
 
   // Enhanced keyboard functionality for sliders and image transformation
@@ -782,10 +786,20 @@ function App() {
 
               <div className="button-group">
                   <button 
-                    onClick={() => setIsGrayscale(!isGrayscale)}
-                    className={`grayscale-button ${isGrayscale ? 'active' : ''}`}
+                    onClick={() => {
+                      if (isGrayscale || isBlackAndWhiteEdges) {
+                        // Revert to full color from grayscale or edge mode
+                        setIsGrayscale(false);
+                        setIsBlackAndWhiteEdges(false);
+                        setIsBlackAndWhiteInverted(false);
+                      } else {
+                        // Enter grayscale mode
+                        setIsGrayscale(true);
+                      }
+                    }}
+                    className={`grayscale-button ${(isGrayscale || isBlackAndWhiteEdges) ? 'active' : ''}`}
                   >
-                    {isGrayscale ? 'Color Mode' : 'Grayscale Mode'}
+                    {(isGrayscale || isBlackAndWhiteEdges) ? 'Color Mode' : 'Grayscale Mode'}
                   </button>
                   <button 
                     onClick={() => {
