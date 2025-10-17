@@ -444,7 +444,18 @@ function App() {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Check if we're in transform mode with an image selected
     if (currentTool === 'transform' && selectedImageForTransform) {
-      e.preventDefault(); // Prevent page scrolling
+      // Prevent default and stop propagation early so focused radios/sliders don't consume arrows
+      e.preventDefault();
+      e.stopPropagation();
+
+      // If a radio input has focus, blur it so arrows won't switch selection
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active.tagName === 'INPUT') {
+        const input = active as HTMLInputElement;
+        if (input.type === 'radio') {
+          input.blur();
+        }
+      }
 
       if (transformMode === 'nudge') {
         // Nudging: single pixel movement
@@ -576,9 +587,10 @@ function App() {
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
+    // Use capture to intercept before default handling on focused controls (e.g., radios)
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [handleKeyDown]);
 
