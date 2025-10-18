@@ -30,7 +30,7 @@ interface DrawingStroke {
 }
 
 type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'draw' | 'erase' | 'transform';
+type Tool = 'draw' | 'erase' | 'transform' | 'magnify';
 
 function App() {
   const [topImage, setTopImage] = useState<PCBImage | null>(null);
@@ -53,6 +53,11 @@ function App() {
   const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
   const [selectedDrawingLayer, setSelectedDrawingLayer] = useState<'top' | 'bottom'>('top');
   const [showBothLayers, setShowBothLayers] = useState(false);
+  const [isShiftConstrained, setIsShiftConstrained] = useState(false);
+  const [viewScale, setViewScale] = useState(1);
+  const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [savedViewScale, setSavedViewScale] = useState<number | null>(null);
+  const [savedViewPan, setSavedViewPan] = useState<{ x: number; y: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
@@ -91,11 +96,23 @@ function App() {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const x = (screenX - viewPan.x) / viewScale;
+    const y = (screenY - viewPan.y) / viewScale;
 
-    if (currentTool === 'draw') {
+    if (currentTool === 'magnify') {
+      const factor = e.shiftKey ? 0.5 : 2;
+      const newScale = Math.max(0.25, Math.min(8, viewScale * factor));
+      // Keep clicked world point under cursor after zoom: pan' = screen - newScale * world
+      const newPanX = screenX - newScale * x;
+      const newPanY = screenY - newScale * y;
+      setViewScale(newScale);
+      setViewPan({ x: newPanX, y: newPanY });
+      return;
+    } else if (currentTool === 'draw') {
       setIsDrawing(true);
+      setIsShiftConstrained(e.shiftKey === true);
       setCurrentStroke([{ x, y }]);
     } else if (currentTool === 'erase') {
       setIsDrawing(true);
@@ -105,20 +122,58 @@ function App() {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     }
-  }, [currentTool, selectedImageForTransform, brushSize, selectedDrawingLayer, drawingStrokes.length]);
+  }, [currentTool, selectedImageForTransform, brushSize, selectedDrawingLayer, drawingStrokes.length, viewScale, viewPan.x, viewPan.y]);
+
+  const snapConstrainedPoint = useCallback((start: DrawingPoint, x: number, y: number): DrawingPoint => {
+    const dx = x - start.x;
+    const dy = y - start.y;
+    if (dx === 0 && dy === 0) return { x, y };
+    // Determine nearest orientation among 0°, 45°, 90° based on initial direction
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180
+    const abs180 = ((angle % 180) + 180) % 180; // 0..180
+    // Nearest among 0,45,90
+    const candidates = [0, 45, 90];
+    let best = 0;
+    let bestDiff = 1e9;
+    for (const c of candidates) {
+      const d = Math.abs(abs180 - c);
+      if (d < bestDiff) { bestDiff = d; best = c; }
+    }
+    if (best === 0) {
+      // Horizontal
+      return { x, y: start.y };
+    } else if (best === 90) {
+      // Vertical
+      return { x: start.x, y };
+    } else {
+      // 45°: choose +45 vs -45 by sign of dx,dy
+      const mag = Math.min(Math.abs(dx), Math.abs(dy));
+      const sx = dx >= 0 ? 1 : -1;
+      const sy = dy >= 0 ? 1 : -1;
+      return { x: start.x + sx * mag, y: start.y + sy * mag };
+    }
+  }, []);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const x = (screenX - viewPan.x) / viewScale;
+    const y = (screenY - viewPan.y) / viewScale;
 
     if (isDrawing && currentStroke.length > 0) {
-      setCurrentStroke(prev => [...prev, { x, y }]);
-      
-      // For erasing, check if we're intersecting with any strokes and remove them
-      if (currentTool === 'erase') {
+      if (currentTool === 'draw') {
+        if (isShiftConstrained) {
+          const startPt = currentStroke[0];
+          const snapped = snapConstrainedPoint(startPt, x, y);
+          setCurrentStroke([startPt, snapped]);
+        } else {
+          setCurrentStroke(prev => [...prev, { x, y }]);
+        }
+      } else if (currentTool === 'erase') {
+        setCurrentStroke(prev => [...prev, { x, y }]);
         setDrawingStrokes(prev => {
           const filtered = prev.filter(stroke => {
             // Only check strokes on the selected drawing layer
@@ -161,7 +216,7 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y]);
 
   const handleCanvasMouseUp = useCallback(() => {
     if (isDrawing && currentStroke.length > 0) {
@@ -182,6 +237,7 @@ function App() {
     setIsDrawing(false);
     setIsTransforming(false);
     setTransformStartPos(null);
+    setIsShiftConstrained(false);
   }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer]);
 
 
@@ -194,6 +250,14 @@ function App() {
 
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Apply global view scaling around canvas center
+    ctx.save();
+    const viewCenterX = canvas.width / 2;
+    const viewCenterY = canvas.height / 2;
+    ctx.translate(viewCenterX, viewCenterY);
+    ctx.scale(viewScale, viewScale);
+    ctx.translate(-viewCenterX, -viewCenterY);
 
     // Helper to create an edge-detected (black & white) canvas from an image
     const createEdgeCanvas = (image: HTMLImageElement, invert: boolean): HTMLCanvasElement => {
@@ -264,11 +328,13 @@ function App() {
       return offscreen;
     };
 
-    // Draw images with transformations
+    // Draw images with transformations and apply view transform per draw
     if (topImage && (currentView === 'top' || currentView === 'overlay')) {
       const img = new Image();
       img.onload = () => {
         ctx.save();
+        ctx.translate(viewPan.x, viewPan.y);
+        ctx.scale(viewScale, viewScale);
         ctx.globalAlpha = 1;
         // Apply grayscale filter if enabled and not in edge mode
         if (isGrayscale && !isBlackAndWhiteEdges) {
@@ -294,8 +360,12 @@ function App() {
         }
         ctx.restore();
         
-        // Draw strokes after image is loaded
+        // Draw strokes after image is loaded (with view transform)
+        ctx.save();
+        ctx.translate(viewPan.x, viewPan.y);
+        ctx.scale(viewScale, viewScale);
         drawStrokes(ctx);
+        ctx.restore();
       };
       img.src = topImage.url;
     }
@@ -304,6 +374,8 @@ function App() {
       const img = new Image();
       img.onload = () => {
         ctx.save();
+        ctx.translate(viewPan.x, viewPan.y);
+        ctx.scale(viewScale, viewScale);
         ctx.globalAlpha = currentView === 'overlay' ? (transparency / 100) : 1;
         // Apply grayscale filter if enabled and not in edge mode
         if (isGrayscale && !isBlackAndWhiteEdges) {
@@ -329,17 +401,27 @@ function App() {
         }
         ctx.restore();
         
-        // Draw strokes after image is loaded
+        // Draw strokes after image is loaded (with view transform)
+        ctx.save();
+        ctx.translate(viewPan.x, viewPan.y);
+        ctx.scale(viewScale, viewScale);
         drawStrokes(ctx);
+        ctx.restore();
       };
       img.src = bottomImage.url;
     }
 
     // If no images are loaded, still draw strokes
     if (!topImage && !bottomImage) {
+      ctx.save();
+      ctx.translate(viewPan.x, viewPan.y);
+      ctx.scale(viewScale, viewScale);
       drawStrokes(ctx);
+      ctx.restore();
     }
-  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, showBothLayers]);
+    // Restore after view scaling
+    ctx.restore();
+  }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, showBothLayers, viewScale, viewPan.x, viewPan.y]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
@@ -678,6 +760,27 @@ function App() {
               >
                 Overlay
               </button>
+              <button 
+                onClick={() => {
+                  if (currentTool !== 'magnify') {
+                    setSavedViewScale(viewScale);
+                    setSavedViewPan(viewPan);
+                  }
+                  setCurrentTool('magnify');
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (savedViewScale != null && savedViewPan) {
+                    setViewScale(savedViewScale);
+                    setViewPan(savedViewPan);
+                  }
+                }}
+                className={currentTool === 'magnify' ? 'active' : ''}
+                title="Magnify: click canvas to zoom (Shift to zoom out)"
+              >
+                Magnify
+              </button>
             </div>
             
             {currentView === 'overlay' && (
@@ -921,6 +1024,18 @@ function App() {
               >
                 Color Picker
         </button>
+              <button
+                onClick={(e) => {
+                  const factor = e.shiftKey ? 0.5 : 2;
+                  setViewScale(prev => Math.max(0.25, Math.min(8, prev * factor)));
+                  // redraw
+                  drawCanvas();
+                }}
+                className="color-button"
+                title="Magnify (Shift for reverse)"
+              >
+                Magnify
+              </button>
               {showColorPicker && (
                 <div className="color-picker-popup">
                   <HexColorPicker color={brushColor} onChange={setBrushColor} />
