@@ -1024,18 +1024,7 @@ function App() {
               >
                 Color Picker
         </button>
-              <button
-                onClick={(e) => {
-                  const factor = e.shiftKey ? 0.5 : 2;
-                  setViewScale(prev => Math.max(0.25, Math.min(8, prev * factor)));
-                  // redraw
-                  drawCanvas();
-                }}
-                className="color-button"
-                title="Magnify (Shift for reverse)"
-              >
-                Magnify
-              </button>
+              
               {showColorPicker && (
                 <div className="color-picker-popup">
                   <HexColorPicker color={brushColor} onChange={setBrushColor} />

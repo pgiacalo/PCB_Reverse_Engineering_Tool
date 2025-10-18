@@ -203,6 +203,20 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Double-click any slider**: Reset to default value
 - **Double-click Erase button**: Clear selected drawing layer
 
+### View Controls: Magnify
+
+The Magnify tool lets you zoom into the canvas at the exact point you click. It scales the entire view (both images and drawing layers) and pans automatically so the clicked point stays under your cursor.
+
+How to use:
+- Click the "Magnify" button in the View Controls to enter magnify mode.
+- Click on the canvas to zoom in by 2× at the cursor location.
+- Hold Shift and click to zoom out by 0.5×.
+- Double‑click the Magnify button to return to the view size and position from before you entered magnify mode.
+
+Notes:
+- All drawing and erasing actions are mapped to the zoomed view so strokes align with what you see.
+- Current zoom is clamped between 0.25× and 8×.
+
 ## API Documentation
 
 ### Core Components
