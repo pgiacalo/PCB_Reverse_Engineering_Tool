@@ -907,7 +907,7 @@ function App() {
           </div>
 
 
-          <div className="control-section">
+          <div className="control-section" onMouseDown={() => setCurrentTool('transform')}>
             <h3>🔧 Image Transform</h3>
             <div className="button-group compact">
               <button 
@@ -1009,6 +1009,7 @@ function App() {
               <div className="button-group">
                   <button 
                     onClick={() => {
+                      setCurrentTool('transform');
                       if (isGrayscale || isBlackAndWhiteEdges) {
                         // Revert to full color from grayscale or edge mode
                         setIsGrayscale(false);
@@ -1025,6 +1026,7 @@ function App() {
                   </button>
                   <button 
                     onClick={() => {
+                      setCurrentTool('transform');
                       if (!isBlackAndWhiteEdges) {
                         setIsBlackAndWhiteEdges(true);
                         setIsBlackAndWhiteInverted(false);
@@ -1039,7 +1041,7 @@ function App() {
                     {isBlackAndWhiteEdges ? 'Invert' : 'Black & White'}
                   </button>
                   <button 
-                    onClick={resetImageTransform}
+                    onClick={() => { setCurrentTool('transform'); resetImageTransform(); }}
                     className="reset-button small"
                   >
                     Reset Transform
