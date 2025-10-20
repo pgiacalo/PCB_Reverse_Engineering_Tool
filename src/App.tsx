@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { Palette, Eraser, Move } from 'lucide-react';
 import { HexColorPicker } from 'react-colorful';
 import './App.css';
@@ -14,6 +15,7 @@ interface PCBImage {
   rotation: number;
   flipX: boolean;
   flipY: boolean;
+  bitmap?: ImageBitmap | null;
 }
 
 interface DrawingPoint {
@@ -60,36 +62,37 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
+  const hScrollContentRef = useRef<HTMLDivElement>(null);
+  const vScrollContentRef = useRef<HTMLDivElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleImageLoad = useCallback((file: File, type: 'top' | 'bottom') => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const imageData: PCBImage = {
-          url: e.target?.result as string,
-          name: file.name,
-          width: img.width,
-          height: img.height,
-          x: 0,
-          y: 0,
-          scale: 1,
-          rotation: 0,
-          flipX: false,
-          flipY: false,
-        };
-        
-        if (type === 'top') {
-          setTopImage(imageData);
-        } else {
-          setBottomImage(imageData);
-        }
+  const handleImageLoad = useCallback(async (file: File, type: 'top' | 'bottom') => {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const url = URL.createObjectURL(file);
+      const imageData: PCBImage = {
+        url,
+        name: file.name,
+        width: bitmap.width,
+        height: bitmap.height,
+        x: 0,
+        y: 0,
+        scale: 1,
+        rotation: 0,
+        flipX: false,
+        flipY: false,
+        bitmap,
       };
-      img.src = e.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+      if (type === 'top') {
+        setTopImage(imageData);
+      } else {
+        setBottomImage(imageData);
+      }
+    } catch (err) {
+      console.error('Failed to load image', err);
+    }
   }, []);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -98,15 +101,20 @@ function App() {
 
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    const x = (screenX - viewPan.x) / viewScale;
-    const y = (screenY - viewPan.y) / viewScale;
+    const canvas = canvasRef.current!;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const canvasX = screenX * scaleX;
+    const canvasY = screenY * scaleY;
+    const x = (canvasX - viewPan.x) / viewScale;
+    const y = (canvasY - viewPan.y) / viewScale;
 
     if (currentTool === 'magnify') {
       const factor = e.shiftKey ? 0.5 : 2;
       const newScale = Math.max(0.25, Math.min(8, viewScale * factor));
-      // Keep clicked world point under cursor after zoom: pan' = screen - newScale * world
-      const newPanX = screenX - newScale * x;
-      const newPanY = screenY - newScale * y;
+      // Keep clicked world point under cursor after zoom: pan' = canvasPt - newScale * world
+      const newPanX = canvasX - newScale * x;
+      const newPanY = canvasY - newScale * y;
       setViewScale(newScale);
       setViewPan({ x: newPanX, y: newPanY });
       return;
@@ -160,8 +168,13 @@ function App() {
 
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    const x = (screenX - viewPan.x) / viewScale;
-    const y = (screenY - viewPan.y) / viewScale;
+    const canvas = canvasRef.current!;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const canvasX = screenX * scaleX;
+    const canvasY = screenY * scaleY;
+    const x = (canvasX - viewPan.x) / viewScale;
+    const y = (canvasY - viewPan.y) / viewScale;
 
     if (isDrawing && currentStroke.length > 0) {
       if (currentTool === 'draw') {
@@ -179,11 +192,38 @@ function App() {
             // Only check strokes on the selected drawing layer
             if (stroke.layer !== selectedDrawingLayer) return true;
             
-            // Check if any point in the stroke is within the eraser radius
-            const hasIntersection = stroke.points.some(point => {
-              const distance = Math.sqrt((point.x - x) ** 2 + (point.y - y) ** 2);
-              return distance <= brushSize; // Use full brush size for more forgiving erasing
-            });
+            // Check distance from the eraser center to each segment of the stroke polyline
+            const pointToSegmentDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const lenSq = dx * dx + dy * dy;
+              if (lenSq === 0) {
+                // Degenerate segment; treat as a point
+                const ddx = px - x1;
+                const ddy = py - y1;
+                return Math.sqrt(ddx * ddx + ddy * ddy);
+              }
+              // Project point onto segment, clamped to [0,1]
+              const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+              const projX = x1 + t * dx;
+              const projY = y1 + t * dy;
+              const ddx = px - projX;
+              const ddy = py - projY;
+              return Math.sqrt(ddx * ddx + ddy * ddy);
+            };
+
+            let hasIntersection = false;
+            if (stroke.points.length === 1) {
+              const p0 = stroke.points[0];
+              hasIntersection = Math.hypot(p0.x - x, p0.y - y) <= brushSize;
+            } else {
+              for (let i = 0; i < stroke.points.length - 1; i++) {
+                const p1 = stroke.points[i];
+                const p2 = stroke.points[i + 1];
+                const d = pointToSegmentDistance(x, y, p1.x, p1.y, p2.x, p2.y);
+                if (d <= brushSize) { hasIntersection = true; break; }
+              }
+            }
             
             if (hasIntersection) {
               console.log('Erasing stroke at position:', x, y, 'brushSize:', brushSize, 'selectedLayer:', selectedDrawingLayer);
@@ -251,24 +291,21 @@ function App() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Apply global view scaling around canvas center
+    // Apply global view transform once (pan then scale)
     ctx.save();
-    const viewCenterX = canvas.width / 2;
-    const viewCenterY = canvas.height / 2;
-    ctx.translate(viewCenterX, viewCenterY);
+    ctx.translate(viewPan.x, viewPan.y);
     ctx.scale(viewScale, viewScale);
-    ctx.translate(-viewCenterX, -viewCenterY);
 
-    // Helper to create an edge-detected (black & white) canvas from an image
-    const createEdgeCanvas = (image: HTMLImageElement, invert: boolean): HTMLCanvasElement => {
-      const w = image.width;
-      const h = image.height;
+    // Helper to create an edge-detected (black & white) canvas from a CanvasImageSource
+    const createEdgeCanvas = (source: CanvasImageSource, invert: boolean): HTMLCanvasElement => {
+      const w = (source as any).width as number;
+      const h = (source as any).height as number;
       const offscreen = document.createElement('canvas');
       offscreen.width = w;
       offscreen.height = h;
       const octx = offscreen.getContext('2d');
       if (!octx) return offscreen;
-      octx.drawImage(image, 0, 0, w, h);
+      octx.drawImage(source, 0, 0, w, h);
       const srcData = octx.getImageData(0, 0, w, h);
       const src = srcData.data;
 
@@ -329,99 +366,113 @@ function App() {
     };
 
     // Draw images with transformations and apply view transform per draw
-    if (topImage && (currentView === 'top' || currentView === 'overlay')) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.save();
-        ctx.translate(viewPan.x, viewPan.y);
-        ctx.scale(viewScale, viewScale);
-        ctx.globalAlpha = 1;
-        // Apply grayscale filter if enabled and not in edge mode
-        if (isGrayscale && !isBlackAndWhiteEdges) {
-          ctx.filter = 'grayscale(100%)';
-        } else {
-          ctx.filter = 'none';
-        }
-        
-        // Apply transformations
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        ctx.translate(centerX + topImage.x, centerY + topImage.y);
-        ctx.rotate((topImage.rotation * Math.PI) / 180);
-        ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
-        
-        const scaledWidth = img.width * topImage.scale;
-        const scaledHeight = img.height * topImage.scale;
-        if (isBlackAndWhiteEdges) {
-          const edgeCanvas = createEdgeCanvas(img, isBlackAndWhiteInverted);
-          ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        } else {
-          ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        }
-        ctx.restore();
-        
-        // Draw strokes after image is loaded (with view transform)
-        ctx.save();
-        ctx.translate(viewPan.x, viewPan.y);
-        ctx.scale(viewScale, viewScale);
-        drawStrokes(ctx);
-        ctx.restore();
-      };
-      img.src = topImage.url;
-    }
-
-    if (bottomImage && (currentView === 'bottom' || currentView === 'overlay')) {
-      const img = new Image();
-      img.onload = () => {
-        ctx.save();
-        ctx.translate(viewPan.x, viewPan.y);
-        ctx.scale(viewScale, viewScale);
-        ctx.globalAlpha = currentView === 'overlay' ? (transparency / 100) : 1;
-        // Apply grayscale filter if enabled and not in edge mode
-        if (isGrayscale && !isBlackAndWhiteEdges) {
-          ctx.filter = 'grayscale(100%)';
-        } else {
-          ctx.filter = 'none';
-        }
-        
-        // Apply transformations
-        const centerX = canvas.width / 2;
-        const centerY = canvas.height / 2;
-        ctx.translate(centerX + bottomImage.x, centerY + bottomImage.y);
-        ctx.rotate((bottomImage.rotation * Math.PI) / 180);
-        ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
-        
-        const scaledWidth = img.width * bottomImage.scale;
-        const scaledHeight = img.height * bottomImage.scale;
-        if (isBlackAndWhiteEdges) {
-          const edgeCanvas = createEdgeCanvas(img, isBlackAndWhiteInverted);
-          ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        } else {
-          ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        }
-        ctx.restore();
-        
-        // Draw strokes after image is loaded (with view transform)
-        ctx.save();
-        ctx.translate(viewPan.x, viewPan.y);
-        ctx.scale(viewScale, viewScale);
-        drawStrokes(ctx);
-        ctx.restore();
-      };
-      img.src = bottomImage.url;
-    }
-
-    // If no images are loaded, still draw strokes
-    if (!topImage && !bottomImage) {
+    if (topImage && topImage.bitmap && (currentView === 'top' || currentView === 'overlay')) {
+      const bmp = topImage.bitmap;
       ctx.save();
-      ctx.translate(viewPan.x, viewPan.y);
-      ctx.scale(viewScale, viewScale);
-      drawStrokes(ctx);
+      ctx.globalAlpha = 1;
+      // Apply grayscale filter if enabled and not in edge mode
+      if (isGrayscale && !isBlackAndWhiteEdges) {
+        ctx.filter = 'grayscale(100%)';
+      } else {
+        ctx.filter = 'none';
+      }
+      // Apply per-image transformations
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      ctx.translate(centerX + topImage.x, centerY + topImage.y);
+      ctx.rotate((topImage.rotation * Math.PI) / 180);
+      ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
+      const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
+      const scaledHeight = bmp.height * 1;
+      if (isBlackAndWhiteEdges) {
+        const edgeCanvas = createEdgeCanvas(bmp, isBlackAndWhiteInverted);
+        ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      } else {
+        ctx.drawImage(bmp, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      }
       ctx.restore();
     }
+
+    if (bottomImage && bottomImage.bitmap && (currentView === 'bottom' || currentView === 'overlay')) {
+      const bmp = bottomImage.bitmap;
+      ctx.save();
+      ctx.globalAlpha = currentView === 'overlay' ? (transparency / 100) : 1;
+      if (isGrayscale && !isBlackAndWhiteEdges) {
+        ctx.filter = 'grayscale(100%)';
+      } else {
+        ctx.filter = 'none';
+      }
+      // Apply per-image transformations
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      ctx.translate(centerX + bottomImage.x, centerY + bottomImage.y);
+      ctx.rotate((bottomImage.rotation * Math.PI) / 180);
+      ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
+      const scaledWidth = bmp.width * 1;
+      const scaledHeight = bmp.height * 1;
+      if (isBlackAndWhiteEdges) {
+        const edgeCanvas = createEdgeCanvas(bmp, isBlackAndWhiteInverted);
+        ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      } else {
+        ctx.drawImage(bmp, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      }
+      ctx.restore();
+    }
+
+    // Always draw strokes on top (respecting view transform applied above)
+    drawStrokes(ctx);
     // Restore after view scaling
     ctx.restore();
   }, [topImage, bottomImage, currentView, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, showBothLayers, viewScale, viewPan.x, viewPan.y]);
+
+  // Resize scrollbar extents based on transformed image bounds
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    const container = canvasContainerRef.current;
+    const hContent = hScrollContentRef.current;
+    const vContent = vScrollContentRef.current;
+    if (!canvas || !container || !hContent || !vContent) return;
+
+    let bounds: Bounds | null = null;
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const addImageBounds = (img: typeof topImage | typeof bottomImage) => {
+      if (!img || !img.bitmap) return;
+      const scaleX = img.scale * (img.flipX ? -1 : 1);
+      const scaleY = img.scale * (img.flipY ? -1 : 1);
+      const b = rectTransformedBounds(
+        img.bitmap.width,
+        img.bitmap.height,
+        centerX,
+        centerY,
+        img.x,
+        img.y,
+        scaleX,
+        scaleY,
+        img.rotation
+      );
+      bounds = mergeBounds(bounds, b);
+    };
+    addImageBounds(topImage);
+    addImageBounds(bottomImage);
+
+    if (!bounds) {
+      // No images; set minimal scroll extents
+      hContent.style.width = `${container.clientWidth}px`;
+      vContent.style.height = `${container.clientHeight}px`;
+      return;
+    }
+    const nb = bounds as Bounds;
+    const widthWorld = nb.maxX - nb.minX;
+    const heightWorld = nb.maxY - nb.minY;
+    const widthScreen = widthWorld * viewScale;
+    const heightScreen = heightWorld * viewScale;
+
+    const desiredW = Math.max(container.clientWidth, Math.ceil(widthScreen));
+    const desiredH = Math.max(container.clientHeight, Math.ceil(heightScreen));
+    hContent.style.width = `${desiredW}px`;
+    vContent.style.height = `${desiredH}px`;
+  }, [topImage, bottomImage, viewScale]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
@@ -1092,7 +1143,7 @@ function App() {
         </div>
 
         {/* Canvas Area */}
-        <div className="canvas-container">
+        <div className="canvas-container" ref={canvasContainerRef}>
           <canvas
             ref={canvasRef}
             width={800}
@@ -1121,7 +1172,7 @@ function App() {
             }}
             aria-label="Horizontal pan"
           >
-            <div className="scrollbar-horizontal-content" />
+            <div className="scrollbar-horizontal-content" ref={hScrollContentRef} />
           </div>
 
           {/* Vertical scrollbar (right) */}
@@ -1134,7 +1185,7 @@ function App() {
             }}
             aria-label="Vertical pan"
           >
-            <div className="scrollbar-vertical-content" />
+            <div className="scrollbar-vertical-content" ref={vScrollContentRef} />
           </div>
         </div>
 
