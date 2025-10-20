@@ -30,14 +30,14 @@ interface DrawingStroke {
 }
 
 type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'draw' | 'erase' | 'transform' | 'magnify';
+type Tool = 'none' | 'draw' | 'erase' | 'transform' | 'magnify';
 
 function App() {
   const [topImage, setTopImage] = useState<PCBImage | null>(null);
   const [bottomImage, setBottomImage] = useState<PCBImage | null>(null);
   const [currentView, setCurrentView] = useState<ViewMode>('overlay');
   const [transparency, setTransparency] = useState(50);
-  const [currentTool, setCurrentTool] = useState<Tool>('draw');
+  const [currentTool, setCurrentTool] = useState<Tool>('none');
   const [brushColor, setBrushColor] = useState('#ff0000');
   const [brushSize, setBrushSize] = useState(10);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -56,8 +56,6 @@ function App() {
   const [isShiftConstrained, setIsShiftConstrained] = useState(false);
   const [viewScale, setViewScale] = useState(1);
   const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [savedViewScale, setSavedViewScale] = useState<number | null>(null);
-  const [savedViewPan, setSavedViewPan] = useState<{ x: number; y: number } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
@@ -707,6 +705,57 @@ function App() {
       <div className="main-container">
         {/* Control Panel */}
         <div className="control-panel">
+          {/* Fixed Tips Panel at top of control panel */}
+          <div className="help-panel" style={{ marginBottom: 12 }}>
+            {(() => {
+              let mode = '';
+              const tips: string[] = [];
+              // First priority: guide loading when either image is missing
+              if (!topImage || !bottomImage) {
+                mode = 'Load Images';
+                tips.push('Click "Load Top PCB" and "Load Bottom PCB" to select photos.');
+                tips.push('Then use View Controls and Image Transform to align them.');
+              } else if (currentTool === 'magnify') {
+                mode = 'Magnify';
+                tips.push('Click on the image to zoom in.');
+                tips.push('Hold Shift and click to zoom out.');
+              } else if (currentTool === 'transform') {
+                mode = `Transform → ${transformMode}${selectedImageForTransform ? ` (${selectedImageForTransform} image)` : ''}`;
+                if (!selectedImageForTransform) {
+                  tips.push('Select Top Image or Bottom Image to transform.');
+                } else if (transformMode === 'nudge') {
+                  tips.push('Use arrow keys to move by 1 pixel.');
+                  tips.push('Click and drag to reposition for coarse moves.');
+                } else if (transformMode === 'scale') {
+                  tips.push('Arrow Up/Down: ±1% scale. Arrow Left/Right: ±0.1% scale.');
+                } else if (transformMode === 'rotate') {
+                  tips.push('Arrow Up/Down: ±1°. Arrow Left/Right: ±0.1°.');
+                }
+              } else if (currentTool === 'draw') {
+                mode = `Draw (${selectedDrawingLayer} layer)`;
+                tips.push('Click and drag to draw.');
+                tips.push('Hold Shift while drawing to constrain to H/V/45°.');
+              } else if (currentTool === 'erase') {
+                mode = `Erase (${selectedDrawingLayer} layer)`;
+                tips.push('Click and drag to erase; intersected strokes are removed.');
+                tips.push('Double-click the Erase button to clear the selected layer.');
+              } else {
+                mode = 'View';
+                tips.push('Use View Controls to switch Top/Bottom/Overlay or Magnify.');
+              }
+  return (
+    <>
+                  <div><strong>Mode:</strong> {mode}</div>
+                  {tips.map((t, i) => (
+                    <div key={i}>• {t}</div>
+                  ))}
+                </>
+              );
+            })()}
+          </div>
+
+          {/* Scrollable tools area */}
+          <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 260px)', padding: '0 8px' }}>
           <div className="control-section">
             <h3>📁 Load PCB Images</h3>
             <div className="button-group compact">
@@ -743,38 +792,27 @@ function App() {
             <h3>👁️ View Controls</h3>
             <div className="button-group compact">
               <button 
-                onClick={() => setCurrentView(currentView === 'top' ? 'overlay' : 'top')}
+                onClick={() => { setCurrentView('top'); setCurrentTool('draw'); }}
                 className={currentView === 'top' ? 'active' : ''}
               >
                 Top
               </button>
               <button 
-                onClick={() => setCurrentView(currentView === 'bottom' ? 'overlay' : 'bottom')}
+                onClick={() => { setCurrentView('bottom'); setCurrentTool('draw'); }}
                 className={currentView === 'bottom' ? 'active' : ''}
               >
                 Bottom
               </button>
               <button 
-                onClick={() => setCurrentView(currentView === 'overlay' ? 'top' : 'overlay')}
+                onClick={() => { setCurrentView('overlay'); setCurrentTool('draw'); }}
                 className={currentView === 'overlay' ? 'active' : ''}
               >
                 Overlay
               </button>
               <button 
                 onClick={() => {
-                  if (currentTool !== 'magnify') {
-                    setSavedViewScale(viewScale);
-                    setSavedViewPan(viewPan);
-                  }
-                  setCurrentTool('magnify');
-                }}
-                onDoubleClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (savedViewScale != null && savedViewPan) {
-                    setViewScale(savedViewScale);
-                    setViewPan(savedViewPan);
-                  }
+                  // Toggle magnify and ensure exclusivity among view controls
+                  setCurrentTool(prev => (prev === 'magnify' ? 'draw' : 'magnify'));
                 }}
                 className={currentTool === 'magnify' ? 'active' : ''}
                 title="Magnify: click canvas to zoom (Shift to zoom out)"
@@ -859,7 +897,7 @@ function App() {
                   </label>
                 </div>
                 
-                <div>
+      <div>
                   <label className="radio-label">
                     <input
                       type="radio"
@@ -947,7 +985,7 @@ function App() {
             <h3>✏️ Drawing Tools</h3>
             <div className="button-group compact">
               <button 
-                onClick={() => setCurrentTool(currentTool === 'draw' ? 'draw' : 'draw')}
+                onClick={() => setCurrentTool('draw')}
                 className={currentTool === 'draw' ? 'active' : ''}
                 title="Draw tool"
               >
@@ -955,7 +993,7 @@ function App() {
                 Draw
               </button>
               <button 
-                onClick={() => setCurrentTool(currentTool === 'erase' ? 'draw' : 'erase')}
+                onClick={() => setCurrentTool('erase')}
                 onDoubleClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1033,6 +1071,7 @@ function App() {
             </div>
           </div>
         </div>
+        </div>
 
         {/* Canvas Area */}
         <div className="canvas-container">
@@ -1054,6 +1093,7 @@ function App() {
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

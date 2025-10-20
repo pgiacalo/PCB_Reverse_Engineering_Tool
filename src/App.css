@@ -2,6 +2,7 @@
 
 .app {
   min-height: 100vh;
+  width: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -26,7 +27,8 @@
   display: flex;
   gap: 2rem;
   padding: 2rem;
-  max-width: 1400px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -42,6 +44,20 @@
   height: fit-content;
   position: sticky;
   top: 2rem;
+}
+
+/* Help panel (mode + tips) */
+.help-panel {
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.help-panel div {
+  line-height: 1.3;
 }
 
 .control-section {
@@ -71,7 +87,7 @@
 .button-group button {
   flex: 1;
   min-width: 0;
-  height: 2.5rem;
+  height: 2.2rem; /* slightly smaller */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -87,10 +103,10 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.9rem; /* slightly smaller */
   border-radius: 8px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.85rem; /* slightly smaller */
   font-weight: 500;
   transition: all 0.3s ease;
   display: flex;
@@ -100,15 +116,15 @@
 }
 
 .button-group.compact button {
-  padding: 0.4rem 0.6rem;
-  font-size: 0.75rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.72rem; /* slightly smaller */
   flex: 1;
   min-width: 0;
 }
 
 .load-button {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
 }
 
 .load-button:hover, button:hover {
@@ -310,8 +326,8 @@ button:disabled:hover {
 
 .slider {
   width: 100%;
-  height: 6px;
-  border-radius: 3px;
+  height: 4px; /* thinner track */
+  border-radius: 2px;
   background: #ddd;
   outline: none;
   -webkit-appearance: none;
@@ -320,8 +336,8 @@ button:disabled:hover {
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 20px;
-  height: 20px;
+  width: 16px; /* smaller thumb */
+  height: 16px;
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   cursor: pointer;
@@ -329,8 +345,8 @@ button:disabled:hover {
 }
 
 .slider::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   cursor: pointer;
@@ -392,7 +408,9 @@ button:disabled:hover {
 
 .pcb-canvas {
   width: 100%;
-  height: 600px;
+  height: auto; /* keep aspect ratio */
+  aspect-ratio: 4 / 3; /* match canvas intrinsic 800x600 */
+  max-height: calc(100vh - 220px); /* do not exceed viewport height */
   border: 2px solid #e0e0e0;
   border-radius: 8px;
   background: #f8f9fa;
@@ -469,7 +487,7 @@ button:disabled:hover {
   }
   
   .pcb-canvas {
-    height: 400px;
+    max-height: calc(100vh - 260px);
   }
 }
 
