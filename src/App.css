@@ -431,7 +431,7 @@ button:disabled:hover {
   left: 1.5rem;
   right: 1.5rem;
   bottom: 0.75rem;
-  height: 16px;
+  height: 8px;
   overflow-x: auto;
   overflow-y: hidden;
   background: rgba(0,0,0,0.06);
