@@ -58,6 +58,8 @@ function App() {
   const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hScrollRef = useRef<HTMLDivElement>(null);
+  const vScrollRef = useRef<HTMLDivElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
 
@@ -696,6 +698,22 @@ function App() {
     drawCanvas();
   }, [drawingStrokes]);
 
+  // Keep scrollbars in sync with viewPan changes from other interactions
+  React.useEffect(() => {
+    const h = hScrollRef.current;
+    if (h) {
+      const maxX = Math.max(0, h.scrollWidth - h.clientWidth);
+      const desired = Math.max(0, Math.min(maxX, -viewPan.x));
+      if (Math.abs(h.scrollLeft - desired) > 1) h.scrollLeft = desired;
+    }
+    const v = vScrollRef.current;
+    if (v) {
+      const maxY = Math.max(0, v.scrollHeight - v.clientHeight);
+      const desired = Math.max(0, Math.min(maxY, -viewPan.y));
+      if (Math.abs(v.scrollTop - desired) > 1) v.scrollTop = desired;
+    }
+  }, [viewPan.x, viewPan.y]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -1092,6 +1110,32 @@ function App() {
               <p>Click "Load Top PCB" and "Load Bottom PCB" buttons</p>
             </div>
           )}
+
+          {/* Horizontal scrollbar (bottom) */}
+          <div
+            ref={hScrollRef}
+            className="scrollbar-horizontal"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              setViewPan((p) => ({ x: -el.scrollLeft, y: p.y }));
+            }}
+            aria-label="Horizontal pan"
+          >
+            <div className="scrollbar-horizontal-content" />
+          </div>
+
+          {/* Vertical scrollbar (right) */}
+          <div
+            ref={vScrollRef}
+            className="scrollbar-vertical"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              setViewPan((p) => ({ x: p.x, y: -el.scrollTop }));
+            }}
+            aria-label="Vertical pan"
+          >
+            <div className="scrollbar-vertical-content" />
+          </div>
         </div>
 
       </div>
