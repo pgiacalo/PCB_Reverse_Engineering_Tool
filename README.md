@@ -149,13 +149,25 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Vertical Flip**: Flip image top-to-bottom
 - Use these to correct image orientation
 
+**Slant (Skew) (Arrow Keys)**
+- Select "Slant" radio button
+- Applies an affine skew (shear) to the image:
+  - ↑/↓ = ±0.5° vertical slant
+  - ←/→ = ±0.5° horizontal slant
+
+**Keystone (Arrow Keys)**
+- Select "Keystone" radio button
+- Applies a perspective-like taper (keystone) similar to correcting camera perspective:
+  - ↑/↓ = ±0.5° vertical keystone (top vs bottom width)
+  - ←/→ = ±0.5° horizontal keystone (left vs right width)
+
 **Black & White / Invert**
 - Click "Black & White" to enable edge-highlighted black/white rendering of the images (useful for emphasizing PCB traces and outlines).
 - Once enabled, the same button changes to "Invert"; click it to swap black and white.
 - The "Color Mode" button exits both Grayscale and Black & White/Invert, restoring full color.
 
 **Reset Transform**
-- Click "Reset Transform" to restore both images to original position, scale, and rotation
+- Click "Reset Transform" to restore the currently selected image (Top or Bottom) to its original position, rotation, scale, flips, slant, and keystone
   - Also restores full color by turning off Grayscale and Black & White/Invert
 
 ### Drawing Tools
@@ -198,6 +210,8 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Nudge**: 1 pixel movement
 - **Scale**: 1% (up/down) or 0.1% (left/right) changes
 - **Rotate**: 1° (up/down) or 0.1° (left/right) changes
+- **Slant**: 0.5° per arrow (vertical on ↑/↓, horizontal on ←/→)
+- **Keystone**: 0.5° per arrow (vertical on ↑/↓, horizontal on ←/→)
 
 **Reset Functions**
 - **Double-click any slider**: Reset to default value
