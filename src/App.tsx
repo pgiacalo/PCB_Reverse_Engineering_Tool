@@ -15,6 +15,12 @@ interface PCBImage {
   rotation: number;
   flipX: boolean;
   flipY: boolean;
+  // Skew (keystone) angles in radians; applied as affine shear
+  skewX?: number;
+  skewY?: number;
+  // Keystone (perspective-like taper) in radians for vertical and horizontal
+  keystoneV?: number;
+  keystoneH?: number;
   bitmap?: ImageBitmap | null;
 }
 
@@ -49,7 +55,7 @@ function App() {
   const [selectedImageForTransform, setSelectedImageForTransform] = useState<'top' | 'bottom' | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
-  const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate'>('nudge');
+  const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone'>('nudge');
   const [isGrayscale, setIsGrayscale] = useState(false);
   const [isBlackAndWhiteEdges, setIsBlackAndWhiteEdges] = useState(false);
   const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
@@ -83,6 +89,10 @@ function App() {
         rotation: 0,
         flipX: false,
         flipY: false,
+        skewX: 0,
+        skewY: 0,
+        keystoneV: 0,
+        keystoneH: 0,
         bitmap,
       };
       if (type === 'top') {
@@ -365,6 +375,67 @@ function App() {
       return offscreen;
     };
 
+    // Draw with perspective-like keystone using slice warping via offscreen canvases
+    const drawImageWithKeystone = (
+      ctxTarget: CanvasRenderingContext2D,
+      source: CanvasImageSource,
+      srcW: number,
+      srcH: number,
+      keystoneV: number,
+      keystoneH: number,
+      destW: number,
+      destH: number,
+    ) => {
+      const base = document.createElement('canvas');
+      base.width = srcW;
+      base.height = srcH;
+      const bctx = base.getContext('2d', { willReadFrequently: true })!;
+      bctx.clearRect(0, 0, srcW, srcH);
+      bctx.drawImage(source as any, 0, 0, srcW, srcH);
+
+      let current = base;
+
+      if (Math.abs(keystoneV) > 1e-6) {
+        const tanV = Math.tan(keystoneV);
+        const topScale = Math.max(0.2, 1 - tanV);
+        const bottomScale = Math.max(0.2, 1 + tanV);
+        const temp = document.createElement('canvas');
+        temp.width = srcW;
+        temp.height = srcH;
+        const tctx = temp.getContext('2d', { willReadFrequently: true })!;
+        tctx.clearRect(0, 0, srcW, srcH);
+        for (let y = 0; y < srcH; y++) {
+          const t = srcH <= 1 ? 0 : (y / (srcH - 1));
+          const scaleRow = topScale * (1 - t) + bottomScale * t;
+          const dw = Math.max(1, srcW * scaleRow);
+          const dx = (srcW - dw) / 2;
+          tctx.drawImage(current, 0, y, srcW, 1, dx, y, dw, 1);
+        }
+        current = temp;
+      }
+
+      if (Math.abs(keystoneH) > 1e-6) {
+        const tanH = Math.tan(keystoneH);
+        const leftScale = Math.max(0.2, 1 - tanH);
+        const rightScale = Math.max(0.2, 1 + tanH);
+        const temp2 = document.createElement('canvas');
+        temp2.width = srcW;
+        temp2.height = srcH;
+        const tctx2 = temp2.getContext('2d', { willReadFrequently: true })!;
+        tctx2.clearRect(0, 0, srcW, srcH);
+        for (let x = 0; x < srcW; x++) {
+          const t = srcW <= 1 ? 0 : (x / (srcW - 1));
+          const scaleCol = leftScale * (1 - t) + rightScale * t;
+          const dh = Math.max(1, srcH * scaleCol);
+          const dy = (srcH - dh) / 2;
+          tctx2.drawImage(current, x, 0, 1, srcH, x, dy, 1, dh);
+        }
+        current = temp2;
+      }
+
+      ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
+    };
+
     // Draw images with transformations and apply view transform per draw
     if (topImage && topImage.bitmap && (currentView === 'top' || currentView === 'overlay')) {
       const bmp = topImage.bitmap;
@@ -381,14 +452,20 @@ function App() {
       const centerY = canvas.height / 2;
       ctx.translate(centerX + topImage.x, centerY + topImage.y);
       ctx.rotate((topImage.rotation * Math.PI) / 180);
+      // Apply skew (keystone) if any
+      if (topImage.skewX || topImage.skewY) {
+        const sx = Math.tan(topImage.skewX || 0);
+        const sy = Math.tan(topImage.skewY || 0);
+        ctx.transform(1, sy, sx, 1, 0, 0);
+      }
       ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
       const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
       const scaledHeight = bmp.height * 1;
-      if (isBlackAndWhiteEdges) {
-        const edgeCanvas = createEdgeCanvas(bmp, isBlackAndWhiteInverted);
-        ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+      if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
+        drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
       } else {
-        ctx.drawImage(bmp, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
       }
       ctx.restore();
     }
@@ -407,14 +484,20 @@ function App() {
       const centerY = canvas.height / 2;
       ctx.translate(centerX + bottomImage.x, centerY + bottomImage.y);
       ctx.rotate((bottomImage.rotation * Math.PI) / 180);
+      // Apply skew (keystone) if any
+      if (bottomImage.skewX || bottomImage.skewY) {
+        const sx = Math.tan(bottomImage.skewX || 0);
+        const sy = Math.tan(bottomImage.skewY || 0);
+        ctx.transform(1, sy, sx, 1, 0, 0);
+      }
       ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
       const scaledWidth = bmp.width * 1;
       const scaledHeight = bmp.height * 1;
-      if (isBlackAndWhiteEdges) {
-        const edgeCanvas = createEdgeCanvas(bmp, isBlackAndWhiteInverted);
-        ctx.drawImage(edgeCanvas, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      const sourceToDrawB: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+      if ((bottomImage.keystoneV && Math.abs(bottomImage.keystoneV) > 1e-6) || (bottomImage.keystoneH && Math.abs(bottomImage.keystoneH) > 1e-6)) {
+        drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight);
       } else {
-        ctx.drawImage(bmp, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        ctx.drawImage(sourceToDrawB, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
       }
       ctx.restore();
     }
@@ -560,18 +643,25 @@ function App() {
   }, [topImage, bottomImage]);
 
   const resetImageTransform = useCallback(() => {
-    // Reset both images to their original state
-    if (topImage) {
-      updateImageTransform('top', { x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false });
-    }
-    if (bottomImage) {
-      updateImageTransform('bottom', { x: 0, y: 0, scale: 1, rotation: 0, flipX: false, flipY: false });
-    }
-    // Also restore color mode
+    // Reset only the selected image to its original transform
+    if (!selectedImageForTransform) return;
+    updateImageTransform(selectedImageForTransform, {
+      x: 0,
+      y: 0,
+      scale: 1,
+      rotation: 0,
+      flipX: false,
+      flipY: false,
+      skewX: 0,
+      skewY: 0,
+      keystoneV: 0,
+      keystoneH: 0,
+    });
+    // Also restore color mode (global)
     setIsGrayscale(false);
     setIsBlackAndWhiteEdges(false);
     setIsBlackAndWhiteInverted(false);
-  }, [updateImageTransform, topImage, bottomImage]);
+  }, [updateImageTransform, selectedImageForTransform]);
 
   // Enhanced keyboard functionality for sliders and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -689,6 +779,84 @@ function App() {
             rotation: prev.rotation + rotationDelta
           } : null);
         }
+      } else if (transformMode === 'slant') {
+        // Keystone (skew): Up/Down adjust vertical skew, Left/Right adjust horizontal; all at ±0.5°
+        let skewXDeltaDeg = 0; // horizontal shear
+        let skewYDeltaDeg = 0; // vertical shear
+
+        switch (e.key) {
+          case 'ArrowUp':
+            skewYDeltaDeg = -0.5;
+            break;
+          case 'ArrowDown':
+            skewYDeltaDeg = 0.5;
+            break;
+          case 'ArrowLeft':
+            skewXDeltaDeg = -0.5;
+            break;
+          case 'ArrowRight':
+            skewXDeltaDeg = 0.5;
+            break;
+          default:
+            break;
+        }
+
+        if (skewXDeltaDeg !== 0 || skewYDeltaDeg !== 0) {
+          const toRad = (deg: number) => (deg * Math.PI) / 180;
+          const clamp = (v: number) => Math.max(-0.7, Math.min(0.7, v)); // clamp to ~±40° to avoid extremes
+          if (selectedImageForTransform === 'top' && topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+              skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+            } : null);
+          } else if (selectedImageForTransform === 'bottom' && bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+              skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+            } : null);
+          }
+        }
+      } else if (transformMode === 'keystone') {
+        // Perspective-like keystone: Up/Down = vertical keystone, Left/Right = horizontal keystone; ±0.5°
+        let kHDeltaDeg = 0; // horizontal keystone
+        let kVDeltaDeg = 0; // vertical keystone
+
+        switch (e.key) {
+          case 'ArrowUp':
+            kVDeltaDeg = -0.5;
+            break;
+          case 'ArrowDown':
+            kVDeltaDeg = 0.5;
+            break;
+          case 'ArrowLeft':
+            kHDeltaDeg = -0.5;
+            break;
+          case 'ArrowRight':
+            kHDeltaDeg = 0.5;
+            break;
+          default:
+            break;
+        }
+
+        if (kHDeltaDeg !== 0 || kVDeltaDeg !== 0) {
+          const toRad = (deg: number) => (deg * Math.PI) / 180;
+          const clamp = (v: number) => Math.max(-0.35, Math.min(0.35, v)); // clamp to ~±20° to avoid extremes
+          if (selectedImageForTransform === 'top' && topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+              keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+            } : null);
+          } else if (selectedImageForTransform === 'bottom' && bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+              keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+            } : null);
+          }
+        }
       }
     } else {
       // Handle slider controls with arrow keys
@@ -799,6 +967,10 @@ function App() {
                   tips.push('Arrow Up/Down: ±1% scale. Arrow Left/Right: ±0.1% scale.');
                 } else if (transformMode === 'rotate') {
                   tips.push('Arrow Up/Down: ±1°. Arrow Left/Right: ±0.1°.');
+                } else if (transformMode === 'slant') {
+                  tips.push('Arrow Up/Down: ±0.5° vertical slant. Arrow Left/Right: ±0.5° horizontal slant.');
+                } else if (transformMode === 'keystone') {
+                  tips.push('Arrow Up/Down: ±0.5° vertical keystone. Arrow Left/Right: ±0.5° horizontal keystone.');
                 }
               } else if (currentTool === 'draw') {
                 mode = `Draw (${selectedDrawingLayer} layer)`;
@@ -996,6 +1168,26 @@ function App() {
                       onChange={() => setTransformMode('rotate')}
                     />
                     <span>Rotate</span>
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="transformMode"
+                      value="slant"
+                      checked={transformMode === 'slant'}
+                      onChange={() => setTransformMode('slant')}
+                    />
+                    <span>Slant</span>
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="transformMode"
+                      value="keystone"
+                      checked={transformMode === 'keystone'}
+                      onChange={() => setTransformMode('keystone')}
+                    />
+                    <span>Keystone</span>
                   </label>
                 </div>
               </div>

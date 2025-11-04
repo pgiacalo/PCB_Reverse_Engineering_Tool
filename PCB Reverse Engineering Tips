@@ -1,0 +1,70 @@
+PCB Reverse Engineering
+
+Hackaday educational PCB reverse engineering video (used to derive the notes below)
+	https://www.youtube.com/watch?v=dQ9Mh9BbyP0&t=6251s
+
+1) BOM: for each of the components, list the following info in a spreadsheet
+	- Designator (i.e., marking on board next to the chip)
+	- Package Type*** (i.e., SOT-23, etc)  		[check google for photo identifiers]
+	- Part Markings (i.e., written on the chip)	[mfg dates are 4 digit numbers: year/week or week/year]
+	- Part Number (i.e., written on the chip)	
+	- Research Information (brief info about the chip, based on a search of the part number/markings)
+
+	**NOTE: Link to electronic component package types (prefixes with photos)
+			https://forum.digikey.com/t/common-electronic-component-package-types/34882
+
+			Category Search: parts categories with photos
+			https://www.digikey.com/en/products/result?s=N4IgTCBcDaIG4EsDOBXAhgGwARIKZoCcBjACxAF0BfIA
+
+	TIPS on component identification:
+		1) For components that are NOT market, you may have to desolder them to get values 
+			- i.e., parallel circuits, etc, prevent values to be measured accurately directly
+
+		2) Chip/IC data sheets often contain sample application circuits. These can help identify 
+		parts and values connected to the chip. 
+
+		3) If component values cannot be determined, just leave the values blank in the BOM (for now)
+
+
+2) Look for marking identifiers on the PCB next to the components
+	Typical Prefix Meanings:
+		Prefix 	Component type(s)
+		B 	Battery or cell
+		BT	Battery or cell
+		C	Capacitor
+		D	Diode (including Zener diodes and LEDs) 
+		CR	Diode (including Zener diodes and LEDs)
+		F	Fuse
+		FB	Ferrite bead
+		J	Connector or jack (the fixed part of a pair)
+		JP	Jumper
+		K	Relay or contactor
+		L	Inductor or coil
+		LS	Loudspeaker or buzzer
+		M	Motor
+		P	Connector or plug (the movable part of a pair)
+		PS	Power supply
+		Q	Transistor (including BJT, FET, and MOSFET)
+		R	Resistor
+		RN	Resistor network
+		RT	Thermistor (a thermal resistor)
+		S 	Switch 
+		SW	Switch
+		T	Transformer
+		TP	Test point
+		U 	Integrated circuit (IC) or assembly (or sometimes a transistor)
+		IC	Integrated circuit (IC) or assembly
+		V	Vacuum tube
+		VR	Variable resistor (potentiometer), varistor, or voltage regulator
+		X 	Crystal oscillator
+		XTAL	Crystal oscillator
+		Y	Crystal or oscillator
+		Z	Zener diode
+
+
+
+3) Create a block diagram of the major components
+
+4) Use KiCad to drop each component into a new drawing, based on the components in the BOM
+	This becomes your CAD parts to be moved around and connected in the subsequent schematic 
+
