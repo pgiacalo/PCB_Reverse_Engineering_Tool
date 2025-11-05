@@ -45,6 +45,7 @@ function App() {
   const [bottomImage, setBottomImage] = useState<PCBImage | null>(null);
   const [currentView, setCurrentView] = useState<ViewMode>('overlay');
   const [transparency, setTransparency] = useState(50);
+  const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
   const [currentTool, setCurrentTool] = useState<Tool>('none');
   const [brushColor, setBrushColor] = useState('#ff0000');
   const [brushSize, setBrushSize] = useState(10);
@@ -73,6 +74,11 @@ function App() {
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const transparencyCycleRafRef = useRef<number | null>(null);
+  const transparencyCycleStartRef = useRef<number | null>(null);
+  const isSyncingScrollRef = useRef<boolean>(false);
+  const contentOriginXRef = useRef<number>(0);
+  const contentOriginYRef = useRef<number>(0);
 
   const handleImageLoad = useCallback(async (file: File, type: 'top' | 'bottom') => {
     try {
@@ -106,16 +112,18 @@ function App() {
   }, []);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const canvas = canvasRef.current!;
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const canvasX = screenX * scaleX;
-    const canvasY = screenY * scaleY;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dprX = canvas.width / rect.width;
+    const dprY = canvas.height / rect.height;
+    // Use offset within the element for robustness
+    const offX = (e.nativeEvent as any).offsetX as number | undefined;
+    const offY = (e.nativeEvent as any).offsetY as number | undefined;
+    const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
+    const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
+    const canvasX = cssX * dprX;
+    const canvasY = cssY * dprY;
     const x = (canvasX - viewPan.x) / viewScale;
     const y = (canvasY - viewPan.y) / viewScale;
 
@@ -141,6 +149,33 @@ function App() {
       setTransformStartPos({ x, y });
     }
   }, [currentTool, selectedImageForTransform, brushSize, selectedDrawingLayer, drawingStrokes.length, viewScale, viewPan.x, viewPan.y]);
+
+  const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    if (currentTool !== 'magnify') return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dprX = canvas.width / rect.width;
+    const dprY = canvas.height / rect.height;
+    const offX = (e.nativeEvent as any).offsetX as number | undefined;
+    const offY = (e.nativeEvent as any).offsetY as number | undefined;
+    const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
+    const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
+    const canvasX = cssX * dprX;
+    const canvasY = cssY * dprY;
+    const worldX = (canvasX - viewPan.x) / viewScale;
+    const worldY = (canvasY - viewPan.y) / viewScale;
+
+    const stepIn = 1.2; // zoom in factor per wheel step
+    const stepOut = 1 / stepIn;
+    const factor = e.deltaY < 0 ? stepIn : stepOut;
+    const newScale = Math.max(0.25, Math.min(8, viewScale * factor));
+    const newPanX = canvasX - newScale * worldX;
+    const newPanY = canvasY - newScale * worldY;
+    setViewScale(newScale);
+    setViewPan({ x: newPanX, y: newPanY });
+  }, [currentTool, viewScale, viewPan.x, viewPan.y]);
 
   const snapConstrainedPoint = useCallback((start: DrawingPoint, x: number, y: number): DrawingPoint => {
     const dx = x - start.x;
@@ -399,16 +434,18 @@ function App() {
         const tanV = Math.tan(keystoneV);
         const topScale = Math.max(0.2, 1 - tanV);
         const bottomScale = Math.max(0.2, 1 + tanV);
+        const maxScale = Math.max(topScale, bottomScale);
+        const newW = Math.max(1, Math.ceil(srcW * maxScale));
         const temp = document.createElement('canvas');
-        temp.width = srcW;
+        temp.width = newW;
         temp.height = srcH;
         const tctx = temp.getContext('2d', { willReadFrequently: true })!;
-        tctx.clearRect(0, 0, srcW, srcH);
+        tctx.clearRect(0, 0, newW, srcH);
         for (let y = 0; y < srcH; y++) {
           const t = srcH <= 1 ? 0 : (y / (srcH - 1));
           const scaleRow = topScale * (1 - t) + bottomScale * t;
           const dw = Math.max(1, srcW * scaleRow);
-          const dx = (srcW - dw) / 2;
+          const dx = (newW - dw) / 2;
           tctx.drawImage(current, 0, y, srcW, 1, dx, y, dw, 1);
         }
         current = temp;
@@ -418,17 +455,19 @@ function App() {
         const tanH = Math.tan(keystoneH);
         const leftScale = Math.max(0.2, 1 - tanH);
         const rightScale = Math.max(0.2, 1 + tanH);
+        const maxScale = Math.max(leftScale, rightScale);
+        const newH = Math.max(1, Math.ceil(srcH * maxScale));
         const temp2 = document.createElement('canvas');
-        temp2.width = srcW;
-        temp2.height = srcH;
+        temp2.width = current.width;
+        temp2.height = newH;
         const tctx2 = temp2.getContext('2d', { willReadFrequently: true })!;
-        tctx2.clearRect(0, 0, srcW, srcH);
-        for (let x = 0; x < srcW; x++) {
-          const t = srcW <= 1 ? 0 : (x / (srcW - 1));
+        tctx2.clearRect(0, 0, temp2.width, newH);
+        for (let x = 0; x < current.width; x++) {
+          const t = current.width <= 1 ? 0 : (x / (current.width - 1));
           const scaleCol = leftScale * (1 - t) + rightScale * t;
           const dh = Math.max(1, srcH * scaleCol);
-          const dy = (srcH - dh) / 2;
-          tctx2.drawImage(current, x, 0, 1, srcH, x, dy, 1, dh);
+          const dy = (newH - dh) / 2;
+          tctx2.drawImage(current, x, 0, 1, current.height, x, dy, 1, dh);
         }
         current = temp2;
       }
@@ -521,17 +560,37 @@ function App() {
     const centerY = canvas.height / 2;
     const addImageBounds = (img: typeof topImage | typeof bottomImage) => {
       if (!img || !img.bitmap) return;
-      const scaleX = img.scale * (img.flipX ? -1 : 1);
-      const scaleY = img.scale * (img.flipY ? -1 : 1);
+      const rawW = img.bitmap.width;
+      const rawH = img.bitmap.height;
+      // Keystone: approximate by scaling width/height by max edge scale
+      const tanV = img.keystoneV ? Math.tan(img.keystoneV) : 0;
+      const tanH = img.keystoneH ? Math.tan(img.keystoneH) : 0;
+      const topScale = Math.max(0.2, 1 - tanV);
+      const bottomScale = Math.max(0.2, 1 + tanV);
+      const leftScale = Math.max(0.2, 1 - tanH);
+      const rightScale = Math.max(0.2, 1 + tanH);
+      const kScaleW = Math.max(topScale, bottomScale);
+      const kScaleH = Math.max(leftScale, rightScale);
+      const wK = rawW * kScaleW;
+      const hK = rawH * kScaleH;
+
+      // Slant (skew) extents: shear before rotation
+      const sx = img.skewX ? Math.tan(img.skewX) : 0; // horizontal shear
+      const sy = img.skewY ? Math.tan(img.skewY) : 0; // vertical shear
+      const absScale = Math.abs(img.scale);
+      const wSheared = Math.abs(absScale) * wK + Math.abs(sx) * Math.abs(absScale) * hK;
+      const hSheared = Math.abs(sy) * Math.abs(absScale) * wK + Math.abs(absScale) * hK;
+
+      // Use unit scale in bounds since dimensions already include scale magnitude
       const b = rectTransformedBounds(
-        img.bitmap.width,
-        img.bitmap.height,
+        wSheared,
+        hSheared,
         centerX,
         centerY,
         img.x,
         img.y,
-        scaleX,
-        scaleY,
+        1,
+        1,
         img.rotation
       );
       bounds = mergeBounds(bounds, b);
@@ -551,11 +610,30 @@ function App() {
     const widthScreen = widthWorld * viewScale;
     const heightScreen = heightWorld * viewScale;
 
-    const desiredW = Math.max(container.clientWidth, Math.ceil(widthScreen));
-    const desiredH = Math.max(container.clientHeight, Math.ceil(heightScreen));
+    const EDGE_PAD = 8; // small pad to ensure the very edges are reachable
+    const desiredW = Math.max(container.clientWidth, Math.ceil(widthScreen) + EDGE_PAD * 2);
+    const desiredH = Math.max(container.clientHeight, Math.ceil(heightScreen) + EDGE_PAD * 2);
     hContent.style.width = `${desiredW}px`;
     vContent.style.height = `${desiredH}px`;
-  }, [topImage, bottomImage, viewScale]);
+    // Update content origin (position of left/top edge in screen space when viewPan=0)
+    contentOriginXRef.current = nb.minX * viewScale - EDGE_PAD;
+    contentOriginYRef.current = nb.minY * viewScale - EDGE_PAD;
+    // After content size changes, sync scrollbars to current pan
+    const h = hScrollRef.current;
+    const v = vScrollRef.current;
+    isSyncingScrollRef.current = true;
+    if (h) {
+      const maxX = Math.max(0, h.scrollWidth - h.clientWidth);
+      const desired = Math.max(0, Math.min(maxX, -(viewPan.x + contentOriginXRef.current)));
+      h.scrollLeft = desired;
+    }
+    if (v) {
+      const maxY = Math.max(0, v.scrollHeight - v.clientHeight);
+      const desired = Math.max(0, Math.min(maxY, -(viewPan.y + contentOriginYRef.current)));
+      v.scrollTop = desired;
+    }
+    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
+  }, [topImage, bottomImage, viewScale, viewPan.x, viewPan.y]);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
     drawingStrokes.forEach(stroke => {
@@ -663,8 +741,31 @@ function App() {
     setIsBlackAndWhiteInverted(false);
   }, [updateImageTransform, selectedImageForTransform]);
 
-  // Enhanced keyboard functionality for sliders and image transformation
+  // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
+    if (currentTool === 'draw') {
+      const isUndo = (e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey;
+      if (isUndo) {
+        e.preventDefault();
+        e.stopPropagation();
+        // If a stroke is in progress, cancel it
+        if (isDrawing && currentStroke.length > 0) {
+          setCurrentStroke([]);
+          return;
+        }
+        setDrawingStrokes(prev => {
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].layer === selectedDrawingLayer) {
+              return [...prev.slice(0, i), ...prev.slice(i + 1)];
+            }
+          }
+          return prev; // nothing to undo on this layer
+        });
+        return;
+      }
+    }
+
     // Check if we're in transform mode with an image selected
     if (currentTool === 'transform' && selectedImageForTransform) {
       // Prevent default and stop propagation early so focused radios/sliders don't consume arrows
@@ -907,6 +1008,29 @@ function App() {
     }
   }, []);
 
+  // Transparency auto-cycle (0% → 100% → 0%) with 1s period while checked
+  React.useEffect(() => {
+    if (isTransparencyCycling) {
+      transparencyCycleStartRef.current = performance.now();
+      setTransparency(0);
+      const tick = (now: number) => {
+        const start = transparencyCycleStartRef.current || now;
+        const periodMs = 1000;
+        const phase = ((now - start) % periodMs) / periodMs; // 0..1
+        const tri = 1 - Math.abs(1 - 2 * phase); // 0→1→0 over 1s
+        setTransparency(Math.round(tri * 100));
+        transparencyCycleRafRef.current = requestAnimationFrame(tick);
+      };
+      transparencyCycleRafRef.current = requestAnimationFrame(tick);
+    }
+    return () => {
+      if (transparencyCycleRafRef.current) {
+        cancelAnimationFrame(transparencyCycleRafRef.current);
+        transparencyCycleRafRef.current = null;
+      }
+    };
+  }, [isTransparencyCycling]);
+
   // Redraw canvas when dependencies change
   React.useEffect(() => {
     drawCanvas();
@@ -920,17 +1044,21 @@ function App() {
   // Keep scrollbars in sync with viewPan changes from other interactions
   React.useEffect(() => {
     const h = hScrollRef.current;
+    const v = vScrollRef.current;
+    isSyncingScrollRef.current = true;
     if (h) {
       const maxX = Math.max(0, h.scrollWidth - h.clientWidth);
-      const desired = Math.max(0, Math.min(maxX, -viewPan.x));
-      if (Math.abs(h.scrollLeft - desired) > 1) h.scrollLeft = desired;
+      const origin = contentOriginXRef.current;
+      const desired = Math.max(0, Math.min(maxX, -(viewPan.x + origin)));
+      if (Math.abs(h.scrollLeft - desired) > 0.5) h.scrollLeft = desired;
     }
-    const v = vScrollRef.current;
     if (v) {
       const maxY = Math.max(0, v.scrollHeight - v.clientHeight);
-      const desired = Math.max(0, Math.min(maxY, -viewPan.y));
-      if (Math.abs(v.scrollTop - desired) > 1) v.scrollTop = desired;
+      const origin = contentOriginYRef.current;
+      const desired = Math.max(0, Math.min(maxY, -(viewPan.y + origin)));
+      if (Math.abs(v.scrollTop - desired) > 0.5) v.scrollTop = desired;
     }
+    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
   }, [viewPan.x, viewPan.y]);
 
   return (
@@ -1064,7 +1192,17 @@ function App() {
             
             {currentView === 'overlay' && (
               <div className="slider-group">
-                <label>Transparency: {transparency}%</label>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <label style={{ marginRight: 8 }}>Transparency: {transparency}%</label>
+                  <label className="radio-label">
+                    <input
+                      type="checkbox"
+                      checked={isTransparencyCycling}
+                      onChange={(e) => setIsTransparencyCycling(e.target.checked)}
+                    />
+                    <span style={{ marginLeft: 8 }}>Cycle</span>
+                  </label>
+                </div>
                 <input
                   type="range"
                   min="0"
@@ -1137,6 +1275,7 @@ function App() {
                     <span>Vertical Flip</span>
                   </label>
                 </div>
+                
                 
       <div>
                   <label className="radio-label">
@@ -1346,6 +1485,7 @@ function App() {
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}
             onMouseLeave={handleCanvasMouseUp}
+            onWheel={handleCanvasWheel}
             className={`pcb-canvas ${currentTool === 'transform' ? 'transform-cursor' : currentTool === 'draw' ? 'draw-cursor' : currentTool === 'erase' ? 'erase-cursor' : 'default-cursor'}`}
           />
           
@@ -1361,8 +1501,10 @@ function App() {
             ref={hScrollRef}
             className="scrollbar-horizontal"
             onScroll={(e) => {
+              if (isSyncingScrollRef.current) return;
               const el = e.currentTarget;
-              setViewPan((p) => ({ x: -el.scrollLeft, y: p.y }));
+              const origin = contentOriginXRef.current;
+              setViewPan((p) => ({ x: -el.scrollLeft - origin, y: p.y }));
             }}
             aria-label="Horizontal pan"
           >
@@ -1374,8 +1516,10 @@ function App() {
             ref={vScrollRef}
             className="scrollbar-vertical"
             onScroll={(e) => {
+              if (isSyncingScrollRef.current) return;
               const el = e.currentTarget;
-              setViewPan((p) => ({ x: p.x, y: -el.scrollTop }));
+              const origin = contentOriginYRef.current;
+              setViewPan((p) => ({ x: p.x, y: -el.scrollTop - origin }));
             }}
             aria-label="Vertical pan"
           >
