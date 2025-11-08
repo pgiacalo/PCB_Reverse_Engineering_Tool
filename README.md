@@ -11,7 +11,7 @@ https://youtu.be/X4hGUUNUJ60
 
 🌐 **Try the tool online**: [https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool](https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool)
 
-The application is hosted on GitHub Pages and available globally. No installation required - just open the link in your browser.
+The application is hosted on GitHub and is available globally. No installation required - just open the link in your browser to try the tool. 
 
 ## Installation Instructions
 
