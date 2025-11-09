@@ -116,7 +116,7 @@ function App() {
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
-  const [openMenu, setOpenMenu] = useState<'file' | 'view' | 'transform' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'file' | 'view' | 'transform' | 'tools' | null>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -131,6 +131,7 @@ function App() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null);
   const [selectRect, setSelectRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  // (Open Project uses native picker or hidden input; no overlay)
 
   const handleImageLoad = useCallback(async (file: File, type: 'top' | 'bottom') => {
     try {
@@ -1166,6 +1167,14 @@ function App() {
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Delete selected items
+    if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0)) {
+      e.preventDefault();
+      e.stopPropagation();
+      setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
+      setSelectedIds(new Set());
+      return;
+    }
     // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
     if (currentTool === 'draw' || currentTool === 'erase') {
       const isUndo = (e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey;
@@ -1413,7 +1422,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
@@ -1553,6 +1562,14 @@ function App() {
   React.useEffect(() => {
     drawCanvas();
   }, [canvasSize.width, canvasSize.height]);
+
+  // If selection exists, changing brush size updates selected items' size
+  React.useEffect(() => {
+    if (selectedIds.size === 0) return;
+    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: brushSize } : s));
+  }, [brushSize, selectedIds, setDrawingStrokes]);
+
+  // Selection size slider removed; size can be set via Tools menu
 
   // (Printing uses the browser's native dialog)
 
@@ -1994,7 +2011,62 @@ function App() {
             </div>
           )}
         </div>
+        {/* Tools menu */}
+        <div style={{ position: 'relative' }}>
+          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: openMenu === 'tools' ? '#eef3ff' : '#fff', fontWeight: 600, color: '#222' }}>
+            Tools ▾
+          </button>
+          {openMenu === 'tools' && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
+              <button
+                onClick={() => {
+                  if (selectedIds.size > 0) {
+                    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
+                  } else {
+                    setBrushSize(b => Math.min(40, b + 1));
+                  }
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Increase Size
+              </button>
+              <button
+                onClick={() => {
+                  if (selectedIds.size > 0) {
+                    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
+                  } else {
+                    setBrushSize(b => Math.max(1, b - 1));
+                  }
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Decrease Size
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              {([2,4,6,8,10,12,16,20,24,32] as number[]).map(sz => (
+                <button
+                  key={sz}
+                  onClick={() => {
+                    if (selectedIds.size > 0) {
+                      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
+                    } else {
+                      setBrushSize(sz);
+                    }
+                    setOpenMenu(null);
+                  }}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+                >
+                  Set Size: {sz}px
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      
 
       <div className="main-container">
         {/* Control Panel (hidden; replaced by top menus and left toolstrip) */}
@@ -2403,13 +2475,19 @@ function App() {
               <button onClick={() => setShowColorPicker(prev => !prev)} title="Color Picker" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: '#fff' }}>
                 <Droplet size={16} color={brushColor} />
               </button>
-              {showColorPicker && (
+            {showColorPicker && (
                 <div style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 6 }}>
                     {palette8x8.map((c) => (
                       <div
                         key={c}
-                        onClick={() => { setBrushColor(c); setShowColorPicker(false); }}
+                      onClick={() => { 
+                        setBrushColor(c); 
+                        setShowColorPicker(false); 
+                        if (selectedIds.size > 0) {
+                          setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, color: c } : s));
+                        }
+                      }}
                         title={c}
                         style={{ width: 22, height: 22, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
                       />
