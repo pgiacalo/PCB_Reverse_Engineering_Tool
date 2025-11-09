@@ -504,7 +504,7 @@ button:disabled:hover {
   
   .canvas-container {
     min-height: 500px;
-  }
+}
 }
 
 @media (max-width: 768px) {
@@ -514,7 +514,7 @@ button:disabled:hover {
   
   .app-header h1 {
     font-size: 2rem;
-  }
+}
   
   .main-container {
     padding: 1rem;
@@ -531,19 +531,19 @@ button:disabled:hover {
   
   .pcb-canvas {
     max-height: calc(100vh - 260px);
-  }
+}
 }
 
 /* Loading States */
 .loading {
   opacity: 0.6;
   pointer-events: none;
-}
+  }
 
 /* Animation for smooth transitions */
 * {
   transition: all 0.3s ease;
-}
+  }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
