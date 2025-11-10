@@ -2143,15 +2143,37 @@ function App() {
     return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
   }, []);
 
+  // VGA-like 256 color palette: 16 base colors + 216 web-safe cube + 24 grayscale
   const palette8x8 = React.useMemo(() => {
     const colors: string[] = [];
-    const steps = 64; // 8x8
-    for (let i = 0; i < steps; i++) {
-      const hue = (i * 360) / steps; // evenly spaced hues 0..360
-      colors.push(hsvToHex(hue, 0.9, 0.9)); // constant saturation/value
+    // 16 classic VGA base colors
+    const base16 = [
+      '#000000', '#0000AA', '#00AA00', '#00AAAA',
+      '#AA0000', '#AA00AA', '#AA5500', '#AAAAAA',
+      '#555555', '#5555FF', '#55FF55', '#55FFFF',
+      '#FF5555', '#FF55FF', '#FFFF55', '#FFFFFF',
+    ];
+    colors.push(...base16);
+    // 216-color cube (web-safe): 6 levels per channel
+    const levels = [0, 51, 102, 153, 204, 255];
+    const toHex = (n: number) => n.toString(16).padStart(2, '0');
+    for (let r = 0; r < 6; r++) {
+      for (let g = 0; g < 6; g++) {
+        for (let b = 0; b < 6; b++) {
+          const R = levels[r], G = levels[g], B = levels[b];
+          colors.push(`#${toHex(R)}${toHex(G)}${toHex(B)}`);
+        }
+      }
     }
-    return colors;
-  }, [hsvToHex]);
+    // 24 grayscale ramp (0..255)
+    for (let i = 0; i < 24; i++) {
+      const v = Math.round((i / 23) * 255);
+      const h = toHex(v);
+      colors.push(`#${h}${h}${h}`);
+    }
+    // Ensure exactly 256 entries
+    return colors.slice(0, 256);
+  }, []);
 
   // Force redraw when drawingStrokes change (for eraser)
   React.useEffect(() => {
@@ -2738,14 +2760,14 @@ function App() {
             <button onClick={() => setCurrentTool('select')} title="Select" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <MousePointer size={16} />
             </button>
-            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              <PenLine size={16} color={brushColor} />
-            </button>
             <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
               </svg>
+            </button>
+            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <PenLine size={16} color={brushColor} />
             </button>
             <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Component Tool" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -2759,23 +2781,35 @@ function App() {
               </svg>
             </button>
             <button onClick={() => setCurrentTool('erase')} title="Erase" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
+              {/* Tilted pink eraser */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="4" y="4" width="16" height="16" fill="#fff" stroke="#111" strokeWidth="2" />
+                <g transform="rotate(-35 12 12)">
+                  <rect x="6" y="8" width="12" height="8" rx="1.5" fill="#f5a3b3" stroke="#111" strokeWidth="1.5" />
+                  <rect x="6" y="13" width="12" height="3" fill="#f18ea4" stroke="none" />
+                </g>
               </svg>
             </button>
             <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              <Move size={16} />
-            </button>
-            <button onClick={() => setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify')} title={isShiftPressed ? 'Zoom Out' : 'Zoom In'} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="10" cy="10" r="6" fill="none" stroke="#111" strokeWidth="2" />
-                <line x1="14.5" y1="14.5" x2="20" y2="20" stroke="#111" strokeWidth="2" strokeLinecap="round" />
+                <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 11v-4c0-.8.6-1.3 1.3-1.3S11 6.2 11 7v4" />
+                  <path d="M11 11V6.5c0-.8.6-1.3 1.3-1.3S14 5.7 14 6.5V11" />
+                  <path d="M14 11V7.2c0-.8.6-1.3 1.3-1.3.7 0 1.3.5 1.3 1.3V12c1 .6 1.6 1.5 1.6 2.7A4.3 4.3 0 0 1 14 19H9.2A4.2 4.2 0 0 1 5 14.8V11c0-.6.4-1 .9-1 .6 0 1 .4 1 1v2" />
+                </g>
+              </svg>
+            </button>
+            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={isShiftPressed ? 'Zoom Out' : 'Zoom In'} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              {/* Enlarged magnifier lens and symbols */}
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10" cy="10" r="7.5" fill="none" stroke="#111" strokeWidth="2" />
+                <line x1="15.5" y1="15.5" x2="21" y2="21" stroke="#111" strokeWidth="2" strokeLinecap="round" />
                 {isShiftPressed ? (
-                  <line x1="7" y1="10" x2="13" y2="10" stroke="#111" strokeWidth="2" strokeLinecap="round" />
+                  <line x1="6.5" y1="10" x2="13.5" y2="10" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
                 ) : (
                   <>
-                    <line x1="7" y1="10" x2="13" y2="10" stroke="#111" strokeWidth="2" strokeLinecap="round" />
-                    <line x1="10" y1="7" x2="10" y2="13" stroke="#111" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="6.5" y1="10" x2="13.5" y2="10" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
+                    <line x1="10" y1="6.5" x2="10" y2="13.5" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
                   </>
                 )}
               </svg>
@@ -2790,7 +2824,7 @@ function App() {
               </button>
             {showColorPicker && (
                 <div style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 11px)', gap: 3 }}>
                     {palette8x8.map((c) => (
                       <div
                         key={c}
@@ -2806,7 +2840,7 @@ function App() {
                         }
                       }}
                         title={c}
-                        style={{ width: 22, height: 22, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
+                        style={{ width: 11, height: 11, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
                       />
                     ))}
                   </div>
