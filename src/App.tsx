@@ -69,8 +69,15 @@ interface PCBComponent {
   color: string;
   size: number; // visual size of icon
 }
+interface GroundSymbol {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+}
 type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component';
+type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground';
 
 function App() {
   const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
@@ -156,6 +163,9 @@ function App() {
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
   const [showTopComponents, setShowTopComponents] = useState(true);
   const [showBottomComponents, setShowBottomComponents] = useState(true);
+  // Ground layer
+  const [showGroundLayer, setShowGroundLayer] = useState(true);
+  const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
   // Tool-specific layer defaults (persist until tool re-selected)
   const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
   const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
@@ -362,6 +372,29 @@ function App() {
         x: comp.x,
         y: comp.y,
       });
+    } else if (currentTool === 'ground') {
+      // Snap to nearest via like traces unless ESC is held
+      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
+        let bestDist = Infinity;
+        let bestCenter: { x: number; y: number } | null = null;
+        for (const s of drawingStrokes) {
+          if (s.type !== 'via') continue;
+          const c = s.points[0];
+          const d = Math.hypot(c.x - wx, c.y - wy);
+          const thresholdWorld = 10 / Math.max(viewScale, 0.0001);
+          if (d <= thresholdWorld && d < bestDist) { bestDist = d; bestCenter = c; }
+        }
+        return bestCenter ?? { x: wx, y: wy };
+      };
+      const { x: gx, y: gy } = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
+      const g: GroundSymbol = {
+        id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        x: gx,
+        y: gy,
+        color: brushColor,
+        size: 18,
+      };
+      setGrounds(prev => [...prev, g]);
     }
   }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes.length, viewScale, viewPan.x, viewPan.y]);
 
@@ -602,6 +635,28 @@ function App() {
           setTraceOrderTop(order => order.filter(id => kept.has(id)));
           setTraceOrderBottom(order => order.filter(id => kept.has(id)));
           return filtered;
+        });
+        // Also erase ground symbols intersecting the eraser square
+        setGrounds(prev => {
+          const half = brushSize / 2;
+          const minX = x - half;
+          const maxX = x + half;
+          const minY = y - half;
+          const maxY = y + half;
+          const intersects = (g: GroundSymbol): boolean => {
+            const unit = Math.max(6, (g.size || 18));
+            const vLen = unit * 0.9;
+            const barG = unit * 0.24;
+            const width = unit * 1.6;
+            const bbMinX = g.x - width / 2;
+            const bbMaxX = g.x + width / 2;
+            const bbMinY = g.y;
+            const bbMaxY = g.y + vLen + barG * 2;
+            const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
+            return !disjoint;
+          };
+          const kept = prev.filter(g => !intersects(g));
+          return kept;
         });
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
@@ -1034,6 +1089,47 @@ function App() {
 
     // Always draw strokes on top (respecting view transform applied above)
     drawStrokes(ctx);
+    // Draw ground symbols (if visible)
+    if (showGroundLayer && grounds.length > 0) {
+      const drawGround = (g: GroundSymbol) => {
+        ctx.save();
+        ctx.strokeStyle = g.color || '#222';
+        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+        ctx.lineCap = 'round';
+        // Attachment point is the TOP of the vertical line at (g.x, g.y)
+        const unit = Math.max(6, (g.size || 18)); // base scale
+        const vLen = unit * 0.9;                 // vertical length
+        const barG = unit * 0.24;                // gap between bars
+        const w1 = unit * 1.6;                   // widths of bars
+        const w2 = unit * 1.0;
+        const w3 = unit * 0.6;
+        // Vertical: from top (attachment) downward to first bar
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x, g.y + vLen);
+        ctx.stroke();
+        // First (longest) bar at the bottom end of the vertical line
+        const y1 = g.y + vLen;
+        ctx.beginPath();
+        ctx.moveTo(g.x - w1 / 2, y1);
+        ctx.lineTo(g.x + w1 / 2, y1);
+        ctx.stroke();
+        // Second bar
+        const y2 = y1 + barG;
+        ctx.beginPath();
+        ctx.moveTo(g.x - w2 / 2, y2);
+        ctx.lineTo(g.x + w2 / 2, y2);
+        ctx.stroke();
+        // Third bar (shortest)
+        const y3 = y2 + barG;
+        ctx.beginPath();
+        ctx.moveTo(g.x - w3 / 2, y3);
+        ctx.lineTo(g.x + w3 / 2, y3);
+        ctx.stroke();
+        ctx.restore();
+      };
+      grounds.forEach(drawGround);
+    }
     // Draw components
     const drawComponent = (c: PCBComponent) => {
       const size = Math.max(10, c.size || 18);
@@ -1082,7 +1178,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, selectRect]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showGroundLayer, grounds, selectRect]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -1443,6 +1539,71 @@ function App() {
       }
     }
 
+    // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
+    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && (active as HTMLInputElement).type !== 'range') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (!isEditing) {
+        switch (e.key) {
+          case 's':
+          case 'S':
+            e.preventDefault();
+            setCurrentTool('select');
+            return;
+          case 'g':
+          case 'G':
+            e.preventDefault();
+            setCurrentTool('ground');
+            return;
+          case 'v':
+          case 'V':
+            e.preventDefault();
+            setDrawingMode('via');
+            setCurrentTool('draw');
+            return;
+          case 't':
+          case 'T':
+            e.preventDefault();
+            setDrawingMode('trace');
+            setCurrentTool('draw');
+            setSelectedDrawingLayer(traceToolLayer);
+            setShowTraceLayerChooser(true);
+            return;
+          case 'c':
+          case 'C':
+            e.preventDefault();
+            setCurrentTool('component');
+            setSelectedDrawingLayer(componentToolLayer);
+            setShowComponentLayerChooser(true);
+            return;
+          case 'e':
+          case 'E':
+            e.preventDefault();
+            setCurrentTool('erase');
+            return;
+          case 'h':
+          case 'H':
+            e.preventDefault();
+            setCurrentTool('pan');
+            return;
+          case 'z':
+          case 'Z':
+            // If not Cmd/Ctrl+Z (handled above), select Zoom tool (default to zoom-in)
+            if (!(e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              setIsShiftPressed(false);
+              setCurrentTool('magnify');
+              return;
+            }
+            break;
+        }
+      }
+    }
+
     // Check if we're in transform mode with an image selected
     if (currentTool === 'transform' && selectedImageForTransform) {
       // Prevent default and stop propagation early so focused radios/sliders don't consume arrows
@@ -1662,7 +1823,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, drawingMode, finalizeTraceIfAny]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, drawingMode, finalizeTraceIfAny, traceToolLayer, componentToolLayer]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
@@ -1742,11 +1903,13 @@ function App() {
 
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
-    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'default' =
+    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'default' =
       currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
         ? 'magnify'
+        : currentTool === 'ground'
+        ? 'ground'
         : currentTool === 'draw'
         ? (drawingMode === 'via' ? 'via' : 'trace')
         : 'default';
@@ -1820,6 +1983,29 @@ function App() {
         ctx.lineTo(cx - 2, cy + 2);
         ctx.stroke();
       }
+    } else if (kind === 'ground') {
+      // Draw miniature ground symbol cursor with top attachment at center
+      const unit = Math.max(8, diameterPx); // scale by brush size for visibility
+      const vLen = unit * 0.9;
+      const barG = unit * 0.24;
+      const w1 = unit * 1.6;
+      const w2 = unit * 1.0;
+      const w3 = unit * 0.6;
+      ctx.strokeStyle = brushColor;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      // Vertical from center downward
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx, cy + vLen * 0.7);
+      ctx.stroke();
+      // Bars
+      const y1 = cy + vLen * 0.7;
+      const y2 = y1 + barG * 0.7;
+      const y3 = y2 + barG * 0.7;
+      ctx.beginPath(); ctx.moveTo(cx - w1 * 0.4, y1); ctx.lineTo(cx + w1 * 0.4, y1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - w2 * 0.4, y2); ctx.lineTo(cx + w2 * 0.4, y2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
@@ -1970,6 +2156,7 @@ function App() {
         tracesBottom,
         componentsTop,
         componentsBottom,
+        grounds,
       },
     };
     const json = JSON.stringify(project, null, 2);
@@ -2003,7 +2190,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, grounds]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -2083,6 +2270,7 @@ function App() {
       // load components if present
       if (project.drawing?.componentsTop) setComponentsTop(project.drawing.componentsTop as PCBComponent[]);
       if (project.drawing?.componentsBottom) setComponentsBottom(project.drawing.componentsBottom as PCBComponent[]);
+      if (project.drawing?.grounds) setGrounds(project.drawing.grounds as GroundSymbol[]);
     } catch (err) {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
@@ -2143,37 +2331,21 @@ function App() {
     return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
   }, []);
 
-  // VGA-like 256 color palette: 16 base colors + 216 web-safe cube + 24 grayscale
-  const palette8x8 = React.useMemo(() => {
-    const colors: string[] = [];
-    // 16 classic VGA base colors
-    const base16 = [
-      '#000000', '#0000AA', '#00AA00', '#00AAAA',
-      '#AA0000', '#AA00AA', '#AA5500', '#AAAAAA',
-      '#555555', '#5555FF', '#55FF55', '#55FFFF',
-      '#FF5555', '#FF55FF', '#FFFF55', '#FFFFFF',
-    ];
-    colors.push(...base16);
-    // 216-color cube (web-safe): 6 levels per channel
-    const levels = [0, 51, 102, 153, 204, 255];
-    const toHex = (n: number) => n.toString(16).padStart(2, '0');
-    for (let r = 0; r < 6; r++) {
-      for (let g = 0; g < 6; g++) {
-        for (let b = 0; b < 6; b++) {
-          const R = levels[r], G = levels[g], B = levels[b];
-          colors.push(`#${toHex(R)}${toHex(G)}${toHex(B)}`);
-        }
-      }
-    }
-    // 24 grayscale ramp (0..255)
-    for (let i = 0; i < 24; i++) {
-      const v = Math.round((i / 23) * 255);
-      const h = toHex(v);
-      colors.push(`#${h}${h}${h}`);
-    }
-    // Ensure exactly 256 entries
-    return colors.slice(0, 256);
-  }, []);
+  // High-contrast 32-color palette tuned for PCB work (includes grays/blacks)
+  const palette8x8 = React.useMemo(() => ([
+    // Neutrals (4)
+    '#000000', '#3C3C3C', '#7F7F7F', '#BFBFBF',
+    // Blues/Cyans (8)
+    '#0072B2', '#56B4E9', '#00BFC4', '#332288',
+    '#1F77B4', '#A6CEE3', '#17BECF', '#6A3D9A',
+    // Greens/Yellows (8)
+    '#009E73', '#B3DE69', '#E69F00', '#F0E442',
+    '#2CA02C', '#B2DF8A', '#BCBD22', '#FFED6F',
+    // Reds/Purples/Browns (12)
+    '#E15759', '#D62728', '#FB9A99', '#CC79A7',
+    '#AA4499', '#F781BF', '#9467BD', '#CAB2D6',
+    '#9C755F', '#8C564B', '#FF7F0E', '#FFFFFF',
+  ]), []);
 
   // Force redraw when drawingStrokes change (for eraser)
   React.useEffect(() => {
@@ -2182,7 +2354,7 @@ function App() {
   // Redraw when components change (add/remove/edit)
   React.useEffect(() => {
     drawCanvas();
-  }, [componentsTop, componentsBottom]);
+  }, [componentsTop, componentsBottom, grounds, showGroundLayer]);
 
   // Keep scrollbars in sync with viewPan changes from other interactions
   React.useEffect(() => {
@@ -2757,19 +2929,19 @@ function App() {
         <div className="canvas-container" ref={canvasContainerRef} style={{ position: 'relative' }}>
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
-            <button onClick={() => setCurrentTool('select')} title="Select" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('select')} title="Select (S)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <MousePointer size={16} />
             </button>
-            <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias (V)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
               </svg>
             </button>
-            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <PenLine size={16} color={brushColor} />
             </button>
-            <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Component Tool" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 {/* top body */}
                 <rect x="5" y="3" width="14" height="7" fill={brushColor} stroke={brushColor} strokeWidth="0.5" />
@@ -2780,7 +2952,7 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => setCurrentTool('erase')} title="Erase" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
               {/* Tilted pink eraser */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g transform="rotate(-35 12 12)">
@@ -2789,7 +2961,7 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move (H)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -2799,7 +2971,19 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={isShiftPressed ? 'Zoom Out' : 'Zoom In'} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            {/* Ground tool */}
+            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              {/* Ground symbol icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <g stroke="#111" strokeWidth="2" strokeLinecap="round">
+                  <line x1="12" y1="4" x2="12" y2="12" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <line x1="7" y1="16" x2="17" y2="16" />
+                  <line x1="9.5" y1="19" x2="14.5" y2="19" />
+                </g>
+              </svg>
+            </button>
+            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Enlarged magnifier lens and symbols */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10" cy="10" r="7.5" fill="none" stroke="#111" strokeWidth="2" />
@@ -2824,7 +3008,7 @@ function App() {
               </button>
             {showColorPicker && (
                 <div style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 11px)', gap: 3 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 4 }}>
                     {palette8x8.map((c) => (
                       <div
                         key={c}
@@ -2840,7 +3024,7 @@ function App() {
                         }
                       }}
                         title={c}
-                        style={{ width: 11, height: 11, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
+                        style={{ width: 22, height: 22, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
                       />
                     ))}
                   </div>
@@ -2916,6 +3100,10 @@ function App() {
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
               <span>Bottom Components</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showGroundLayer} onChange={(e) => setShowGroundLayer(e.target.checked)} />
+              <span>Ground</span>
             </label>
             <div style={{ marginTop: 'auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

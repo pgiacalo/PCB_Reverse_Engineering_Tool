@@ -217,6 +217,53 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Double-click any slider**: Reset to default value
 - **Double-click Erase button**: Clear selected drawing layer
 
+## High-Contrast 32‑Color Palette
+
+This palette is optimized for strong visual separation on PCB imagery, includes neutral grays/blacks, and is broadly color‑blind friendly. It’s arranged as an 8×4 grid to match the in‑app picker (swatches sized 22×22).
+
+<table>
+  <tr>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#000000;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#000000</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#3C3C3C;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#3C3C3C</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#7F7F7F;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#7F7F7F</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#BFBFBF;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#BFBFBF</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#0072B2;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#0072B2</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#56B4E9;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#56B4E9</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#00BFC4;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#00BFC4</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#332288;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#332288</div></td>
+  </tr>
+  <tr>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#1F77B4;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#1F77B4</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#A6CEE3;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#A6CEE3</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#17BECF;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#17BECF</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#6A3D9A;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#6A3D9A</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#009E73;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#009E73</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#B3DE69;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#B3DE69</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#E69F00;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#E69F00</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#F0E442;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#F0E442</div></td>
+  </tr>
+  <tr>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#2CA02C;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#2CA02C</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#B2DF8A;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#B2DF8A</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#BCBD22;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#BCBD22</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#FFED6F;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#FFED6F</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#E15759;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#E15759</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#D62728;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#D62728</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#FB9A99;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#FB9A99</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#CC79A7;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#CC79A7</div></td>
+  </tr>
+  <tr>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#AA4499;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#AA4499</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#F781BF;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#F781BF</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#9467BD;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#9467BD</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#CAB2D6;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#CAB2D6</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#9C755F;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#9C755F</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#8C564B;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#8C564B</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#FF7F0E;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#FF7F0E</div></td>
+    <td align="center" style="padding:6px;"><div style="width:22px;height:22px;background:#FFFFFF;border:1px solid #999;border-radius:3px;"></div><div style="font-size:12px;">#FFFFFF</div></td>
+  </tr>
+</table>
+
 ### View Controls: Magnify
 
 The Magnify tool lets you zoom into the canvas at the exact point you click. It scales the entire view (both images and drawing layers) and pans automatically so the clicked point stays under your cursor.
