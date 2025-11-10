@@ -26,6 +26,7 @@ interface PCBImage {
 }
 
 interface DrawingPoint {
+  id: number; // sequential unique point id
   x: number;
   y: number;
 }
@@ -56,8 +57,20 @@ interface TraceSegment {
   color: string;
 }
 
+interface PCBComponent {
+  id: string;
+  name: string;
+  manufacturer: string;
+  partNumber: string;
+  numPins: number;
+  layer: 'top' | 'bottom';
+  x: number;
+  y: number;
+  color: string;
+  size: number; // visual size of icon
+}
 type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan';
+type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component';
 
 function App() {
   const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
@@ -92,13 +105,27 @@ function App() {
   const [, setTraceOrderTop] = useState<string[]>([]);
   const [, setTraceOrderBottom] = useState<string[]>([]);
   // Independent lists (stacks) derived from drawingStrokes
-  const [viasTop, setViasTop] = useState<Via[]>([]);
-  const [viasBottom, setViasBottom] = useState<Via[]>([]);
+  const [vias, setVias] = useState<Via[]>([]);
   const [tracesTop, setTracesTop] = useState<TraceSegment[]>([]);
   const [tracesBottom, setTracesBottom] = useState<TraceSegment[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentStrokeRef = useRef<DrawingPoint[]>([]);
+  const nextPointIdRef = useRef<number>(1);
+  const [componentsTop, setComponentsTop] = useState<PCBComponent[]>([]);
+  const [componentsBottom, setComponentsBottom] = useState<PCBComponent[]>([]);
+  const [selectedComponentIds, setSelectedComponentIds] = useState<Set<string>>(new Set());
+  const [componentEditor, setComponentEditor] = useState<{
+    visible: boolean;
+    layer: 'top' | 'bottom';
+    id: string;
+    name: string;
+    manufacturer: string;
+    partNumber: string;
+    numPins: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
   const hScrollContentRef = useRef<HTMLDivElement>(null);
@@ -114,6 +141,7 @@ function App() {
   const contentOriginYRef = useRef<number>(0);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
+  const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   const [openMenu, setOpenMenu] = useState<'file' | 'view' | 'transform' | 'tools' | null>(null);
@@ -126,6 +154,17 @@ function App() {
   const [showViasLayer, setShowViasLayer] = useState(true);
   const [showTopTracesLayer, setShowTopTracesLayer] = useState(true);
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
+  const [showTopComponents, setShowTopComponents] = useState(true);
+  const [showBottomComponents, setShowBottomComponents] = useState(true);
+  // Tool-specific layer defaults (persist until tool re-selected)
+  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
+  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
+  // Show chooser popovers only when tool is (re)selected
+  const [showTraceLayerChooser, setShowTraceLayerChooser] = useState(false);
+  const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
+  const traceChooserRef = useRef<HTMLDivElement>(null);
+  const componentChooserRef = useRef<HTMLDivElement>(null);
+  const [isEscHeld, setIsEscHeld] = useState(false);
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
@@ -192,6 +231,37 @@ function App() {
     const y = (contentCanvasY - viewPan.y) / viewScale;
 
     if (currentTool === 'select') {
+      // If clicking a component, open its editor instead of starting marquee
+      const hitSize = 10; // half box for hit test
+      const hitComponent = (() => {
+        for (const c of componentsTop) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'top' as const, comp: c };
+          }
+        }
+        for (const c of componentsBottom) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'bottom' as const, comp: c };
+          }
+        }
+        return null;
+      })();
+      if (hitComponent) {
+        const { layer, comp } = hitComponent;
+        setSelectedComponentIds(new Set([comp.id]));
+        setComponentEditor({
+          visible: true,
+          layer,
+          id: comp.id,
+          name: comp.name,
+          manufacturer: comp.manufacturer,
+          partNumber: comp.partNumber,
+          numPins: comp.numPins,
+          x: comp.x,
+          y: comp.y,
+        });
+        return;
+      }
       setIsSelecting(true);
       setSelectStart({ x, y });
       setSelectRect({ x, y, width: 0, height: 0 });
@@ -208,6 +278,8 @@ function App() {
     } else if (currentTool === 'pan') {
       // Start panning in content-canvas coordinates
       panStartRef.current = { startCX: contentCanvasX, startCY: contentCanvasY, panX: viewPan.x, panY: viewPan.y };
+      // Also track client coordinates for out-of-canvas drags
+      panClientStartRef.current = { startClientX: e.clientX, startClientY: e.clientY, panX: viewPan.x, panY: viewPan.y };
       setIsPanning(true);
       return;
     } else if (currentTool === 'draw') {
@@ -215,20 +287,20 @@ function App() {
       const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number } | null = null;
+        // search all vias on both layers
         for (const s of drawingStrokes) {
-          if (s.type !== 'via' || s.layer !== selectedDrawingLayer) continue;
+          if (s.type !== 'via') continue;
           const c = s.points[0];
-          const radius = s.size / 2;
           const d = Math.hypot(c.x - wx, c.y - wy);
-          const threshold = Math.max(8 / viewScale, radius * 0.8);
-          if (d <= threshold && d < bestDist) { bestDist = d; bestCenter = c; }
+          const thresholdWorld = 10 / Math.max(viewScale, 0.0001); // 10px screen distance
+          if (d <= thresholdWorld && d < bestDist) { bestDist = d; bestCenter = c; }
         }
         return bestCenter ?? { x: wx, y: wy };
       };
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        const center = { x, y };
+        const center = { id: nextPointIdRef.current++, x, y };
         const viaStroke: DrawingStroke = {
           id: `${Date.now()}-via`,
           points: [center],
@@ -246,19 +318,50 @@ function App() {
         return;
       }
 
-      // Traces mode: connected segments by clicks, snapping to via centers
-      const snapped = drawingMode === 'trace' ? snapToNearestViaCenter(x, y) : { x, y };
-      setCurrentStroke(prev => (prev.length === 0 ? [snapped] : [...prev, snapped]));
+      // Traces mode: connected segments by clicks, snapping to via centers unless ESC is held
+      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y) : { x, y };
+      const pt = { id: nextPointIdRef.current++, x: snapped.x, y: snapped.y };
+      setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
       setIsDrawing(false);
       setIsShiftConstrained(false);
     } else if (currentTool === 'erase') {
       setIsDrawing(true);
-      setCurrentStroke([{ x, y }]);
+      setCurrentStroke([{ id: nextPointIdRef.current++, x, y }]);
       console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
+    } else if (currentTool === 'component') {
+      const comp: PCBComponent = {
+        id: `cmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: 'U?',
+        manufacturer: '',
+        partNumber: '',
+        numPins: 0,
+        layer: selectedDrawingLayer,
+        x,
+        y,
+        color: brushColor,
+        size: 18,
+      };
+      if (selectedDrawingLayer === 'top') {
+        setComponentsTop(prev => [...prev, comp]);
+      } else {
+        setComponentsBottom(prev => [...prev, comp]);
+      }
+      // Open attribute editor immediately
+      setComponentEditor({
+        visible: true,
+        layer: selectedDrawingLayer,
+        id: comp.id,
+        name: comp.name,
+        manufacturer: comp.manufacturer,
+        partNumber: comp.partNumber,
+        numPins: comp.numPins,
+        x: comp.x,
+        y: comp.y,
+      });
     }
   }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes.length, viewScale, viewPan.x, viewPan.y]);
 
@@ -310,7 +413,48 @@ function App() {
     }
   }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer]);
 
-  const snapConstrainedPoint = useCallback((start: DrawingPoint, x: number, y: number): DrawingPoint => {
+  // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
+  const finalizeTraceIfAny = useCallback(() => {
+    const pts = currentStrokeRef.current;
+    if (currentTool === 'draw' && drawingMode === 'trace' && pts.length >= 2) {
+      const newStroke: DrawingStroke = {
+        id: `${Date.now()}-trace`,
+        points: pts,
+        color: brushColor,
+        size: brushSize,
+        layer: selectedDrawingLayer,
+        type: 'trace',
+      };
+      setDrawingStrokes(prev => [...prev, newStroke]);
+      if (selectedDrawingLayer === 'top') {
+        setTraceOrderTop(prev => [...prev, newStroke.id]);
+      } else {
+        setTraceOrderBottom(prev => [...prev, newStroke.id]);
+      }
+      setCurrentStroke([]);
+    } else {
+      // If only a single point was placed, treat it as a dot trace
+      if (currentTool === 'draw' && drawingMode === 'trace' && pts.length === 1) {
+        const newStroke: DrawingStroke = {
+          id: `${Date.now()}-trace-dot`,
+          points: pts,
+          color: brushColor,
+          size: brushSize,
+          layer: selectedDrawingLayer,
+          type: 'trace',
+        };
+        setDrawingStrokes(prev => [...prev, newStroke]);
+        if (selectedDrawingLayer === 'top') {
+          setTraceOrderTop(prev => [...prev, newStroke.id]);
+        } else {
+          setTraceOrderBottom(prev => [...prev, newStroke.id]);
+        }
+        setCurrentStroke([]);
+      }
+    }
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, setDrawingStrokes]);
+
+  const snapConstrainedPoint = useCallback((start: DrawingPoint, x: number, y: number): { x: number; y: number } => {
     const dx = x - start.x;
     const dy = y - start.y;
     if (dx === 0 && dy === 0) return { x, y };
@@ -370,12 +514,13 @@ function App() {
         if (isShiftConstrained) {
           const startPt = currentStroke[0];
           const snapped = snapConstrainedPoint(startPt, x, y);
-          setCurrentStroke([startPt, snapped]);
+          const pt = { id: nextPointIdRef.current++, x: snapped.x, y: snapped.y };
+          setCurrentStroke([startPt, pt]);
         } else {
-          setCurrentStroke(prev => [...prev, { x, y }]);
+          setCurrentStroke(prev => [...prev, { id: nextPointIdRef.current++, x, y }]);
         }
       } else if (currentTool === 'erase') {
-        setCurrentStroke(prev => [...prev, { x, y }]);
+        setCurrentStroke(prev => [...prev, { id: nextPointIdRef.current++, x, y }]);
         setDrawingStrokes(prev => {
           const filtered = prev.filter(stroke => {
             // Only check strokes on the selected drawing layer
@@ -546,6 +691,7 @@ function App() {
           return Math.hypot(px - cx, py - cy);
         };
         const next = new Set<string>(isShiftPressed ? Array.from(selectedIds) : []);
+        const nextComps = new Set<string>(isShiftPressed ? Array.from(selectedComponentIds) : []);
         for (const s of drawingStrokes) {
           let hit = false;
           if (tiny) {
@@ -577,7 +723,26 @@ function App() {
           }
           if (hit) next.add(s.id);
         }
+        // Components hit-test (reuse minX/minY/maxX/maxY)
+        const compInRect = (c: PCBComponent) => {
+          const size = Math.max(10, c.size || 18);
+          const half = size / 2;
+          return (c.x - half) <= maxX && (c.x + half) >= minX && (c.y - half) <= maxY && (c.y + half) >= minY;
+        };
+        if (tiny) {
+          const clickInComp = (c: PCBComponent) => {
+            const size = Math.max(10, c.size || 18);
+            const half = size / 2;
+            return (start.x >= c.x - half && start.x <= c.x + half && start.y >= c.y - half && start.y <= c.y + half);
+          };
+          componentsTop.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+          componentsBottom.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+        } else {
+          componentsTop.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+          componentsBottom.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+        }
         setSelectedIds(next);
+        setSelectedComponentIds(nextComps);
       }
     }
     if (isDrawing && currentStroke.length > 0) {
@@ -604,12 +769,42 @@ function App() {
     if (isPanning) {
       setIsPanning(false);
       panStartRef.current = null;
+      panClientStartRef.current = null;
     }
     setIsDrawing(false);
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
   }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds]);
+
+  // Allow panning to continue even when the pointer leaves the canvas while the button is held
+  React.useEffect(() => {
+    if (!(currentTool === 'pan' && isPanning && panClientStartRef.current)) return;
+    const onMove = (e: MouseEvent) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const { startClientX, startClientY, panX, panY } = panClientStartRef.current!;
+      const dx = (e.clientX - startClientX) * scaleX;
+      const dy = (e.clientY - startClientY) * scaleY;
+      setViewPan({ x: panX + dx, y: panY + dy });
+    };
+    const onUp = () => {
+      setIsPanning(false);
+      panStartRef.current = null;
+      panClientStartRef.current = null;
+      window.removeEventListener('mousemove', onMove, true);
+      window.removeEventListener('mouseup', onUp, true);
+    };
+    window.addEventListener('mousemove', onMove, true);
+    window.addEventListener('mouseup', onUp, true);
+    return () => {
+      window.removeEventListener('mousemove', onMove, true);
+      window.removeEventListener('mouseup', onUp, true);
+    };
+  }, [currentTool, isPanning]);
 
 
   const drawCanvas = useCallback(() => {
@@ -839,6 +1034,36 @@ function App() {
 
     // Always draw strokes on top (respecting view transform applied above)
     drawStrokes(ctx);
+    // Draw components
+    const drawComponent = (c: PCBComponent) => {
+      const size = Math.max(10, c.size || 18);
+      const half = size / 2;
+      ctx.save();
+      ctx.strokeStyle = c.color || '#111';
+      ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.rect(c.x - half, c.y - half, size, size);
+      ctx.fill();
+      ctx.stroke();
+      // small pin dot
+      ctx.beginPath();
+      ctx.arc(c.x - half + 4, c.y - half + 4, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = c.color || '#111';
+      ctx.fill();
+      // selection highlight
+      const isSelected = selectedComponentIds.has(c.id);
+      if (isSelected) {
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = '#00bfff';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(c.x - half - 3, c.y - half - 3, size + 6, size + 6);
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    };
+    if (showTopComponents) componentsTop.forEach(drawComponent);
+    if (showBottomComponents) componentsBottom.forEach(drawComponent);
     // Draw active selection rectangle in view space for perfect alignment
     if (currentTool === 'select' && selectRect) {
       ctx.save();
@@ -857,7 +1082,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, selectRect]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, selectRect]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -971,93 +1196,92 @@ function App() {
   }, []);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
+    // Pass 1: draw non-via strokes (traces) first
     drawingStrokes.forEach(stroke => {
-      // Show strokes based on layer toggles
+      if (stroke.type === 'via') return;
       let shouldShowStroke = false;
-      if (stroke.type === 'via') {
-        shouldShowStroke = showViasLayer;
-      } else {
-        if (stroke.layer === 'top') shouldShowStroke = showTopTracesLayer;
-        else if (stroke.layer === 'bottom') shouldShowStroke = showBottomTracesLayer;
-      }
-        
-      if (shouldShowStroke) {
-        if (stroke.type === 'via') {
-          // Selection highlight
-          if (selectedIds.has(stroke.id)) {
-            const c = stroke.points[0];
-            const rOuter = Math.max(0.5, stroke.size / 2) + 3;
-            ctx.strokeStyle = '#00bfff';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([4, 3]);
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-          }
-          // Outer ring + inner filled pad (inner = 1/2 outer diameter)
-          const c = stroke.points[0];
-          const rOuter = Math.max(0.5, stroke.size / 2);
-          const rInner = rOuter * 0.5;
-          ctx.strokeStyle = stroke.color;
-          ctx.lineWidth = Math.max(1, Math.min(2, rOuter * 0.25));
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.fillStyle = stroke.color;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          if (stroke.points.length === 1) {
-            const p = stroke.points[0];
-            const r = Math.max(0.5, stroke.size / 2);
-            if (selectedIds.has(stroke.id)) {
-              ctx.strokeStyle = '#00bfff';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([4, 3]);
-              ctx.beginPath();
-              ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.setLineDash([]);
-            }
-            ctx.fillStyle = stroke.color;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-            ctx.fill();
-          } else {
-            if (selectedIds.has(stroke.id)) {
-              ctx.strokeStyle = '#00bfff';
-              ctx.lineWidth = stroke.size + 4;
-              ctx.lineCap = 'round';
-              ctx.lineJoin = 'round';
-              ctx.globalAlpha = 0.6;
-              ctx.beginPath();
-              stroke.points.forEach((point, index) => {
-                if (index === 0) ctx.moveTo(point.x, point.y);
-                else ctx.lineTo(point.x, point.y);
-              });
-              ctx.stroke();
-              ctx.globalAlpha = 1;
-            }
-            ctx.strokeStyle = stroke.color;
-            ctx.lineWidth = stroke.size;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.globalAlpha = 1;
+      if (stroke.layer === 'top') shouldShowStroke = showTopTracesLayer;
+      else if (stroke.layer === 'bottom') shouldShowStroke = showBottomTracesLayer;
+      if (!shouldShowStroke) return;
 
-            ctx.beginPath();
-            stroke.points.forEach((point, index) => {
-              if (index === 0) {
-                ctx.moveTo(point.x, point.y);
-              } else {
-                ctx.lineTo(point.x, point.y);
-              }
-            });
-            ctx.stroke();
-          }
+      if (stroke.points.length === 1) {
+        const p = stroke.points[0];
+        const r = Math.max(0.5, stroke.size / 2);
+        if (selectedIds.has(stroke.id)) {
+          ctx.strokeStyle = '#00bfff';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
+        ctx.fillStyle = stroke.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        if (selectedIds.has(stroke.id)) {
+          ctx.strokeStyle = '#00bfff';
+          ctx.lineWidth = stroke.size + 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          stroke.points.forEach((point, index) => {
+            if (index === 0) ctx.moveTo(point.x, point.y);
+            else ctx.lineTo(point.x, point.y);
+          });
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.size;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.globalAlpha = 1;
+
+        ctx.beginPath();
+        stroke.points.forEach((point, index) => {
+          if (index === 0) {
+            ctx.moveTo(point.x, point.y);
+          } else {
+            ctx.lineTo(point.x, point.y);
+          }
+        });
+        ctx.stroke();
       }
+    });
+
+    // Pass 2: draw vias on top of all other strokes
+    drawingStrokes.forEach(stroke => {
+      if (stroke.type !== 'via') return;
+      if (!showViasLayer) return;
+      // Selection highlight
+      if (selectedIds.has(stroke.id)) {
+        const c = stroke.points[0];
+        const rOuter = Math.max(0.5, stroke.size / 2) + 3;
+        ctx.strokeStyle = '#00bfff';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // Outer ring + inner filled pad (inner = 1/2 outer diameter)
+      const c = stroke.points[0];
+      const rOuter = Math.max(0.5, stroke.size / 2);
+      const rInner = rOuter * 0.5;
+      ctx.strokeStyle = stroke.color;
+      ctx.lineWidth = Math.max(1, Math.min(2, rOuter * 0.25));
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = stroke.color;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
+      ctx.fill();
     });
 
     // Draw current stroke if it's on the appropriate layer and visible
@@ -1167,12 +1391,28 @@ function App() {
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Delete selected items
-    if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0)) {
+    // Track ESC hold for disabling snapping
+    if (e.key === 'Escape') {
+      setIsEscHeld(true);
+    }
+    // Finalize an in-progress trace with Enter/Return
+    if ((e.key === 'Enter') && currentTool === 'draw' && drawingMode === 'trace') {
+      finalizeTraceIfAny();
+      return;
+    }
+    // Delete selected items (strokes and components)
+    if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0 || selectedComponentIds.size > 0)) {
       e.preventDefault();
       e.stopPropagation();
-      setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
-      setSelectedIds(new Set());
+      if (selectedIds.size > 0) {
+        setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
+        setSelectedIds(new Set());
+      }
+      if (selectedComponentIds.size > 0) {
+        setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
+        setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
+        setSelectedComponentIds(new Set());
+      }
       return;
     }
     // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
@@ -1422,16 +1662,48 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, drawingMode, finalizeTraceIfAny]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
     // Use capture to intercept before default handling on focused controls (e.g., radios)
     window.addEventListener('keydown', handleKeyDown, true);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsEscHeld(false);
+    };
+    window.addEventListener('keyup', onKeyUp, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
     };
   }, [handleKeyDown]);
+
+  // Finalize trace when clicking outside the canvas (e.g., menus, tools, layer panel)
+  React.useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      // If click originated on the canvas, ignore (canvas handlers will manage)
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (e.target instanceof Node && canvas.contains(e.target)) return;
+      // Otherwise, finalize any in-progress trace
+      finalizeTraceIfAny();
+      // Also hide tool layer choosers when clicking anywhere outside them
+      if (showTraceLayerChooser) {
+        const el = traceChooserRef.current;
+        if (!el || !(e.target instanceof Node) || !el.contains(e.target)) {
+          setShowTraceLayerChooser(false);
+        }
+      }
+      if (showComponentLayerChooser) {
+        const el2 = componentChooserRef.current;
+        if (!el2 || !(e.target instanceof Node) || !el2.contains(e.target)) {
+          setShowComponentLayerChooser(false);
+        }
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown, true);
+    return () => document.removeEventListener('mousedown', onDocMouseDown, true);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -1628,15 +1900,14 @@ function App() {
 
   // Maintain independent stacks for vias and trace segments in insertion order
   React.useEffect(() => {
-    const vTop: Via[] = [];
-    const vBot: Via[] = [];
+    const vAll: Via[] = [];
     const tTop: TraceSegment[] = [];
     const tBot: TraceSegment[] = [];
     for (const s of drawingStrokes) {
       if (s.type === 'via' && s.points.length >= 1) {
         const c = s.points[0];
         const v: Via = { x: c.x, y: c.y, size: s.size, color: s.color };
-        if (s.layer === 'top') vTop.push(v); else vBot.push(v);
+        vAll.push(v); // Vias are physical holes shared by both layers
       } else if (s.type === 'trace' && s.points.length >= 2) {
         for (let i = 0; i < s.points.length - 1; i++) {
           const p1 = s.points[i];
@@ -1646,8 +1917,7 @@ function App() {
         }
       }
     }
-    setViasTop(vTop);
-    setViasBottom(vBot);
+    setVias(vAll);
     setTracesTop(tTop);
     setTracesBottom(tBot);
   }, [drawingStrokes]);
@@ -1695,10 +1965,11 @@ function App() {
         } : null,
       },
       drawing: {
-        viasTop,
-        viasBottom,
+        vias,
         tracesTop,
         tracesBottom,
+        componentsTop,
+        componentsBottom,
       },
     };
     const json = JSON.stringify(project, null, 2);
@@ -1732,7 +2003,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, viasTop, viasBottom, tracesTop, tracesBottom]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -1782,7 +2053,7 @@ function App() {
       const pushVia = (v: Via, layer: 'top' | 'bottom') => {
         strokes.push({
           id: `${Date.now()}-via-${Math.random()}`,
-          points: [{ x: v.x, y: v.y }],
+          points: [{ id: (Math.random()*1e9)|0, x: v.x, y: v.y }],
           color: v.color,
           size: v.size,
           layer,
@@ -1792,18 +2063,26 @@ function App() {
       const pushSeg = (s: TraceSegment, layer: 'top' | 'bottom') => {
         strokes.push({
           id: `${Date.now()}-trace-${Math.random()}`,
-          points: [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }],
+          points: [{ id: (Math.random()*1e9)|0, x: s.x1, y: s.y1 }, { id: (Math.random()*1e9)|0, x: s.x2, y: s.y2 }],
           color: s.color,
           size: s.size,
           layer,
           type: 'trace',
         });
       };
-      (project.drawing?.viasTop ?? []).forEach((v: Via) => pushVia(v, 'top'));
-      (project.drawing?.viasBottom ?? []).forEach((v: Via) => pushVia(v, 'bottom'));
+      // Back-compat: support either single 'vias' array or legacy viasTop/viasBottom
+      if (project.drawing?.vias) {
+        (project.drawing.vias as Via[]).forEach((v: Via) => pushVia(v, 'top'));
+      } else {
+        (project.drawing?.viasTop ?? []).forEach((v: Via) => pushVia(v, 'top'));
+        (project.drawing?.viasBottom ?? []).forEach((v: Via) => pushVia(v, 'bottom'));
+      }
       (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
       (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
       setDrawingStrokes(strokes);
+      // load components if present
+      if (project.drawing?.componentsTop) setComponentsTop(project.drawing.componentsTop as PCBComponent[]);
+      if (project.drawing?.componentsBottom) setComponentsBottom(project.drawing.componentsBottom as PCBComponent[]);
     } catch (err) {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
@@ -1814,32 +2093,36 @@ function App() {
     currentStrokeRef.current = currentStroke;
   }, [currentStroke]);
 
-  // Reset in-progress trace when switching mode or layer to avoid mixing
+  // Finalize in-progress trace when switching mode (not on layer change) to avoid unintended commits
   const prevModeRef = React.useRef<'trace' | 'via'>(drawingMode);
   const prevLayerRef = React.useRef<'top' | 'bottom'>(selectedDrawingLayer);
   React.useEffect(() => {
-    // If we were in trace mode and had an in-progress stroke, finalize it on mode/layer change
-    if (currentTool === 'draw' && prevModeRef.current === 'trace' && currentStroke.length > 0) {
-      const newStroke: DrawingStroke = {
-        id: `${Date.now()}-trace-autofinalize`,
-        points: currentStroke,
-        color: brushColor,
-        size: brushSize,
-        layer: prevLayerRef.current,
-        type: 'trace',
-      };
-      setDrawingStrokes(prev => [...prev, newStroke]);
-      if (prevLayerRef.current === 'top') {
-        setTraceOrderTop(prev => [...prev, newStroke.id]);
-      } else {
-        setTraceOrderBottom(prev => [...prev, newStroke.id]);
+    // Only react when mode actually changed; do NOT auto-finalize on layer change
+    const modeChanged = drawingMode !== prevModeRef.current;
+    if (currentTool === 'draw' && prevModeRef.current === 'trace' && modeChanged) {
+      // finalize without losing the current points
+      if (currentStrokeRef.current.length >= 2) {
+        const newStroke: DrawingStroke = {
+          id: `${Date.now()}-trace-autofinalize`,
+          points: currentStrokeRef.current,
+          color: brushColor,
+          size: brushSize,
+          layer: prevLayerRef.current,
+          type: 'trace',
+        };
+        setDrawingStrokes(prev => [...prev, newStroke]);
+        if (prevLayerRef.current === 'top') {
+          setTraceOrderTop(prev => [...prev, newStroke.id]);
+        } else {
+          setTraceOrderBottom(prev => [...prev, newStroke.id]);
+        }
       }
+      setCurrentStroke([]);
+      setIsDrawing(false);
     }
-    setCurrentStroke([]);
-    setIsDrawing(false);
     prevModeRef.current = drawingMode;
     prevLayerRef.current = selectedDrawingLayer;
-  }, [drawingMode, selectedDrawingLayer, currentTool, currentStroke, brushColor, brushSize]);
+  }, [drawingMode, selectedDrawingLayer, currentTool, brushColor, brushSize]);
 
   // Simple HSV -> HEX for palette generation
   const hsvToHex = useCallback((h: number, s: number, v: number): string => {
@@ -1874,6 +2157,10 @@ function App() {
   React.useEffect(() => {
     drawCanvas();
   }, [drawingStrokes]);
+  // Redraw when components change (add/remove/edit)
+  React.useEffect(() => {
+    drawCanvas();
+  }, [componentsTop, componentsBottom]);
 
   // Keep scrollbars in sync with viewPan changes from other interactions
   React.useEffect(() => {
@@ -2020,8 +2307,12 @@ function App() {
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0) {
+                  if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
+                    if (selectedComponentIds.size > 0) {
+                      setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+                      setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+                    }
                   } else {
                     setBrushSize(b => Math.min(40, b + 1));
                   }
@@ -2033,8 +2324,12 @@ function App() {
               </button>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0) {
+                  if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
+                    if (selectedComponentIds.size > 0) {
+                      setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+                      setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+                    }
                   } else {
                     setBrushSize(b => Math.max(1, b - 1));
                   }
@@ -2049,8 +2344,12 @@ function App() {
                 <button
                   key={sz}
                   onClick={() => {
-                    if (selectedIds.size > 0) {
+                    if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
                       setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
+                      if (selectedComponentIds.size > 0) {
+                        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+                        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+                      }
                     } else {
                       setBrushSize(sz);
                     }
@@ -2439,13 +2738,24 @@ function App() {
             <button onClick={() => setCurrentTool('select')} title="Select" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <MousePointer size={16} />
             </button>
-            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); }} title="Draw Traces" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              <PenLine size={16} />
+            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <PenLine size={16} color={brushColor} />
             </button>
             <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
+              </svg>
+            </button>
+            <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Component Tool" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                {/* top body */}
+                <rect x="5" y="3" width="14" height="7" fill={brushColor} stroke={brushColor} strokeWidth="0.5" />
+                {/* pin headers */}
+                <g stroke={brushColor} fill="none" strokeWidth="1.5">
+                  <rect x="5" y="10" width="14" height="4" rx="1.2" />
+                  <path d="M7 14 v4 M10 14 v4 M13 14 v4 M16 14 v4" stroke={brushColor} />
+                </g>
               </svg>
             </button>
             <button onClick={() => setCurrentTool('erase')} title="Erase" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
@@ -2487,6 +2797,10 @@ function App() {
                         if (selectedIds.size > 0) {
                           setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, color: c } : s));
                         }
+                        if (selectedComponentIds.size > 0) {
+                          setComponentsTop(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
+                          setComponentsBottom(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
+                        }
                       }}
                         title={c}
                         style={{ width: 22, height: 22, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
@@ -2497,6 +2811,31 @@ function App() {
               )}
             </div>
           </div>
+          {/* Active tool layer chooser for Trace/Component */}
+          {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
+            <div ref={traceChooserRef} style={{ position: 'absolute', top: 6, left: 52, padding: '4px 6px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+              <label className="radio-label" style={{ marginRight: 6 }}>
+                <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('top'); setSelectedDrawingLayer('top'); setShowTraceLayerChooser(false); setShowTopImage(true); }} />
+                <span>Top</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowTraceLayerChooser(false); setShowBottomImage(true); }} />
+                <span>Bottom</span>
+              </label>
+            </div>
+          )}
+          {currentTool === 'component' && showComponentLayerChooser && (
+            <div ref={componentChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '4px 6px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+              <label className="radio-label" style={{ marginRight: 6 }}>
+                <input type="radio" name="componentToolLayer" onChange={() => { setComponentToolLayer('top'); setSelectedDrawingLayer('top'); setShowComponentLayerChooser(false); setShowTopImage(true); }} />
+                <span>Top</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="componentToolLayer" onChange={() => { setComponentToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowComponentLayerChooser(false); setShowBottomImage(true); }} />
+                <span>Bottom</span>
+              </label>
+            </div>
+          )}
 
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
           <div style={{ position: 'absolute', top: 6, left: 56, bottom: 6, width: 168, padding: 8, display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
@@ -2520,7 +2859,7 @@ function App() {
               <canvas ref={bottomThumbRef} width={140} height={90} />
             </div>
             <div style={{ height: 1, background: '#e9e9ef', margin: '4px 0' }} />
-            <div style={{ fontSize: 12, color: '#333', fontWeight: 700 }}>Drawing Layers</div>
+            <div style={{ fontSize: 12, color: '#333', fontWeight: 700 }}>Show Layers</div>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showViasLayer} onChange={(e) => setShowViasLayer(e.target.checked)} />
               <span>Vias</span>
@@ -2532,6 +2871,14 @@ function App() {
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
               <span>Bottom Traces</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showTopComponents} onChange={(e) => setShowTopComponents(e.target.checked)} />
+              <span>Top Components</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
+              <span>Bottom Components</span>
             </label>
             <div style={{ marginTop: 'auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
