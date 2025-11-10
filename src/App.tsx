@@ -2783,7 +2783,10 @@ function App() {
             {/* Color picker moved just below magnify */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowColorPicker(prev => !prev)} title="Color Picker" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: '#fff' }}>
-                <Droplet size={16} color={brushColor} />
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 2 C9 6 6 9.5 6 12.5 A6 6 0 0 0 18 12.5 C18 9.5 15 6 12 2 Z"
+                        fill={brushColor} stroke="#111" strokeWidth="1.5" />
+                </svg>
               </button>
             {showColorPicker && (
                 <div style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
