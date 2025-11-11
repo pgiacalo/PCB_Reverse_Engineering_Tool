@@ -1,6 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { Move, PenLine, Droplet, MousePointer } from 'lucide-react';
+import { createComponent } from './utils/components';
+import { COMPONENT_TYPE_INFO } from './constants';
+import type { ComponentType, PCBComponent } from './types';
 import './App.css';
 
 interface PCBImage {
@@ -57,18 +60,7 @@ interface TraceSegment {
   color: string;
 }
 
-interface PCBComponent {
-  id: string;
-  name: string;
-  manufacturer: string;
-  partNumber: string;
-  numPins: number;
-  layer: 'top' | 'bottom';
-  x: number;
-  y: number;
-  color: string;
-  size: number; // visual size of icon
-}
+// PCBComponent is now imported from './types'
 interface GroundSymbol {
   id: string;
   x: number;
@@ -78,6 +70,17 @@ interface GroundSymbol {
 }
 type ViewMode = 'top' | 'bottom' | 'overlay';
 type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground';
+
+// Helper function to get default abbreviation from component type
+const getDefaultAbbreviation = (componentType: ComponentType): string => {
+  const info = COMPONENT_TYPE_INFO[componentType];
+  if (!info || !info.prefix || info.prefix.length < 1) {
+    return '*';
+  }
+  // Use just the first letter of the first prefix
+  const firstPrefix = info.prefix[0];
+  return firstPrefix.substring(0, 1).toUpperCase();
+};
 
 // Tool settings interface
 interface ToolSettings {
@@ -302,6 +305,15 @@ function App() {
     });
   }, [brushColor, brushSize, currentTool, drawingMode]);
   
+  // Reset component type selection when switching away from component tool
+  React.useEffect(() => {
+    if (currentTool !== 'component') {
+      setSelectedComponentType(null);
+      setShowComponentTypeChooser(false);
+      setPendingComponentPosition(null);
+    }
+  }, [currentTool]);
+  
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
   const [, setViaOrderBottom] = useState<string[]>([]);
@@ -322,13 +334,16 @@ function App() {
     visible: boolean;
     layer: 'top' | 'bottom';
     id: string;
-    name: string;
+    designator: string;
+    abbreviation: string;
     manufacturer: string;
     partNumber: string;
-    numPins: number;
+    pinCount: number;
     x: number;
     y: number;
   } | null>(null);
+  // Pin connection mode: when a pin is clicked in the editor, track which component and pin
+  const [connectingPin, setConnectingPin] = useState<{ componentId: string; pinIndex: number } | null>(null);
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
   const hScrollContentRef = useRef<HTMLDivElement>(null);
@@ -370,6 +385,12 @@ function App() {
   const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
   const traceChooserRef = useRef<HTMLDivElement>(null);
   const componentChooserRef = useRef<HTMLDivElement>(null);
+  // Component type selection (appears after clicking to set position)
+  const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
+  const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
+  const componentTypeChooserRef = useRef<HTMLDivElement>(null);
+  // Store pending component position (set by click, used when type is selected)
+  const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   const [isEscHeld, setIsEscHeld] = useState(false);
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -418,6 +439,9 @@ function App() {
   }, []);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Stop propagation to prevent document-level handlers from interfering
+    e.stopPropagation();
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -437,7 +461,60 @@ function App() {
     const y = (contentCanvasY - viewPan.y) / viewScale;
 
     if (currentTool === 'select') {
-      // If clicking a component, open its editor instead of starting marquee
+      // If in pin connection mode, connect the pin to the nearest via/pad
+      if (connectingPin) {
+        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance
+        let bestNodeId: string | null = null;
+        let bestDist = Infinity;
+        
+        // Search all vias for the nearest one
+        // Use the point ID as the unique node ID (each via has a point with a unique ID)
+        for (const s of drawingStrokes) {
+          if (s.type === 'via' && s.points.length > 0) {
+            const c = s.points[0];
+            const d = Math.hypot(c.x - x, c.y - y);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              // Use the point ID as the unique node ID
+              // Format: "node-{pointId}" to ensure it's a valid node ID format
+              bestNodeId = `node-${c.id}`;
+            }
+          }
+        }
+        
+        // TODO: Also search pads when pad system is implemented
+        
+        if (bestNodeId) {
+          // Update the component's pin connection
+          const updateComponent = (comp: PCBComponent): PCBComponent => {
+            const updated = { ...comp };
+            if (!updated.pinConnections) {
+              updated.pinConnections = new Array(updated.pinCount).fill('');
+            }
+            updated.pinConnections[connectingPin.pinIndex] = bestNodeId!;
+            return updated;
+          };
+          
+          // Find which layer the component is on
+          const compTop = componentsTop.find(c => c.id === connectingPin.componentId);
+          const compBottom = componentsBottom.find(c => c.id === connectingPin.componentId);
+          
+          if (compTop) {
+            setComponentsTop(prev => prev.map(c => c.id === connectingPin.componentId ? updateComponent(c) : c));
+          } else if (compBottom) {
+            setComponentsBottom(prev => prev.map(c => c.id === connectingPin.componentId ? updateComponent(c) : c));
+          }
+          
+          // Clear pin connection mode
+          setConnectingPin(null);
+          return;
+        } else {
+          // No via/pad found nearby, cancel connection mode
+          setConnectingPin(null);
+        }
+      }
+      
+      // If clicking a component, select it (single click = select, double click = edit)
       const hitSize = 10; // half box for hit test
       const hitComponent = (() => {
         for (const c of componentsTop) {
@@ -454,18 +531,8 @@ function App() {
       })();
       if (hitComponent) {
         const { layer, comp } = hitComponent;
+        // Single click: just select the component (for moving, deleting, resizing)
         setSelectedComponentIds(new Set([comp.id]));
-        setComponentEditor({
-          visible: true,
-          layer,
-          id: comp.id,
-          name: comp.name,
-          manufacturer: comp.manufacturer,
-          partNumber: comp.partNumber,
-          numPins: comp.numPins,
-          x: comp.x,
-          y: comp.y,
-        });
         return;
       }
       setIsSelecting(true);
@@ -539,35 +606,10 @@ function App() {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
-      const comp: PCBComponent = {
-        id: `cmp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: 'U?',
-        manufacturer: '',
-        partNumber: '',
-        numPins: 0,
-        layer: selectedDrawingLayer,
-        x,
-        y,
-        color: brushColor,
-        size: 18,
-      };
-      if (selectedDrawingLayer === 'top') {
-        setComponentsTop(prev => [...prev, comp]);
-      } else {
-        setComponentsBottom(prev => [...prev, comp]);
-      }
-      // Open attribute editor immediately
-      setComponentEditor({
-        visible: true,
-        layer: selectedDrawingLayer,
-        id: comp.id,
-        name: comp.name,
-        manufacturer: comp.manufacturer,
-        partNumber: comp.partNumber,
-        numPins: comp.numPins,
-        x: comp.x,
-        y: comp.y,
-      });
+      // Store the click position and show type chooser (like trace pattern)
+      setPendingComponentPosition({ x, y, layer: selectedDrawingLayer });
+      setShowComponentTypeChooser(true);
+      return;
     } else if (currentTool === 'ground') {
       // Snap to nearest via like traces unless ESC is held
       const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
@@ -621,7 +663,8 @@ function App() {
     setViewPan({ x: newPanX, y: newPanY });
   }, [currentTool, viewScale, viewPan.x, viewPan.y]);
 
-  const handleCanvasDoubleClick = useCallback(() => {
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Handle trace finalization
     const pts = currentStrokeRef.current;
     if (currentTool === 'draw' && drawingMode === 'trace' && pts.length >= 2) {
       const newStroke: DrawingStroke = {
@@ -639,8 +682,66 @@ function App() {
         setTraceOrderBottom(prev => [...prev, newStroke.id]);
       }
       setCurrentStroke([]);
+      return;
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer]);
+    
+    // Handle component double-click to open properties editor
+    if (currentTool === 'select') {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const dprX = canvas.width / rect.width;
+      const dprY = canvas.height / rect.height;
+      const offX = (e.nativeEvent as any).offsetX as number | undefined;
+      const offY = (e.nativeEvent as any).offsetY as number | undefined;
+      const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
+      const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
+      const canvasX = cssX * dprX;
+      const canvasY = cssY * dprY;
+      const contentCanvasX = canvasX - CONTENT_BORDER;
+      const contentCanvasY = canvasY - CONTENT_BORDER;
+      const x = (contentCanvasX - viewPan.x) / viewScale;
+      const y = (contentCanvasY - viewPan.y) / viewScale;
+      
+      const hitSize = 10;
+      const hitComponent = (() => {
+        for (const c of componentsTop) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'top' as const, comp: c };
+          }
+        }
+        for (const c of componentsBottom) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'bottom' as const, comp: c };
+          }
+        }
+        return null;
+      })();
+      
+      if (hitComponent) {
+        const { layer, comp } = hitComponent;
+        setSelectedComponentIds(new Set([comp.id]));
+        // Get abbreviation, defaulting to component type prefix if not set or is empty
+        let abbreviation = ('abbreviation' in comp && (comp as any).abbreviation) ? String((comp as any).abbreviation) : '';
+        if (!abbreviation || abbreviation.trim() === '' || abbreviation === '****' || abbreviation === '*') {
+          abbreviation = getDefaultAbbreviation(comp.componentType);
+        }
+        
+        setComponentEditor({
+          visible: true,
+          layer,
+          id: comp.id,
+          designator: comp.designator || '',
+          abbreviation: abbreviation,
+          manufacturer: 'manufacturer' in comp ? (comp as any).manufacturer || '' : '',
+          partNumber: 'partNumber' in comp ? (comp as any).partNumber || '' : '',
+          pinCount: comp.pinCount,
+          x: comp.x,
+          y: comp.y,
+        });
+      }
+    }
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -1338,11 +1439,17 @@ function App() {
       ctx.rect(c.x - half, c.y - half, size, size);
       ctx.fill();
       ctx.stroke();
-      // small pin dot
-      ctx.beginPath();
-      ctx.arc(c.x - half + 4, c.y - half + 4, 2.5, 0, Math.PI * 2);
+      // Draw abbreviation text (default based on component type prefix)
+      let abbreviation = ('abbreviation' in c && (c as any).abbreviation) ? 
+        String((c as any).abbreviation).trim() : '';
+      if (!abbreviation || abbreviation === '' || abbreviation === '****' || abbreviation === '*') {
+        abbreviation = getDefaultAbbreviation(c.componentType);
+      }
       ctx.fillStyle = c.color || '#111';
-      ctx.fill();
+      ctx.font = `bold ${Math.max(8, size * 0.35)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(abbreviation, c.x, c.y);
       // selection highlight
       const isSelected = selectedComponentIds.has(c.id);
       if (isSelected) {
@@ -2138,10 +2245,17 @@ function App() {
           setShowComponentLayerChooser(false);
         }
       }
+      if (showComponentTypeChooser) {
+        const el3 = componentTypeChooserRef.current;
+        if (!el3 || !(e.target instanceof Node) || !el3.contains(e.target)) {
+          setShowComponentTypeChooser(false);
+          setPendingComponentPosition(null); // Clear pending position if chooser is closed
+        }
+      }
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser, showComponentTypeChooser]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -2180,19 +2294,21 @@ function App() {
 
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
-    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'default' =
+    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'component' | 'default' =
       currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
         ? 'magnify'
         : currentTool === 'ground'
         ? 'ground'
+        : currentTool === 'component' && selectedComponentType
+        ? 'component'
         : currentTool === 'draw'
         ? (drawingMode === 'via' ? 'via' : 'trace')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
     const scale = Math.max(1, viewScale);
-    const diameterPx = kind === 'magnify' ? 18 : Math.max(6, Math.round(brushSize * scale));
+    const diameterPx = kind === 'magnify' ? 18 : kind === 'component' ? Math.max(16, Math.round(brushSize * scale)) : Math.max(6, Math.round(brushSize * scale));
     const pad = 4;
     const size = diameterPx + pad * 2 + (kind === 'magnify' ? 8 : 0); // extra room for handle/plus
     const canvas = document.createElement('canvas');
@@ -2283,10 +2399,29 @@ function App() {
       ctx.beginPath(); ctx.moveTo(cx - w1 * 0.4, y1); ctx.lineTo(cx + w1 * 0.4, y1); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w2 * 0.4, y2); ctx.lineTo(cx + w2 * 0.4, y2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
+    } else if (kind === 'component' && selectedComponentType) {
+      // Draw square component icon with abbreviation text
+      const compSize = diameterPx;
+      const half = compSize / 2;
+      // Draw square
+      ctx.strokeStyle = brushColor;
+      ctx.lineWidth = 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.rect(cx - half, cy - half, compSize, compSize);
+      ctx.fill();
+      ctx.stroke();
+      // Draw abbreviation text
+      const abbrev = getDefaultAbbreviation(selectedComponentType);
+      ctx.fillStyle = brushColor;
+      ctx.font = `bold ${Math.max(8, compSize * 0.35)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(abbrev, cx, cy);
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -2474,7 +2609,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, grounds, toolRegistry]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -2598,9 +2733,23 @@ function App() {
       (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
       (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
       setDrawingStrokes(strokes);
-      // load components if present
-      if (project.drawing?.componentsTop) setComponentsTop(project.drawing.componentsTop as PCBComponent[]);
-      if (project.drawing?.componentsBottom) setComponentsBottom(project.drawing.componentsBottom as PCBComponent[]);
+      // load components if present, ensuring all properties are preserved
+      if (project.drawing?.componentsTop) {
+        const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => ({
+          ...comp,
+          // Ensure pinConnections is always an array
+          pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
+        }));
+        setComponentsTop(compsTop);
+      }
+      if (project.drawing?.componentsBottom) {
+        const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => ({
+          ...comp,
+          // Ensure pinConnections is always an array
+          pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
+        }));
+        setComponentsBottom(compsBottom);
+      }
       if (project.drawing?.grounds) setGrounds(project.drawing.grounds as GroundSymbol[]);
     } catch (err) {
       console.error('Failed to open project', err);
@@ -2919,15 +3068,23 @@ function App() {
               <PenLine size={16} color={brushColor} />
             </button>
             <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                {/* top body */}
-                <rect x="5" y="3" width="14" height="7" fill={brushColor} stroke={brushColor} strokeWidth="0.5" />
-                {/* pin headers */}
-                <g stroke={brushColor} fill="none" strokeWidth="1.5">
-                  <rect x="5" y="10" width="14" height="4" rx="1.2" />
-                  <path d="M7 14 v4 M10 14 v4 M13 14 v4 M16 14 v4" stroke={brushColor} />
-                </g>
-              </svg>
+              {selectedComponentType ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  {/* Square icon with text - show default abbreviation based on component type */}
+                  <rect x="4" y="4" width="16" height="16" fill="rgba(255,255,255,0.9)" stroke={brushColor} strokeWidth="1.5" />
+                  <text x="12" y="14" textAnchor="middle" fontSize="7" fill={brushColor} fontWeight="bold" fontFamily="monospace">{getDefaultAbbreviation(selectedComponentType)}</text>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  {/* top body */}
+                  <rect x="5" y="3" width="14" height="7" fill={brushColor} stroke={brushColor} strokeWidth="0.5" />
+                  {/* pin headers */}
+                  <g stroke={brushColor} fill="none" strokeWidth="1.5">
+                    <rect x="5" y="10" width="14" height="4" rx="1.2" />
+                    <path d="M7 14 v4 M10 14 v4 M13 14 v4 M16 14 v4" stroke={brushColor} />
+                  </g>
+                </svg>
+              )}
             </button>
             <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
               {/* Tilted pink eraser */}
@@ -3025,13 +3182,101 @@ function App() {
           {currentTool === 'component' && showComponentLayerChooser && (
             <div ref={componentChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '4px 6px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
-                <input type="radio" name="componentToolLayer" onChange={() => { setComponentToolLayer('top'); setSelectedDrawingLayer('top'); setShowComponentLayerChooser(false); setShowTopImage(true); }} />
+                <input type="radio" name="componentToolLayer" onChange={() => { 
+                  setComponentToolLayer('top'); 
+                  setSelectedDrawingLayer('top'); 
+                  setShowComponentLayerChooser(false); 
+                  setShowTopImage(true);
+                  // Type chooser will appear after clicking to set position
+                }} />
                 <span>Top</span>
               </label>
               <label className="radio-label">
-                <input type="radio" name="componentToolLayer" onChange={() => { setComponentToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowComponentLayerChooser(false); setShowBottomImage(true); }} />
+                <input type="radio" name="componentToolLayer" onChange={() => { 
+                  setComponentToolLayer('bottom'); 
+                  setSelectedDrawingLayer('bottom'); 
+                  setShowComponentLayerChooser(false); 
+                  setShowBottomImage(true);
+                  // Type chooser will appear after clicking to set position
+                }} />
                 <span>Bottom</span>
               </label>
+            </div>
+          )}
+          {currentTool === 'component' && showComponentTypeChooser && (
+            <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '400px', overflowY: 'auto', minWidth: '200px' }}>
+              <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Component Type:</div>
+              {Object.entries(COMPONENT_TYPE_INFO).map(([type, info]) => (
+                <button
+                  key={type}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCurrentTool('component'); // Ensure component tool is active
+                    const componentType = type as ComponentType;
+                    setSelectedComponentType(componentType);
+                    setShowComponentTypeChooser(false);
+                    
+                    // Create component at stored position (from the click)
+                    if (pendingComponentPosition) {
+                      const { x, y, layer } = pendingComponentPosition;
+                      const comp = createComponent(
+                        componentType,
+                        layer,
+                        x,
+                        y,
+                        brushColor,
+                        brushSize
+                      );
+                      
+                      // Initialize abbreviation to default based on component type prefix
+                      (comp as any).abbreviation = getDefaultAbbreviation(componentType);
+                      
+                      // Add component to appropriate layer
+                      if (layer === 'top') {
+                        setShowTopComponents(true);
+                        setComponentsTop(prev => [...prev, comp]);
+                      } else {
+                        setShowBottomComponents(true);
+                        setComponentsBottom(prev => [...prev, comp]);
+                      }
+                      
+                      // Open attribute editor immediately
+                      const defaultAbbrev = getDefaultAbbreviation(componentType);
+                      setComponentEditor({
+                        visible: true,
+                        layer,
+                        id: comp.id,
+                        designator: comp.designator || '',
+                        abbreviation: defaultAbbrev,
+                        manufacturer: 'manufacturer' in comp ? (comp as any).manufacturer || '' : '',
+                        partNumber: 'partNumber' in comp ? (comp as any).partNumber || '' : '',
+                        pinCount: comp.pinCount,
+                        x: comp.x,
+                        y: comp.y,
+                      });
+                      
+                      // Clear pending position
+                      setPendingComponentPosition(null);
+                    }
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '4px 8px',
+                    marginBottom: '2px',
+                    background: selectedComponentType === type ? '#e6f0ff' : '#fff',
+                    border: '1px solid #ddd',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: '#333',
+                  }}
+                >
+                  {info.prefix.join(', ')} - {type} ({info.defaultPins} pins)
+                </button>
+              ))}
             </div>
           )}
 
@@ -3124,6 +3369,324 @@ function App() {
             }}
           />
           
+          {/* Component Properties Editor Dialog */}
+          {componentEditor && componentEditor.visible && (() => {
+            // Find the component being edited
+            const compList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+            const comp = compList.find(c => c.id === componentEditor.id);
+            if (!comp) return null;
+            
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: '#fff',
+                  border: '2px solid #0b5fff',
+                  borderRadius: 8,
+                  padding: '12px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  zIndex: 1000,
+                  minWidth: '350px',
+                  maxWidth: '500px',
+                  maxHeight: '80vh',
+                  overflowY: 'auto',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '14px', color: '#333', fontWeight: 600 }}>Component Properties</h3>
+                  <button
+                    onClick={() => {
+                      setComponentEditor(null);
+                      setConnectingPin(null); // Clear pin connection mode
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: '18px',
+                      cursor: 'pointer',
+                      color: '#666',
+                      padding: 0,
+                      width: '22px',
+                      height: '22px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Component Type (read-only) */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Component Type:
+                    </label>
+                    <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                      {comp.componentType}
+                    </div>
+                  </div>
+                  
+                  {/* Designator */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Designator (Name):
+                    </label>
+                    <input
+                      type="text"
+                      value={componentEditor.designator}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, designator: e.target.value })}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      placeholder="e.g., U1, R5, C3"
+                    />
+                  </div>
+                  
+                  {/* Abbreviation */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Abbreviation (shown in icon):
+                    </label>
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={componentEditor.abbreviation.replace(/\*/g, '')}
+                      onChange={(e) => {
+                        const val = e.target.value.substring(0, 4).toUpperCase();
+                        setComponentEditor({ ...componentEditor, abbreviation: val });
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value.substring(0, 4).toUpperCase();
+                        setComponentEditor({ ...componentEditor, abbreviation: val });
+                      }}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px', fontFamily: 'monospace', textTransform: 'uppercase' }}
+                      placeholder="*"
+                    />
+                  </div>
+                  
+                  {/* Manufacturer */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Manufacturer:
+                    </label>
+                    <input
+                      type="text"
+                      value={componentEditor.manufacturer}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      placeholder="e.g., Texas Instruments, STMicroelectronics"
+                    />
+                  </div>
+                  
+                  {/* Part Number */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Part Number:
+                    </label>
+                    <input
+                      type="text"
+                      value={componentEditor.partNumber}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      placeholder="e.g., TL072, LM358"
+                    />
+                  </div>
+                  
+                  {/* Pin Count */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Number of Pins:
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={componentEditor.pinCount}
+                      onChange={(e) => {
+                        const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                        setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                      }}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                    />
+                  </div>
+                  
+                  {/* Position (read-only) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                        X Position:
+                      </label>
+                      <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                        {Math.round(componentEditor.x)}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                        Y Position:
+                      </label>
+                      <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                        {Math.round(componentEditor.y)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Layer (read-only) */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      Layer:
+                    </label>
+                    <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                      {componentEditor.layer === 'top' ? 'Top' : 'Bottom'}
+                    </div>
+                  </div>
+                  
+                  {/* Pin Connections */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
+                      Pin Connections:
+                    </label>
+                    {connectingPin && connectingPin.componentId === comp.id && (
+                      <div style={{ padding: '4px 6px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 4, marginBottom: '4px', fontSize: '10px', color: '#856404' }}>
+                        Click on a via or pad to connect Pin {connectingPin.pinIndex + 1}
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: '4px', maxHeight: '150px', overflowY: 'auto', padding: '2px' }}>
+                      {Array.from({ length: componentEditor.pinCount }, (_, i) => {
+                        const pinConnection = comp.pinConnections && comp.pinConnections[i] ? comp.pinConnections[i] : '';
+                        const isConnecting = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              if (isConnecting) {
+                                // Cancel connection mode
+                                setConnectingPin(null);
+                              } else {
+                                // Enter connection mode for this pin
+                                setConnectingPin({ componentId: comp.id, pinIndex: i });
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '2px',
+                              padding: '4px 2px',
+                              border: isConnecting ? '2px solid #0b5fff' : pinConnection ? '1px solid #28a745' : '1px solid #ddd',
+                              borderRadius: 4,
+                              background: isConnecting ? '#e6f0ff' : pinConnection ? '#d4edda' : '#fff',
+                              cursor: 'pointer',
+                              fontSize: '9px',
+                            }}
+                            title={isConnecting ? 'Click on a via or pad to connect (or click again to cancel)' : pinConnection ? `Connected to: ${pinConnection}` : 'Click to connect this pin to a via or pad'}
+                          >
+                            <div style={{ 
+                              width: '18px', 
+                              height: '18px', 
+                              borderRadius: '50%', 
+                              background: isConnecting ? '#0b5fff' : pinConnection ? '#28a745' : '#ccc',
+                              border: '1px solid #fff',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#fff',
+                              fontWeight: 'bold',
+                              fontSize: '8px',
+                            }}>
+                              {i + 1}
+                            </div>
+                            <div style={{ fontSize: '8px', color: '#666', textAlign: 'center' }}>
+                              Pin {i + 1}
+                            </div>
+                            {pinConnection && (
+                              <div style={{ fontSize: '7px', color: '#28a745', fontWeight: 600, textAlign: 'center', wordBreak: 'break-all' }}>
+                                {pinConnection.substring(0, 6)}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Type-specific properties would go here - for now, just show basic ones */}
+                  {/* TODO: Add type-specific property fields based on componentType */}
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px' }}>
+                  <button
+                    onClick={() => {
+                      setComponentEditor(null);
+                      setConnectingPin(null); // Clear pin connection mode
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      background: '#f5f5f5',
+                      border: '1px solid #ddd',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      color: '#333',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      // Update the component with new values
+                      const updateComponent = (comp: PCBComponent): PCBComponent => {
+                        const updated = { ...comp };
+                        updated.designator = componentEditor.designator;
+                        // Store abbreviation as a dynamic property (no padding needed, just use as-is)
+                        (updated as any).abbreviation = componentEditor.abbreviation.trim() || getDefaultAbbreviation(comp.componentType);
+                        if ('manufacturer' in updated) {
+                          (updated as any).manufacturer = componentEditor.manufacturer;
+                        }
+                        if ('partNumber' in updated) {
+                          (updated as any).partNumber = componentEditor.partNumber;
+                        }
+                        // Update pin count if changed
+                        if (componentEditor.pinCount !== comp.pinCount) {
+                          updated.pinCount = componentEditor.pinCount;
+                          // Resize pinConnections array, preserving existing connections
+                          const currentConnections = comp.pinConnections || [];
+                          updated.pinConnections = new Array(componentEditor.pinCount).fill('').map((_, i) => 
+                            i < currentConnections.length ? currentConnections[i] : ''
+                          );
+                        } else {
+                          // Preserve existing pinConnections even if pin count didn't change
+                          updated.pinConnections = comp.pinConnections || [];
+                        }
+                        return updated;
+                      };
+                      
+                      if (componentEditor.layer === 'top') {
+                        setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                      } else {
+                        setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                      }
+                      setComponentEditor(null);
+                      setConnectingPin(null); // Clear pin connection mode
+                    }}
+                    style={{
+                      padding: '4px 10px',
+                      background: '#0b5fff',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
           
           {!topImage && !bottomImage && (
             <div className="placeholder">
