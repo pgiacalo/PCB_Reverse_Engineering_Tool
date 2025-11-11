@@ -17,7 +17,7 @@ Hackaday educational PCB reverse engineering video (used to derive the notes bel
 			https://www.digikey.com/en/products/result?s=N4IgTCBcDaIG4EsDOBXAhgGwARIKZoCcBjACxAF0BfIA
 
 	TIPS on component identification:
-		1) For components that are NOT market, you may have to desolder them to get values 
+		1) For components that are NOT marked, you may have to desolder them to get values 
 			- i.e., parallel circuits, etc, prevent values to be measured accurately directly
 
 		2) Chip/IC data sheets often contain sample application circuits. These can help identify 

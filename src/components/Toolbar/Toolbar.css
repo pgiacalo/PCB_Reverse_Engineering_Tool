@@ -1,0 +1,450 @@
+/* ============================================================================
+   Toolbar Container
+   ============================================================================ */
+
+.toolbar {
+  width: 120px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 8px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* ============================================================================
+   Tool Buttons
+   ============================================================================ */
+
+.tool-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 100%;
+  text-align: left;
+}
+
+.tool-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(2px);
+}
+
+.tool-button.active {
+  background: rgba(0, 191, 255, 0.3);
+  border-color: #00bfff;
+  box-shadow: 0 0 10px rgba(0, 191, 255, 0.5);
+}
+
+.tool-button:focus {
+  outline: 2px solid #00bfff;
+  outline-offset: 2px;
+}
+
+.tool-icon {
+  font-size: 24px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tool-label {
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.tool-shortcut {
+  font-size: 11px;
+  opacity: 0.7;
+  font-weight: normal;
+}
+
+/* ============================================================================
+   Separator
+   ============================================================================ */
+
+.toolbar-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 8px 0;
+}
+
+/* ============================================================================
+   Color Picker Button
+   ============================================================================ */
+
+.color-picker-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 100%;
+  text-align: left;
+}
+
+.color-picker-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fff;
+}
+
+.color-picker-button:focus {
+  outline: 2px solid #00bfff;
+  outline-offset: 2px;
+}
+
+.color-picker-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.color-picker-label {
+  font-size: 14px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.color-picker-value {
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: 'Courier New', monospace;
+  margin-top: 2px;
+}
+
+/* ============================================================================
+   Brush Size Controls
+   ============================================================================ */
+
+.brush-size-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Brush Size Slider */
+
+.brush-size-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.brush-size-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.slider-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.1s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+.brush-size-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Size Presets */
+
+.size-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.size-presets-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.preset-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.preset-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.preset-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.preset-button.active {
+  border-width: 2px;
+  font-weight: bold;
+}
+
+.preset-button:focus {
+  outline: 2px solid #00bfff;
+  outline-offset: 1px;
+}
+
+.preset-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.preset-value {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* ============================================================================
+   Voltage Dialog
+   ============================================================================ */
+
+.voltage-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.voltage-dialog {
+  background: #2a2a2a;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 320px;
+  max-width: 400px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  color: white;
+}
+
+.voltage-dialog-title {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+}
+
+.voltage-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.voltage-section-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.common-voltages {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.voltage-button {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.voltage-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #00bfff;
+  transform: translateY(-1px);
+}
+
+.voltage-button:focus {
+  outline: 2px solid #00bfff;
+  outline-offset: 2px;
+}
+
+.custom-voltage-input {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.custom-voltage-input:focus {
+  outline: none;
+  border-color: #00bfff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.custom-voltage-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.voltage-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.voltage-dialog-button {
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+
+.voltage-dialog-ok {
+  background: #00bfff;
+  color: white;
+}
+
+.voltage-dialog-ok:hover:not(:disabled) {
+  background: #00a0e0;
+  transform: translateY(-1px);
+}
+
+.voltage-dialog-ok:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voltage-dialog-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.voltage-dialog-cancel:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.voltage-dialog-button:focus {
+  outline: 2px solid #00bfff;
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Responsive Adjustments
+   ============================================================================ */
+
+@media (max-height: 800px) {
+  .toolbar {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .tool-button {
+    padding: 6px 10px;
+  }
+  
+  .tool-icon {
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+  }
+}
+

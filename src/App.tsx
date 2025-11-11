@@ -79,6 +79,127 @@ interface GroundSymbol {
 type ViewMode = 'top' | 'bottom' | 'overlay';
 type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground';
 
+// Tool settings interface
+interface ToolSettings {
+  color: string;
+  size: number;
+}
+
+// Tool definition interface - each tool has its own attributes including settings
+interface ToolDefinition {
+  id: string; // Unique identifier: 'select', 'trace', 'via', 'component', 'ground', etc.
+  name: string; // Display name
+  toolType: Tool; // The underlying tool type
+  drawingMode?: 'trace' | 'via'; // For draw tools, which mode
+  icon?: string; // Icon/symbol for the tool
+  shortcut?: string; // Keyboard shortcut
+  tooltip?: string; // Tooltip text
+  colorReflective?: boolean; // Whether icon color reflects brush color
+  settings: ToolSettings; // Tool-specific color and size settings
+  defaultLayer?: 'top' | 'bottom'; // Default layer preference
+}
+
+// Tool registry - centralized definition of all tools with their attributes
+const createToolRegistry = (): Map<string, ToolDefinition> => {
+  const registry = new Map<string, ToolDefinition>();
+  
+  registry.set('select', {
+    id: 'select',
+    name: 'Select',
+    toolType: 'select',
+    icon: '⊕',
+    shortcut: 'S',
+    tooltip: 'Select objects or groups',
+    colorReflective: false,
+    settings: { color: '#ff0000', size: 10 },
+  });
+  
+  registry.set('via', {
+    id: 'via',
+    name: 'Via',
+    toolType: 'draw',
+    drawingMode: 'via',
+    icon: '◎',
+    shortcut: 'V',
+    tooltip: 'Place via connection',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 10 },
+    defaultLayer: 'top',
+  });
+  
+  registry.set('trace', {
+    id: 'trace',
+    name: 'Trace',
+    toolType: 'draw',
+    drawingMode: 'trace',
+    icon: '╱',
+    shortcut: 'T',
+    tooltip: 'Draw copper traces',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 10 },
+    defaultLayer: 'top',
+  });
+  
+  registry.set('component', {
+    id: 'component',
+    name: 'Component',
+    toolType: 'component',
+    icon: '▭',
+    shortcut: 'C',
+    tooltip: 'Place component',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 18 },
+    defaultLayer: 'top',
+  });
+  
+  registry.set('ground', {
+    id: 'ground',
+    name: 'Ground',
+    toolType: 'ground',
+    icon: '⏚',
+    shortcut: 'G',
+    tooltip: 'Place ground symbol',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 18 },
+    defaultLayer: 'top',
+  });
+  
+  registry.set('erase', {
+    id: 'erase',
+    name: 'Erase',
+    toolType: 'erase',
+    icon: '▭',
+    shortcut: 'E',
+    tooltip: 'Erase objects',
+    colorReflective: false,
+    settings: { color: '#ffffff', size: 10 },
+  });
+  
+  registry.set('pan', {
+    id: 'pan',
+    name: 'Move',
+    toolType: 'pan',
+    icon: '✋',
+    shortcut: 'H',
+    tooltip: 'Pan the view',
+    colorReflective: false,
+    settings: { color: '#ff0000', size: 10 },
+  });
+  
+  registry.set('magnify', {
+    id: 'magnify',
+    name: 'Zoom',
+    toolType: 'magnify',
+    icon: '🔍+',
+    shortcut: 'Z',
+    tooltip: 'Zoom In (or Zoom Out)',
+    colorReflective: false,
+    settings: { color: '#ff0000', size: 10 },
+  });
+  
+  return registry;
+};
+
 function App() {
   const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
   const [topImage, setTopImage] = useState<PCBImage | null>(null);
@@ -90,6 +211,10 @@ function App() {
   const [brushColor, setBrushColor] = useState('#ff0000');
   const [brushSize, setBrushSize] = useState(10);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  
+  // Tool registry - centralized tool definitions with settings as attributes
+  const [toolRegistry, setToolRegistry] = useState<Map<string, ToolDefinition>>(() => createToolRegistry());
+  
   const [drawingStrokes, setDrawingStrokes] = useState<DrawingStroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
@@ -106,6 +231,77 @@ function App() {
   const [viewScale, setViewScale] = useState(1);
   const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [drawingMode, setDrawingMode] = useState<'trace' | 'via'>('trace');
+  
+  // Save current settings when switching away from a tool and restore new tool's settings
+  const prevToolIdRef = React.useRef<string | null>(null);
+  const prevBrushColorRef = React.useRef<string>(brushColor);
+  const prevBrushSizeRef = React.useRef<number>(brushSize);
+  
+  React.useEffect(() => {
+    // Use functional update to avoid dependency on toolRegistry
+    setToolRegistry(prev => {
+      const currentToolDef = (() => {
+        if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
+        if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
+        if (currentTool === 'component') return prev.get('component');
+        if (currentTool === 'ground') return prev.get('ground');
+        return null;
+      })();
+      
+      const currentToolId = currentToolDef?.id || null;
+      const prevToolId = prevToolIdRef.current;
+      const updated = new Map(prev);
+      
+      // Save previous tool's settings before switching
+      if (prevToolId && prevToolId !== currentToolId) {
+        const prevToolDef = prev.get(prevToolId);
+        if (prevToolDef) {
+          updated.set(prevToolId, {
+            ...prevToolDef,
+            settings: { color: prevBrushColorRef.current, size: prevBrushSizeRef.current }
+          });
+        }
+      }
+      
+      // Restore new tool's settings
+      if (currentToolDef && currentToolId !== prevToolId) {
+        const settings = currentToolDef.settings;
+        setBrushColor(settings.color);
+        setBrushSize(settings.size);
+        prevBrushColorRef.current = settings.color;
+        prevBrushSizeRef.current = settings.size;
+      }
+      
+      prevToolIdRef.current = currentToolId;
+      return updated;
+    });
+  }, [currentTool, drawingMode]); // Only depend on tool changes
+  
+  // Update tool-specific settings when color/size changes (for the active tool)
+  React.useEffect(() => {
+    setToolRegistry(prev => {
+      const currentToolDef = (() => {
+        if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
+        if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
+        if (currentTool === 'component') return prev.get('component');
+        if (currentTool === 'ground') return prev.get('ground');
+        return null;
+      })();
+      
+      if (currentToolDef) {
+        const updated = new Map(prev);
+        updated.set(currentToolDef.id, {
+          ...currentToolDef,
+          settings: { color: brushColor, size: brushSize }
+        });
+        prevBrushColorRef.current = brushColor;
+        prevBrushSizeRef.current = brushSize;
+        return updated;
+      }
+      return prev;
+    });
+  }, [brushColor, brushSize, currentTool, drawingMode]);
+  
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
   const [, setViaOrderBottom] = useState<string[]>([]);
@@ -298,12 +494,12 @@ function App() {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number } | null = null;
         // search all vias on both layers
+        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
           if (s.type !== 'via') continue;
           const c = s.points[0];
           const d = Math.hypot(c.x - wx, c.y - wy);
-          const thresholdWorld = 10 / Math.max(viewScale, 0.0001); // 10px screen distance
-          if (d <= thresholdWorld && d < bestDist) { bestDist = d; bestCenter = c; }
+          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
         }
         return bestCenter ?? { x: wx, y: wy };
       };
@@ -377,12 +573,12 @@ function App() {
       const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number } | null = null;
+        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
           if (s.type !== 'via') continue;
           const c = s.points[0];
           const d = Math.hypot(c.x - wx, c.y - wy);
-          const thresholdWorld = 10 / Math.max(viewScale, 0.0001);
-          if (d <= thresholdWorld && d < bestDist) { bestDist = d; bestCenter = c; }
+          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
         }
         return bestCenter ?? { x: wx, y: wy };
       };
@@ -1275,15 +1471,37 @@ function App() {
     const computeSize = () => {
       const container = canvasContainerRef.current;
       if (!container) return;
-      const rect = container.getBoundingClientRect();
+      
+      // ASPECT = width / height, so 1.6 means 1.6x wider than tall (e.g., 1600x1000)
       const ASPECT = 1.6;
-      // Available dimensions inside container, accounting for top toolbar (~42px) and some padding
-      const toolbarH = 42 + 16;
-      const availableW = Math.max(300, container.clientWidth - 16);
-      const availableH = Math.max(240, window.innerHeight - rect.top - 24 - toolbarH);
-      const widthByHeight = Math.floor(availableH * ASPECT);
-      const width = Math.min(availableW, widthByHeight);
-      const height = Math.floor(width / ASPECT);
+      
+      // The toolbar and layers panel are absolutely positioned INSIDE the container,
+      // so we use the FULL container dimensions, but leave some padding
+      const PADDING = 24; // 12px on each side
+      const availableW = container.clientWidth - PADDING;
+      const availableH = container.clientHeight - PADDING;
+      
+      // Calculate dimensions based on aspect ratio
+      // If we use full height, how wide would it be?
+      const widthIfHeightLimited = Math.floor(availableH * ASPECT);
+      // If we use full width, how tall would it be?
+      const heightIfWidthLimited = Math.floor(availableW / ASPECT);
+      
+      let width, height;
+      if (widthIfHeightLimited <= availableW) {
+        // Height is the limiting factor - use full height
+        width = widthIfHeightLimited;
+        height = availableH;
+      } else {
+        // Width is the limiting factor - use full width
+        width = availableW;
+        height = heightIfWidthLimited;
+      }
+      
+      // Ensure minimum usable size
+      width = Math.max(600, width);
+      height = Math.max(375, height);
+      
       setCanvasSize(prev => (prev.width === width && prev.height === height) ? prev : { width, height });
     };
     computeSize();
@@ -1512,18 +1730,70 @@ function App() {
       return;
     }
     // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
-    if (currentTool === 'draw' || currentTool === 'erase') {
-      const isUndo = (e.key === 'z' || e.key === 'Z') && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey;
-      if (isUndo) {
-        e.preventDefault();
-        e.stopPropagation();
-        // If a stroke is in progress, cancel it
+    // Only handle undo keys here; let other keys pass through to tool shortcuts
+    if ((currentTool === 'draw' || currentTool === 'erase') && 
+        (e.key === 'z' || e.key === 'Z') && 
+        (e.metaKey || e.ctrlKey) && 
+        !e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Special handling for trace mode: undo last segment instead of entire trace
+      if (currentTool === 'draw' && drawingMode === 'trace') {
+          // ALWAYS check in-progress trace first (most recent action)
+          // Check both state (source of truth) and ref (backup) to catch all cases
+          const statePoints = currentStroke;
+          const refPoints = currentStrokeRef.current;
+          // Prefer state (source of truth), but use ref if state is empty (handles timing edge cases)
+          const inProgressPoints = statePoints.length > 0 ? statePoints : refPoints;
+          
+          // If a trace is in progress, remove the last point (undo last segment)
+          // This is the most recent action, so it takes priority over completed traces
+          if (inProgressPoints.length > 0) {
+            if (inProgressPoints.length > 1) {
+              // Remove last point, keeping the trace in progress
+              setCurrentStroke(prev => prev.slice(0, -1));
+            } else {
+              // Only one point left, cancel the trace
+              setCurrentStroke([]);
+            }
+            return;
+          }
+          
+          // No trace in progress - find the MOST RECENT completed trace (last in array)
+          // and remove its last segment, then restore it to currentStroke so user can continue
+          setDrawingStrokes(prev => {
+            // Search backwards from the end to find the most recent trace
+            for (let i = prev.length - 1; i >= 0; i--) {
+              const s = prev[i];
+              // Check if it's a trace on the current layer
+              if (s.type === 'trace' && s.layer === selectedDrawingLayer && s.points.length >= 2) {
+                if (s.points.length > 2) {
+                  // Remove last point (undo last segment)
+                  const remainingPoints = s.points.slice(0, -1);
+                  // Restore the remaining points to currentStroke so user can continue drawing
+                  // Remove the trace from drawingStrokes since it's now back in currentStroke
+                  setCurrentStroke(remainingPoints);
+                  return [...prev.slice(0, i), ...prev.slice(i + 1)];
+                } else {
+                  // Only 2 points left (one segment), remove entire trace
+                  return [...prev.slice(0, i), ...prev.slice(i + 1)];
+                }
+              }
+            }
+            return prev;
+          });
+          return;
+        }
+        
+        // For vias and other tools: remove last point if in progress, or remove entire stroke
         if (isDrawing && currentStroke.length > 0) {
           setCurrentStroke([]);
           return;
         }
+        
         // Remove the last stroke of the current type on the selected layer
-        if (currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'trace')) {
+        if (currentTool === 'draw' && drawingMode === 'via') {
           setDrawingStrokes(prev => {
             for (let i = prev.length - 1; i >= 0; i--) {
               const s = prev[i];
@@ -1537,7 +1807,6 @@ function App() {
         }
         return;
       }
-    }
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -1606,7 +1875,15 @@ function App() {
 
     // Check if we're in transform mode with an image selected
     if (currentTool === 'transform' && selectedImageForTransform) {
-      // Prevent default and stop propagation early so focused radios/sliders don't consume arrows
+      // Only handle arrow keys in transform mode; let other keys pass through for tool shortcuts
+      const isArrowKey = e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown';
+      
+      if (!isArrowKey) {
+        // Not an arrow key - let it pass through to tool shortcuts
+        return;
+      }
+
+      // Prevent default and stop propagation for arrow keys so focused radios/sliders don't consume them
       e.preventDefault();
       e.stopPropagation();
 
@@ -2025,7 +2302,7 @@ function App() {
   React.useEffect(() => {
     if (selectedIds.size === 0) return;
     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: brushSize } : s));
-  }, [brushSize, selectedIds, setDrawingStrokes]);
+  }, [brushSize]); // Only run when brushSize changes, not when selection changes
 
   // Selection size slider removed; size can be set via Tools menu
 
@@ -2158,6 +2435,13 @@ function App() {
         componentsBottom,
         grounds,
       },
+      toolSettings: {
+        // Convert Map to plain object for JSON serialization
+        trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
+        via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 10 },
+        component: toolRegistry.get('component')?.settings || { color: '#ff0000', size: 18 },
+        ground: toolRegistry.get('ground')?.settings || { color: '#ff0000', size: 18 },
+      },
     };
     const json = JSON.stringify(project, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -2190,7 +2474,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, grounds]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, grounds, toolRegistry]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -2202,6 +2486,53 @@ function App() {
         if (project.view.viewPan) setViewPan(project.view.viewPan);
         if (project.view.showBothLayers != null) setShowBothLayers(project.view.showBothLayers);
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
+      }
+      // Restore tool settings
+      if (project.toolSettings) {
+        setToolRegistry(prev => {
+          const updated = new Map(prev);
+          // Restore settings for each tool if present in saved data
+          if (project.toolSettings.trace) {
+            const traceDef = updated.get('trace');
+            if (traceDef) {
+              updated.set('trace', { ...traceDef, settings: project.toolSettings.trace });
+            }
+          }
+          if (project.toolSettings.via) {
+            const viaDef = updated.get('via');
+            if (viaDef) {
+              updated.set('via', { ...viaDef, settings: project.toolSettings.via });
+            }
+          }
+          if (project.toolSettings.component) {
+            const componentDef = updated.get('component');
+            if (componentDef) {
+              updated.set('component', { ...componentDef, settings: project.toolSettings.component });
+            }
+          }
+          if (project.toolSettings.ground) {
+            const groundDef = updated.get('ground');
+            if (groundDef) {
+              updated.set('ground', { ...groundDef, settings: project.toolSettings.ground });
+            }
+          }
+          
+          // If a tool is currently active, restore its settings immediately
+          const currentToolDef = (() => {
+            if (currentTool === 'draw' && drawingMode === 'trace') return updated.get('trace');
+            if (currentTool === 'draw' && drawingMode === 'via') return updated.get('via');
+            if (currentTool === 'component') return updated.get('component');
+            if (currentTool === 'ground') return updated.get('ground');
+            return null;
+          })();
+          
+          if (currentToolDef) {
+            setBrushColor(currentToolDef.settings.color);
+            setBrushSize(currentToolDef.settings.size);
+          }
+          
+          return updated;
+        });
       }
       // Helper to build PCBImage from saved data
       const buildImage = async (img: any): Promise<PCBImage | null> => {
@@ -2275,7 +2606,7 @@ function App() {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
     }
-  }, []);
+  }, [currentTool, drawingMode]);
 
   React.useEffect(() => {
     currentStrokeRef.current = currentStroke;
@@ -2400,11 +2731,18 @@ function App() {
                 const w = window as any;
                 if (typeof w.showOpenFilePicker === 'function') {
                   try {
+                    // Don't use restrictive types filter - accept all files and let user filter
                     const [handle] = await w.showOpenFilePicker({
                       multiple: false,
-                      types: [{ description: 'PCB Project', accept: { 'application/json': ['.json'] } }],
+                      // Remove types filter to allow all .json files regardless of MIME type
                     });
                     const file = await handle.getFile();
+                    // Only accept .json files
+                    if (!file.name.toLowerCase().endsWith('.json')) {
+                      alert('Please select a .json project file.');
+                      setOpenMenu(null);
+                      return;
+                    }
                     const text = await file.text();
                     const project = JSON.parse(text);
                     await loadProject(project);
@@ -2561,372 +2899,11 @@ function App() {
 
       
 
-      <div className="main-container">
-        {/* Control Panel (hidden; replaced by top menus and left toolstrip) */}
-        <div className="control-panel" style={{ display: 'none' }}>
-          {/* Fixed Tips Panel at top of control panel */}
-          <div className="help-panel" style={{ marginBottom: 12 }}>
-            {(() => {
-              let mode = '';
-              const tips: string[] = [];
-              // First priority: guide loading when either image is missing
-              if (!topImage || !bottomImage) {
-                mode = 'Load Images';
-                tips.push('Click "Load Top PCB" and "Load Bottom PCB" to select photos.');
-                tips.push('Then use View Controls and Image Transform to align them.');
-              } else if (currentTool === 'magnify') {
-                mode = 'Magnify';
-                tips.push('Click on the image to zoom in.');
-                tips.push('Hold Shift and click to zoom out.');
-              } else if (currentTool === 'transform') {
-                mode = `Transform → ${transformMode}${selectedImageForTransform ? ` (${selectedImageForTransform} image)` : ''}`;
-                if (!selectedImageForTransform) {
-                  tips.push('Select Top Image or Bottom Image to transform.');
-                } else if (transformMode === 'nudge') {
-                  tips.push('Use arrow keys to move by 1 pixel.');
-                  tips.push('Click and drag to reposition for coarse moves.');
-                } else if (transformMode === 'scale') {
-                  tips.push('Arrow Up/Down: ±1% scale. Arrow Left/Right: ±0.1% scale.');
-                } else if (transformMode === 'rotate') {
-                  tips.push('Arrow Up/Down: ±1°. Arrow Left/Right: ±0.1°.');
-                } else if (transformMode === 'slant') {
-                  tips.push('Arrow Up/Down: ±0.5° vertical slant. Arrow Left/Right: ±0.5° horizontal slant.');
-                } else if (transformMode === 'keystone') {
-                  tips.push('Arrow Up/Down: ±0.5° vertical keystone. Arrow Left/Right: ±0.5° horizontal keystone.');
-                }
-              } else if (currentTool === 'draw') {
-                mode = `Draw (${selectedDrawingLayer} layer)`;
-                tips.push('Click and drag to draw.');
-                tips.push('Hold Shift while drawing to constrain to H/V/45°.');
-              } else if (currentTool === 'erase') {
-                mode = `Erase (${selectedDrawingLayer} layer)`;
-                tips.push('Click and drag to erase; intersected strokes are removed.');
-                tips.push('Double-click the Erase button to clear the selected layer.');
-              } else {
-                mode = 'View';
-                tips.push('Use View Controls to switch Top/Bottom/Overlay or Magnify.');
-              }
-  return (
-    <>
-                  <div><strong>Mode:</strong> {mode}</div>
-                  {tips.map((t, i) => (
-                    <div key={i}>• {t}</div>
-                  ))}
-                </>
-              );
-            })()}
-          </div>
-
-          {/* Scrollable tools area */}
-          <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 260px)', padding: '0 8px' }}>
-          <div className="control-section">
-            <h3>📁 Load PCB Images</h3>
-            <div className="button-group compact">
-              <button 
-                onClick={() => fileInputTopRef.current?.click()}
-                className="load-button"
-              >
-                Load Top PCB
-              </button>
-              <button 
-                onClick={() => fileInputBottomRef.current?.click()}
-                className="load-button"
-              >
-                Load Bottom PCB
-              </button>
-            </div>
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center' }}>
-              <button 
-                onClick={() => { void saveProject(); }}
-                className="load-button"
-                title="Save the entire project (images embedded) as JSON"
-              >
-                💾 Save Project
-              </button>
-              <button 
-                onClick={async () => {
-                  const w = window as any;
-                  if (typeof w.showOpenFilePicker === 'function') {
-                    try {
-                      const [handle] = await w.showOpenFilePicker({
-                        multiple: false,
-                        types: [{ description: 'PCB Project', accept: { 'application/json': ['.json'] } }],
-                      });
-                      const file = await handle.getFile();
-                      const text = await file.text();
-                      const project = JSON.parse(text);
-                      await loadProject(project);
-                      return;
-                    } catch (e) {
-                      if ((e as any)?.name === 'AbortError') return;
-                      console.warn('showOpenFilePicker failed, falling back to input', e);
-                    }
-                  }
-                  openProjectRef.current?.click();
-                }}
-                className="load-button"
-                style={{ marginLeft: 8 }}
-                title="Open a saved project JSON"
-              >
-                📂 Open Project
-              </button>
-            </div>
-            <input
-              ref={fileInputTopRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => e.target.files?.[0] && handleImageLoad(e.target.files[0], 'top')}
-              style={{ display: 'none' }}
-            />
-            <input
-              ref={fileInputBottomRef}
-              type="file"
-              accept="image/*"
-              onChange={(e) => e.target.files?.[0] && handleImageLoad(e.target.files[0], 'bottom')}
-              style={{ display: 'none' }}
-            />
-            <input
-              ref={openProjectRef}
-              type="file"
-              accept="application/json"
-              style={{ display: 'none' }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                try {
-                  const text = await file.text();
-                  const project = JSON.parse(text);
-                  await loadProject(project);
-                } finally {
-                  e.currentTarget.value = '';
-                }
-              }}
-            />
-          </div>
-
-          {/* (Tools moved to left toolbar inside canvas area) */}
-
-          <div className="control-section">
-            <h3>👁️ View Controls</h3>
-            <div className="button-group compact">
-              <button 
-                onClick={() => { setCurrentView('top'); setCurrentTool('draw'); }}
-                className={currentView === 'top' ? 'active' : ''}
-              >
-                Top
-              </button>
-              <button 
-                onClick={() => { setCurrentView('bottom'); setCurrentTool('draw'); }}
-                className={currentView === 'bottom' ? 'active' : ''}
-              >
-                Bottom
-              </button>
-              <button 
-                onClick={() => { setCurrentView('overlay'); setCurrentTool('draw'); }}
-                className={currentView === 'overlay' ? 'active' : ''}
-              >
-                Overlay
-              </button>
-            </div>
-            
-            {currentView === 'overlay' && (
-              <div className="slider-group">
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <label style={{ marginRight: 8 }}>Transparency: {transparency}%</label>
-                  <label className="radio-label">
-                    <input
-                      type="checkbox"
-                      checked={isTransparencyCycling}
-                      onChange={(e) => setIsTransparencyCycling(e.target.checked)}
-                    />
-                    <span style={{ marginLeft: 8 }}>Cycle</span>
-                  </label>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={transparency}
-                  onChange={(e) => setTransparency(Number(e.target.value))}
-                  onDoubleClick={() => handleSliderDoubleClick('transparency')}
-                  className="slider"
-                />
-              </div>
-            )}
-          </div>
-
-
-          <div className="control-section" onMouseDown={() => setCurrentTool('transform')}>
-            <h3>🔧 Image Transform</h3>
-            <div className="button-group compact">
-              <button 
-                onClick={() => setCurrentTool('transform')}
-                className={currentTool === 'transform' ? 'active' : ''}
-                title="Transform tool"
-              >
-                <Move size={14} />
-                Transform
-              </button>
-            </div>
-
-            <div className="radio-group horizontal">
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="transformImage"
-                  value="top"
-                  checked={selectedImageForTransform === 'top'}
-                  onChange={() => setSelectedImageForTransform('top')}
-                  disabled={!topImage}
-                />
-                <span>Top Image</span>
-              </label>
-              <label className="radio-label">
-                <input
-                  type="radio"
-                  name="transformImage"
-                  value="bottom"
-                  checked={selectedImageForTransform === 'bottom'}
-                  onChange={() => setSelectedImageForTransform('bottom')}
-                  disabled={!bottomImage}
-                />
-                <span>Bottom Image</span>
-              </label>
-            </div>
-
-            {selectedImageForTransform && (
-              <div className="radio-group horizontal">
-      <div>
-                  <label className="radio-label">
-                    <input
-                      type="checkbox"
-                      checked={selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false)}
-                      onChange={(e) => updateImageTransform(selectedImageForTransform, { flipX: e.target.checked })}
-                    />
-                    <span>Horizontal Flip</span>
-                  </label>
-                  <label className="radio-label">
-                    <input
-                      type="checkbox"
-                      checked={selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false)}
-                      onChange={(e) => updateImageTransform(selectedImageForTransform, { flipY: e.target.checked })}
-                    />
-                    <span>Vertical Flip</span>
-                  </label>
-      </div>
-                
-                
-      <div>
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="transformMode"
-                      value="nudge"
-                      checked={transformMode === 'nudge'}
-                      onChange={() => setTransformMode('nudge')}
-                    />
-                    <span>Nudge</span>
-                  </label>
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="transformMode"
-                      value="scale"
-                      checked={transformMode === 'scale'}
-                      onChange={() => setTransformMode('scale')}
-                    />
-                    <span>Scale</span>
-                  </label>
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="transformMode"
-                      value="rotate"
-                      checked={transformMode === 'rotate'}
-                      onChange={() => setTransformMode('rotate')}
-                    />
-                    <span>Rotate</span>
-                  </label>
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="transformMode"
-                      value="slant"
-                      checked={transformMode === 'slant'}
-                      onChange={() => setTransformMode('slant')}
-                    />
-                    <span>Slant</span>
-                  </label>
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="transformMode"
-                      value="keystone"
-                      checked={transformMode === 'keystone'}
-                      onChange={() => setTransformMode('keystone')}
-                    />
-                    <span>Keystone</span>
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {selectedImageForTransform && (
-              <>
-
-
-
-              <div className="button-group">
-                  <button 
-                    onClick={() => {
-                      setCurrentTool('transform');
-                      if (isGrayscale || isBlackAndWhiteEdges) {
-                        // Revert to full color from grayscale or edge mode
-                        setIsGrayscale(false);
-                        setIsBlackAndWhiteEdges(false);
-                        setIsBlackAndWhiteInverted(false);
-                      } else {
-                        // Enter grayscale mode
-                        setIsGrayscale(true);
-                      }
-                    }}
-                    className={`grayscale-button ${(isGrayscale || isBlackAndWhiteEdges) ? 'active' : ''}`}
-                  >
-                    {(isGrayscale || isBlackAndWhiteEdges) ? 'Color Mode' : 'Grayscale Mode'}
-        </button>
-                  <button 
-                    onClick={() => {
-                      setCurrentTool('transform');
-                      if (!isBlackAndWhiteEdges) {
-                        setIsBlackAndWhiteEdges(true);
-                        setIsBlackAndWhiteInverted(false);
-                      } else {
-                        // Toggle inversion while staying in edge mode
-                        setIsBlackAndWhiteInverted(prev => !prev);
-                      }
-                    }}
-                    className={`grayscale-button ${isBlackAndWhiteEdges ? 'active' : ''}`}
-                    title={isBlackAndWhiteEdges ? 'Invert edges' : 'Black & White edge highlight'}
-                  >
-                    {isBlackAndWhiteEdges ? 'Invert' : 'Black & White'}
-                  </button>
-                  <button 
-                    onClick={() => { setCurrentTool('transform'); resetImageTransform(); }}
-                    className="reset-button small"
-                  >
-                    Reset Transform
-                  </button>
-      </div>
-
-              </>
-            )}
-          </div>
-
-        </div>
-        </div>
+      <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
+        {/* Control Panel removed - functionality moved to top menus and left toolstrip */}
 
         {/* Canvas Area */}
-        <div className="canvas-container" ref={canvasContainerRef} style={{ position: 'relative' }}>
+        <div ref={canvasContainerRef} style={{ position: 'relative', width: '100%', height: '100%', margin: 0, padding: 0, boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '16px', overflow: 'hidden' }}>
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
             <button onClick={() => setCurrentTool('select')} title="Select (S)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
@@ -3137,7 +3114,14 @@ function App() {
             onWheel={handleCanvasWheel}
             onDoubleClick={handleCanvasDoubleClick}
             className={`pcb-canvas ${currentTool === 'transform' ? 'transform-cursor' : currentTool === 'draw' ? 'draw-cursor' : currentTool === 'erase' ? 'erase-cursor' : 'default-cursor'}`}
-            style={canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : undefined)}
+            style={{
+              ...(canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {})),
+              width: `${canvasSize.width}px`,
+              height: `${canvasSize.height}px`,
+              maxHeight: 'none',
+              aspectRatio: 'auto',
+              border: 'none'
+            }}
           />
           
           
@@ -3175,12 +3159,56 @@ function App() {
             }}
             aria-label="Vertical pan"
           >
-            <div className="scrollbar-vertical-content" ref={vScrollContentRef} />
-          </div>
+          <div className="scrollbar-vertical-content" ref={vScrollContentRef} />
         </div>
-
       </div>
+
+      {/* Hidden file inputs for Load Top/Bottom PCB menu items */}
+      <input
+        ref={fileInputTopRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImageLoad(file, 'top');
+          e.target.value = ''; // Reset so same file can be loaded again
+        }}
+      />
+      <input
+        ref={fileInputBottomRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleImageLoad(file, 'bottom');
+          e.target.value = ''; // Reset so same file can be loaded again
+        }}
+      />
+      <input
+        ref={openProjectRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            try {
+              const text = await file.text();
+              const project = JSON.parse(text);
+              await loadProject(project);
+            } catch (err) {
+              console.error('Failed to open project', err);
+              alert('Failed to open project file. See console for details.');
+            }
+          }
+          e.target.value = ''; // Reset so same file can be loaded again
+        }}
+      />
+
     </div>
+  </div>
   );
 }
 
