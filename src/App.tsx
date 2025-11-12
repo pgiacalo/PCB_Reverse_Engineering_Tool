@@ -74,8 +74,15 @@ interface GroundSymbol {
   color: string;
   size: number;
 }
+interface PowerSymbol {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+}
 type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground';
+type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground' | 'power';
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: ComponentType): string => {
@@ -161,6 +168,18 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     defaultLayer: 'top',
   });
   
+  registry.set('power', {
+    id: 'power',
+    name: 'Power',
+    toolType: 'power',
+    icon: '⊕',
+    shortcut: 'P',
+    tooltip: 'Place power node',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 18 },
+    defaultLayer: 'top',
+  });
+  
   registry.set('ground', {
     id: 'ground',
     name: 'Ground',
@@ -169,7 +188,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'G',
     tooltip: 'Place ground symbol',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 18 },
+    settings: { color: '#000000', size: 18 },
     defaultLayer: 'top',
   });
   
@@ -253,6 +272,7 @@ function App() {
         if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
         if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
         if (currentTool === 'component') return prev.get('component');
+        if (currentTool === 'power') return prev.get('power');
         if (currentTool === 'ground') return prev.get('ground');
         return null;
       })();
@@ -293,6 +313,7 @@ function App() {
         if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
         if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
         if (currentTool === 'component') return prev.get('component');
+        if (currentTool === 'power') return prev.get('power');
         if (currentTool === 'ground') return prev.get('ground');
         return null;
       })();
@@ -383,6 +404,7 @@ function App() {
   const [showBottomComponents, setShowBottomComponents] = useState(true);
   // Power layer
   const [showPowerLayer, setShowPowerLayer] = useState(true);
+  const [powers, setPowers] = useState<PowerSymbol[]>([]);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
@@ -754,6 +776,36 @@ function App() {
       setPendingComponentPosition({ x, y, layer: selectedDrawingLayer });
       setShowComponentTypeChooser(true);
       return;
+    } else if (currentTool === 'power') {
+      // Snap to nearest via like traces unless ESC is held
+      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
+        let bestDist = Infinity;
+        let bestCenter: { x: number; y: number } | null = null;
+        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+        drawingStrokes.forEach(stroke => {
+          if (stroke.type === 'via') {
+            const via = stroke.points[0];
+            if (via) {
+              const dist = Math.sqrt((via.x - wx) ** 2 + (via.y - wy) ** 2);
+              if (dist < SNAP_THRESHOLD_WORLD && dist < bestDist) {
+                bestDist = dist;
+                bestCenter = { x: via.x, y: via.y };
+              }
+            }
+          }
+        });
+        return bestCenter || { x: wx, y: wy };
+      };
+      const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
+      const p: PowerSymbol = {
+        id: `power-${Date.now()}-${Math.random()}`,
+        x: snapped.x,
+        y: snapped.y,
+        color: brushColor,
+        size: brushSize,
+      };
+      setPowers(prev => [...prev, p]);
+      return;
     } else if (currentTool === 'ground') {
       // Snap to nearest via like traces unless ESC is held
       const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
@@ -1076,6 +1128,24 @@ function App() {
           setTraceOrderTop(order => order.filter(id => kept.has(id)));
           setTraceOrderBottom(order => order.filter(id => kept.has(id)));
           return filtered;
+        });
+        // Also erase power symbols intersecting the eraser square
+        setPowers(prev => {
+          const half = brushSize / 2;
+          const minX = x - half;
+          const maxX = x + half;
+          const minY = y - half;
+          const maxY = y + half;
+          const intersects = (p: PowerSymbol): boolean => {
+            const radius = p.size / 2;
+            const bbMinX = p.x - radius;
+            const bbMaxX = p.x + radius;
+            const bbMinY = p.y - radius;
+            const bbMaxY = p.y + radius;
+            const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
+            return !disjoint;
+          };
+          return prev.filter(g => !intersects(g));
         });
         // Also erase ground symbols intersecting the eraser square
         setGrounds(prev => {
@@ -1551,6 +1621,28 @@ function App() {
     // Always draw strokes on top (respecting view transform applied above)
     drawStrokes(ctx);
     // Draw ground symbols (if visible)
+    if (showPowerLayer && powers.length > 0) {
+      const drawPower = (p: PowerSymbol) => {
+        ctx.save();
+        ctx.strokeStyle = p.color;
+        ctx.fillStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        const radius = p.size / 2;
+        // Draw circle
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        // Draw vertical lines (top and bottom)
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - radius);
+        ctx.lineTo(p.x, p.y - radius * 0.6);
+        ctx.moveTo(p.x, p.y + radius);
+        ctx.lineTo(p.x, p.y + radius * 0.6);
+        ctx.stroke();
+      };
+      powers.forEach(drawPower);
+    }
     if (showGroundLayer && grounds.length > 0) {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
@@ -1645,7 +1737,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showGroundLayer, grounds, selectRect]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -2175,6 +2267,11 @@ function App() {
           case 'S':
             e.preventDefault();
             setCurrentTool('select');
+            return;
+          case 'p':
+          case 'P':
+            e.preventDefault();
+            setCurrentTool('power');
             return;
           case 'g':
           case 'G':
@@ -2979,7 +3076,8 @@ function App() {
         trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
         via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 10 },
         component: toolRegistry.get('component')?.settings || { color: '#ff0000', size: 18 },
-        ground: toolRegistry.get('ground')?.settings || { color: '#ff0000', size: 18 },
+        ground: toolRegistry.get('ground')?.settings || { color: '#000000', size: 18 },
+        power: toolRegistry.get('power')?.settings || { color: '#ff0000', size: 18 },
       },
     };
     const json = JSON.stringify(project, null, 2);
@@ -3055,12 +3153,19 @@ function App() {
               updated.set('ground', { ...groundDef, settings: project.toolSettings.ground });
             }
           }
+          if (project.toolSettings.power) {
+            const powerDef = updated.get('power');
+            if (powerDef) {
+              updated.set('power', { ...powerDef, settings: project.toolSettings.power });
+            }
+          }
           
           // If a tool is currently active, restore its settings immediately
           const currentToolDef = (() => {
             if (currentTool === 'draw' && drawingMode === 'trace') return updated.get('trace');
             if (currentTool === 'draw' && drawingMode === 'via') return updated.get('via');
             if (currentTool === 'component') return updated.get('component');
+            if (currentTool === 'power') return updated.get('power');
             if (currentTool === 'ground') return updated.get('ground');
             return null;
           })();
@@ -3510,6 +3615,29 @@ function App() {
                 </svg>
               )}
             </button>
+            {/* Power tool */}
+            <button onClick={() => setCurrentTool('power')} title="Draw Power (P)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'power' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              {/* Power symbol icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <g stroke={toolRegistry.get('power')?.settings.color || '#ff0000'} strokeWidth="2" strokeLinecap="round" fill="none">
+                  <circle cx="12" cy="12" r="8" />
+                  <line x1="12" y1="6" x2="12" y2="10" />
+                  <line x1="12" y1="14" x2="12" y2="18" />
+                </g>
+              </svg>
+            </button>
+            {/* Ground tool */}
+            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              {/* Ground symbol icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
+                  <line x1="12" y1="4" x2="12" y2="12" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <line x1="7" y1="16" x2="17" y2="16" />
+                  <line x1="9.5" y1="19" x2="14.5" y2="19" />
+                </g>
+              </svg>
+            </button>
             <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
               {/* Tilted pink eraser */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
@@ -3526,18 +3654,6 @@ function App() {
                   <path d="M8 11v-4c0-.8.6-1.3 1.3-1.3S11 6.2 11 7v4" />
                   <path d="M11 11V6.5c0-.8.6-1.3 1.3-1.3S14 5.7 14 6.5V11" />
                   <path d="M14 11V7.2c0-.8.6-1.3 1.3-1.3.7 0 1.3.5 1.3 1.3V12c1 .6 1.6 1.5 1.6 2.7A4.3 4.3 0 0 1 14 19H9.2A4.2 4.2 0 0 1 5 14.8V11c0-.6.4-1 .9-1 .6 0 1 .4 1 1v2" />
-                </g>
-              </svg>
-            </button>
-            {/* Ground tool */}
-            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              {/* Ground symbol icon */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <g stroke="#111" strokeWidth="2" strokeLinecap="round">
-                  <line x1="12" y1="4" x2="12" y2="12" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <line x1="7" y1="16" x2="17" y2="16" />
-                  <line x1="9.5" y1="19" x2="14.5" y2="19" />
                 </g>
               </svg>
             </button>
