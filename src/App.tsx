@@ -4283,7 +4283,7 @@ function App() {
           {!topImage && !bottomImage && (
             <div className="placeholder">
               <p>📸 Load your PCB images to get started</p>
-              <p>Click "Load Top PCB" and "Load Bottom PCB" buttons</p>
+              <p>Use the File menu to load your PCB images</p>
             </div>
           )}
 
