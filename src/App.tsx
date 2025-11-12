@@ -381,6 +381,8 @@ function App() {
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
   const [showTopComponents, setShowTopComponents] = useState(true);
   const [showBottomComponents, setShowBottomComponents] = useState(true);
+  // Power layer
+  const [showPowerLayer, setShowPowerLayer] = useState(true);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
@@ -3703,7 +3705,7 @@ function App() {
           )}
 
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
-          <div style={{ position: 'absolute', top: 6, left: 56, bottom: 6, width: 168, padding: 8, display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
+          <div style={{ position: 'absolute', top: 6, left: 56, bottom: 6, width: 168, padding: 8, display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#333', marginBottom: 2 }}>Layers</div>
             <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedDrawingLayer === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -3724,7 +3726,6 @@ function App() {
               <canvas ref={bottomThumbRef} width={140} height={90} />
             </div>
             <div style={{ height: 1, background: '#e9e9ef', margin: '4px 0' }} />
-            <div style={{ fontSize: 12, color: '#333', fontWeight: 700 }}>Show Layers</div>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showViasLayer} onChange={(e) => setShowViasLayer(e.target.checked)} />
               <span>Vias</span>
@@ -3746,10 +3747,14 @@ function App() {
               <span>Bottom Components</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showPowerLayer} onChange={(e) => setShowPowerLayer(e.target.checked)} />
+              <span>Power</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showGroundLayer} onChange={(e) => setShowGroundLayer(e.target.checked)} />
               <span>Ground</span>
             </label>
-            <div style={{ marginTop: 'auto' }}>
+            <div style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <label style={{ fontSize: 12, color: '#333' }}>Transparency: {transparency}%</label>
                 <label className="radio-label" style={{ margin: 0 }}>
