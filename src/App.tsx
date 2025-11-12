@@ -394,6 +394,7 @@ function App() {
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
+  const colorPickerRef = useRef<HTMLDivElement>(null);
   // Layer visibility toggles
   const [showTopImage, setShowTopImage] = useState(true);
   const [showBottomImage, setShowBottomImage] = useState(true);
@@ -2595,10 +2596,18 @@ function App() {
           setPendingComponentPosition(null); // Clear pending position if chooser is closed
         }
       }
+      // Close color picker when clicking outside it
+      if (showColorPicker) {
+        const colorPickerEl = colorPickerRef.current;
+        const colorPickerButton = (e.target as HTMLElement)?.closest('button[title="Color Picker"]');
+        if (!colorPickerButton && (!colorPickerEl || !(e.target instanceof Node) || !colorPickerEl.contains(e.target))) {
+          setShowColorPicker(false);
+        }
+      }
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser, showComponentTypeChooser]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser, showComponentTypeChooser, showColorPicker]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -3700,7 +3709,7 @@ function App() {
                 </svg>
               </button>
             {showColorPicker && (
-                <div style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
+                <div ref={colorPickerRef} style={{ position: 'absolute', left: 42, top: 0, padding: 8, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 8px 18px rgba(0,0,0,0.18)', zIndex: 50 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 22px)', gap: 4 }}>
                     {palette8x8.map((c) => (
                       <div
