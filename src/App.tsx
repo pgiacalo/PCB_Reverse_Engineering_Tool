@@ -372,6 +372,10 @@ function App() {
   } | null>(null);
   // Pin connection mode: when a pin is clicked in the editor, track which component and pin
   const [connectingPin, setConnectingPin] = useState<{ componentId: string; pinIndex: number } | null>(null);
+  // Component dialog drag state
+  const [componentDialogPosition, setComponentDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingDialog, setIsDraggingDialog] = useState(false);
+  const [dialogDragOffset, setDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
   const hScrollContentRef = useRef<HTMLDivElement>(null);
@@ -565,19 +569,25 @@ function App() {
               
               console.log(`BEFORE update: pinConnections =`, comp.pinConnections);
               
-              // Ensure pinConnections array exists and is correct size
-              const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+              // Always create a fresh copy of the pinConnections array to avoid reference issues
+              const existingConnections = comp.pinConnections || [];
+              const currentConnections = existingConnections.length > 0 
+                ? [...existingConnections] 
+                : new Array(comp.pinCount).fill('');
+              
+              // Ensure array is correct size
+              let newPinConnections: string[];
               if (currentConnections.length !== comp.pinCount) {
-                const resized = new Array(comp.pinCount).fill('');
+                newPinConnections = new Array(comp.pinCount).fill('');
                 for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
-                  resized[i] = currentConnections[i] || '';
+                  newPinConnections[i] = currentConnections[i] || '';
                 }
-                currentConnections.length = 0;
-                currentConnections.push(...resized);
+              } else {
+                // Create a fresh copy to avoid mutating the original
+                newPinConnections = [...currentConnections];
               }
               
-              // Create new array with updated pin connection
-              const newPinConnections = [...currentConnections];
+              // Update the specific pin connection
               newPinConnections[pinIndex] = pointIdString;
               
               console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
@@ -608,19 +618,25 @@ function App() {
               
               console.log(`BEFORE update: pinConnections =`, comp.pinConnections);
               
-              // Ensure pinConnections array exists and is correct size
-              const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+              // Always create a fresh copy of the pinConnections array to avoid reference issues
+              const existingConnections = comp.pinConnections || [];
+              const currentConnections = existingConnections.length > 0 
+                ? [...existingConnections] 
+                : new Array(comp.pinCount).fill('');
+              
+              // Ensure array is correct size
+              let newPinConnections: string[];
               if (currentConnections.length !== comp.pinCount) {
-                const resized = new Array(comp.pinCount).fill('');
+                newPinConnections = new Array(comp.pinCount).fill('');
                 for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
-                  resized[i] = currentConnections[i] || '';
+                  newPinConnections[i] = currentConnections[i] || '';
                 }
-                currentConnections.length = 0;
-                currentConnections.push(...resized);
+              } else {
+                // Create a fresh copy to avoid mutating the original
+                newPinConnections = [...currentConnections];
               }
               
-              // Create new array with updated pin connection
-              const newPinConnections = [...currentConnections];
+              // Update the specific pin connection
               newPinConnections[pinIndex] = pointIdString;
               
               console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
@@ -1707,6 +1723,26 @@ function App() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(abbreviation, c.x, c.y);
+      
+      // Check if all pins are connected - if so, underline the abbreviation
+      const pinConnections = c.pinConnections || [];
+      const allPinsConnected = pinConnections.length > 0 && 
+        pinConnections.length === c.pinCount && 
+        pinConnections.every(conn => conn && conn.trim() !== '');
+      
+      if (allPinsConnected) {
+        // Measure text width to draw underline
+        const textMetrics = ctx.measureText(abbreviation);
+        const textWidth = textMetrics.width;
+        const underlineY = c.y + (size * 0.35) / 2 + 2; // Position below text
+        ctx.strokeStyle = c.color || '#111';
+        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+        ctx.beginPath();
+        ctx.moveTo(c.x - textWidth / 2, underlineY);
+        ctx.lineTo(c.x + textWidth / 2, underlineY);
+        ctx.stroke();
+      }
+      
       // selection highlight
       const isSelected = selectedComponentIds.has(c.id);
       if (isSelected) {
@@ -2688,17 +2724,25 @@ function App() {
             const comp = prev.find(c => c.id === componentId);
             if (!comp) return prev;
             
-            const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+            // Always create a fresh copy of the pinConnections array to avoid reference issues
+            const existingConnections = comp.pinConnections || [];
+            const currentConnections = existingConnections.length > 0 
+              ? [...existingConnections] 
+              : new Array(comp.pinCount).fill('');
+            
+            // Ensure array is correct size
+            let newPinConnections: string[];
             if (currentConnections.length !== comp.pinCount) {
-              const resized = new Array(comp.pinCount).fill('');
+              newPinConnections = new Array(comp.pinCount).fill('');
               for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
-                resized[i] = currentConnections[i] || '';
+                newPinConnections[i] = currentConnections[i] || '';
               }
-              currentConnections.length = 0;
-              currentConnections.push(...resized);
+            } else {
+              // Create a fresh copy to avoid mutating the original
+              newPinConnections = [...currentConnections];
             }
             
-            const newPinConnections = [...currentConnections];
+            // Update the specific pin connection
             newPinConnections[pinIndex] = pointIdString;
             
             console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
@@ -2711,17 +2755,25 @@ function App() {
             const comp = prev.find(c => c.id === componentId);
             if (!comp) return prev;
             
-            const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+            // Always create a fresh copy of the pinConnections array to avoid reference issues
+            const existingConnections = comp.pinConnections || [];
+            const currentConnections = existingConnections.length > 0 
+              ? [...existingConnections] 
+              : new Array(comp.pinCount).fill('');
+            
+            // Ensure array is correct size
+            let newPinConnections: string[];
             if (currentConnections.length !== comp.pinCount) {
-              const resized = new Array(comp.pinCount).fill('');
+              newPinConnections = new Array(comp.pinCount).fill('');
               for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
-                resized[i] = currentConnections[i] || '';
+                newPinConnections[i] = currentConnections[i] || '';
               }
-              currentConnections.length = 0;
-              currentConnections.push(...resized);
+            } else {
+              // Create a fresh copy to avoid mutating the original
+              newPinConnections = [...currentConnections];
             }
             
-            const newPinConnections = [...currentConnections];
+            // Update the specific pin connection
             newPinConnections[pinIndex] = pointIdString;
             
             console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
@@ -2746,6 +2798,45 @@ function App() {
       return () => document.removeEventListener('mousedown', handlePinConnectionClick, true);
     }
   }, [connectingPin, componentsTop, componentsBottom, drawingStrokes, viewScale, viewPan.x, viewPan.y]);
+
+  // Handle component dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dialogDragOffset) return;
+      setComponentDialogPosition({
+        x: e.clientX - dialogDragOffset.x,
+        y: e.clientY - dialogDragOffset.y,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingDialog(false);
+      setDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingDialog, dialogDragOffset]);
+
+  // Initialize dialog position when it opens (center of screen)
+  React.useEffect(() => {
+    if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
+      setComponentDialogPosition({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+      });
+    } else if (!componentEditor || !componentEditor.visible) {
+      // Reset position when dialog closes
+      setComponentDialogPosition(null);
+    }
+  }, [componentEditor, componentDialogPosition]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -3826,6 +3917,10 @@ function App() {
                       
                       // Clear pending position
                       setPendingComponentPosition(null);
+                      
+                      // Switch back to Select tool after component is placed
+                      setCurrentTool('select');
+                      setSelectedComponentType(null);
                     }
                   }}
                   style={{
@@ -3962,9 +4057,9 @@ function App() {
                 }}
                 style={{
                   position: 'fixed',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
+                  top: componentDialogPosition ? `${componentDialogPosition.y}px` : '50%',
+                  left: componentDialogPosition ? `${componentDialogPosition.x}px` : '50%',
+                  transform: componentDialogPosition ? 'translate(-50%, -50%)' : 'translate(-50%, -50%)',
                   background: connectingPin && connectingPin.componentId === comp.id ? 'rgba(255, 255, 255, 0.95)' : '#fff',
                   border: '1px solid #0b5fff',
                   borderRadius: 4,
@@ -3976,9 +4071,34 @@ function App() {
                   maxHeight: '40vh',
                   overflowY: 'auto',
                   pointerEvents: 'auto',
+                  cursor: isDraggingDialog ? 'grabbing' : 'default',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                <div 
+                  onMouseDown={(e) => {
+                    // Only start dragging if clicking on the header (not buttons/inputs)
+                    const target = e.target as HTMLElement;
+                    if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button') || target.closest('input')) {
+                      return;
+                    }
+                    if (componentDialogPosition) {
+                      setDialogDragOffset({
+                        x: e.clientX - componentDialogPosition.x,
+                        y: e.clientY - componentDialogPosition.y,
+                      });
+                      setIsDraggingDialog(true);
+                      e.preventDefault();
+                    }
+                  }}
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginBottom: '5px',
+                    cursor: isDraggingDialog ? 'grabbing' : 'grab',
+                    userSelect: 'none',
+                  }}
+                >
                   <h3 style={{ margin: 0, fontSize: '12px', color: '#333', fontWeight: 600 }}>Component Properties</h3>
                   <button
                     onClick={() => {
