@@ -3675,9 +3675,28 @@ function App() {
             {/* Color picker moved just below magnify */}
             <div style={{ position: 'relative' }}>
               <button onClick={() => setShowColorPicker(prev => !prev)} title="Color Picker" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: '#fff' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 2 C9 6 6 9.5 6 12.5 A6 6 0 0 0 18 12.5 C18 9.5 15 6 12 2 Z"
-                        fill={brushColor} stroke="#111" strokeWidth="1.5" />
+                {/* Color palette grid icon - 4x4 grid representing the color picker */}
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  {/* Row 1 */}
+                  <rect x="0" y="0" width="3.5" height="3.5" fill="#9E9E9E" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="4" y="0" width="3.5" height="3.5" fill="#0072B2" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="8" y="0" width="3.5" height="3.5" fill="#56B4E9" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="12" y="0" width="3.5" height="3.5" fill="#00BFC4" stroke="#ccc" strokeWidth="0.3" />
+                  {/* Row 2 */}
+                  <rect x="0" y="4" width="3.5" height="3.5" fill="#6A3D9A" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="4" y="4" width="3.5" height="3.5" fill="#2CA02C" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="8" y="4" width="3.5" height="3.5" fill="#7FC97F" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="12" y="4" width="3.5" height="3.5" fill="#FF7F0E" stroke="#ccc" strokeWidth="0.3" />
+                  {/* Row 3 */}
+                  <rect x="0" y="8" width="3.5" height="3.5" fill="#FFD700" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="4" y="8" width="3.5" height="3.5" fill="#FF6B6B" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="8" y="8" width="3.5" height="3.5" fill="#E74C3C" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="12" y="8" width="3.5" height="3.5" fill="#FFB6C1" stroke="#ccc" strokeWidth="0.3" />
+                  {/* Row 4 */}
+                  <rect x="0" y="12" width="3.5" height="3.5" fill="#DDA0DD" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="4" y="12" width="3.5" height="3.5" fill="#8B4513" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="8" y="12" width="3.5" height="3.5" fill="#A0522D" stroke="#ccc" strokeWidth="0.3" />
+                  <rect x="12" y="12" width="3.5" height="3.5" fill="#FF4500" stroke="#ccc" strokeWidth="0.3" />
                 </svg>
               </button>
             {showColorPicker && (
