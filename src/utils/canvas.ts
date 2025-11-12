@@ -7,8 +7,7 @@ import type {
   Via, 
   DrawingStroke, 
   PCBComponent, 
-  GroundSymbol,
-  Point 
+  GroundSymbol
 } from '../types';
 import { 
   VIA, 

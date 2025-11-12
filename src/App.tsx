@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
-import { Move, PenLine, Droplet, MousePointer } from 'lucide-react';
+import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent } from './utils/components';
 import { COMPONENT_TYPE_INFO } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter } from './utils/coordinates';
@@ -672,7 +672,7 @@ function App() {
         return null;
       })();
       if (hitComponent) {
-        const { layer, comp } = hitComponent;
+        const { comp } = hitComponent;
         // Single click: just select the component (for moving, deleting, resizing)
         setSelectedComponentIds(new Set([comp.id]));
         // Clear drawing stroke selection when selecting a component
@@ -3321,24 +3321,24 @@ function App() {
     prevLayerRef.current = selectedDrawingLayer;
   }, [drawingMode, selectedDrawingLayer, currentTool, brushColor, brushSize]);
 
-  // Simple HSV -> HEX for palette generation
-  const hsvToHex = useCallback((h: number, s: number, v: number): string => {
-    const c = v * s;
-    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = v - c;
-    let r = 0, g = 0, b = 0;
-    if (h < 60) { r = c; g = x; b = 0; }
-    else if (h < 120) { r = x; g = c; b = 0; }
-    else if (h < 180) { r = 0; g = c; b = x; }
-    else if (h < 240) { r = 0; g = x; b = c; }
-    else if (h < 300) { r = x; g = 0; b = c; }
-    else { r = c; g = 0; b = x; }
-    const R = Math.round((r + m) * 255);
-    const G = Math.round((g + m) * 255);
-    const B = Math.round((b + m) * 255);
-    const toHex = (n: number) => n.toString(16).padStart(2, '0');
-    return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
-  }, []);
+  // Simple HSV -> HEX for palette generation (currently unused)
+  // const hsvToHex = useCallback((h: number, s: number, v: number): string => {
+  //   const c = v * s;
+  //   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  //   const m = v - c;
+  //   let r = 0, g = 0, b = 0;
+  //   if (h < 60) { r = c; g = x; b = 0; }
+  //   else if (h < 120) { r = x; g = c; b = 0; }
+  //   else if (h < 180) { r = 0; g = c; b = x; }
+  //   else if (h < 240) { r = 0; g = x; b = c; }
+  //   else if (h < 300) { r = x; g = 0; b = c; }
+  //   else { r = c; g = 0; b = x; }
+  //   const R = Math.round((r + m) * 255);
+  //   const G = Math.round((g + m) * 255);
+  //   const B = Math.round((b + m) * 255);
+  //   const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  //   return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
+  // }, []);
 
   // High-contrast 32-color palette tuned for PCB work (includes grays/blacks)
   const palette8x8 = React.useMemo(() => ([
