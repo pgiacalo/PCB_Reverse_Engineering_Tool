@@ -29,7 +29,7 @@ export interface PCBImage {
 // ============================================================================
 
 export interface DrawingPoint {
-  id: number; // sequential unique point id
+  id: number; // globally unique point ID (used for netlist connections)
   x: number;
   y: number;
 }
@@ -48,7 +48,8 @@ export interface DrawingStroke {
 // ============================================================================
 
 export interface Via {
-  id: string;
+  id: string; // stroke ID (for deletion/selection tracking)
+  pointId?: number; // globally unique point ID (for netlist connections)
   x: number;
   y: number;
   size: number;
@@ -56,7 +57,9 @@ export interface Via {
 }
 
 export interface TraceSegment {
-  id: string;
+  id: string; // stroke ID (for deletion/selection tracking)
+  startPointId?: number; // globally unique point ID for start point (for netlist connections)
+  endPointId?: number; // globally unique point ID for end point (for netlist connections)
   x1: number;
   y1: number;
   x2: number;
@@ -148,7 +151,7 @@ export interface Diode extends PCBComponentBase {
   partNumber?: string;
   voltage?: string; // forward voltage or Zener voltage
   current?: string; // max current rating
-  color?: string; // for LEDs
+  ledColor?: string; // for LEDs (wavelength/color like "red", "blue", "650nm")
 }
 
 /**

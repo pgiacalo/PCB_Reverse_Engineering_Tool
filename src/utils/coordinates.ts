@@ -217,12 +217,31 @@ export function constrainLine(
 }
 
 /**
- * Generate a unique ID for drawing elements
+ * Generate a globally unique ID for all drawing points
+ * This ID is used across all vias, trace points, component pins, etc.
+ * to establish electrical connections for netlist generation.
+ * 
+ * IMPORTANT: These IDs must be globally unique across the entire project
+ * and must be preserved in save/load operations.
  */
 let nextPointId = 1;
 
 export function generatePointId(): number {
   return nextPointId++;
+}
+
+/**
+ * Set the point ID counter to a specific value (used when loading projects)
+ */
+export function setPointIdCounter(value: number): void {
+  nextPointId = value;
+}
+
+/**
+ * Get the current point ID counter value (used when saving projects)
+ */
+export function getPointIdCounter(): number {
+  return nextPointId;
 }
 
 export function resetPointIdCounter(): void {

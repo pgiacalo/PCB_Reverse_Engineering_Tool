@@ -3,6 +3,7 @@ import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometr
 import { Move, PenLine, Droplet, MousePointer } from 'lucide-react';
 import { createComponent } from './utils/components';
 import { COMPONENT_TYPE_INFO } from './constants';
+import { generatePointId, setPointIdCounter, getPointIdCounter } from './utils/coordinates';
 import type { ComponentType, PCBComponent } from './types';
 import './App.css';
 
@@ -29,7 +30,7 @@ interface PCBImage {
 }
 
 interface DrawingPoint {
-  id: number; // sequential unique point id
+  id: number; // globally unique point ID (used for netlist connections)
   x: number;
   y: number;
 }
@@ -45,6 +46,8 @@ interface DrawingStroke {
 
 // Independent stacks for saved/managed drawing objects
 interface Via {
+  id?: string; // stroke ID (for deletion/selection tracking)
+  pointId?: number; // globally unique point ID (for netlist connections)
   x: number;
   y: number;
   size: number;
@@ -52,6 +55,9 @@ interface Via {
 }
 
 interface TraceSegment {
+  id?: string; // stroke ID (for deletion/selection tracking)
+  startPointId?: number; // globally unique point ID for start point (for netlist connections)
+  endPointId?: number; // globally unique point ID for end point (for netlist connections)
   x1: number;
   y1: number;
   x2: number;
@@ -326,7 +332,8 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentStrokeRef = useRef<DrawingPoint[]>([]);
-  const nextPointIdRef = useRef<number>(1);
+  // Note: Point IDs are now generated globally via generatePointId() from coordinates.ts
+  // This ensures globally unique IDs across all vias, traces, and connection points
   const [componentsTop, setComponentsTop] = useState<PCBComponent[]>([]);
   const [componentsBottom, setComponentsBottom] = useState<PCBComponent[]>([]);
   const [selectedComponentIds, setSelectedComponentIds] = useState<Set<string>>(new Set());
@@ -441,6 +448,7 @@ function App() {
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Stop propagation to prevent document-level handlers from interfering
     e.stopPropagation();
+    e.preventDefault(); // Also prevent default to ensure our handler runs first
     
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -463,50 +471,160 @@ function App() {
     if (currentTool === 'select') {
       // If in pin connection mode, connect the pin to the nearest via/pad
       if (connectingPin) {
-        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance
-        let bestNodeId: string | null = null;
         let bestDist = Infinity;
         
-        // Search all vias for the nearest one
-        // Use the point ID as the unique node ID (each via has a point with a unique ID)
+        // Search all vias for the nearest one using the same hit detection as selection
+        // Use the globally unique point ID directly (no "node-" prefix needed)
+        let bestPointId: number | null = null;
+        let bestStroke: DrawingStroke | null = null;
+        const hitTolerance = Math.max(6 / viewScale, 4); // Same as selection logic
+        
         for (const s of drawingStrokes) {
           if (s.type === 'via' && s.points.length > 0) {
             const c = s.points[0];
+            const viaRadius = Math.max(1, s.size / 2);
             const d = Math.hypot(c.x - x, c.y - y);
-            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+            // Use the same hit detection logic as selection: max(via radius, hit tolerance)
+            const hitDistance = Math.max(viaRadius, hitTolerance);
+            if (d <= hitDistance && d < bestDist) {
               bestDist = d;
-              // Use the point ID as the unique node ID
-              // Format: "node-{pointId}" to ensure it's a valid node ID format
-              bestNodeId = `node-${c.id}`;
+              // Use the globally unique point ID directly
+              bestPointId = c.id;
+              bestStroke = s;
             }
           }
         }
         
+        // Debug: log which via we found
+        if (bestStroke) {
+          console.log(`\n[PIN CONNECTION] Found via!`);
+          console.log(`  Stroke ID: ${bestStroke.id}`);
+          console.log(`  Point ID: ${bestPointId}`);
+          console.log(`  Point coordinates: x=${bestStroke.points[0].x.toFixed(2)}, y=${bestStroke.points[0].y.toFixed(2)}`);
+          console.log(`  Click coordinates: x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+          console.log(`  Distance: ${bestDist.toFixed(2)}`);
+          console.log(`  Via size: ${bestStroke.size}, radius: ${Math.max(1, bestStroke.size / 2)}`);
+        } else {
+          console.log(`\n[PIN CONNECTION] No via found!`);
+          console.log(`  Click coordinates: x=${x.toFixed(2)}, y=${y.toFixed(2)}`);
+          console.log(`  Hit tolerance: ${hitTolerance.toFixed(2)}`);
+          console.log(`  Total vias in drawingStrokes: ${drawingStrokes.filter(s => s.type === 'via').length}`);
+        }
+        
         // TODO: Also search pads when pad system is implemented
         
-        if (bestNodeId) {
-          // Update the component's pin connection
-          const updateComponent = (comp: PCBComponent): PCBComponent => {
-            const updated = { ...comp };
-            if (!updated.pinConnections) {
-              updated.pinConnections = new Array(updated.pinCount).fill('');
-            }
-            updated.pinConnections[connectingPin.pinIndex] = bestNodeId!;
-            return updated;
-          };
+        if (bestPointId !== null && bestPointId !== undefined) {
+          console.log(`\n[PIN CONNECTION] Proceeding with connection...`);
+          console.log(`  bestPointId is valid: ${bestPointId} (type: ${typeof bestPointId})`);
           
-          // Find which layer the component is on
-          const compTop = componentsTop.find(c => c.id === connectingPin.componentId);
-          const compBottom = componentsBottom.find(c => c.id === connectingPin.componentId);
+          // Update the component's pin connection using the point ID directly
+          const pointIdString = String(bestPointId);
+          const pinIndex = connectingPin.pinIndex;
+          const componentId = connectingPin.componentId;
+          
+          console.log(`\n=== PIN CONNECTION START ===`);
+          console.log(`Connecting pin ${pinIndex} (Pin ${pinIndex + 1}) of component ${componentId} to point ID ${pointIdString}`);
+          
+          // Find which layer the component is on FIRST, then update only that layer
+          const compTop = componentsTop.find(c => c.id === componentId);
+          const compBottom = componentsBottom.find(c => c.id === componentId);
           
           if (compTop) {
-            setComponentsTop(prev => prev.map(c => c.id === connectingPin.componentId ? updateComponent(c) : c));
+            console.log(`Component found in TOP layer`);
+            setComponentsTop(prev => {
+              const comp = prev.find(c => c.id === componentId);
+              if (!comp) {
+                console.error(`Component ${componentId} not found in TOP layer during update!`);
+                return prev;
+              }
+              
+              console.log(`BEFORE update: pinConnections =`, comp.pinConnections);
+              
+              // Ensure pinConnections array exists and is correct size
+              const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+              if (currentConnections.length !== comp.pinCount) {
+                const resized = new Array(comp.pinCount).fill('');
+                for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
+                  resized[i] = currentConnections[i] || '';
+                }
+                currentConnections.length = 0;
+                currentConnections.push(...resized);
+              }
+              
+              // Create new array with updated pin connection
+              const newPinConnections = [...currentConnections];
+              newPinConnections[pinIndex] = pointIdString;
+              
+              console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
+              console.log(`New pinConnections array:`, newPinConnections);
+              
+              const updated = prev.map(c => {
+                if (c.id === componentId) {
+                  const updatedComp = { ...c, pinConnections: newPinConnections };
+                  return updatedComp;
+                }
+                return c;
+              });
+              
+              const finalComp = updated.find(c => c.id === componentId);
+              console.log(`AFTER update: pinConnections =`, finalComp?.pinConnections);
+              console.log(`Pin ${pinIndex} value: ${finalComp?.pinConnections[pinIndex]}`);
+              console.log(`=== PIN CONNECTION COMPLETE (TOP) ===\n`);
+              return updated;
+            });
           } else if (compBottom) {
-            setComponentsBottom(prev => prev.map(c => c.id === connectingPin.componentId ? updateComponent(c) : c));
+            console.log(`Component found in BOTTOM layer`);
+            setComponentsBottom(prev => {
+              const comp = prev.find(c => c.id === componentId);
+              if (!comp) {
+                console.error(`Component ${componentId} not found in BOTTOM layer during update!`);
+                return prev;
+              }
+              
+              console.log(`BEFORE update: pinConnections =`, comp.pinConnections);
+              
+              // Ensure pinConnections array exists and is correct size
+              const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+              if (currentConnections.length !== comp.pinCount) {
+                const resized = new Array(comp.pinCount).fill('');
+                for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
+                  resized[i] = currentConnections[i] || '';
+                }
+                currentConnections.length = 0;
+                currentConnections.push(...resized);
+              }
+              
+              // Create new array with updated pin connection
+              const newPinConnections = [...currentConnections];
+              newPinConnections[pinIndex] = pointIdString;
+              
+              console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
+              console.log(`New pinConnections array:`, newPinConnections);
+              
+              const updated = prev.map(c => {
+                if (c.id === componentId) {
+                  const updatedComp = { ...c, pinConnections: newPinConnections };
+                  return updatedComp;
+                }
+                return c;
+              });
+              
+              const finalComp = updated.find(c => c.id === componentId);
+              console.log(`AFTER update: pinConnections =`, finalComp?.pinConnections);
+              console.log(`Pin ${pinIndex} value: ${finalComp?.pinConnections[pinIndex]}`);
+              console.log(`=== PIN CONNECTION COMPLETE (BOTTOM) ===\n`);
+              return updated;
+            });
+          } else {
+            console.error(`Component ${componentId} not found in either TOP or BOTTOM layer!`);
+            console.log(`Available TOP components:`, componentsTop.map(c => c.id));
+            console.log(`Available BOTTOM components:`, componentsBottom.map(c => c.id));
           }
           
-          // Clear pin connection mode
-          setConnectingPin(null);
+          // Clear pin connection mode AFTER a short delay to allow state update to complete
+          setTimeout(() => {
+            setConnectingPin(null);
+          }, 0);
           return;
         } else {
           // No via/pad found nearby, cancel connection mode
@@ -533,8 +651,32 @@ function App() {
         const { layer, comp } = hitComponent;
         // Single click: just select the component (for moving, deleting, resizing)
         setSelectedComponentIds(new Set([comp.id]));
+        // Clear drawing stroke selection when selecting a component
+        setSelectedIds(new Set());
         return;
       }
+      
+      // Check if clicking on empty space - clear selection immediately
+      const hitToleranceSelect = Math.max(6 / viewScale, 4);
+      let hitStroke: DrawingStroke | null = null;
+      for (const s of drawingStrokes) {
+        if (s.type === 'via' && s.points.length > 0) {
+          const c = s.points[0];
+          const r = Math.max(1, s.size / 2);
+          const d = Math.hypot(c.x - x, c.y - y);
+          if (d <= Math.max(r, hitToleranceSelect)) {
+            hitStroke = s;
+            break; // Found a hit, selection will be finalized on mouse up
+          }
+        }
+      }
+      
+      // If we didn't hit anything, clear selection immediately
+      if (!hitStroke) {
+        setSelectedIds(new Set());
+        setSelectedComponentIds(new Set());
+      }
+      
       setIsSelecting(true);
       setSelectStart({ x, y });
       setSelectRect({ x, y, width: 0, height: 0 });
@@ -573,7 +715,7 @@ function App() {
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        const center = { id: nextPointIdRef.current++, x, y };
+        const center = { id: generatePointId(), x, y };
         const viaStroke: DrawingStroke = {
           id: `${Date.now()}-via`,
           points: [center],
@@ -593,14 +735,14 @@ function App() {
 
       // Traces mode: connected segments by clicks, snapping to via centers unless ESC is held
       const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y) : { x, y };
-      const pt = { id: nextPointIdRef.current++, x: snapped.x, y: snapped.y };
+      const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
       setIsDrawing(false);
       setIsShiftConstrained(false);
     } else if (currentTool === 'erase') {
       setIsDrawing(true);
-      setCurrentStroke([{ id: nextPointIdRef.current++, x, y }]);
+      setCurrentStroke([{ id: generatePointId(), x, y }]);
       console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       setIsTransforming(true);
@@ -844,13 +986,13 @@ function App() {
         if (isShiftConstrained) {
           const startPt = currentStroke[0];
           const snapped = snapConstrainedPoint(startPt, x, y);
-          const pt = { id: nextPointIdRef.current++, x: snapped.x, y: snapped.y };
+          const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
           setCurrentStroke([startPt, pt]);
         } else {
-          setCurrentStroke(prev => [...prev, { id: nextPointIdRef.current++, x, y }]);
+          setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
         }
       } else if (currentTool === 'erase') {
-        setCurrentStroke(prev => [...prev, { id: nextPointIdRef.current++, x, y }]);
+        setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
         setDrawingStrokes(prev => {
           const filtered = prev.filter(stroke => {
             // Only check strokes on the selected drawing layer
@@ -1042,26 +1184,46 @@ function App() {
           const cx = x1 + t * dx, cy = y1 + t * dy;
           return Math.hypot(px - cx, py - cy);
         };
+        // For click selection (tiny rect), find the single nearest hit
+        // For rectangle selection, find all hits
         const next = new Set<string>(isShiftPressed ? Array.from(selectedIds) : []);
         const nextComps = new Set<string>(isShiftPressed ? Array.from(selectedComponentIds) : []);
-        for (const s of drawingStrokes) {
-          let hit = false;
-          if (tiny) {
-            // Click selection: nearest
+        
+        if (tiny) {
+          // Click selection: find the single nearest via or trace
+          let bestHit: { id: string; dist: number } | null = null;
+          for (const s of drawingStrokes) {
+            let dist = Infinity;
             if (s.type === 'via') {
               const c = s.points[0];
               const r = Math.max(1, s.size / 2);
-              const d = Math.hypot(c.x - start.x, c.y - start.y);
-              hit = d <= Math.max(r, hitTolerance);
+              dist = Math.hypot(c.x - start.x, c.y - start.y);
+              if (dist <= Math.max(r, hitTolerance)) {
+                if (!bestHit || dist < bestHit.dist) {
+                  bestHit = { id: s.id, dist };
+                }
+              }
             } else {
               for (let i = 0; i < s.points.length - 1; i++) {
                 const p1 = s.points[i], p2 = s.points[i + 1];
                 const d = pointToSegDist(start.x, start.y, p1.x, p1.y, p2.x, p2.y);
-                if (d <= Math.max(hitTolerance, s.size / 2)) { hit = true; break; }
+                if (d <= Math.max(hitTolerance, s.size / 2)) {
+                  if (!bestHit || d < bestHit.dist) {
+                    bestHit = { id: s.id, dist: d };
+                  }
+                  break;
+                }
               }
             }
-          } else {
-            // Rectangle selection
+          }
+          // Only add the single best hit (or nothing if no hit)
+          if (bestHit) {
+            next.add(bestHit.id);
+          }
+        } else {
+          // Rectangle selection: find all hits
+          for (const s of drawingStrokes) {
+            let hit = false;
             if (s.type === 'via') {
               const c = s.points[0];
               hit = withinRect(c.x, c.y);
@@ -1072,8 +1234,8 @@ function App() {
                     (withinRect(p1.x, p1.y) && withinRect(p2.x, p2.y))) { hit = true; break; }
               }
             }
+            if (hit) next.add(s.id);
           }
-          if (hit) next.add(s.id);
         }
         // Components hit-test (reuse minX/minY/maxX/maxY)
         const compInRect = (c: PCBComponent) => {
@@ -1812,6 +1974,88 @@ function App() {
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Debug: Display properties of selected objects (Ctrl+Shift+I)
+    if (e.key === 'I' || e.key === 'i') {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const debugInfo: string[] = [];
+        debugInfo.push('=== Selected Objects Debug Info ===\n');
+        
+        // Check selected drawing strokes (vias, traces)
+        if (selectedIds.size > 0) {
+          debugInfo.push(`\n--- Drawing Strokes (${selectedIds.size} selected) ---`);
+          for (const id of selectedIds) {
+            const stroke = drawingStrokes.find(s => s.id === id);
+            if (stroke) {
+              debugInfo.push(`\nID: ${stroke.id}`);
+              debugInfo.push(`Type: ${stroke.type || 'unknown'}`);
+              debugInfo.push(`Layer: ${stroke.layer}`);
+              debugInfo.push(`Color: ${stroke.color}`);
+              debugInfo.push(`Size: ${stroke.size}`);
+              debugInfo.push(`Points: ${stroke.points.length}`);
+              if (stroke.points.length > 0) {
+                stroke.points.forEach((p, idx) => {
+                  debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                });
+              }
+              if (stroke.type === 'via' && stroke.points.length > 0) {
+                const point = stroke.points[0];
+                debugInfo.push(`Node ID: node-${point.id}`);
+              }
+            } else {
+              debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
+            }
+          }
+        }
+        
+        // Check selected components
+        if (selectedComponentIds.size > 0) {
+          debugInfo.push(`\n--- Components (${selectedComponentIds.size} selected) ---`);
+          for (const id of selectedComponentIds) {
+            const compTop = componentsTop.find(c => c.id === id);
+            const compBottom = componentsBottom.find(c => c.id === id);
+            const comp = compTop || compBottom;
+            if (comp) {
+              debugInfo.push(`\nID: ${comp.id}`);
+              debugInfo.push(`Type: ${comp.componentType}`);
+              debugInfo.push(`Layer: ${comp.layer}`);
+              debugInfo.push(`Designator: ${comp.designator || '(empty)'}`);
+              debugInfo.push(`Abbreviation: ${(comp as any).abbreviation || '(empty)'}`);
+              debugInfo.push(`Position: x=${comp.x.toFixed(2)}, y=${comp.y.toFixed(2)}`);
+              debugInfo.push(`Color: ${comp.color}`);
+              debugInfo.push(`Size: ${comp.size}`);
+              debugInfo.push(`Pin Count: ${comp.pinCount}`);
+              if (comp.pinConnections && comp.pinConnections.length > 0) {
+                debugInfo.push(`Pin Connections:`);
+                comp.pinConnections.forEach((conn, idx) => {
+                  debugInfo.push(`  Pin ${idx + 1}: ${conn || '(not connected)'}`);
+                });
+              }
+              if ('manufacturer' in comp) {
+                debugInfo.push(`Manufacturer: ${(comp as any).manufacturer || '(empty)'}`);
+              }
+              if ('partNumber' in comp) {
+                debugInfo.push(`Part Number: ${(comp as any).partNumber || '(empty)'}`);
+              }
+            } else {
+              debugInfo.push(`\nID: ${id} (not found in components)`);
+            }
+          }
+        }
+        
+        if (selectedIds.size === 0 && selectedComponentIds.size === 0) {
+          debugInfo.push('\nNo objects selected.');
+        }
+        
+        const debugText = debugInfo.join('\n');
+        console.log(debugText);
+        alert(debugText);
+        return;
+      }
+    }
+    
     // Track ESC hold for disabling snapping
     if (e.key === 'Escape') {
       setIsEscHeld(true);
@@ -2207,7 +2451,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, drawingMode, finalizeTraceIfAny, traceToolLayer, componentToolLayer]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom, drawingMode, finalizeTraceIfAny, traceToolLayer, componentToolLayer]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
@@ -2256,6 +2500,144 @@ function App() {
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
   }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser, showComponentTypeChooser]);
+
+  // Document-level handler for pin connections (works even when dialog is open)
+  React.useEffect(() => {
+    const handlePinConnectionClick = (e: MouseEvent) => {
+      // Only handle if we're in pin connection mode
+      if (!connectingPin) return;
+      
+      // Don't handle if clicking on the component editor dialog content
+      const dialogElement = document.querySelector('[data-component-editor-dialog]');
+      if (dialogElement && e.target instanceof Node && dialogElement.contains(e.target)) {
+        // Check if it's a button or input - allow those to work normally
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button') || target.closest('input')) {
+          return; // Let the dialog handle its own buttons/inputs
+        }
+        // If clicking on dialog background, allow it to pass through
+      }
+      
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX;
+      const clickY = e.clientY;
+      
+      // Check if click is within canvas bounds
+      if (clickX < rect.left || clickX > rect.right || clickY < rect.top || clickY > rect.bottom) {
+        return; // Click outside canvas
+      }
+      
+      // Convert click coordinates to canvas coordinates
+      const dprX = canvas.width / rect.width;
+      const dprY = canvas.height / rect.height;
+      const cssX = clickX - rect.left;
+      const cssY = clickY - rect.top;
+      const canvasX = cssX * dprX;
+      const canvasY = cssY * dprY;
+      const contentCanvasX = canvasX - CONTENT_BORDER;
+      const contentCanvasY = canvasY - CONTENT_BORDER;
+      const x = (contentCanvasX - viewPan.x) / viewScale;
+      const y = (contentCanvasY - viewPan.y) / viewScale;
+      
+      // Find nearest via
+      let bestDist = Infinity;
+      let bestPointId: number | null = null;
+      let bestStroke: DrawingStroke | null = null;
+      const hitTolerance = Math.max(6 / viewScale, 4);
+      
+      for (const s of drawingStrokes) {
+        if (s.type === 'via' && s.points.length > 0) {
+          const c = s.points[0];
+          const viaRadius = Math.max(1, s.size / 2);
+          const d = Math.hypot(c.x - x, c.y - y);
+          const hitDistance = Math.max(viaRadius, hitTolerance);
+          if (d <= hitDistance && d < bestDist) {
+            bestDist = d;
+            bestPointId = c.id;
+            bestStroke = s;
+          }
+        }
+      }
+      
+      if (bestPointId !== null && bestPointId !== undefined && bestStroke) {
+        console.log(`\n[PIN CONNECTION - DOCUMENT HANDLER] Found via!`);
+        console.log(`  Point ID: ${bestPointId}`);
+        console.log(`  Connecting pin ${connectingPin.pinIndex + 1} of component ${connectingPin.componentId}`);
+        
+        const pointIdString = String(bestPointId);
+        const pinIndex = connectingPin.pinIndex;
+        const componentId = connectingPin.componentId;
+        
+        // Find which layer the component is on
+        const compTop = componentsTop.find(c => c.id === componentId);
+        const compBottom = componentsBottom.find(c => c.id === componentId);
+        
+        if (compTop) {
+          setComponentsTop(prev => {
+            const comp = prev.find(c => c.id === componentId);
+            if (!comp) return prev;
+            
+            const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+            if (currentConnections.length !== comp.pinCount) {
+              const resized = new Array(comp.pinCount).fill('');
+              for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
+                resized[i] = currentConnections[i] || '';
+              }
+              currentConnections.length = 0;
+              currentConnections.push(...resized);
+            }
+            
+            const newPinConnections = [...currentConnections];
+            newPinConnections[pinIndex] = pointIdString;
+            
+            console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
+            console.log(`New pinConnections:`, newPinConnections);
+            
+            return prev.map(c => c.id === componentId ? { ...c, pinConnections: newPinConnections } : c);
+          });
+        } else if (compBottom) {
+          setComponentsBottom(prev => {
+            const comp = prev.find(c => c.id === componentId);
+            if (!comp) return prev;
+            
+            const currentConnections = comp.pinConnections || new Array(comp.pinCount).fill('');
+            if (currentConnections.length !== comp.pinCount) {
+              const resized = new Array(comp.pinCount).fill('');
+              for (let i = 0; i < Math.min(currentConnections.length, comp.pinCount); i++) {
+                resized[i] = currentConnections[i] || '';
+              }
+              currentConnections.length = 0;
+              currentConnections.push(...resized);
+            }
+            
+            const newPinConnections = [...currentConnections];
+            newPinConnections[pinIndex] = pointIdString;
+            
+            console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
+            console.log(`New pinConnections:`, newPinConnections);
+            
+            return prev.map(c => c.id === componentId ? { ...c, pinConnections: newPinConnections } : c);
+          });
+        }
+        
+        // Clear pin connection mode
+        setTimeout(() => {
+          setConnectingPin(null);
+        }, 0);
+      } else {
+        console.log(`[PIN CONNECTION - DOCUMENT HANDLER] No via found at click location`);
+      }
+    };
+    
+    if (connectingPin) {
+      // Use capture phase to catch clicks before they're blocked by dialog
+      document.addEventListener('mousedown', handlePinConnectionClick, true);
+      return () => document.removeEventListener('mousedown', handlePinConnectionClick, true);
+    }
+  }, [connectingPin, componentsTop, componentsBottom, drawingStrokes, viewScale, viewPan.x, viewPan.y]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -2497,6 +2879,7 @@ function App() {
   }, [topImage, bottomImage]);
 
   // Maintain independent stacks for vias and trace segments in insertion order
+  // Preserve point IDs for netlist generation
   React.useEffect(() => {
     const vAll: Via[] = [];
     const tTop: TraceSegment[] = [];
@@ -2504,13 +2887,30 @@ function App() {
     for (const s of drawingStrokes) {
       if (s.type === 'via' && s.points.length >= 1) {
         const c = s.points[0];
-        const v: Via = { x: c.x, y: c.y, size: s.size, color: s.color };
+        const v: Via = { 
+          id: s.id, // stroke ID for deletion/selection
+          pointId: c.id, // globally unique point ID for netlist connections
+          x: c.x, 
+          y: c.y, 
+          size: s.size, 
+          color: s.color 
+        };
         vAll.push(v); // Vias are physical holes shared by both layers
       } else if (s.type === 'trace' && s.points.length >= 2) {
         for (let i = 0; i < s.points.length - 1; i++) {
           const p1 = s.points[i];
           const p2 = s.points[i + 1];
-          const seg: TraceSegment = { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, size: s.size, color: s.color };
+          const seg: TraceSegment = { 
+            id: s.id, // stroke ID for deletion/selection
+            startPointId: p1.id, // globally unique point ID for start point
+            endPointId: p2.id, // globally unique point ID for end point
+            x1: p1.x, 
+            y1: p1.y, 
+            x2: p2.x, 
+            y2: p2.y, 
+            size: s.size, 
+            color: s.color 
+          };
           if (s.layer === 'top') tTop.push(seg); else tBot.push(seg);
         }
       }
@@ -2563,6 +2963,7 @@ function App() {
         } : null,
       },
       drawing: {
+        drawingStrokes, // Save full strokes with point IDs
         vias,
         tracesTop,
         tracesBottom,
@@ -2570,6 +2971,7 @@ function App() {
         componentsBottom,
         grounds,
       },
+      pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
       toolSettings: {
         // Convert Map to plain object for JSON serialization
         trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
@@ -2609,7 +3011,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -2701,38 +3103,58 @@ function App() {
       setTopImage(newTop);
       setBottomImage(newBottom);
 
-      // Rebuild drawing strokes from saved arrays (order preserved)
-      const strokes: DrawingStroke[] = [];
-      const pushVia = (v: Via, layer: 'top' | 'bottom') => {
-        strokes.push({
-          id: `${Date.now()}-via-${Math.random()}`,
-          points: [{ id: (Math.random()*1e9)|0, x: v.x, y: v.y }],
-          color: v.color,
-          size: v.size,
-          layer,
-          type: 'via',
-        });
-      };
-      const pushSeg = (s: TraceSegment, layer: 'top' | 'bottom') => {
-        strokes.push({
-          id: `${Date.now()}-trace-${Math.random()}`,
-          points: [{ id: (Math.random()*1e9)|0, x: s.x1, y: s.y1 }, { id: (Math.random()*1e9)|0, x: s.x2, y: s.y2 }],
-          color: s.color,
-          size: s.size,
-          layer,
-          type: 'trace',
-        });
-      };
-      // Back-compat: support either single 'vias' array or legacy viasTop/viasBottom
-      if (project.drawing?.vias) {
-        (project.drawing.vias as Via[]).forEach((v: Via) => pushVia(v, 'top'));
-      } else {
-        (project.drawing?.viasTop ?? []).forEach((v: Via) => pushVia(v, 'top'));
-        (project.drawing?.viasBottom ?? []).forEach((v: Via) => pushVia(v, 'bottom'));
+      // Restore point ID counter if present (for new projects, start from saved value)
+      if (project.pointIdCounter && typeof project.pointIdCounter === 'number') {
+        setPointIdCounter(project.pointIdCounter);
       }
-      (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
-      (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
-      setDrawingStrokes(strokes);
+
+      // Restore drawing strokes - prefer saved drawingStrokes with point IDs
+      if (project.drawing?.drawingStrokes && Array.isArray(project.drawing.drawingStrokes)) {
+        // New format: restore strokes with preserved point IDs
+        setDrawingStrokes(project.drawing.drawingStrokes as DrawingStroke[]);
+      } else {
+        // Legacy format: rebuild from vias/traces arrays (point IDs will be regenerated)
+        const strokes: DrawingStroke[] = [];
+        const pushVia = (v: Via, layer: 'top' | 'bottom') => {
+          strokes.push({
+            id: v.id || `${Date.now()}-via-${Math.random()}`,
+            points: [{ 
+              id: v.pointId || generatePointId(), // Use saved point ID or generate new
+              x: v.x, 
+              y: v.y 
+            }],
+            color: v.color,
+            size: v.size,
+            layer,
+            type: 'via',
+          });
+        };
+        const pushSeg = (s: TraceSegment, layer: 'top' | 'bottom') => {
+          // For legacy format, create separate strokes for each segment
+          // This loses the original stroke grouping but preserves point IDs
+          strokes.push({
+            id: s.id || `${Date.now()}-trace-${Math.random()}`,
+            points: [
+              { id: s.startPointId || generatePointId(), x: s.x1, y: s.y1 },
+              { id: s.endPointId || generatePointId(), x: s.x2, y: s.y2 }
+            ],
+            color: s.color,
+            size: s.size,
+            layer,
+            type: 'trace',
+          });
+        };
+        // Back-compat: support either single 'vias' array or legacy viasTop/viasBottom
+        if (project.drawing?.vias) {
+          (project.drawing.vias as Via[]).forEach((v: Via) => pushVia(v, 'top'));
+        } else {
+          (project.drawing?.viasTop ?? []).forEach((v: Via) => pushVia(v, 'top'));
+          (project.drawing?.viasBottom ?? []).forEach((v: Via) => pushVia(v, 'bottom'));
+        }
+        (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
+        (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
+        setDrawingStrokes(strokes);
+      }
       // load components if present, ensuring all properties are preserved
       if (project.drawing?.componentsTop) {
         const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => ({
@@ -3378,25 +3800,37 @@ function App() {
             
             return (
               <div
+                data-component-editor-dialog
+                onClick={(e) => {
+                  // Don't interfere with pin connection clicks - let document handler deal with it
+                  if (connectingPin && connectingPin.componentId === comp.id) {
+                    // Only stop propagation for dialog content (buttons, inputs)
+                    const target = e.target as HTMLElement;
+                    if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button') || target.closest('input')) {
+                      e.stopPropagation();
+                    }
+                  }
+                }}
                 style={{
                   position: 'fixed',
                   top: '50%',
                   left: '50%',
                   transform: 'translate(-50%, -50%)',
-                  background: '#fff',
-                  border: '2px solid #0b5fff',
-                  borderRadius: 8,
-                  padding: '12px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  background: connectingPin && connectingPin.componentId === comp.id ? 'rgba(255, 255, 255, 0.95)' : '#fff',
+                  border: '1px solid #0b5fff',
+                  borderRadius: 4,
+                  padding: '6px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
                   zIndex: 1000,
-                  minWidth: '350px',
-                  maxWidth: '500px',
-                  maxHeight: '80vh',
+                  minWidth: '175px',
+                  maxWidth: '250px',
+                  maxHeight: '40vh',
                   overflowY: 'auto',
+                  pointerEvents: 'auto',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h3 style={{ margin: 0, fontSize: '14px', color: '#333', fontWeight: 600 }}>Component Properties</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                  <h3 style={{ margin: 0, fontSize: '12px', color: '#333', fontWeight: 600 }}>Component Properties</h3>
                   <button
                     onClick={() => {
                       setComponentEditor(null);
@@ -3405,12 +3839,12 @@ function App() {
                     style={{
                       background: 'transparent',
                       border: 'none',
-                      fontSize: '18px',
+                      fontSize: '14px',
                       cursor: 'pointer',
                       color: '#666',
                       padding: 0,
-                      width: '22px',
-                      height: '22px',
+                      width: '16px',
+                      height: '16px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -3420,37 +3854,41 @@ function App() {
                   </button>
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {/* Component Type (read-only) */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Component Type:
                     </label>
-                    <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
                       {comp.componentType}
                     </div>
                   </div>
                   
                   {/* Designator */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label htmlFor={`component-designator-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Designator (Name):
                     </label>
                     <input
+                      id={`component-designator-${comp.id}`}
+                      name={`component-designator-${comp.id}`}
                       type="text"
                       value={componentEditor.designator}
                       onChange={(e) => setComponentEditor({ ...componentEditor, designator: e.target.value })}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
                       placeholder="e.g., U1, R5, C3"
                     />
                   </div>
                   
                   {/* Abbreviation */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label htmlFor={`component-abbreviation-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Abbreviation (shown in icon):
                     </label>
                     <input
+                      id={`component-abbreviation-${comp.id}`}
+                      name={`component-abbreviation-${comp.id}`}
                       type="text"
                       maxLength={4}
                       value={componentEditor.abbreviation.replace(/\*/g, '')}
@@ -3469,38 +3907,44 @@ function App() {
                   
                   {/* Manufacturer */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label htmlFor={`component-manufacturer-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Manufacturer:
                     </label>
                     <input
+                      id={`component-manufacturer-${comp.id}`}
+                      name={`component-manufacturer-${comp.id}`}
                       type="text"
                       value={componentEditor.manufacturer}
                       onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
                       placeholder="e.g., Texas Instruments, STMicroelectronics"
                     />
                   </div>
                   
                   {/* Part Number */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label htmlFor={`component-partnumber-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Part Number:
                     </label>
                     <input
+                      id={`component-partnumber-${comp.id}`}
+                      name={`component-partnumber-${comp.id}`}
                       type="text"
                       value={componentEditor.partNumber}
                       onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
                       placeholder="e.g., TL072, LM358"
                     />
                   </div>
                   
                   {/* Pin Count */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label htmlFor={`component-pincount-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Number of Pins:
                     </label>
                     <input
+                      id={`component-pincount-${comp.id}`}
+                      name={`component-pincount-${comp.id}`}
                       type="number"
                       min="1"
                       value={componentEditor.pinCount}
@@ -3508,25 +3952,25 @@ function App() {
                         const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
                         setComponentEditor({ ...componentEditor, pinCount: newPinCount });
                       }}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px' }}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
                     />
                   </div>
                   
                   {/* Position (read-only) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                         X Position:
                       </label>
-                      <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                      <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
                         {Math.round(componentEditor.x)}
                       </div>
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                         Y Position:
                       </label>
-                      <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                      <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
                         {Math.round(componentEditor.y)}
                       </div>
                     </div>
@@ -3534,79 +3978,78 @@ function App() {
                   
                   {/* Layer (read-only) */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Layer:
                     </label>
-                    <div style={{ padding: '4px 6px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666' }}>
+                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
                       {componentEditor.layer === 'top' ? 'Top' : 'Bottom'}
                     </div>
                   </div>
                   
                   {/* Pin Connections */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '10px', fontWeight: 600, color: '#333', marginBottom: '4px' }}>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
                       Pin Connections:
                     </label>
                     {connectingPin && connectingPin.componentId === comp.id && (
-                      <div style={{ padding: '4px 6px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 4, marginBottom: '4px', fontSize: '10px', color: '#856404' }}>
-                        Click on a via or pad to connect Pin {connectingPin.pinIndex + 1}
+                      <div style={{ padding: '2px 3px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 2, marginBottom: '2px', fontSize: '9px', color: '#856404' }}>
+                        Pin {connectingPin.pinIndex + 1} selected. Click on a via or pad to connect.
                       </div>
                     )}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: '4px', maxHeight: '150px', overflowY: 'auto', padding: '2px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '75px', overflowY: 'auto', padding: '1px' }}>
                       {Array.from({ length: componentEditor.pinCount }, (_, i) => {
-                        const pinConnection = comp.pinConnections && comp.pinConnections[i] ? comp.pinConnections[i] : '';
-                        const isConnecting = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
+                        // Read pin connection from the current component state (should update reactively)
+                        // Re-find the component to ensure we have the latest state
+                        const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                        const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                        const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
+                        const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
+                        // Debug: log pin connection state for all pins when in connection mode
+                        if (connectingPin && connectingPin.componentId === comp.id) {
+                          console.log(`Component Editor Pin ${i + 1}: pinConnection="${pinConnection}", comp.pinConnections=`, currentComp?.pinConnections);
+                        }
                         return (
-                          <button
+                          <label
                             key={i}
-                            onClick={() => {
-                              if (isConnecting) {
-                                // Cancel connection mode
-                                setConnectingPin(null);
-                              } else {
-                                // Enter connection mode for this pin
-                                setConnectingPin({ componentId: comp.id, pinIndex: i });
-                              }
-                            }}
+                            htmlFor={`pin-radio-${comp.id}-${i}`}
                             style={{
                               display: 'flex',
-                              flexDirection: 'column',
                               alignItems: 'center',
-                              gap: '2px',
-                              padding: '4px 2px',
-                              border: isConnecting ? '2px solid #0b5fff' : pinConnection ? '1px solid #28a745' : '1px solid #ddd',
-                              borderRadius: 4,
-                              background: isConnecting ? '#e6f0ff' : pinConnection ? '#d4edda' : '#fff',
+                              gap: '4px',
+                              padding: '2px 4px',
                               cursor: 'pointer',
                               fontSize: '9px',
+                              border: isSelected ? '1px solid #0b5fff' : pinConnection ? '1px solid #28a745' : '1px solid #ddd',
+                              borderRadius: 2,
+                              background: isSelected ? '#e6f0ff' : pinConnection ? '#d4edda' : '#fff',
                             }}
-                            title={isConnecting ? 'Click on a via or pad to connect (or click again to cancel)' : pinConnection ? `Connected to: ${pinConnection}` : 'Click to connect this pin to a via or pad'}
+                            title={pinConnection ? `Connected to: ${pinConnection}` : 'Select this pin, then click on a via or pad to connect'}
                           >
-                            <div style={{ 
-                              width: '18px', 
-                              height: '18px', 
-                              borderRadius: '50%', 
-                              background: isConnecting ? '#0b5fff' : pinConnection ? '#28a745' : '#ccc',
-                              border: '1px solid #fff',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: '#fff',
-                              fontWeight: 'bold',
-                              fontSize: '8px',
-                            }}>
-                              {i + 1}
-                            </div>
-                            <div style={{ fontSize: '8px', color: '#666', textAlign: 'center' }}>
+                            <input
+                              id={`pin-radio-${comp.id}-${i}`}
+                              name={`pin-radio-${comp.id}`}
+                              type="radio"
+                              checked={!!isSelected}
+                              onChange={() => {
+                                if (isSelected) {
+                                  // Deselect if already selected
+                                  setConnectingPin(null);
+                                } else {
+                                  // Select this pin for connection
+                                  setConnectingPin({ componentId: comp.id, pinIndex: i });
+                                }
+                              }}
+                              style={{ margin: 0, cursor: 'pointer' }}
+                            />
+                            <span style={{ color: '#333', fontWeight: isSelected ? 600 : 400 }}>
                               Pin {i + 1}
-                            </div>
+                            </span>
                             {pinConnection && (
-                              <div style={{ fontSize: '7px', color: '#28a745', fontWeight: 600, textAlign: 'center', wordBreak: 'break-all' }}>
-                                {pinConnection.substring(0, 6)}
-                              </div>
+                              <span style={{ fontSize: '8px', color: '#28a745', fontWeight: 600, marginLeft: 'auto' }}>
+                                {pinConnection}
+                              </span>
                             )}
-                          </button>
+                          </label>
                         );
                       })}
                     </div>
@@ -3616,19 +4059,19 @@ function App() {
                   {/* TODO: Add type-specific property fields based on componentType */}
                 </div>
                 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px', marginTop: '6px' }}>
                   <button
                     onClick={() => {
                       setComponentEditor(null);
                       setConnectingPin(null); // Clear pin connection mode
                     }}
                     style={{
-                      padding: '4px 10px',
+                      padding: '2px 5px',
                       background: '#f5f5f5',
                       border: '1px solid #ddd',
-                      borderRadius: 4,
+                      borderRadius: 2,
                       cursor: 'pointer',
-                      fontSize: '11px',
+                      fontSize: '10px',
                       color: '#333',
                     }}
                   >
@@ -3672,13 +4115,13 @@ function App() {
                       setConnectingPin(null); // Clear pin connection mode
                     }}
                     style={{
-                      padding: '4px 10px',
+                      padding: '2px 5px',
                       background: '#0b5fff',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: 4,
+                      borderRadius: 2,
                       cursor: 'pointer',
-                      fontSize: '11px',
+                      fontSize: '10px',
                     }}
                   >
                     Save
