@@ -344,6 +344,14 @@ function App() {
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
   const [, setViaOrderBottom] = useState<string[]>([]);
+  
+  // Lock states
+  const [isImagesLocked, setIsImagesLocked] = useState(false);
+  const [areViasLocked, setAreViasLocked] = useState(false);
+  const [areTracesLocked, setAreTracesLocked] = useState(false);
+  const [areComponentsLocked, setAreComponentsLocked] = useState(false);
+  const [isGroundLocked, setIsGroundLocked] = useState(false);
+  const [arePowerNodesLocked, setArePowerNodesLocked] = useState(false);
   const [, setTraceOrderTop] = useState<string[]>([]);
   const [, setTraceOrderBottom] = useState<string[]>([]);
   // Independent lists (stacks) derived from drawingStrokes
@@ -786,6 +794,8 @@ function App() {
       setCurrentStroke([{ id: generatePointId(), x, y }]);
       console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
+      // Don't start transforming if images are locked
+      if (isImagesLocked) return;
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
@@ -1066,6 +1076,10 @@ function App() {
         setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
         setDrawingStrokes(prev => {
           const filtered = prev.filter(stroke => {
+            // Don't erase locked vias or traces
+            if (stroke.type === 'via' && areViasLocked) return true;
+            if (stroke.type === 'trace' && areTracesLocked) return true;
+            
             // Only check strokes on the selected drawing layer
             if (stroke.layer !== selectedDrawingLayer) return true;
             
@@ -1147,47 +1161,55 @@ function App() {
           return filtered;
         });
         // Also erase power symbols intersecting the eraser square
-        setPowers(prev => {
-          const half = brushSize / 2;
-          const minX = x - half;
-          const maxX = x + half;
-          const minY = y - half;
-          const maxY = y + half;
-          const intersects = (p: PowerSymbol): boolean => {
-            const radius = p.size / 2;
-            const bbMinX = p.x - radius;
-            const bbMaxX = p.x + radius;
-            const bbMinY = p.y - radius;
-            const bbMaxY = p.y + radius;
-            const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
-            return !disjoint;
-          };
-          return prev.filter(g => !intersects(g));
-        });
+        // Don't erase power nodes if locked
+        if (!arePowerNodesLocked) {
+          setPowers(prev => {
+            const half = brushSize / 2;
+            const minX = x - half;
+            const maxX = x + half;
+            const minY = y - half;
+            const maxY = y + half;
+            const intersects = (p: PowerSymbol): boolean => {
+              const radius = p.size / 2;
+              const bbMinX = p.x - radius;
+              const bbMaxX = p.x + radius;
+              const bbMinY = p.y - radius;
+              const bbMaxY = p.y + radius;
+              const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
+              return !disjoint;
+            };
+            return prev.filter(g => !intersects(g));
+          });
+        }
         // Also erase ground symbols intersecting the eraser square
-        setGrounds(prev => {
-          const half = brushSize / 2;
-          const minX = x - half;
-          const maxX = x + half;
-          const minY = y - half;
-          const maxY = y + half;
-          const intersects = (g: GroundSymbol): boolean => {
-            const unit = Math.max(6, (g.size || 18));
-            const vLen = unit * 0.9;
-            const barG = unit * 0.24;
-            const width = unit * 1.6;
-            const bbMinX = g.x - width / 2;
-            const bbMaxX = g.x + width / 2;
-            const bbMinY = g.y;
-            const bbMaxY = g.y + vLen + barG * 2;
-            const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
-            return !disjoint;
-          };
-          const kept = prev.filter(g => !intersects(g));
-          return kept;
-        });
+        // Don't erase ground if locked
+        if (!isGroundLocked) {
+          setGrounds(prev => {
+            const half = brushSize / 2;
+            const minX = x - half;
+            const maxX = x + half;
+            const minY = y - half;
+            const maxY = y + half;
+            const intersects = (g: GroundSymbol): boolean => {
+              const unit = Math.max(6, (g.size || 18));
+              const vLen = unit * 0.9;
+              const barG = unit * 0.24;
+              const width = unit * 1.6;
+              const bbMinX = g.x - width / 2;
+              const bbMaxX = g.x + width / 2;
+              const bbMinY = g.y;
+              const bbMaxY = g.y + vLen + barG * 2;
+              const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
+              return !disjoint;
+            };
+            const kept = prev.filter(g => !intersects(g));
+            return kept;
+          });
+        }
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
+      // Don't allow transforms if images are locked
+      if (isImagesLocked) return;
       const deltaX = x - transformStartPos.x;
       const deltaY = y - transformStartPos.y;
       
@@ -1207,7 +1229,7 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, isImagesLocked, areViasLocked, areTracesLocked, arePowerNodesLocked, isGroundLocked]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -2075,12 +2097,14 @@ function App() {
 
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom', updates: Partial<PCBImage>) => {
+    // Don't allow transforms if images are locked
+    if (isImagesLocked) return;
     if (type === 'top' && topImage) {
       setTopImage(prev => prev ? { ...prev, ...updates } : null);
     } else if (type === 'bottom' && bottomImage) {
       setBottomImage(prev => prev ? { ...prev, ...updates } : null);
     }
-  }, [topImage, bottomImage]);
+  }, [topImage, bottomImage, isImagesLocked]);
 
   const resetImageTransform = useCallback(() => {
     // Reset only the selected image to its original transform
@@ -2200,11 +2224,23 @@ function App() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0 || selectedComponentIds.size > 0)) {
       e.preventDefault();
       e.stopPropagation();
+      
+      // Check if any selected items are locked
       if (selectedIds.size > 0) {
+        // Filter out locked vias and traces
+        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+        if (hasLockedVias || hasLockedTraces) {
+          // Don't delete if any are locked
+          return;
+        }
         setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
         setSelectedIds(new Set());
       }
       if (selectedComponentIds.size > 0) {
+        // Don't delete if components are locked
+        if (areComponentsLocked) return;
         setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
         setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
         setSelectedComponentIds(new Set());
@@ -3179,6 +3215,14 @@ function App() {
         ground: toolRegistry.get('ground')?.settings || { color: '#000000', size: 18 },
         power: toolRegistry.get('power')?.settings || { color: '#ff0000', size: 18 },
       },
+      locks: {
+        isImagesLocked,
+        areViasLocked,
+        areTracesLocked,
+        areComponentsLocked,
+        isGroundLocked,
+        arePowerNodesLocked,
+      },
     };
     const json = JSON.stringify(project, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -3211,7 +3255,7 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, isImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, isGroundLocked, arePowerNodesLocked]);
 
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
@@ -3313,6 +3357,16 @@ function App() {
       // Restore point ID counter if present (for new projects, start from saved value)
       if (project.pointIdCounter && typeof project.pointIdCounter === 'number') {
         setPointIdCounter(project.pointIdCounter);
+      }
+      
+      // Restore lock states if present
+      if (project.locks) {
+        if (typeof project.locks.isImagesLocked === 'boolean') setIsImagesLocked(project.locks.isImagesLocked);
+        if (typeof project.locks.areViasLocked === 'boolean') setAreViasLocked(project.locks.areViasLocked);
+        if (typeof project.locks.areTracesLocked === 'boolean') setAreTracesLocked(project.locks.areTracesLocked);
+        if (typeof project.locks.areComponentsLocked === 'boolean') setAreComponentsLocked(project.locks.areComponentsLocked);
+        if (typeof project.locks.isGroundLocked === 'boolean') setIsGroundLocked(project.locks.isGroundLocked);
+        if (typeof project.locks.arePowerNodesLocked === 'boolean') setArePowerNodesLocked(project.locks.arePowerNodesLocked);
       }
 
       // Restore drawing strokes - prefer saved drawingStrokes with point IDs
@@ -3605,6 +3659,10 @@ function App() {
                 {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
               </button>
               <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button onClick={() => { setIsImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Images {isImagesLocked ? '✓' : ''}
+              </button>
             </div>
           )}
         </div>
@@ -3618,6 +3676,15 @@ function App() {
               <button
                 onClick={() => {
                   if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                    // Check if any selected items are locked
+                    if (selectedIds.size > 0) {
+                      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+                      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+                      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+                      if (hasLockedVias || hasLockedTraces) return;
+                    }
+                    if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                    
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
                     if (selectedComponentIds.size > 0) {
                       setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
@@ -3635,6 +3702,15 @@ function App() {
               <button
                 onClick={() => {
                   if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                    // Check if any selected items are locked
+                    if (selectedIds.size > 0) {
+                      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+                      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+                      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+                      if (hasLockedVias || hasLockedTraces) return;
+                    }
+                    if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                    
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
                     if (selectedComponentIds.size > 0) {
                       setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
@@ -3655,6 +3731,15 @@ function App() {
                   key={sz}
                   onClick={() => {
                     if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                      // Check if any selected items are locked
+                      if (selectedIds.size > 0) {
+                        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+                        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+                        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+                        if (hasLockedVias || hasLockedTraces) return;
+                      }
+                      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                      
                       setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
                       if (selectedComponentIds.size > 0) {
                         setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
@@ -3670,6 +3755,22 @@ function App() {
                   Set Size: {sz}px
                 </button>
               ))}
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Vias {areViasLocked ? '✓' : ''}
+              </button>
+              <button onClick={() => { setAreTracesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Traces {areTracesLocked ? '✓' : ''}
+              </button>
+              <button onClick={() => { setAreComponentsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Components {areComponentsLocked ? '✓' : ''}
+              </button>
+              <button onClick={() => { setIsGroundLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Ground Node {isGroundLocked ? '✓' : ''}
+              </button>
+              <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
+              </button>
             </div>
           )}
         </div>
@@ -4145,7 +4246,8 @@ function App() {
                       type="text"
                       value={componentEditor.designator}
                       onChange={(e) => setComponentEditor({ ...componentEditor, designator: e.target.value })}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
                       placeholder="e.g., U1, R5, C3"
                     />
                   </div>
@@ -4169,7 +4271,8 @@ function App() {
                         const val = e.target.value.substring(0, 4).toUpperCase();
                         setComponentEditor({ ...componentEditor, abbreviation: val });
                       }}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px', fontFamily: 'monospace', textTransform: 'uppercase' }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
                       placeholder="*"
                     />
                   </div>
@@ -4185,7 +4288,8 @@ function App() {
                       type="text"
                       value={componentEditor.manufacturer}
                       onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
                       placeholder="e.g., Texas Instruments, STMicroelectronics"
                     />
                   </div>
@@ -4201,7 +4305,8 @@ function App() {
                       type="text"
                       value={componentEditor.partNumber}
                       onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
                       placeholder="e.g., TL072, LM358"
                     />
                   </div>
@@ -4221,7 +4326,8 @@ function App() {
                         const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
                         setComponentEditor({ ...componentEditor, pinCount: newPinCount });
                       }}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px' }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
                     />
                   </div>
                   
@@ -4300,6 +4406,7 @@ function App() {
                               type="radio"
                               checked={!!isSelected}
                               onChange={() => {
+                                if (areComponentsLocked) return;
                                 if (isSelected) {
                                   // Deselect if already selected
                                   setConnectingPin(null);
@@ -4308,7 +4415,8 @@ function App() {
                                   setConnectingPin({ componentId: comp.id, pinIndex: i });
                                 }
                               }}
-                              style={{ margin: 0, cursor: 'pointer' }}
+                              disabled={areComponentsLocked}
+                              style={{ margin: 0, cursor: areComponentsLocked ? 'not-allowed' : 'pointer', opacity: areComponentsLocked ? 0.6 : 1 }}
                             />
                             <span style={{ color: '#333', fontWeight: isSelected ? 600 : 400 }}>
                               Pin {i + 1}
@@ -4348,6 +4456,8 @@ function App() {
                   </button>
                   <button
                     onClick={() => {
+                      // Don't allow saving if components are locked
+                      if (areComponentsLocked) return;
                       // Update the component with new values
                       const updateComponent = (comp: PCBComponent): PCBComponent => {
                         const updated = { ...comp };
@@ -4383,14 +4493,16 @@ function App() {
                       setComponentEditor(null);
                       setConnectingPin(null); // Clear pin connection mode
                     }}
+                    disabled={areComponentsLocked}
                     style={{
                       padding: '2px 5px',
-                      background: '#0b5fff',
-                      color: '#fff',
-                      border: 'none',
+                      background: areComponentsLocked ? '#f5f5f5' : '#0b5fff',
+                      color: areComponentsLocked ? '#999' : '#fff',
+                      border: '1px solid #ddd',
                       borderRadius: 2,
-                      cursor: 'pointer',
+                      cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
                       fontSize: '10px',
+                      opacity: areComponentsLocked ? 0.6 : 1,
                     }}
                   >
                     Save
