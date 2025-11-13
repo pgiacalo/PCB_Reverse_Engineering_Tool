@@ -88,6 +88,7 @@ interface PowerSymbol {
   color: string;
   size: number;
   powerBusId: string; // Reference to which power bus this node belongs to
+  layer: 'top' | 'bottom'; // Layer on which the power node is placed
 }
 type ViewMode = 'top' | 'bottom' | 'overlay';
 type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground' | 'power';
@@ -394,6 +395,17 @@ function App() {
   const [componentDialogPosition, setComponentDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingDialog, setIsDraggingDialog] = useState(false);
   const [dialogDragOffset, setDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // Power properties editor
+  const [powerEditor, setPowerEditor] = useState<{
+    visible: boolean;
+    id: string;
+    layer: 'top' | 'bottom';
+    x: number;
+    y: number;
+    size: number;
+    color: string;
+    powerBusId: string;
+  } | null>(null);
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
   const hScrollContentRef = useRef<HTMLDivElement>(null);
@@ -431,9 +443,8 @@ function App() {
   const [powers, setPowers] = useState<PowerSymbol[]>([]);
   // Power bus definitions
   const [powerBuses, setPowerBuses] = useState<PowerBus[]>([
-    { id: 'default-5v', name: '+5V', voltage: '+5VDC', color: '#ff0000' },
     { id: 'default-3v3', name: '+3.3V', voltage: '+3.3VDC', color: '#ff6600' },
-    { id: 'default-12v', name: '+12V', voltage: '+12VDC', color: '#cc0000' },
+    { id: 'default-5v', name: '+5V', voltage: '+5VDC', color: '#ff0000' },
   ]);
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
@@ -1046,6 +1057,33 @@ function App() {
         return null;
       })();
       
+      // Check for power node hit
+      const hitTolerance = Math.max(6 / viewScale, 4);
+      let hitPower: PowerSymbol | null = null;
+      for (const p of powers) {
+        const radius = Math.max(1, p.size / 2);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d <= Math.max(radius, hitTolerance)) {
+          hitPower = p;
+          break;
+        }
+      }
+      
+      if (hitPower) {
+        setSelectedPowerIds(new Set([hitPower.id]));
+        setPowerEditor({
+          visible: true,
+          id: hitPower.id,
+          layer: hitPower.layer,
+          x: hitPower.x,
+          y: hitPower.y,
+          size: hitPower.size,
+          color: hitPower.color,
+          powerBusId: hitPower.powerBusId,
+        });
+        return;
+      }
+      
       if (hitComponent) {
         const { layer, comp } = hitComponent;
         setSelectedComponentIds(new Set([comp.id]));
@@ -1069,7 +1107,7 @@ function App() {
         });
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -3676,13 +3714,13 @@ function App() {
       }
       if (project.drawing?.powers) {
         const loadedPowers = project.drawing.powers as PowerSymbol[];
-        // Ensure all power nodes have a powerBusId (for legacy projects)
+        // Ensure all power nodes have a powerBusId and layer (for legacy projects)
         const powersWithBusId = loadedPowers.map(p => {
           if (!p.powerBusId) {
             // Assign to first power bus or create a default one
-            return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v' };
+            return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
           }
-          return p;
+          return { ...p, layer: p.layer || 'top' };
         });
         setPowers(powersWithBusId);
       }
@@ -4294,6 +4332,7 @@ function App() {
                           color: bus.color,
                           size: brushSize,
                           powerBusId: bus.id,
+                          layer: selectedDrawingLayer, // Use current drawing layer
                         };
                         setPowers(prev => [...prev, p]);
                       }
@@ -4920,6 +4959,166 @@ function App() {
               </div>
             );
           })()}
+
+          {/* Power Properties Editor Dialog */}
+          {powerEditor && powerEditor.visible && (() => {
+            const power = powers.find(p => p.id === powerEditor.id);
+            if (!power) return null;
+            
+            const bus = powerBuses.find(b => b.id === powerEditor.powerBusId);
+            
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: '#fff',
+                  border: '1px solid #0b5fff',
+                  borderRadius: 4,
+                  padding: '6px',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  zIndex: 1000,
+                  minWidth: '175px',
+                  maxWidth: '250px',
+                  maxHeight: '40vh',
+                  overflowY: 'auto',
+                  pointerEvents: 'auto',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                  <h3 style={{ margin: 0, fontSize: '12px', color: '#333', fontWeight: 600 }}>Power Properties</h3>
+                  <button
+                    onClick={() => setPowerEditor(null)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      color: '#666',
+                      padding: 0,
+                      width: '16px',
+                      height: '16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {/* Power Bus (read-only) */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      Power Bus:
+                    </label>
+                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
+                      {bus ? `${bus.name} (${bus.voltage})` : 'Unknown'}
+                    </div>
+                  </div>
+                  
+                  {/* Layer */}
+                  <div>
+                    <label htmlFor={`power-layer-${powerEditor.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      Layer:
+                    </label>
+                    <select
+                      id={`power-layer-${powerEditor.id}`}
+                      name={`power-layer-${powerEditor.id}`}
+                      value={powerEditor.layer}
+                      onChange={(e) => setPowerEditor({ ...powerEditor, layer: e.target.value as 'top' | 'bottom' })}
+                      disabled={arePowerNodesLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: arePowerNodesLocked ? 0.6 : 1 }}
+                    >
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                  
+                  {/* X Position */}
+                  <div>
+                    <label htmlFor={`power-x-${powerEditor.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      X:
+                    </label>
+                    <input
+                      id={`power-x-${powerEditor.id}`}
+                      name={`power-x-${powerEditor.id}`}
+                      type="number"
+                      value={powerEditor.x.toFixed(2)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setPowerEditor({ ...powerEditor, x: val });
+                      }}
+                      disabled={arePowerNodesLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: arePowerNodesLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                  
+                  {/* Y Position */}
+                  <div>
+                    <label htmlFor={`power-y-${powerEditor.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      Y:
+                    </label>
+                    <input
+                      id={`power-y-${powerEditor.id}`}
+                      name={`power-y-${powerEditor.id}`}
+                      type="number"
+                      value={powerEditor.y.toFixed(2)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setPowerEditor({ ...powerEditor, y: val });
+                      }}
+                      disabled={arePowerNodesLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: arePowerNodesLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px', marginTop: '6px' }}>
+                  <button
+                    onClick={() => setPowerEditor(null)}
+                    style={{
+                      padding: '2px 5px',
+                      background: '#f5f5f5',
+                      border: '1px solid #ddd',
+                      borderRadius: 2,
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      color: '#333',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (arePowerNodesLocked) return;
+                      setPowers(prev => prev.map(p => 
+                        p.id === powerEditor.id 
+                          ? { ...p, layer: powerEditor.layer, x: powerEditor.x, y: powerEditor.y }
+                          : p
+                      ));
+                      setPowerEditor(null);
+                    }}
+                    disabled={arePowerNodesLocked}
+                    style={{
+                      padding: '2px 5px',
+                      background: arePowerNodesLocked ? '#f5f5f5' : '#0b5fff',
+                      color: arePowerNodesLocked ? '#999' : '#fff',
+                      border: '1px solid #ddd',
+                      borderRadius: 2,
+                      cursor: arePowerNodesLocked ? 'not-allowed' : 'pointer',
+                      fontSize: '10px',
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
           
           {!topImage && !bottomImage && (
             <div className="placeholder">
@@ -4967,7 +5166,36 @@ function App() {
             <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666' }}>×</button>
           </div>
           <div style={{ marginBottom: '16px' }}>
-            {powerBuses.map((bus, index) => (
+            {[...powerBuses].sort((a, b) => {
+              // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
+              const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
+                const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
+                if (match) {
+                  const sign = match[1] || '+';
+                  const numValue = parseFloat(match[2]);
+                  const absValue = Math.abs(numValue);
+                  const isNegative = sign === '-';
+                  return { absValue, isNegative, original: voltage };
+                }
+                return { absValue: Infinity, isNegative: false, original: voltage };
+              };
+              
+              const aParsed = parseVoltage(a.voltage);
+              const bParsed = parseVoltage(b.voltage);
+              
+              if (aParsed.absValue !== bParsed.absValue) {
+                return aParsed.absValue - bParsed.absValue;
+              }
+              
+              if (aParsed.isNegative !== bParsed.isNegative) {
+                return aParsed.isNegative ? -1 : 1;
+              }
+              
+              return 0;
+            }).map((bus) => {
+              // Find the original index for state updates
+              const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
+              return (
               <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', marginBottom: '8px', background: '#f5f5f5', borderRadius: 6, border: '1px solid #ddd' }}>
                 <div style={{ width: 24, height: 24, borderRadius: '50%', background: bus.color, border: '2px solid #333' }} />
                 <div style={{ flex: 1 }}>
@@ -4976,7 +5204,7 @@ function App() {
                     value={bus.name}
                     onChange={(e) => {
                       const updated = [...powerBuses];
-                      updated[index] = { ...bus, name: e.target.value };
+                      updated[originalIndex] = { ...bus, name: e.target.value };
                       setPowerBuses(updated);
                     }}
                     placeholder="Name"
@@ -4987,10 +5215,10 @@ function App() {
                     value={bus.voltage}
                     onChange={(e) => {
                       const updated = [...powerBuses];
-                      updated[index] = { ...bus, voltage: e.target.value };
+                      updated[originalIndex] = { ...bus, voltage: e.target.value };
                       setPowerBuses(updated);
                     }}
-                    placeholder="Voltage (e.g., +5VDC, +3.3VDC, AC_120V)"
+                    placeholder="Voltage (e.g., +5VDC, +3.3VDC, -5VDC)"
                     style={{ width: '100%', padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4, fontSize: '13px' }}
                   />
                 </div>
@@ -4999,7 +5227,7 @@ function App() {
                   value={bus.color}
                   onChange={(e) => {
                     const updated = [...powerBuses];
-                    updated[index] = { ...bus, color: e.target.value };
+                    updated[originalIndex] = { ...bus, color: e.target.value };
                     setPowerBuses(updated);
                   }}
                   style={{ width: '40px', height: '40px', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
@@ -5019,7 +5247,8 @@ function App() {
                   Delete
                 </button>
               </div>
-            ))}
+            );
+            })}
           </div>
           <button
             onClick={() => {
