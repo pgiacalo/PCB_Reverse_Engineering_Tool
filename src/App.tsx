@@ -2535,6 +2535,68 @@ function App() {
       }
     }
     
+    // Reset view and selection (O key)
+    if (e.key === 'O' || e.key === 'o') {
+      e.preventDefault();
+      e.stopPropagation();
+      // Reset view settings
+      setViewScale(1);
+      // Reset image offsets to 0 for proper centering
+      if (topImage) {
+        setTopImage({ ...topImage, x: 0, y: 0 });
+      }
+      if (bottomImage) {
+        setBottomImage({ ...bottomImage, x: 0, y: 0 });
+      }
+      // Center the image in the actual visible canvas area
+      // Get the canvas element's actual visible size and position on screen
+      const canvas = canvasRef.current;
+      let panX = 0;
+      let panY = 0;
+      if (canvas) {
+        // Get the actual visible bounding rectangle of the canvas element
+        const canvasRect = canvas.getBoundingClientRect();
+        const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+        const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+        
+        // The visible center of the canvas (in screen coordinates, relative to canvas top-left)
+        // This accounts for the actual rendered size of the canvas, not the container
+        const visibleCenterX = canvasRect.width / 2;
+        const visibleCenterY = canvasRect.height / 2;
+        
+        // Image center in canvas content coordinates
+        const imageCenterX = contentWidth / 2;
+        const imageCenterY = contentHeight / 2;
+        
+        // Pan needed to align image center with visible center
+        // viewPan is applied in canvas content coordinates (after CONTENT_BORDER translation)
+        // We need to convert the visible center from screen pixels to canvas content coordinates
+        // The canvas is scaled: canvasRect.width / canvas.width gives the scale factor
+        const scaleX = canvasRect.width / canvas.width;
+        const scaleY = canvasRect.height / canvas.height;
+        
+        // Visible center in canvas content coordinates (accounting for CONTENT_BORDER)
+        // The visible center in canvas pixels: visibleCenterX / scaleX
+        // But we need it in content coordinates (after CONTENT_BORDER offset)
+        const visibleCenterContentX = (visibleCenterX / scaleX) - CONTENT_BORDER;
+        const visibleCenterContentY = (visibleCenterY / scaleY) - CONTENT_BORDER;
+        
+        // Pan to align image center with visible center
+        panX = visibleCenterContentX - imageCenterX;
+        panY = visibleCenterContentY - imageCenterY;
+      }
+      setViewPan({ x: panX, y: panY });
+      setCurrentView('overlay');
+      // Clear all selections
+      setSelectedIds(new Set());
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
+      // Set tool to Select
+      setCurrentTool('select');
+      return;
+    }
+    
     // Track ESC hold for disabling snapping
     if (e.key === 'Escape') {
       setIsEscHeld(true);
