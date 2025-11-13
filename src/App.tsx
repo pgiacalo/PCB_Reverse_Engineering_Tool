@@ -424,8 +424,9 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
-  const [openMenu, setOpenMenu] = useState<'file' | 'view' | 'transform' | 'tools' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
   const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
+  const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -2528,7 +2529,8 @@ function App() {
         
         const debugText = debugInfo.join('\n');
         console.log(debugText);
-        alert(debugText);
+        // Update dialog if already open, otherwise open it
+        setDebugDialog({ visible: true, text: debugText });
         return;
       }
     }
@@ -2970,6 +2972,83 @@ function App() {
       window.removeEventListener('keyup', onKeyUp, true);
     };
   }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds, increaseSize, decreaseSize]);
+
+  // Update debug dialog when selection changes (if dialog is open)
+  React.useEffect(() => {
+    if (!debugDialog.visible) return;
+    
+    const debugInfo: string[] = [];
+    debugInfo.push('=== Selected Objects Debug Info ===\n');
+    
+    // Check selected drawing strokes (vias, traces)
+    if (selectedIds.size > 0) {
+      debugInfo.push(`\n--- Drawing Strokes (${selectedIds.size} selected) ---`);
+      for (const id of selectedIds) {
+        const stroke = drawingStrokes.find(s => s.id === id);
+        if (stroke) {
+          debugInfo.push(`\nID: ${stroke.id}`);
+          debugInfo.push(`Type: ${stroke.type || 'unknown'}`);
+          debugInfo.push(`Layer: ${stroke.layer}`);
+          debugInfo.push(`Color: ${stroke.color}`);
+          debugInfo.push(`Size: ${stroke.size}`);
+          debugInfo.push(`Points: ${stroke.points.length}`);
+          if (stroke.points.length > 0) {
+            stroke.points.forEach((p, idx) => {
+              debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+            });
+          }
+          if (stroke.type === 'via' && stroke.points.length > 0) {
+            const point = stroke.points[0];
+            debugInfo.push(`Node ID: node-${point.id}`);
+          }
+        } else {
+          debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
+        }
+      }
+    }
+    
+    // Check selected components
+    if (selectedComponentIds.size > 0) {
+      debugInfo.push(`\n--- Components (${selectedComponentIds.size} selected) ---`);
+      for (const id of selectedComponentIds) {
+        const compTop = componentsTop.find(c => c.id === id);
+        const compBottom = componentsBottom.find(c => c.id === id);
+        const comp = compTop || compBottom;
+        if (comp) {
+          debugInfo.push(`\nID: ${comp.id}`);
+          debugInfo.push(`Type: ${comp.componentType}`);
+          debugInfo.push(`Layer: ${comp.layer}`);
+          debugInfo.push(`Designator: ${comp.designator || '(empty)'}`);
+          debugInfo.push(`Abbreviation: ${(comp as any).abbreviation || '(empty)'}`);
+          debugInfo.push(`Position: x=${comp.x.toFixed(2)}, y=${comp.y.toFixed(2)}`);
+          debugInfo.push(`Color: ${comp.color}`);
+          debugInfo.push(`Size: ${comp.size}`);
+          debugInfo.push(`Pin Count: ${comp.pinCount}`);
+          if (comp.pinConnections && comp.pinConnections.length > 0) {
+            debugInfo.push(`Pin Connections:`);
+            comp.pinConnections.forEach((conn, idx) => {
+              debugInfo.push(`  Pin ${idx + 1}: ${conn || '(not connected)'}`);
+            });
+          }
+          if ('manufacturer' in comp) {
+            debugInfo.push(`Manufacturer: ${(comp as any).manufacturer || '(empty)'}`);
+          }
+          if ('partNumber' in comp) {
+            debugInfo.push(`Part Number: ${(comp as any).partNumber || '(empty)'}`);
+          }
+        } else {
+          debugInfo.push(`\nID: ${id} (not found in components)`);
+        }
+      }
+    }
+    
+    if (selectedIds.size === 0 && selectedComponentIds.size === 0) {
+      debugInfo.push('\nNo objects selected.');
+    }
+    
+    const debugText = debugInfo.join('\n');
+    setDebugDialog(prev => ({ ...prev, text: debugText }));
+  }, [debugDialog.visible, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom]);
 
   // Finalize trace when clicking outside the canvas (e.g., menus, tools, layer panel)
   React.useEffect(() => {
@@ -3956,33 +4035,6 @@ function App() {
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
               <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
-            </div>
-          )}
-        </div>
-
-        {/* View menu */}
-        <div style={{ position: 'relative' }}>
-          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'view' ? null : 'view'); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: openMenu === 'view' ? '#eef3ff' : '#fff', fontWeight: 600, color: '#222' }}>
-            View ▾
-          </button>
-          {openMenu === 'view' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <button onClick={() => { setCurrentView('top'); setCurrentTool('draw'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Top</button>
-              <button onClick={() => { setCurrentView('bottom'); setCurrentTool('draw'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Bottom</button>
-              <button onClick={() => { setCurrentView('overlay'); setCurrentTool('draw'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Overlay</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { 
-                setIsTransparencyCycling(prev => {
-                  // If going from checked to unchecked, set transparency to 50%
-                  if (prev) {
-                    setTransparency(50);
-                  }
-                  return !prev;
-                }); 
-                setOpenMenu(null); 
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                {isTransparencyCycling ? 'Stop Transparency Cycle' : 'Start Transparency Cycle'}
-              </button>
             </div>
           )}
         </div>
@@ -5440,6 +5492,82 @@ function App() {
           e.target.value = ''; // Reset so same file can be loaded again
         }}
       />
+      
+      {/* Debug Information Dialog */}
+      {debugDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            paddingRight: '20px',
+            zIndex: 10000,
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#fff',
+              borderRadius: 8,
+              padding: '20px',
+              minWidth: '150px',
+              maxWidth: '400px',
+              width: 'fit-content',
+              maxHeight: '80%',
+              overflow: 'auto',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+              position: 'relative',
+              pointerEvents: 'auto',
+              border: '1px solid #ddd',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Debug Information</h2>
+              <button
+                onClick={() => setDebugDialog({ visible: false, text: '' })}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666',
+                  padding: 0,
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <pre
+              style={{
+                margin: 0,
+                padding: '12px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: 4,
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxHeight: 'calc(80vh - 100px)',
+                overflow: 'auto',
+                color: '#000',
+              }}
+            >
+              {debugDialog.text}
+            </pre>
+          </div>
+        </div>
+      )}
 
     </div>
   </div>
