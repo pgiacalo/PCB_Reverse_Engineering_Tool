@@ -2362,6 +2362,65 @@ function App() {
   }, [updateImageTransform, selectedImageForTransform]);
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
+  // Helper functions for size changes
+  const increaseSize = useCallback(() => {
+    if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
+      // Check if any selected items are locked
+      if (selectedIds.size > 0) {
+        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+        if (hasLockedVias || hasLockedTraces) return;
+      }
+      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+      if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
+      if (selectedGroundIds.size > 0 && isGroundLocked) return;
+      
+      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
+      if (selectedComponentIds.size > 0) {
+        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+      }
+      if (selectedPowerIds.size > 0) {
+        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
+      }
+      if (selectedGroundIds.size > 0) {
+        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
+      }
+    } else {
+      setBrushSize(b => Math.min(40, b + 1));
+    }
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, isGroundLocked]);
+
+  const decreaseSize = useCallback(() => {
+    if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
+      // Check if any selected items are locked
+      if (selectedIds.size > 0) {
+        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+        if (hasLockedVias || hasLockedTraces) return;
+      }
+      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+      if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
+      if (selectedGroundIds.size > 0 && isGroundLocked) return;
+      
+      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
+      if (selectedComponentIds.size > 0) {
+        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+      }
+      if (selectedPowerIds.size > 0) {
+        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
+      }
+      if (selectedGroundIds.size > 0) {
+        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
+      }
+    } else {
+      setBrushSize(b => Math.max(1, b - 1));
+    }
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, isGroundLocked]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Ignore keyboard shortcuts if user is typing in an input field, textarea, or contenteditable
     const activeElement = document.activeElement;
@@ -2374,6 +2433,22 @@ function App() {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         return; // Let the input field handle Delete/Backspace
       }
+    }
+    
+    // Size change shortcuts: + and - keys
+    if (e.key === '+' || e.key === '=') {
+      // + key (or = key on keyboards where + requires Shift)
+      e.preventDefault();
+      e.stopPropagation();
+      increaseSize();
+      return;
+    }
+    if (e.key === '-' || e.key === '_') {
+      // - key (or _ key on keyboards where - requires Shift)
+      e.preventDefault();
+      e.stopPropagation();
+      decreaseSize();
+      return;
     }
     
     // Debug: Display properties of selected objects (Ctrl+Shift+I)
@@ -2894,7 +2969,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds, increaseSize, decreaseSize]);
 
   // Finalize trace when clicking outside the canvas (e.g., menus, tools, layer panel)
   React.useEffect(() => {
@@ -3896,7 +3971,16 @@ function App() {
               <button onClick={() => { setCurrentView('bottom'); setCurrentTool('draw'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Bottom</button>
               <button onClick={() => { setCurrentView('overlay'); setCurrentTool('draw'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Overlay</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setIsTransparencyCycling(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              <button onClick={() => { 
+                setIsTransparencyCycling(prev => {
+                  // If going from checked to unchecked, set transparency to 50%
+                  if (prev) {
+                    setTransparency(50);
+                  }
+                  return !prev;
+                }); 
+                setOpenMenu(null); 
+              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 {isTransparencyCycling ? 'Stop Transparency Cycle' : 'Start Transparency Cycle'}
               </button>
             </div>
@@ -3965,71 +4049,21 @@ function App() {
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
-                    // Check if any selected items are locked
-                    if (selectedIds.size > 0) {
-                      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-                      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
-                      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-                      if (hasLockedVias || hasLockedTraces) return;
-                    }
-                    if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-                    if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-                    if (selectedGroundIds.size > 0 && isGroundLocked) return;
-                    
-                    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
-                    if (selectedComponentIds.size > 0) {
-                      setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
-                      setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
-                    }
-                    if (selectedPowerIds.size > 0) {
-                      setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
-                    }
-                    if (selectedGroundIds.size > 0) {
-                      setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
-                    }
-                  } else {
-                    setBrushSize(b => Math.min(40, b + 1));
-                  }
+                  increaseSize();
                   setOpenMenu(null);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
-                Increase Size
+                Increase Size (+)
               </button>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
-                    // Check if any selected items are locked
-                    if (selectedIds.size > 0) {
-                      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-                      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
-                      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-                      if (hasLockedVias || hasLockedTraces) return;
-                    }
-                    if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-                    if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-                    if (selectedGroundIds.size > 0 && isGroundLocked) return;
-                    
-                    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
-                    if (selectedComponentIds.size > 0) {
-                      setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
-                      setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
-                    }
-                    if (selectedPowerIds.size > 0) {
-                      setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
-                    }
-                    if (selectedGroundIds.size > 0) {
-                      setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
-                    }
-                  } else {
-                    setBrushSize(b => Math.max(1, b - 1));
-                  }
+                  decreaseSize();
                   setOpenMenu(null);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
-                Decrease Size
+                Decrease Size (-)
               </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <div 
@@ -4104,6 +4138,77 @@ function App() {
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Manage Power Buses…
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button 
+                onClick={() => {
+                  // Select all vias
+                  const viaIds = drawingStrokes.filter(s => s.type === 'via').map(s => s.id);
+                  setSelectedIds(new Set(viaIds));
+                  setSelectedComponentIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all vias
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all traces (top)
+                  const traceIds = drawingStrokes.filter(s => s.type === 'trace' && s.layer === 'top').map(s => s.id);
+                  setSelectedIds(new Set(traceIds));
+                  setSelectedComponentIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Traces (top)
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all traces (bottom)
+                  const traceIds = drawingStrokes.filter(s => s.type === 'trace' && s.layer === 'bottom').map(s => s.id);
+                  setSelectedIds(new Set(traceIds));
+                  setSelectedComponentIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Traces (bottom)
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all components (top)
+                  const compIds = componentsTop.map(c => c.id);
+                  setSelectedComponentIds(new Set(compIds));
+                  setSelectedIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Components (top)
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all components (bottom)
+                  const compIds = componentsBottom.map(c => c.id);
+                  setSelectedComponentIds(new Set(compIds));
+                  setSelectedIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Components (bottom)
               </button>
             </div>
           )}
@@ -4499,7 +4604,14 @@ function App() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <label style={{ fontSize: 12, color: '#333' }}>Transparency: {transparency}%</label>
                 <label className="radio-label" style={{ margin: 0 }}>
-                  <input type="checkbox" checked={isTransparencyCycling} onChange={(e) => setIsTransparencyCycling(e.target.checked)} />
+                  <input type="checkbox" checked={isTransparencyCycling} onChange={(e) => {
+                    const newValue = e.target.checked;
+                    // If going from checked to unchecked, set transparency to 50%
+                    if (isTransparencyCycling && !newValue) {
+                      setTransparency(50);
+                    }
+                    setIsTransparencyCycling(newValue);
+                  }} />
                   <span style={{ marginLeft: 6, fontSize: 12 }}>Cycle</span>
                 </label>
               </div>
@@ -4721,6 +4833,44 @@ function App() {
                     />
                   </div>
                   
+                  {/* X Position */}
+                  <div>
+                    <label htmlFor={`component-x-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      X:
+                    </label>
+                    <input
+                      id={`component-x-${comp.id}`}
+                      name={`component-x-${comp.id}`}
+                      type="number"
+                      value={componentEditor.x.toFixed(2)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setComponentEditor({ ...componentEditor, x: val });
+                      }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                  
+                  {/* Y Position */}
+                  <div>
+                    <label htmlFor={`component-y-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                      Y:
+                    </label>
+                    <input
+                      id={`component-y-${comp.id}`}
+                      name={`component-y-${comp.id}`}
+                      type="number"
+                      value={componentEditor.y.toFixed(2)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setComponentEditor({ ...componentEditor, y: val });
+                      }}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                  
                   {/* Pin Count */}
                   <div>
                     <label htmlFor={`component-pincount-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
@@ -4739,26 +4889,6 @@ function App() {
                       disabled={areComponentsLocked}
                       style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
                     />
-                  </div>
-                  
-                  {/* Position (read-only) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                        X Position:
-                      </label>
-                      <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
-                        {Math.round(componentEditor.x)}
-                      </div>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                        Y Position:
-                      </label>
-                      <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
-                        {Math.round(componentEditor.y)}
-                      </div>
-                    </div>
                   </div>
                   
                   {/* Layer (editable) */}
@@ -4880,6 +5010,8 @@ function App() {
                       const updateComponent = (comp: PCBComponent): PCBComponent => {
                         const updated = { ...comp };
                         updated.designator = componentEditor.designator;
+                        updated.x = componentEditor.x;
+                        updated.y = componentEditor.y;
                         // Store abbreviation as a dynamic property (no padding needed, just use as-is)
                         (updated as any).abbreviation = componentEditor.abbreviation.trim() || getDefaultAbbreviation(comp.componentType);
                         if ('manufacturer' in updated) {
@@ -5038,42 +5170,24 @@ function App() {
                     </select>
                   </div>
                   
-                  {/* X Position */}
+                  {/* X Position (read-only) */}
                   <div>
-                    <label htmlFor={`power-x-${powerEditor.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       X:
                     </label>
-                    <input
-                      id={`power-x-${powerEditor.id}`}
-                      name={`power-x-${powerEditor.id}`}
-                      type="number"
-                      value={powerEditor.x.toFixed(2)}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0;
-                        setPowerEditor({ ...powerEditor, x: val });
-                      }}
-                      disabled={arePowerNodesLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: arePowerNodesLocked ? 0.6 : 1 }}
-                    />
+                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
+                      {powerEditor.x.toFixed(2)}
+                    </div>
                   </div>
                   
-                  {/* Y Position */}
+                  {/* Y Position (read-only) */}
                   <div>
-                    <label htmlFor={`power-y-${powerEditor.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Y:
                     </label>
-                    <input
-                      id={`power-y-${powerEditor.id}`}
-                      name={`power-y-${powerEditor.id}`}
-                      type="number"
-                      value={powerEditor.y.toFixed(2)}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0;
-                        setPowerEditor({ ...powerEditor, y: val });
-                      }}
-                      disabled={arePowerNodesLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: arePowerNodesLocked ? 0.6 : 1 }}
-                    />
+                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
+                      {powerEditor.y.toFixed(2)}
+                    </div>
                   </div>
                 </div>
                 
@@ -5097,7 +5211,7 @@ function App() {
                       if (arePowerNodesLocked) return;
                       setPowers(prev => prev.map(p => 
                         p.id === powerEditor.id 
-                          ? { ...p, layer: powerEditor.layer, x: powerEditor.x, y: powerEditor.y }
+                          ? { ...p, layer: powerEditor.layer }
                           : p
                       ));
                       setPowerEditor(null);
