@@ -3917,7 +3917,7 @@ function App() {
           </div>
           {/* Active tool layer chooser for Trace/Component */}
           {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
-            <div ref={traceChooserRef} style={{ position: 'absolute', top: 6, left: 52, padding: '4px 6px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+            <div ref={traceChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('top'); setSelectedDrawingLayer('top'); setShowTraceLayerChooser(false); setShowTopImage(true); }} />
                 <span>Top</span>
