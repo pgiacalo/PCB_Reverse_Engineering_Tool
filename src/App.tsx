@@ -3058,6 +3058,82 @@ function App() {
     };
   }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds, increaseSize, decreaseSize]);
 
+  // Initialize application with default keyboard shortcuts on first load (o and s)
+  React.useEffect(() => {
+    // Use setTimeout to ensure DOM is ready and refs are available
+    const timer = setTimeout(() => {
+      // Execute 'o' shortcut: Reset view and selection
+      setViewScale(1);
+      const canvas = canvasRef.current;
+      const container = canvasContainerRef.current;
+      let panX = 0;
+      let panY = 0;
+      if (canvas && container) {
+        // Get the actual visible bounding rectangles
+        const canvasRect = canvas.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+        const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+        
+        // Toolbar and layers panel positions (absolute within container)
+        // Toolbar: left: 6, width: 44
+        // Layers panel: left: 56, width: 168
+        const LAYERS_LEFT = 56;
+        const LAYERS_WIDTH = 168;
+        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (230px)
+        
+        // Calculate the visible area (canvas area not covered by toolbar/layers)
+        // The canvas starts at the container's left edge, but the left portion is covered
+        const canvasLeftOffset = canvasRect.left - containerRect.left; // Canvas position relative to container
+        const visibleAreaStart = LEFT_OVERLAY - canvasLeftOffset; // Where visible area starts in canvas coordinates
+        const visibleAreaWidth = canvasRect.width - Math.max(0, visibleAreaStart); // Visible width
+        
+        // The visible center is at: visibleAreaStart + visibleAreaWidth / 2 (in screen pixels)
+        // But we need it relative to the canvas element's top-left
+        const visibleCenterXScreen = visibleAreaStart + visibleAreaWidth / 2;
+        const visibleCenterYScreen = canvasRect.height / 2; // Vertical center of canvas
+        
+        // Image center in canvas content coordinates
+        const imageCenterX = contentWidth / 2;
+        const imageCenterY = contentHeight / 2;
+        
+        // Convert visible center from screen pixels to canvas content coordinates
+        const scaleX = canvasRect.width / canvas.width;
+        const scaleY = canvasRect.height / canvas.height;
+        
+        // Visible center in canvas pixels (relative to canvas top-left)
+        const visibleCenterXCanvas = visibleCenterXScreen / scaleX;
+        const visibleCenterYCanvas = visibleCenterYScreen / scaleY;
+        
+        // Convert to content coordinates (after CONTENT_BORDER offset)
+        const visibleCenterContentX = visibleCenterXCanvas - CONTENT_BORDER;
+        const visibleCenterContentY = visibleCenterYCanvas - CONTENT_BORDER;
+        
+        // Pan to align image center with visible center
+        panX = visibleCenterContentX - imageCenterX;
+        panY = visibleCenterContentY - imageCenterY;
+      }
+      // Reset browser zoom to 100%
+      if (document.body) {
+        document.body.style.zoom = '1';
+      }
+      if (document.documentElement) {
+        document.documentElement.style.zoom = '1';
+      }
+      setViewPan({ x: panX, y: panY });
+      setCurrentView('overlay');
+      // Clear all selections
+      setSelectedIds(new Set());
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
+      // Set tool to Select (from both 'o' and 's' shortcuts)
+      setCurrentTool('select');
+    }, 100); // Small delay to ensure DOM is ready
+    
+    return () => clearTimeout(timer);
+  }, []); // Run only once on mount
+
   // Update debug dialog when selection changes (if dialog is open)
   React.useEffect(() => {
     if (!debugDialog.visible) return;
