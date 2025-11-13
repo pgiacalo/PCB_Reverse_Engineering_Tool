@@ -3683,6 +3683,55 @@ function App() {
     }, 0);
   }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, isImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, isGroundLocked, arePowerNodesLocked]);
 
+  // Check if there are unsaved changes
+  const hasUnsavedChanges = useCallback(() => {
+    return !!(
+      topImage ||
+      bottomImage ||
+      drawingStrokes.length > 0 ||
+      componentsTop.length > 0 ||
+      componentsBottom.length > 0 ||
+      powers.length > 0 ||
+      grounds.length > 0
+    );
+  }, [topImage, bottomImage, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
+
+  // Create a new project (reset all state)
+  const newProject = useCallback(() => {
+    setTopImage(null);
+    setBottomImage(null);
+    setDrawingStrokes([]);
+    setComponentsTop([]);
+    setComponentsBottom([]);
+    setPowers([]);
+    setGrounds([]);
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+    setCurrentView('overlay');
+    setViewScale(1);
+    setViewPan({ x: 0, y: 0 });
+    setSelectedDrawingLayer('top');
+    setCurrentTool('select');
+    setTransparency(50);
+    setIsTransparencyCycling(false);
+    // Reset power buses to defaults
+    setPowerBuses([
+      { id: 'powerbus-1', name: '+3.3VDC', voltage: '+3.3VDC', color: '#ff0000' },
+      { id: 'powerbus-2', name: '+5VDC', voltage: '+5VDC', color: '#ff0000' },
+    ]);
+    // Reset locks
+    setIsImagesLocked(false);
+    setAreViasLocked(false);
+    setAreTracesLocked(false);
+    setAreComponentsLocked(false);
+    setIsGroundLocked(false);
+    setArePowerNodesLocked(false);
+    // Reset point ID counter
+    setPointIdCounter(1);
+  }, []);
+
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
@@ -3998,6 +4047,22 @@ function App() {
           </button>
           {openMenu === 'file' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
+              <button onClick={async () => {
+                if (hasUnsavedChanges()) {
+                  const shouldSave = window.confirm('You have unsaved changes. Do you want to save your project before creating a new one?');
+                  if (shouldSave) {
+                    await saveProject();
+                  }
+                  const proceed = window.confirm('Are you sure you want to create a new project? All unsaved changes will be lost.');
+                  if (proceed) {
+                    newProject();
+                  }
+                } else {
+                  newProject();
+                }
+                setOpenMenu(null);
+              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>New Project</button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { fileInputTopRef.current?.click(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Load Top PCB…</button>
               <button onClick={() => { fileInputBottomRef.current?.click(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Load Bottom PCB…</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
