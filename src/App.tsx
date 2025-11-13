@@ -349,6 +349,17 @@ function App() {
       setPendingComponentPosition(null);
     }
   }, [currentTool]);
+
+  // Show power bus selector when power tool is selected
+  React.useEffect(() => {
+    if (currentTool === 'power') {
+      setShowPowerBusSelector(true);
+      setSelectedPowerBusId(null); // Reset selection when tool is selected
+    } else {
+      setShowPowerBusSelector(false);
+      setSelectedPowerBusId(null);
+    }
+  }, [currentTool]);
   
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
@@ -451,7 +462,7 @@ function App() {
   ]);
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
-  const [pendingPowerPosition, setPendingPowerPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
@@ -928,6 +939,11 @@ function App() {
       setShowComponentTypeChooser(true);
       return;
     } else if (currentTool === 'power') {
+      // Only place power node if a bus has been selected
+      if (!selectedPowerBusId) {
+        return; // Wait for user to select a power bus
+      }
+      
       // Snap to nearest via like traces unless ESC is held
       const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
         let bestDist = Infinity;
@@ -948,9 +964,22 @@ function App() {
         return bestCenter || { x: wx, y: wy };
       };
       const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
-      // Store position and show power bus selector
-      setPendingPowerPosition(snapped);
-      setShowPowerBusSelector(true);
+      
+      // Find the selected power bus
+      const bus = powerBuses.find(b => b.id === selectedPowerBusId);
+      if (bus) {
+        // Place power node immediately
+        const p: PowerSymbol = {
+          id: `power-${Date.now()}-${Math.random()}`,
+          x: snapped.x,
+          y: snapped.y,
+          color: bus.color,
+          size: brushSize,
+          powerBusId: bus.id,
+          layer: selectedDrawingLayer,
+        };
+        setPowers(prev => [...prev, p]);
+      }
       return;
     } else if (currentTool === 'ground') {
       // Snap to nearest via like traces unless ESC is held
@@ -2539,6 +2568,17 @@ function App() {
     
     // Reset view and selection (O key)
     if (e.key === 'O' || e.key === 'o') {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && (active as HTMLInputElement).type !== 'range') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Don't trigger shortcut when typing in input fields
+      }
+      
       e.preventDefault();
       e.stopPropagation();
       // Reset view settings
@@ -3060,10 +3100,11 @@ function App() {
     };
   }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds, increaseSize, decreaseSize]);
 
-  // Initialize application with default keyboard shortcuts on first load (o and s)
-  React.useEffect(() => {
+  // Initialize application with default keyboard shortcuts (o and s)
+  // This function performs the same initialization as when the app first loads
+  const initializeApplication = useCallback(() => {
     // Use setTimeout to ensure DOM is ready and refs are available
-    const timer = setTimeout(() => {
+    setTimeout(() => {
       // Execute 'o' shortcut: Reset view and selection
       setViewScale(1);
       const canvas = canvasRef.current;
@@ -3132,8 +3173,11 @@ function App() {
       // Set tool to Select (from both 'o' and 's' shortcuts)
       setCurrentTool('select');
     }, 100); // Small delay to ensure DOM is ready
-    
-    return () => clearTimeout(timer);
+  }, []);
+
+  // Initialize application on first load
+  React.useEffect(() => {
+    initializeApplication();
   }, []); // Run only once on mount
 
   // Update debug dialog when selection changes (if dialog is open)
@@ -3486,7 +3530,7 @@ function App() {
         ? 'magnify'
         : currentTool === 'ground'
         ? 'ground'
-        : currentTool === 'power'
+        : currentTool === 'power' && selectedPowerBusId
         ? 'power'
         : currentTool === 'component'
         ? 'component'
@@ -3507,6 +3551,11 @@ function App() {
     const cy = size / 2;
     const r = diameterPx / 2;
     ctx.clearRect(0,0,size,size);
+    
+    // Get power bus color if power tool is active
+    const powerBusColor = kind === 'power' && selectedPowerBusId 
+      ? (powerBuses.find(b => b.id === selectedPowerBusId)?.color || brushColor)
+      : brushColor;
     if (kind === 'via') {
       // Outer ring
       ctx.strokeStyle = brushColor;
@@ -3588,8 +3637,8 @@ function App() {
       ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
     } else if (kind === 'power') {
       // Draw miniature power symbol cursor (circle with vertical lines at top and bottom)
-      ctx.strokeStyle = brushColor;
-      ctx.fillStyle = brushColor;
+      ctx.strokeStyle = powerBusColor;
+      ctx.fillStyle = powerBusColor;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       // Draw circle
@@ -3625,7 +3674,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -3785,7 +3834,14 @@ function App() {
         } : null,
       },
       drawing: {
-        drawingStrokes, // Save full strokes with point IDs
+        // Filter out single-point traces (traces must have at least 2 points to form a line)
+        // Keep vias (which are single points by design) and traces with 2+ points
+        drawingStrokes: drawingStrokes.filter(s => {
+          if (s.type === 'trace' && s.points.length < 2) {
+            return false; // Remove single-point traces
+          }
+          return true; // Keep vias and valid traces
+        }),
         vias,
         tracesTop,
         tracesBottom,
@@ -3900,12 +3956,16 @@ function App() {
     setNewProjectDialog({ visible: false });
     await saveProject();
     newProject();
-  }, [saveProject, newProject]);
+    // Perform initialization after new project is created
+    initializeApplication();
+  }, [saveProject, newProject, initializeApplication]);
 
   const handleNewProjectNo = useCallback(() => {
     setNewProjectDialog({ visible: false });
     newProject();
-  }, [newProject]);
+    // Perform initialization after new project is created
+    initializeApplication();
+  }, [newProject, initializeApplication]);
 
   const handleNewProjectCancel = useCallback(() => {
     setNewProjectDialog({ visible: false });
@@ -4053,7 +4113,15 @@ function App() {
       // Restore drawing strokes - prefer saved drawingStrokes with point IDs
       if (project.drawing?.drawingStrokes && Array.isArray(project.drawing.drawingStrokes)) {
         // New format: restore strokes with preserved point IDs
-        setDrawingStrokes(project.drawing.drawingStrokes as DrawingStroke[]);
+        // Filter out single-point traces (traces must have at least 2 points to form a line)
+        // Keep vias (which are single points by design) and traces with 2+ points
+        const validStrokes = (project.drawing.drawingStrokes as DrawingStroke[]).filter(s => {
+          if (s.type === 'trace' && s.points.length < 2) {
+            return false; // Remove single-point traces
+          }
+          return true; // Keep vias and valid traces
+        });
+        setDrawingStrokes(validStrokes);
       } else {
         // Legacy format: rebuild from vias/traces arrays (point IDs will be regenerated)
         const strokes: DrawingStroke[] = [];
@@ -4095,7 +4163,15 @@ function App() {
         }
         (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
         (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
-        setDrawingStrokes(strokes);
+        // Filter out single-point traces (traces must have at least 2 points to form a line)
+        // Keep vias (which are single points by design) and traces with 2+ points
+        const validStrokes = strokes.filter(s => {
+          if (s.type === 'trace' && s.points.length < 2) {
+            return false; // Remove single-point traces
+          }
+          return true; // Keep vias and valid traces
+        });
+        setDrawingStrokes(validStrokes);
       }
       // load components if present, ensuring all properties are preserved
       if (project.drawing?.componentsTop) {
@@ -4579,7 +4655,22 @@ function App() {
         <div ref={canvasContainerRef} style={{ position: 'relative', width: '100%', height: '100%', margin: 0, padding: 0, boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '16px', overflow: 'hidden' }}>
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
-            <button onClick={() => setCurrentTool('select')} title="Select (S)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'select' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => setCurrentTool('select')} 
+              onMouseDown={(e) => e.currentTarget.blur()}
+              title="Select (S)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'select' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'select' ? '#e6f0ff' : '#fff', 
+                color: '#222',
+                outline: 'none'
+              }}
+            >
               <MousePointer size={16} />
             </button>
             <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias (V)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'via') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
@@ -4740,7 +4831,7 @@ function App() {
             </div>
           )}
           {/* Power Bus Selector */}
-          {showPowerBusSelector && pendingPowerPosition && (
+          {showPowerBusSelector && currentTool === 'power' && (
             <div style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, minWidth: '200px' }}>
               <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Power Bus:</div>
               {powerBuses.length === 0 ? (
@@ -4784,20 +4875,9 @@ function App() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      if (pendingPowerPosition) {
-                        const p: PowerSymbol = {
-                          id: `power-${Date.now()}-${Math.random()}`,
-                          x: pendingPowerPosition.x,
-                          y: pendingPowerPosition.y,
-                          color: bus.color,
-                          size: brushSize,
-                          powerBusId: bus.id,
-                          layer: selectedDrawingLayer, // Use current drawing layer
-                        };
-                        setPowers(prev => [...prev, p]);
-                      }
+                      // Set the selected power bus and close the selector
+                      setSelectedPowerBusId(bus.id);
                       setShowPowerBusSelector(false);
-                      setPendingPowerPosition(null);
                     }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', marginBottom: '4px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
                   >
@@ -4816,7 +4896,9 @@ function App() {
                   e.preventDefault();
                   e.stopPropagation();
                   setShowPowerBusSelector(false);
-                  setPendingPowerPosition(null);
+                  setSelectedPowerBusId(null);
+                  // Switch back to select tool if user cancels
+                  setCurrentTool('select');
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'center', padding: '6px 10px', marginTop: '8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
               >
@@ -4961,9 +5043,14 @@ function App() {
                 <label className="radio-label" style={{ margin: 0 }}>
                   <input type="checkbox" checked={isTransparencyCycling} onChange={(e) => {
                     const newValue = e.target.checked;
-                    // If going from checked to unchecked, set transparency to 50%
-                    if (isTransparencyCycling && !newValue) {
-                      setTransparency(50);
+                    if (newValue) {
+                      // When checked, select both Top Image and Bottom Image
+                      setShowTopImage(true);
+                      setShowBottomImage(true);
+                    } else {
+                      // When unchecked, stop cycling, reset transparency, and set tool to Select
+                      setTransparency(50); // Reset to middle
+                      setCurrentTool('select');
                     }
                     setIsTransparencyCycling(newValue);
                   }} />
@@ -5167,7 +5254,6 @@ function App() {
                       onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
                       disabled={areComponentsLocked}
                       style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                      placeholder="e.g., Texas Instruments, STMicroelectronics"
                     />
                   </div>
                   
@@ -5184,7 +5270,6 @@ function App() {
                       onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
                       disabled={areComponentsLocked}
                       style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                      placeholder="e.g., TL072, LM358"
                     />
                   </div>
                   
