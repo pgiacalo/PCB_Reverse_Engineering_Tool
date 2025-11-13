@@ -2030,7 +2030,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -4148,7 +4148,9 @@ function App() {
                   setSelectedComponentIds(new Set());
                   setSelectedPowerIds(new Set());
                   setSelectedGroundIds(new Set());
-                  setOpenMenu(null);
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
@@ -4162,7 +4164,9 @@ function App() {
                   setSelectedComponentIds(new Set());
                   setSelectedPowerIds(new Set());
                   setSelectedGroundIds(new Set());
-                  setOpenMenu(null);
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
@@ -4176,7 +4180,9 @@ function App() {
                   setSelectedComponentIds(new Set());
                   setSelectedPowerIds(new Set());
                   setSelectedGroundIds(new Set());
-                  setOpenMenu(null);
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
@@ -4190,7 +4196,9 @@ function App() {
                   setSelectedIds(new Set());
                   setSelectedPowerIds(new Set());
                   setSelectedGroundIds(new Set());
-                  setOpenMenu(null);
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
@@ -4204,7 +4212,9 @@ function App() {
                   setSelectedIds(new Set());
                   setSelectedPowerIds(new Set());
                   setSelectedGroundIds(new Set());
-                  setOpenMenu(null);
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
                 }}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
@@ -4448,12 +4458,12 @@ function App() {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
-                      <div>
+      <div>
                         <div style={{ fontWeight: 600, fontSize: '13px' }}>{bus.name}</div>
                         <div style={{ fontSize: '11px', color: '#666' }}>{bus.voltage}</div>
-                      </div>
+      </div>
                     </div>
-                  </button>
+        </button>
                 ))
               )}
               <button
@@ -4467,7 +4477,7 @@ function App() {
               >
                 Cancel
               </button>
-            </div>
+      </div>
           )}
           {currentTool === 'component' && showComponentTypeChooser && (
             <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '400px', overflowY: 'auto', minWidth: '200px' }}>
