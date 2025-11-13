@@ -423,12 +423,9 @@ function App() {
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
   // Tool-specific layer defaults (persist until tool re-selected)
   const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
-  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
   // Show chooser popovers only when tool is (re)selected
   const [showTraceLayerChooser, setShowTraceLayerChooser] = useState(false);
-  const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
   const traceChooserRef = useRef<HTMLDivElement>(null);
-  const componentChooserRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
@@ -800,7 +797,7 @@ function App() {
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
       // Store the click position and show type chooser (like trace pattern)
-      setPendingComponentPosition({ x, y, layer: selectedDrawingLayer });
+      setPendingComponentPosition({ x, y, layer: 'top' });
       setShowComponentTypeChooser(true);
       return;
     } else if (currentTool === 'power') {
@@ -2369,8 +2366,6 @@ function App() {
           case 'C':
             e.preventDefault();
             setCurrentTool('component');
-            setSelectedDrawingLayer(componentToolLayer);
-            setShowComponentLayerChooser(true);
             return;
           case 'e':
           case 'E':
@@ -2623,7 +2618,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom, drawingMode, finalizeTraceIfAny, traceToolLayer, componentToolLayer]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom, drawingMode, finalizeTraceIfAny, traceToolLayer]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
@@ -2655,12 +2650,6 @@ function App() {
           setShowTraceLayerChooser(false);
         }
       }
-      if (showComponentLayerChooser) {
-        const el2 = componentChooserRef.current;
-        if (!el2 || !(e.target instanceof Node) || !el2.contains(e.target)) {
-          setShowComponentLayerChooser(false);
-        }
-      }
       if (showComponentTypeChooser) {
         const el3 = componentTypeChooserRef.current;
         if (!el3 || !(e.target instanceof Node) || !el3.contains(e.target)) {
@@ -2679,7 +2668,7 @@ function App() {
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentLayerChooser, showComponentTypeChooser, showColorPicker]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentTypeChooser, showColorPicker]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -2918,7 +2907,7 @@ function App() {
         ? 'magnify'
         : currentTool === 'ground'
         ? 'ground'
-        : currentTool === 'component' && selectedComponentType
+        : currentTool === 'component'
         ? 'component'
         : currentTool === 'draw'
         ? (drawingMode === 'via' ? 'via' : 'trace')
@@ -3016,7 +3005,7 @@ function App() {
       ctx.beginPath(); ctx.moveTo(cx - w1 * 0.4, y1); ctx.lineTo(cx + w1 * 0.4, y1); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w2 * 0.4, y2); ctx.lineTo(cx + w2 * 0.4, y2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
-    } else if (kind === 'component' && selectedComponentType) {
+    } else if (kind === 'component') {
       // Draw square component icon with abbreviation text
       const compSize = diameterPx;
       const half = compSize / 2;
@@ -3028,8 +3017,8 @@ function App() {
       ctx.rect(cx - half, cy - half, compSize, compSize);
       ctx.fill();
       ctx.stroke();
-      // Draw abbreviation text
-      const abbrev = getDefaultAbbreviation(selectedComponentType);
+      // Draw abbreviation text (use selected type if available, otherwise show generic '*')
+      const abbrev = selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '*';
       ctx.fillStyle = brushColor;
       ctx.font = `bold ${Math.max(8, compSize * 0.35)}px sans-serif`;
       ctx.textAlign = 'center';
@@ -3797,7 +3786,7 @@ function App() {
             <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <PenLine size={16} color={brushColor} />
             </button>
-            <button onClick={() => { setCurrentTool('component'); setSelectedDrawingLayer(componentToolLayer); setShowComponentLayerChooser(true); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setCurrentTool('component'); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {selectedComponentType ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                   {/* Square icon with text - show default abbreviation based on component type */}
@@ -3935,30 +3924,6 @@ function App() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowTraceLayerChooser(false); setShowBottomImage(true); }} />
-                <span>Bottom</span>
-              </label>
-            </div>
-          )}
-          {currentTool === 'component' && showComponentLayerChooser && (
-            <div ref={componentChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '4px 6px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
-              <label className="radio-label" style={{ marginRight: 6 }}>
-                <input type="radio" name="componentToolLayer" onChange={() => { 
-                  setComponentToolLayer('top'); 
-                  setSelectedDrawingLayer('top'); 
-                  setShowComponentLayerChooser(false); 
-                  setShowTopImage(true);
-                  // Type chooser will appear after clicking to set position
-                }} />
-                <span>Top</span>
-              </label>
-              <label className="radio-label">
-                <input type="radio" name="componentToolLayer" onChange={() => { 
-                  setComponentToolLayer('bottom'); 
-                  setSelectedDrawingLayer('bottom'); 
-                  setShowComponentLayerChooser(false); 
-                  setShowBottomImage(true);
-                  // Type chooser will appear after clicking to set position
-                }} />
                 <span>Bottom</span>
               </label>
             </div>
@@ -4351,14 +4316,22 @@ function App() {
                     </div>
                   </div>
                   
-                  {/* Layer (read-only) */}
+                  {/* Layer (editable) */}
                   <div>
-                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                    <label htmlFor={`component-layer-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
                       Layer:
                     </label>
-                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
-                      {componentEditor.layer === 'top' ? 'Top' : 'Bottom'}
-                    </div>
+                    <select
+                      id={`component-layer-${comp.id}`}
+                      name={`component-layer-${comp.id}`}
+                      value={componentEditor.layer}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
+                      disabled={areComponentsLocked}
+                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    >
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
                   </div>
                   
                   {/* Pin Connections */}
@@ -4485,11 +4458,41 @@ function App() {
                         return updated;
                       };
                       
-                      if (componentEditor.layer === 'top') {
-                        setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                      // Handle layer changes - move component between layers if needed
+                      const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                      const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                      
+                      if (currentComp) {
+                        // Component exists on current layer
+                        const updatedComp = updateComponent(currentComp);
+                        
+                        // Check if layer changed
+                        if (updatedComp.layer !== componentEditor.layer) {
+                          // Remove from old layer
+                          if (componentEditor.layer === 'top') {
+                            setComponentsTop(prev => prev.filter(c => c.id !== componentEditor.id));
+                            setComponentsBottom(prev => [...prev, { ...updatedComp, layer: 'bottom' }]);
+                          } else {
+                            setComponentsBottom(prev => prev.filter(c => c.id !== componentEditor.id));
+                            setComponentsTop(prev => [...prev, { ...updatedComp, layer: 'top' }]);
+                          }
+                        } else {
+                          // Update in place
+                          if (componentEditor.layer === 'top') {
+                            setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                          } else {
+                            setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                          }
+                        }
                       } else {
-                        setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                        // Component not found on current layer, update based on new layer
+                        if (componentEditor.layer === 'top') {
+                          setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                        } else {
+                          setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                        }
                       }
+                      
                       setComponentEditor(null);
                       setConnectingPin(null); // Clear pin connection mode
                     }}
