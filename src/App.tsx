@@ -74,12 +74,20 @@ interface GroundSymbol {
   color: string;
   size: number;
 }
+interface PowerBus {
+  id: string;
+  name: string; // e.g., "3.3VDC", "+5V", "+12V", "AC_120V"
+  voltage: string; // e.g., "3.3VDC", "+5V", "+12V", "AC_120V"
+  color: string; // Display color for this power bus
+}
+
 interface PowerSymbol {
   id: string;
   x: number;
   y: number;
   color: string;
   size: number;
+  powerBusId: string; // Reference to which power bus this node belongs to
 }
 type ViewMode = 'top' | 'bottom' | 'overlay';
 type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground' | 'power';
@@ -366,6 +374,8 @@ function App() {
   const [componentsTop, setComponentsTop] = useState<PCBComponent[]>([]);
   const [componentsBottom, setComponentsBottom] = useState<PCBComponent[]>([]);
   const [selectedComponentIds, setSelectedComponentIds] = useState<Set<string>>(new Set());
+  const [selectedPowerIds, setSelectedPowerIds] = useState<Set<string>>(new Set());
+  const [selectedGroundIds, setSelectedGroundIds] = useState<Set<string>>(new Set());
   const [componentEditor, setComponentEditor] = useState<{
     visible: boolean;
     layer: 'top' | 'bottom';
@@ -419,6 +429,15 @@ function App() {
   // Power layer
   const [showPowerLayer, setShowPowerLayer] = useState(true);
   const [powers, setPowers] = useState<PowerSymbol[]>([]);
+  // Power bus definitions
+  const [powerBuses, setPowerBuses] = useState<PowerBus[]>([
+    { id: 'default-5v', name: '+5V', voltage: '+5VDC', color: '#ff0000' },
+    { id: 'default-3v3', name: '+3.3V', voltage: '+3.3VDC', color: '#ff6600' },
+    { id: 'default-12v', name: '+12V', voltage: '+12VDC', color: '#cc0000' },
+  ]);
+  const [showPowerBusManager, setShowPowerBusManager] = useState(false);
+  const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
+  const [pendingPowerPosition, setPendingPowerPosition] = useState<{ x: number; y: number } | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
@@ -696,14 +715,100 @@ function App() {
       })();
       if (hitComponent) {
         const { comp } = hitComponent;
-        // Single click: just select the component (for moving, deleting, resizing)
-        setSelectedComponentIds(new Set([comp.id]));
-        // Clear drawing stroke selection when selecting a component
+        if (e.shiftKey) {
+          // Shift-click: add to selection (toggle)
+          setSelectedComponentIds(prev => {
+            const next = new Set(prev);
+            if (next.has(comp.id)) {
+              next.delete(comp.id);
+            } else {
+              next.add(comp.id);
+            }
+            return next;
+          });
+          // Keep other selections when Shift-clicking
+        } else {
+          // Regular click: select only this component (replace all selections)
+          setSelectedComponentIds(new Set([comp.id]));
+          // Clear other selections
+          setSelectedIds(new Set());
+          setSelectedPowerIds(new Set());
+          setSelectedGroundIds(new Set());
+        }
+        return;
+      }
+      
+      // Check for power node hit
+      const hitTolerance = Math.max(6 / viewScale, 4);
+      let hitPower: PowerSymbol | null = null;
+      for (const p of powers) {
+        const radius = Math.max(1, p.size / 2);
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d <= Math.max(radius, hitTolerance)) {
+          hitPower = p;
+          break;
+        }
+      }
+      if (hitPower) {
+        if (e.shiftKey) {
+          // Shift-click: toggle selection
+          setSelectedPowerIds(prev => {
+            const next = new Set(prev);
+            if (next.has(hitPower!.id)) {
+              next.delete(hitPower!.id);
+            } else {
+              next.add(hitPower!.id);
+            }
+            return next;
+          });
+        } else {
+          // Regular click: select only this power node
+          setSelectedPowerIds(new Set([hitPower.id]));
+        }
+        // Clear other selections
         setSelectedIds(new Set());
+        setSelectedComponentIds(new Set());
+        setSelectedGroundIds(new Set());
+        return;
+      }
+      
+      // Check for ground node hit
+      let hitGround: GroundSymbol | null = null;
+      for (const g of grounds) {
+        const radius = Math.max(1, (g.size || 18) / 2);
+        const d = Math.hypot(g.x - x, g.y - y);
+        if (d <= Math.max(radius, hitTolerance)) {
+          hitGround = g;
+          break;
+        }
+      }
+      if (hitGround) {
+        if (e.shiftKey) {
+          // Shift-click: add to selection (toggle)
+          setSelectedGroundIds(prev => {
+            const next = new Set(prev);
+            if (next.has(hitGround!.id)) {
+              next.delete(hitGround!.id);
+            } else {
+              next.add(hitGround!.id);
+            }
+            return next;
+          });
+          // Keep other selections when Shift-clicking
+        } else {
+          // Regular click: select only this ground node (replace all selections)
+          setSelectedGroundIds(new Set([hitGround.id]));
+          // Clear other selections
+          setSelectedIds(new Set());
+          setSelectedComponentIds(new Set());
+          setSelectedPowerIds(new Set());
+        }
+        // Don't start rectangle selection - we've already selected the ground node
         return;
       }
       
       // Check if clicking on empty space - clear selection immediately
+      // But first check if we hit a via (for rectangle selection)
       const hitToleranceSelect = Math.max(6 / viewScale, 4);
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
@@ -718,14 +823,21 @@ function App() {
         }
       }
       
-      // If we didn't hit anything, clear selection immediately
+      // If we didn't hit anything (no via, no component, no power, no ground), clear selection and start rectangle selection
       if (!hitStroke) {
-        setSelectedIds(new Set());
-        setSelectedComponentIds(new Set());
+        // Clear selection immediately when clicking on empty space (unless Shift is held for multi-select)
+        if (!e.shiftKey) {
+          setSelectedIds(new Set());
+          setSelectedComponentIds(new Set());
+          setSelectedPowerIds(new Set());
+          setSelectedGroundIds(new Set());
+        }
       }
       
+      // Store whether Shift was pressed at mouseDown for use in mouseUp
+      // We'll pass this through the selectStart state
       setIsSelecting(true);
-      setSelectStart({ x, y });
+      setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
       setSelectRect({ x, y, width: 0, height: 0 });
       return;
     } else if (currentTool === 'magnify') {
@@ -822,14 +934,9 @@ function App() {
         return bestCenter || { x: wx, y: wy };
       };
       const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
-      const p: PowerSymbol = {
-        id: `power-${Date.now()}-${Math.random()}`,
-        x: snapped.x,
-        y: snapped.y,
-        color: brushColor,
-        size: brushSize,
-      };
-      setPowers(prev => [...prev, p]);
+      // Store position and show power bus selector
+      setPendingPowerPosition(snapped);
+      setShowPowerBusSelector(true);
       return;
     } else if (currentTool === 'ground') {
       // Snap to nearest via like traces unless ESC is held
@@ -1295,8 +1402,12 @@ function App() {
         };
         // For click selection (tiny rect), find the single nearest hit
         // For rectangle selection, find all hits
-        const next = new Set<string>(isShiftPressed ? Array.from(selectedIds) : []);
-        const nextComps = new Set<string>(isShiftPressed ? Array.from(selectedComponentIds) : []);
+        // Get Shift key state from mouseDown (stored in selectStart)
+        const shiftWasPressed = (start as any)?.shiftKey === true;
+        const next = new Set<string>(shiftWasPressed ? Array.from(selectedIds) : []);
+        const nextComps = new Set<string>(shiftWasPressed ? Array.from(selectedComponentIds) : []);
+        const nextPowers = new Set<string>(shiftWasPressed ? Array.from(selectedPowerIds) : []);
+        const nextGrounds = new Set<string>(shiftWasPressed ? Array.from(selectedGroundIds) : []);
         
         if (tiny) {
           // Click selection: find the single nearest via or trace
@@ -1364,8 +1475,60 @@ function App() {
           componentsTop.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
           componentsBottom.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
         }
+        // Power nodes hit-test
+        const powerInRect = (p: PowerSymbol) => {
+          const radius = Math.max(1, p.size / 2);
+          return (p.x - radius) <= maxX && (p.x + radius) >= minX && (p.y - radius) <= maxY && (p.y + radius) >= minY;
+        };
+        if (tiny) {
+          // Click selection: find nearest power node
+          let bestPowerHit: { id: string; dist: number } | null = null;
+          for (const p of powers) {
+            const radius = Math.max(1, p.size / 2);
+            const dist = Math.hypot(p.x - start.x, p.y - start.y);
+            if (dist <= Math.max(radius, hitTolerance)) {
+              if (!bestPowerHit || dist < bestPowerHit.dist) {
+                bestPowerHit = { id: p.id, dist };
+              }
+            }
+          }
+          if (bestPowerHit) {
+            nextPowers.add(bestPowerHit.id);
+          }
+        } else {
+          // Rectangle selection: find all power nodes in rect
+          powers.forEach(p => { if (powerInRect(p)) nextPowers.add(p.id); });
+        }
+        // Ground nodes hit-test
+        const groundInRect = (g: GroundSymbol) => {
+          const radius = Math.max(1, (g.size || 18) / 2);
+          return (g.x - radius) <= maxX && (g.x + radius) >= minX && (g.y - radius) <= maxY && (g.y + radius) >= minY;
+        };
+        if (tiny) {
+          // Click selection: find nearest ground node
+          let bestGroundHit: { id: string; dist: number } | null = null;
+          for (const g of grounds) {
+            const radius = Math.max(1, (g.size || 18) / 2);
+            const dist = Math.hypot(g.x - start.x, g.y - start.y);
+            if (dist <= Math.max(radius, hitTolerance)) {
+              if (!bestGroundHit || dist < bestGroundHit.dist) {
+                bestGroundHit = { id: g.id, dist };
+              }
+            }
+          }
+          if (bestGroundHit) {
+            nextGrounds.add(bestGroundHit.id);
+          }
+        } else {
+          // Rectangle selection: find all ground nodes in rect
+          grounds.forEach(g => { if (groundInRect(g)) nextGrounds.add(g.id); });
+        }
+        // Always update selections - if Shift wasn't pressed and nothing was found,
+        // the selections should already be empty (cleared in mouseDown)
         setSelectedIds(next);
         setSelectedComponentIds(nextComps);
+        setSelectedPowerIds(nextPowers);
+        setSelectedGroundIds(nextGrounds);
       }
     }
     if (isDrawing && currentStroke.length > 0) {
@@ -1398,7 +1561,7 @@ function App() {
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
 
   // Allow panning to continue even when the pointer leaves the canvas while the button is held
   React.useEffect(() => {
@@ -1661,12 +1824,26 @@ function App() {
     if (showPowerLayer && powers.length > 0) {
       const drawPower = (p: PowerSymbol) => {
         ctx.save();
-        ctx.strokeStyle = p.color;
-        ctx.fillStyle = p.color;
-        ctx.lineWidth = 2;
+        // Find the power bus to get its color and voltage
+        const bus = powerBuses.find(b => b.id === p.powerBusId);
+        const displayColor = bus?.color || p.color;
+        const isSelected = selectedPowerIds.has(p.id);
+        ctx.strokeStyle = displayColor;
+        ctx.fillStyle = displayColor;
+        ctx.lineWidth = isSelected ? 3 : 2;
         ctx.lineCap = 'round';
         const radius = p.size / 2;
+        // Draw selection highlight if selected
+        if (isSelected) {
+          ctx.strokeStyle = '#0066ff';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         // Draw circle
+        ctx.strokeStyle = displayColor;
+        ctx.lineWidth = isSelected ? 3 : 2;
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -1677,14 +1854,24 @@ function App() {
         ctx.moveTo(p.x, p.y + radius);
         ctx.lineTo(p.x, p.y + radius * 0.6);
         ctx.stroke();
+        // Draw voltage label if bus is found
+        if (bus) {
+          ctx.fillStyle = displayColor;
+          ctx.font = `${Math.max(10, radius * 0.8)}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(bus.voltage, p.x, p.y + radius + 12);
+        }
+        ctx.restore();
       };
       powers.forEach(drawPower);
     }
     if (showGroundLayer && grounds.length > 0) {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
+        const isSelected = selectedGroundIds.has(g.id);
         ctx.strokeStyle = g.color || '#222';
-        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.lineCap = 'round';
         // Attachment point is the TOP of the vertical line at (g.x, g.y)
         const unit = Math.max(6, (g.size || 18)); // base scale
@@ -1693,6 +1880,17 @@ function App() {
         const w1 = unit * 1.6;                   // widths of bars
         const w2 = unit * 1.0;
         const w3 = unit * 0.6;
+        const radius = Math.max(1, unit / 2);
+        // Draw selection highlight if selected
+        if (isSelected) {
+          ctx.strokeStyle = '#0066ff';
+          ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, radius + 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = g.color || '#222';
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         // Vertical: from top (attachment) downward to first bar
         ctx.beginPath();
         ctx.moveTo(g.x, g.y);
@@ -2231,8 +2429,8 @@ function App() {
       finalizeTraceIfAny();
       return;
     }
-    // Delete selected items (strokes and components)
-    if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0 || selectedComponentIds.size > 0)) {
+    // Delete selected items (strokes, components, power nodes, ground nodes)
+    if ((e.key === 'Delete' || e.key === 'Backspace') && (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0)) {
       e.preventDefault();
       e.stopPropagation();
       
@@ -2255,6 +2453,18 @@ function App() {
         setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
         setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
         setSelectedComponentIds(new Set());
+      }
+      if (selectedPowerIds.size > 0) {
+        // Don't delete if power nodes are locked
+        if (arePowerNodesLocked) return;
+        setPowers(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
+        setSelectedPowerIds(new Set());
+      }
+      if (selectedGroundIds.size > 0) {
+        // Don't delete if ground is locked
+        if (isGroundLocked) return;
+        setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
+        setSelectedGroundIds(new Set());
       }
       return;
     }
@@ -2646,7 +2856,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds]);
 
   // Finalize trace when clicking outside the canvas (e.g., menus, tools, layer panel)
   React.useEffect(() => {
@@ -2914,13 +3124,15 @@ function App() {
 
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
-    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'component' | 'default' =
+    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
       currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
         ? 'magnify'
         : currentTool === 'ground'
         ? 'ground'
+        : currentTool === 'power'
+        ? 'power'
         : currentTool === 'component'
         ? 'component'
         : currentTool === 'draw'
@@ -2928,7 +3140,7 @@ function App() {
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
     const scale = Math.max(1, viewScale);
-    const diameterPx = kind === 'magnify' ? 18 : kind === 'component' ? Math.max(16, Math.round(brushSize * scale)) : Math.max(6, Math.round(brushSize * scale));
+    const diameterPx = kind === 'magnify' ? 18 : kind === 'component' ? Math.max(16, Math.round(brushSize * scale)) : kind === 'power' || kind === 'ground' ? Math.max(12, Math.round(brushSize * scale)) : Math.max(6, Math.round(brushSize * scale));
     const pad = 4;
     const size = diameterPx + pad * 2 + (kind === 'magnify' ? 8 : 0); // extra room for handle/plus
     const canvas = document.createElement('canvas');
@@ -3019,6 +3231,23 @@ function App() {
       ctx.beginPath(); ctx.moveTo(cx - w1 * 0.4, y1); ctx.lineTo(cx + w1 * 0.4, y1); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w2 * 0.4, y2); ctx.lineTo(cx + w2 * 0.4, y2); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
+    } else if (kind === 'power') {
+      // Draw miniature power symbol cursor (circle with vertical lines at top and bottom)
+      ctx.strokeStyle = brushColor;
+      ctx.fillStyle = brushColor;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      // Draw circle
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // Draw vertical lines (top and bottom)
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx, cy - r * 0.6);
+      ctx.moveTo(cx, cy + r);
+      ctx.lineTo(cx, cy + r * 0.6);
+      ctx.stroke();
     } else if (kind === 'component') {
       // Draw square component icon with abbreviation text
       const compSize = diameterPx;
@@ -3208,7 +3437,9 @@ function App() {
         componentsTop,
         componentsBottom,
         grounds,
+        powers,
       },
+      powerBuses, // Save power bus definitions
       pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
       toolSettings: {
         // Convert Map to plain object for JSON serialization
@@ -3437,6 +3668,24 @@ function App() {
         setComponentsBottom(compsBottom);
       }
       if (project.drawing?.grounds) setGrounds(project.drawing.grounds as GroundSymbol[]);
+      // Load power buses first (needed for legacy power node migration)
+      let busesToUse = powerBuses; // Default buses
+      if (project.powerBuses && Array.isArray(project.powerBuses)) {
+        busesToUse = project.powerBuses as PowerBus[];
+        setPowerBuses(busesToUse);
+      }
+      if (project.drawing?.powers) {
+        const loadedPowers = project.drawing.powers as PowerSymbol[];
+        // Ensure all power nodes have a powerBusId (for legacy projects)
+        const powersWithBusId = loadedPowers.map(p => {
+          if (!p.powerBusId) {
+            // Assign to first power bus or create a default one
+            return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v' };
+          }
+          return p;
+        });
+        setPowers(powersWithBusId);
+      }
     } catch (err) {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
@@ -3678,7 +3927,7 @@ function App() {
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                  if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
                     // Check if any selected items are locked
                     if (selectedIds.size > 0) {
                       const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
@@ -3687,11 +3936,19 @@ function App() {
                       if (hasLockedVias || hasLockedTraces) return;
                     }
                     if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                    if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
+                    if (selectedGroundIds.size > 0 && isGroundLocked) return;
                     
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
                     if (selectedComponentIds.size > 0) {
                       setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
                       setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+                    }
+                    if (selectedPowerIds.size > 0) {
+                      setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
+                    }
+                    if (selectedGroundIds.size > 0) {
+                      setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
                     }
                   } else {
                     setBrushSize(b => Math.min(40, b + 1));
@@ -3704,7 +3961,7 @@ function App() {
               </button>
               <button
                 onClick={() => {
-                  if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                  if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
                     // Check if any selected items are locked
                     if (selectedIds.size > 0) {
                       const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
@@ -3713,11 +3970,19 @@ function App() {
                       if (hasLockedVias || hasLockedTraces) return;
                     }
                     if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                    if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
+                    if (selectedGroundIds.size > 0 && isGroundLocked) return;
                     
                     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
                     if (selectedComponentIds.size > 0) {
                       setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
                       setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+                    }
+                    if (selectedPowerIds.size > 0) {
+                      setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
+                    }
+                    if (selectedGroundIds.size > 0) {
+                      setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
                     }
                   } else {
                     setBrushSize(b => Math.max(1, b - 1));
@@ -3745,7 +4010,7 @@ function App() {
                       <button
                         key={sz}
                         onClick={() => {
-                          if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                          if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
                             // Check if any selected items are locked
                             if (selectedIds.size > 0) {
                               const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
@@ -3754,11 +4019,19 @@ function App() {
                               if (hasLockedVias || hasLockedTraces) return;
                             }
                             if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                            if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
+                            if (selectedGroundIds.size > 0 && isGroundLocked) return;
                             
                             setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
                             if (selectedComponentIds.size > 0) {
                               setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
                               setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+                            }
+                            if (selectedPowerIds.size > 0) {
+                              setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: sz } : p));
+                            }
+                            if (selectedGroundIds.size > 0) {
+                              setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: sz } : g));
                             }
                           } else {
                             setBrushSize(sz);
@@ -3789,6 +4062,10 @@ function App() {
               </button>
               <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Manage Power Buses…
               </button>
             </div>
           )}
@@ -3935,6 +4212,12 @@ function App() {
                           setComponentsTop(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
                           setComponentsBottom(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
                         }
+                        if (selectedPowerIds.size > 0) {
+                          setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, color: c } : p));
+                        }
+                        if (selectedGroundIds.size > 0) {
+                          setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, color: c } : g));
+                        }
                       }}
                         title={c}
                         style={{ width: 22, height: 22, backgroundColor: c, border: c === brushColor ? '2px solid #333' : '1px solid #ccc', cursor: 'pointer' }}
@@ -3956,6 +4239,90 @@ function App() {
                 <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowTraceLayerChooser(false); setShowBottomImage(true); }} />
                 <span>Bottom</span>
               </label>
+            </div>
+          )}
+          {/* Power Bus Selector */}
+          {showPowerBusSelector && pendingPowerPosition && (
+            <div style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, minWidth: '200px' }}>
+              <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Power Bus:</div>
+              {powerBuses.length === 0 ? (
+                <div style={{ padding: '8px', color: '#666', fontSize: '12px' }}>No power buses defined. Use Tools → Manage Power Buses to add one.</div>
+              ) : (
+                [...powerBuses].sort((a, b) => {
+                  // Parse voltage strings to extract numeric values
+                  const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
+                    // Try to extract a numeric value with optional sign
+                    // Match patterns like: +3.3V, -5VDC, 3.3V, AC_120V, etc.
+                    const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
+                    if (match) {
+                      const sign = match[1] || '+';
+                      const numValue = parseFloat(match[2]);
+                      const absValue = Math.abs(numValue);
+                      const isNegative = sign === '-';
+                      return { absValue, isNegative, original: voltage };
+                    }
+                    // If no numeric value found, put at end with high absolute value
+                    return { absValue: Infinity, isNegative: false, original: voltage };
+                  };
+                  
+                  const aParsed = parseVoltage(a.voltage);
+                  const bParsed = parseVoltage(b.voltage);
+                  
+                  // First sort by absolute value
+                  if (aParsed.absValue !== bParsed.absValue) {
+                    return aParsed.absValue - bParsed.absValue;
+                  }
+                  
+                  // If absolute values are equal, sort negative before positive
+                  if (aParsed.isNegative !== bParsed.isNegative) {
+                    return aParsed.isNegative ? -1 : 1;
+                  }
+                  
+                  // If both have same sign and absolute value, maintain original order
+                  return 0;
+                }).map((bus) => (
+                  <button
+                    key={bus.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (pendingPowerPosition) {
+                        const p: PowerSymbol = {
+                          id: `power-${Date.now()}-${Math.random()}`,
+                          x: pendingPowerPosition.x,
+                          y: pendingPowerPosition.y,
+                          color: bus.color,
+                          size: brushSize,
+                          powerBusId: bus.id,
+                        };
+                        setPowers(prev => [...prev, p]);
+                      }
+                      setShowPowerBusSelector(false);
+                      setPendingPowerPosition(null);
+                    }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', marginBottom: '4px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{bus.name}</div>
+                        <div style={{ fontSize: '11px', color: '#666' }}>{bus.voltage}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowPowerBusSelector(false);
+                  setPendingPowerPosition(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '6px 10px', marginTop: '8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+              >
+                Cancel
+              </button>
             </div>
           )}
           {currentTool === 'component' && showComponentTypeChooser && (
@@ -4591,6 +4958,91 @@ function App() {
           <div className="scrollbar-vertical-content" ref={vScrollContentRef} />
         </div>
       </div>
+
+      {/* Power Bus Manager Dialog */}
+      {showPowerBusManager && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '2px solid #333', borderRadius: 8, padding: '20px', zIndex: 1000, minWidth: '500px', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
+            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666' }}>×</button>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            {powerBuses.map((bus, index) => (
+              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', marginBottom: '8px', background: '#f5f5f5', borderRadius: 6, border: '1px solid #ddd' }}>
+                <div style={{ width: 24, height: 24, borderRadius: '50%', background: bus.color, border: '2px solid #333' }} />
+                <div style={{ flex: 1 }}>
+                  <input
+                    type="text"
+                    value={bus.name}
+                    onChange={(e) => {
+                      const updated = [...powerBuses];
+                      updated[index] = { ...bus, name: e.target.value };
+                      setPowerBuses(updated);
+                    }}
+                    placeholder="Name"
+                    style={{ width: '100%', padding: '4px 8px', marginBottom: '4px', border: '1px solid #ccc', borderRadius: 4, fontSize: '13px' }}
+                  />
+                  <input
+                    type="text"
+                    value={bus.voltage}
+                    onChange={(e) => {
+                      const updated = [...powerBuses];
+                      updated[index] = { ...bus, voltage: e.target.value };
+                      setPowerBuses(updated);
+                    }}
+                    placeholder="Voltage (e.g., +5VDC, +3.3VDC, AC_120V)"
+                    style={{ width: '100%', padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4, fontSize: '13px' }}
+                  />
+                </div>
+                <input
+                  type="color"
+                  value={bus.color}
+                  onChange={(e) => {
+                    const updated = [...powerBuses];
+                    updated[index] = { ...bus, color: e.target.value };
+                    setPowerBuses(updated);
+                  }}
+                  style={{ width: '40px', height: '40px', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                />
+                <button
+                  onClick={() => {
+                    // Don't allow deleting if any power nodes use this bus
+                    const nodesUsingBus = powers.filter(p => p.powerBusId === bus.id);
+                    if (nodesUsingBus.length > 0) {
+                      alert(`Cannot delete: ${nodesUsingBus.length} power node(s) are using this bus. Remove or reassign them first.`);
+                      return;
+                    }
+                    setPowerBuses(prev => prev.filter(b => b.id !== bus.id));
+                  }}
+                  style={{ padding: '6px 12px', background: '#ff4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              const newBus: PowerBus = {
+                id: `powerbus-${Date.now()}-${Math.random()}`,
+                name: 'New Power Bus',
+                voltage: '+0VDC',
+                color: '#ff0000',
+              };
+              setPowerBuses(prev => [...prev, newBus]);
+            }}
+            style={{ width: '100%', padding: '10px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}
+          >
+            + Add Power Bus
+          </button>
+          <button
+            onClick={() => setShowPowerBusManager(false)}
+            style={{ width: '100%', padding: '10px', background: '#666', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+          >
+            Close
+          </button>
+        </div>
+      )}
 
       {/* Hidden file inputs for Load Top/Bottom PCB menu items */}
       <input
