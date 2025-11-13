@@ -2541,13 +2541,8 @@ function App() {
       e.stopPropagation();
       // Reset view settings
       setViewScale(1);
-      // Reset image offsets to 0 for proper centering
-      if (topImage) {
-        setTopImage({ ...topImage, x: 0, y: 0 });
-      }
-      if (bottomImage) {
-        setBottomImage({ ...bottomImage, x: 0, y: 0 });
-      }
+      // Don't reset image offsets - preserve their alignment
+      // Only reset the view pan to center the images in the visible area
       // Center the image in the actual visible canvas area (excluding toolbar/layers overlay)
       // Get the canvas element's actual visible size and position on screen
       const canvas = canvasRef.current;
@@ -5648,7 +5643,7 @@ function App() {
         }}
       />
       
-      {/* Debug Information Dialog */}
+      {/* Detailed Information Dialog */}
       {debugDialog.visible && (
         <div 
           style={{
@@ -5683,7 +5678,7 @@ function App() {
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Debug Information</h2>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Detailed Information</h2>
               <button
                 onClick={() => setDebugDialog({ visible: false, text: '' })}
                 style={{
