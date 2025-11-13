@@ -3804,19 +3804,19 @@ function App() {
         <div ref={canvasContainerRef} style={{ position: 'relative', width: '100%', height: '100%', margin: 0, padding: 0, boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '16px', overflow: 'hidden' }}>
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
-            <button onClick={() => setCurrentTool('select')} title="Select (S)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('select')} title="Select (S)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'select' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'select' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <MousePointer size={16} />
             </button>
-            <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias (V)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias (V)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'via') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
               </svg>
             </button>
-            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <PenLine size={16} color={brushColor} />
             </button>
-            <button onClick={() => { setCurrentTool('component'); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setCurrentTool('component'); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'component' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {selectedComponentType ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                   {/* Square icon with text - show default abbreviation based on component type */}
@@ -3836,7 +3836,7 @@ function App() {
               )}
             </button>
             {/* Power tool */}
-            <button onClick={() => setCurrentTool('power')} title="Draw Power (P)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'power' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('power')} title="Draw Power (P)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'power' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'power' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Power symbol icon */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g stroke={toolRegistry.get('power')?.settings.color || '#ff0000'} strokeWidth="2" strokeLinecap="round" fill="none">
@@ -3847,7 +3847,7 @@ function App() {
               </svg>
             </button>
             {/* Ground tool */}
-            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Ground symbol icon */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
@@ -3858,7 +3858,7 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
+            <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'erase' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
               {/* Tilted pink eraser */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g transform="rotate(-35 12 12)">
@@ -3867,7 +3867,7 @@ function App() {
                 </g>
               </svg>
             </button>
-              <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move (H)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move (H)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -3877,7 +3877,7 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'magnify' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Enlarged magnifier lens and symbols */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10" cy="10" r="7.5" fill="none" stroke="#111" strokeWidth="2" />
