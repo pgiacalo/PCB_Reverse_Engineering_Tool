@@ -403,6 +403,7 @@ function App() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   const [openMenu, setOpenMenu] = useState<'file' | 'view' | 'transform' | 'tools' | null>(null);
+  const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -2126,6 +2127,19 @@ function App() {
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Ignore keyboard shortcuts if user is typing in an input field, textarea, or contenteditable
+    const activeElement = document.activeElement;
+    if (activeElement && (
+      activeElement.tagName === 'INPUT' ||
+      activeElement.tagName === 'TEXTAREA' ||
+      (activeElement as HTMLElement).isContentEditable
+    )) {
+      // Only ignore Delete/Backspace if typing in an input (let other shortcuts work)
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        return; // Let the input field handle Delete/Backspace
+      }
+    }
+    
     // Debug: Display properties of selected objects (Ctrl+Shift+I)
     if (e.key === 'I' || e.key === 'i') {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey) {
@@ -3715,35 +3729,51 @@ function App() {
                 Decrease Size
               </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              {([2,4,6,8,10,12,16,20,24,32] as number[]).map(sz => (
-                <button
-                  key={sz}
-                  onClick={() => {
-                    if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
-                      // Check if any selected items are locked
-                      if (selectedIds.size > 0) {
-                        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-                        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
-                        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-                        if (hasLockedVias || hasLockedTraces) return;
-                      }
-                      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-                      
-                      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
-                      if (selectedComponentIds.size > 0) {
-                        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
-                        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
-                      }
-                    } else {
-                      setBrushSize(sz);
-                    }
-                    setOpenMenu(null);
-                  }}
+              <div 
+                style={{ position: 'relative' }}
+                onMouseEnter={() => setShowSetSizeSubmenu(true)}
+                onMouseLeave={() => setShowSetSizeSubmenu(false)}
+              >
+                <button 
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
                 >
-                  Set Size: {sz}px
+                  Set Size ▸
                 </button>
-              ))}
+                {showSetSizeSubmenu && (
+                  <div style={{ position: 'absolute', top: 0, left: '100%', marginLeft: '4px', minWidth: 120, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 30 }}>
+                    {([2,4,6,8,10,12,14,16,18,20] as number[]).map(sz => (
+                      <button
+                        key={sz}
+                        onClick={() => {
+                          if (selectedIds.size > 0 || selectedComponentIds.size > 0) {
+                            // Check if any selected items are locked
+                            if (selectedIds.size > 0) {
+                              const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+                              const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+                              const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+                              if (hasLockedVias || hasLockedTraces) return;
+                            }
+                            if (selectedComponentIds.size > 0 && areComponentsLocked) return;
+                            
+                            setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
+                            if (selectedComponentIds.size > 0) {
+                              setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+                              setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+                            }
+                          } else {
+                            setBrushSize(sz);
+                          }
+                          setShowSetSizeSubmenu(false);
+                          setOpenMenu(null);
+                        }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+                      >
+                        {sz}px
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Vias {areViasLocked ? '✓' : ''}
@@ -4103,10 +4133,19 @@ function App() {
           
           {/* Component Properties Editor Dialog */}
           {componentEditor && componentEditor.visible && (() => {
-            // Find the component being edited
-            const compList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-            const comp = compList.find(c => c.id === componentEditor.id);
+            // Find the component being edited - check both layers in case layer was changed
+            let comp = componentsTop.find(c => c.id === componentEditor.id);
+            let actualLayer: 'top' | 'bottom' = 'top';
+            if (!comp) {
+              comp = componentsBottom.find(c => c.id === componentEditor.id);
+              actualLayer = 'bottom';
+            }
             if (!comp) return null;
+            
+            // Update componentEditor layer if it doesn't match the actual component's layer
+            if (componentEditor.layer !== actualLayer) {
+              setComponentEditor({ ...componentEditor, layer: actualLayer });
+            }
             
             return (
               <div
