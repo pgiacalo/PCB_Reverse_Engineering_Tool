@@ -427,6 +427,8 @@ function App() {
   const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
   const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
+  const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
+  const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -3893,6 +3895,49 @@ function App() {
     setPointIdCounter(1);
   }, []);
 
+  // Handler functions for new project dialog (defined after saveProject and newProject)
+  const handleNewProjectYes = useCallback(async () => {
+    setNewProjectDialog({ visible: false });
+    await saveProject();
+    newProject();
+  }, [saveProject, newProject]);
+
+  const handleNewProjectNo = useCallback(() => {
+    setNewProjectDialog({ visible: false });
+    newProject();
+  }, [newProject]);
+
+  const handleNewProjectCancel = useCallback(() => {
+    setNewProjectDialog({ visible: false });
+  }, []);
+
+  // Focus Yes button when new project dialog opens and handle keyboard
+  React.useEffect(() => {
+    if (newProjectDialog.visible) {
+      // Focus Yes button after a short delay to ensure it's rendered
+      setTimeout(() => {
+        newProjectYesButtonRef.current?.focus();
+      }, 0);
+      
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // Yes - save and create new project
+          handleNewProjectYes();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          // Cancel - close dialog
+          setNewProjectDialog({ visible: false });
+        }
+      };
+      
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [newProjectDialog.visible, handleNewProjectYes]);
+
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
@@ -4069,7 +4114,21 @@ function App() {
         }));
         setComponentsBottom(compsBottom);
       }
-      if (project.drawing?.grounds) setGrounds(project.drawing.grounds as GroundSymbol[]);
+      if (project.drawing?.grounds) {
+        const loadedGrounds = project.drawing.grounds as GroundSymbol[];
+        // Filter out ground symbols with invalid coordinates (in border area or negative)
+        const validGrounds = loadedGrounds.filter(g => {
+          const isValid = g.y >= 0 && g.x >= 0 && 
+                         typeof g.x === 'number' && typeof g.y === 'number' && 
+                         !isNaN(g.x) && !isNaN(g.y) &&
+                         isFinite(g.x) && isFinite(g.y);
+          if (!isValid) {
+            console.warn(`Filtered out invalid ground symbol at (${g.x}, ${g.y}) - likely in border area or invalid coordinates`);
+          }
+          return isValid;
+        });
+        setGrounds(validGrounds);
+      }
       // Load power buses first (needed for legacy power node migration)
       let busesToUse = powerBuses; // Default buses
       if (project.powerBuses && Array.isArray(project.powerBuses)) {
@@ -4079,13 +4138,28 @@ function App() {
       if (project.drawing?.powers) {
         const loadedPowers = project.drawing.powers as PowerSymbol[];
         // Ensure all power nodes have a powerBusId and layer (for legacy projects)
-        const powersWithBusId = loadedPowers.map(p => {
-          if (!p.powerBusId) {
-            // Assign to first power bus or create a default one
-            return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
-          }
-          return { ...p, layer: p.layer || 'top' };
-        });
+        // Also filter out power nodes with invalid coordinates (in border area or negative)
+        const powersWithBusId = loadedPowers
+          .map(p => {
+            if (!p.powerBusId) {
+              // Assign to first power bus or create a default one
+              return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
+            }
+            return { ...p, layer: p.layer || 'top' };
+          })
+          .filter(p => {
+            // Filter out power nodes with negative coordinates or invalid values
+            // These are likely accidentally placed in the border area or corrupted data
+            // Coordinates are in content space, so they should be >= 0
+            const isValid = p.y >= 0 && p.x >= 0 && 
+                           typeof p.x === 'number' && typeof p.y === 'number' && 
+                           !isNaN(p.x) && !isNaN(p.y) &&
+                           isFinite(p.x) && isFinite(p.y);
+            if (!isValid) {
+              console.warn(`Filtered out invalid power node at (${p.x}, ${p.y}) - likely in border area or invalid coordinates`);
+            }
+            return isValid;
+          });
         setPowers(powersWithBusId);
       }
     } catch (err) {
@@ -4208,20 +4282,13 @@ function App() {
           </button>
           {openMenu === 'file' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <button onClick={async () => {
+              <button onClick={() => {
+                setOpenMenu(null);
                 if (hasUnsavedChanges()) {
-                  const shouldSave = window.confirm('You have unsaved changes. Do you want to save your project before creating a new one?');
-                  if (shouldSave) {
-                    await saveProject();
-                  }
-                  const proceed = window.confirm('Are you sure you want to create a new project? All unsaved changes will be lost.');
-                  if (proceed) {
-                    newProject();
-                  }
+                  setNewProjectDialog({ visible: true });
                 } else {
                   newProject();
                 }
-                setOpenMenu(null);
               }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>New Project</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { fileInputTopRef.current?.click(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Load Top PCB…</button>
@@ -5790,6 +5857,99 @@ function App() {
             >
               {debugDialog.text}
             </pre>
+          </div>
+        </div>
+      )}
+
+      {/* New Project Confirmation Dialog */}
+      {newProjectDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleNewProjectCancel();
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              New Project
+            </h2>
+            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
+              You have unsaved changes. Do you want to save your project before creating a new one?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleNewProjectCancel}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleNewProjectNo}
+                style={{
+                  padding: '8px 16px',
+                  background: '#555',
+                  color: '#f2f2f2',
+                  border: '1px solid #666',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                No
+              </button>
+              <button
+                ref={newProjectYesButtonRef}
+                onClick={handleNewProjectYes}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+                autoFocus
+              >
+                Yes
+              </button>
+            </div>
           </div>
         </div>
       )}
