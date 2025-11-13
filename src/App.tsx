@@ -988,10 +988,14 @@ function App() {
         let bestCenter: { x: number; y: number } | null = null;
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
-          if (s.type !== 'via') continue;
+          if (s.type !== 'via' || !s.points || s.points.length === 0) continue;
           const c = s.points[0];
+          if (!c) continue;
           const d = Math.hypot(c.x - wx, c.y - wy);
-          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
+          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { 
+            bestDist = d; 
+            bestCenter = { x: c.x, y: c.y }; 
+          }
         }
         return bestCenter ?? { x: wx, y: wy };
       };
@@ -1000,12 +1004,13 @@ function App() {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         x: gx,
         y: gy,
-        color: brushColor,
-        size: 18,
+        color: '#000000', // Ground symbols are always black
+        size: toolRegistry.get('ground')?.settings.size || 18,
       };
       setGrounds(prev => [...prev, g]);
+      return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes.length, viewScale, viewPan.x, viewPan.y]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isEscHeld, selectedPowerBusId, powerBuses]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -1940,7 +1945,7 @@ function App() {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
         const isSelected = selectedGroundIds.has(g.id);
-        ctx.strokeStyle = g.color || '#222';
+        ctx.strokeStyle = '#000000'; // Ground symbols are always black
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.lineCap = 'round';
         // Attachment point is the TOP of the vertical line at (g.x, g.y)
@@ -1959,7 +1964,7 @@ function App() {
           ctx.arc(g.x, g.y, radius + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.strokeStyle = g.color || '#222';
+        ctx.strokeStyle = '#000000'; // Ground symbols are always black
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         // Vertical: from top (attachment) downward to first bar
         ctx.beginPath();
@@ -2554,7 +2559,42 @@ function App() {
           }
         }
         
-        if (selectedIds.size === 0 && selectedComponentIds.size === 0) {
+        // Check selected power symbols
+        if (selectedPowerIds.size > 0) {
+          debugInfo.push(`\n--- Power Symbols (${selectedPowerIds.size} selected) ---`);
+          for (const id of selectedPowerIds) {
+            const power = powers.find(p => p.id === id);
+            if (power) {
+              debugInfo.push(`\nID: ${power.id}`);
+              debugInfo.push(`Position: x=${power.x.toFixed(2)}, y=${power.y.toFixed(2)}`);
+              debugInfo.push(`Color: ${power.color}`);
+              debugInfo.push(`Size: ${power.size}`);
+              debugInfo.push(`Layer: ${power.layer}`);
+              const bus = powerBuses.find(b => b.id === power.powerBusId);
+              debugInfo.push(`Power Bus: ${bus?.name || power.powerBusId || '(unknown)'}`);
+            } else {
+              debugInfo.push(`\nID: ${id} (not found in powers)`);
+            }
+          }
+        }
+        
+        // Check selected ground symbols
+        if (selectedGroundIds.size > 0) {
+          debugInfo.push(`\n--- Ground Symbols (${selectedGroundIds.size} selected) ---`);
+          for (const id of selectedGroundIds) {
+            const ground = grounds.find(g => g.id === id);
+            if (ground) {
+              debugInfo.push(`\nID: ${ground.id}`);
+              debugInfo.push(`Position: x=${ground.x.toFixed(2)}, y=${ground.y.toFixed(2)}`);
+              debugInfo.push(`Color: ${ground.color}`);
+              debugInfo.push(`Size: ${ground.size}`);
+            } else {
+              debugInfo.push(`\nID: ${id} (not found in grounds)`);
+            }
+          }
+        }
+        
+        if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
           debugInfo.push('\nNo objects selected.');
         }
         
@@ -2669,48 +2709,68 @@ function App() {
       e.preventDefault();
       e.stopPropagation();
       
-      // Check if any selected items are locked
+      // Handle each type independently so one locked type doesn't prevent deleting others
       if (selectedIds.size > 0) {
         // Filter out locked vias and traces
         const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (hasLockedVias || hasLockedTraces) {
-          // Don't delete if any are locked
-          return;
+        if (!hasLockedVias && !hasLockedTraces) {
+          setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
+          setSelectedIds(new Set());
         }
-        setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
-        setSelectedIds(new Set());
       }
       if (selectedComponentIds.size > 0) {
         // Don't delete if components are locked
-        if (areComponentsLocked) return;
-        setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
-        setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
-        setSelectedComponentIds(new Set());
+        if (!areComponentsLocked) {
+          setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
+          setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
+          setSelectedComponentIds(new Set());
+        }
       }
       if (selectedPowerIds.size > 0) {
         // Don't delete if power nodes are locked
-        if (arePowerNodesLocked) return;
-        setPowers(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
-        setSelectedPowerIds(new Set());
+        if (!arePowerNodesLocked) {
+          setPowers(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
+          setSelectedPowerIds(new Set());
+        }
       }
       if (selectedGroundIds.size > 0) {
         // Don't delete if ground is locked
-        if (isGroundLocked) return;
-        setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
-        setSelectedGroundIds(new Set());
+        if (!isGroundLocked) {
+          setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
+          setSelectedGroundIds(new Set());
+        }
       }
       return;
     }
     // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
+    // Also handles Power and Ground tool undo
     // Only handle undo keys here; let other keys pass through to tool shortcuts
-    if ((currentTool === 'draw' || currentTool === 'erase') && 
+    if ((currentTool === 'draw' || currentTool === 'erase' || currentTool === 'power' || currentTool === 'ground') && 
         (e.key === 'z' || e.key === 'Z') && 
         (e.metaKey || e.ctrlKey) && 
         !e.shiftKey && !e.altKey) {
       e.preventDefault();
       e.stopPropagation();
+      
+      // Power tool undo: remove last power symbol in reverse order
+      if (currentTool === 'power') {
+        setPowers(prev => {
+          if (prev.length === 0) return prev;
+          return prev.slice(0, -1); // Remove last power symbol
+        });
+        return;
+      }
+      
+      // Ground tool undo: remove last ground symbol in reverse order
+      if (currentTool === 'ground') {
+        setGrounds(prev => {
+          if (prev.length === 0) return prev;
+          return prev.slice(0, -1); // Remove last ground symbol
+        });
+        return;
+      }
       
       // Special handling for trace mode: undo last segment instead of entire trace
       if (currentTool === 'draw' && drawingMode === 'trace') {
@@ -3077,7 +3137,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom, drawingMode, finalizeTraceIfAny, traceToolLayer]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -3249,13 +3309,48 @@ function App() {
       }
     }
     
-    if (selectedIds.size === 0 && selectedComponentIds.size === 0) {
+    // Check selected power symbols
+    if (selectedPowerIds.size > 0) {
+      debugInfo.push(`\n--- Power Symbols (${selectedPowerIds.size} selected) ---`);
+      for (const id of selectedPowerIds) {
+        const power = powers.find(p => p.id === id);
+        if (power) {
+          debugInfo.push(`\nID: ${power.id}`);
+          debugInfo.push(`Position: x=${power.x.toFixed(2)}, y=${power.y.toFixed(2)}`);
+          debugInfo.push(`Color: ${power.color}`);
+          debugInfo.push(`Size: ${power.size}`);
+          debugInfo.push(`Layer: ${power.layer}`);
+          const bus = powerBuses.find(b => b.id === power.powerBusId);
+          debugInfo.push(`Power Bus: ${bus?.name || power.powerBusId || '(unknown)'}`);
+        } else {
+          debugInfo.push(`\nID: ${id} (not found in powers)`);
+        }
+      }
+    }
+    
+    // Check selected ground symbols
+    if (selectedGroundIds.size > 0) {
+      debugInfo.push(`\n--- Ground Symbols (${selectedGroundIds.size} selected) ---`);
+      for (const id of selectedGroundIds) {
+        const ground = grounds.find(g => g.id === id);
+        if (ground) {
+          debugInfo.push(`\nID: ${ground.id}`);
+          debugInfo.push(`Position: x=${ground.x.toFixed(2)}, y=${ground.y.toFixed(2)}`);
+          debugInfo.push(`Color: ${ground.color}`);
+          debugInfo.push(`Size: ${ground.size}`);
+        } else {
+          debugInfo.push(`\nID: ${id} (not found in grounds)`);
+        }
+      }
+    }
+    
+    if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
       debugInfo.push('\nNo objects selected.');
     }
     
     const debugText = debugInfo.join('\n');
     setDebugDialog(prev => ({ ...prev, text: debugText }));
-  }, [debugDialog.visible, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom]);
+  }, [debugDialog.visible, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses]);
 
   // Finalize trace when clicking outside the canvas (e.g., menus, tools, layer panel)
   React.useEffect(() => {
@@ -4715,12 +4810,12 @@ function App() {
             {/* Ground tool */}
             <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
               {/* Ground symbol icon */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible' }}>
                 <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
-                  <line x1="12" y1="4" x2="12" y2="12" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                  <line x1="7" y1="16" x2="17" y2="16" />
-                  <line x1="9.5" y1="19" x2="14.5" y2="19" />
+                  <line x1="12" y1="2" x2="12" y2="10" />
+                  <line x1="5" y1="10" x2="19" y2="10" />
+                  <line x1="7" y1="13" x2="17" y2="13" />
+                  <line x1="9.5" y1="16" x2="14.5" y2="16" />
                 </g>
               </svg>
             </button>
@@ -5925,7 +6020,7 @@ function App() {
                 ×
               </button>
             </div>
-            <pre
+            <div
               style={{
                 margin: 0,
                 padding: '12px',
@@ -5933,15 +6028,106 @@ function App() {
                 borderRadius: 4,
                 fontSize: '12px',
                 fontFamily: 'monospace',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
                 maxHeight: 'calc(80vh - 100px)',
                 overflow: 'auto',
                 color: '#000',
               }}
             >
-              {debugDialog.text}
-            </pre>
+              {/* Display text info for non-editable items */}
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {debugDialog.text.split('\n').filter(line => 
+                  !line.includes('Position: x=') || 
+                  (!selectedPowerIds.size && !selectedGroundIds.size)
+                ).join('\n')}
+              </pre>
+              
+              {/* Editable Power Symbol Properties */}
+              {selectedPowerIds.size > 0 && powers.filter(p => selectedPowerIds.has(p.id)).map((power) => {
+                const bus = powerBuses.find(b => b.id === power.powerBusId);
+                return (
+                  <div key={power.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Power Symbol: {power.id}</div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>X Position:</label>
+                      <input
+                        type="number"
+                        value={power.x.toFixed(2)}
+                        onChange={(e) => {
+                          const newX = parseFloat(e.target.value);
+                          if (!isNaN(newX)) {
+                            setPowers(prev => prev.map(p => p.id === power.id ? { ...p, x: newX } : p));
+                          }
+                        }}
+                        style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
+                        step="0.01"
+                      />
+                    </div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Y Position:</label>
+                      <input
+                        type="number"
+                        value={power.y.toFixed(2)}
+                        onChange={(e) => {
+                          const newY = parseFloat(e.target.value);
+                          if (!isNaN(newY)) {
+                            setPowers(prev => prev.map(p => p.id === power.id ? { ...p, y: newY } : p));
+                          }
+                        }}
+                        style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
+                        step="0.01"
+                      />
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      <div>Color: {power.color}</div>
+                      <div>Size: {power.size}</div>
+                      <div>Layer: {power.layer}</div>
+                      <div>Power Bus: {bus?.name || power.powerBusId || '(unknown)'}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Editable Ground Symbol Properties */}
+              {selectedGroundIds.size > 0 && grounds.filter(g => selectedGroundIds.has(g.id)).map((ground) => (
+                <div key={ground.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Ground Symbol: {ground.id}</div>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>X Position:</label>
+                    <input
+                      type="number"
+                      value={ground.x.toFixed(2)}
+                      onChange={(e) => {
+                        const newX = parseFloat(e.target.value);
+                        if (!isNaN(newX)) {
+                          setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, x: newX } : g));
+                        }
+                      }}
+                      style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
+                      step="0.01"
+                    />
+                  </div>
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Y Position:</label>
+                    <input
+                      type="number"
+                      value={ground.y.toFixed(2)}
+                      onChange={(e) => {
+                        const newY = parseFloat(e.target.value);
+                        if (!isNaN(newY)) {
+                          setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, y: newY } : g));
+                        }
+                      }}
+                      style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
+                      step="0.01"
+                    />
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                    <div>Color: {ground.color}</div>
+                    <div>Size: {ground.size}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
