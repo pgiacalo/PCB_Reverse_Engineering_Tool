@@ -2548,42 +2548,63 @@ function App() {
       if (bottomImage) {
         setBottomImage({ ...bottomImage, x: 0, y: 0 });
       }
-      // Center the image in the actual visible canvas area
+      // Center the image in the actual visible canvas area (excluding toolbar/layers overlay)
       // Get the canvas element's actual visible size and position on screen
       const canvas = canvasRef.current;
+      const container = canvasContainerRef.current;
       let panX = 0;
       let panY = 0;
-      if (canvas) {
-        // Get the actual visible bounding rectangle of the canvas element
+      if (canvas && container) {
+        // Get the actual visible bounding rectangles
         const canvasRect = canvas.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const contentWidth = canvas.width - 2 * CONTENT_BORDER;
         const contentHeight = canvas.height - 2 * CONTENT_BORDER;
         
-        // The visible center of the canvas (in screen coordinates, relative to canvas top-left)
-        // This accounts for the actual rendered size of the canvas, not the container
-        const visibleCenterX = canvasRect.width / 2;
-        const visibleCenterY = canvasRect.height / 2;
+        // Toolbar and layers panel positions (absolute within container)
+        // Toolbar: left: 6, width: 44
+        // Layers panel: left: 56, width: 168
+        const LAYERS_LEFT = 56;
+        const LAYERS_WIDTH = 168;
+        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (230px)
+        
+        // Calculate the visible area (canvas area not covered by toolbar/layers)
+        // The canvas starts at the container's left edge, but the left portion is covered
+        const canvasLeftOffset = canvasRect.left - containerRect.left; // Canvas position relative to container
+        const visibleAreaStart = LEFT_OVERLAY - canvasLeftOffset; // Where visible area starts in canvas coordinates
+        const visibleAreaWidth = canvasRect.width - Math.max(0, visibleAreaStart); // Visible width
+        
+        // The visible center is at: visibleAreaStart + visibleAreaWidth / 2 (in screen pixels)
+        // But we need it relative to the canvas element's top-left
+        const visibleCenterXScreen = visibleAreaStart + visibleAreaWidth / 2;
+        const visibleCenterYScreen = canvasRect.height / 2; // Vertical center of canvas
         
         // Image center in canvas content coordinates
         const imageCenterX = contentWidth / 2;
         const imageCenterY = contentHeight / 2;
         
-        // Pan needed to align image center with visible center
-        // viewPan is applied in canvas content coordinates (after CONTENT_BORDER translation)
-        // We need to convert the visible center from screen pixels to canvas content coordinates
-        // The canvas is scaled: canvasRect.width / canvas.width gives the scale factor
+        // Convert visible center from screen pixels to canvas content coordinates
         const scaleX = canvasRect.width / canvas.width;
         const scaleY = canvasRect.height / canvas.height;
         
-        // Visible center in canvas content coordinates (accounting for CONTENT_BORDER)
-        // The visible center in canvas pixels: visibleCenterX / scaleX
-        // But we need it in content coordinates (after CONTENT_BORDER offset)
-        const visibleCenterContentX = (visibleCenterX / scaleX) - CONTENT_BORDER;
-        const visibleCenterContentY = (visibleCenterY / scaleY) - CONTENT_BORDER;
+        // Visible center in canvas pixels (relative to canvas top-left)
+        const visibleCenterXCanvas = visibleCenterXScreen / scaleX;
+        const visibleCenterYCanvas = visibleCenterYScreen / scaleY;
+        
+        // Convert to content coordinates (after CONTENT_BORDER offset)
+        const visibleCenterContentX = visibleCenterXCanvas - CONTENT_BORDER;
+        const visibleCenterContentY = visibleCenterYCanvas - CONTENT_BORDER;
         
         // Pan to align image center with visible center
         panX = visibleCenterContentX - imageCenterX;
         panY = visibleCenterContentY - imageCenterY;
+      }
+      // Reset browser zoom to 100%
+      if (document.body) {
+        document.body.style.zoom = '1';
+      }
+      if (document.documentElement) {
+        document.documentElement.style.zoom = '1';
       }
       setViewPan({ x: panX, y: panY });
       setCurrentView('overlay');
@@ -3020,6 +3041,13 @@ function App() {
       }
     }
   }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, drawingStrokes, componentsTop, componentsBottom, drawingMode, finalizeTraceIfAny, traceToolLayer]);
+
+  // Clear image selection when switching away from transform tool
+  React.useEffect(() => {
+    if (currentTool !== 'transform') {
+      setSelectedImageForTransform(null);
+    }
+  }, [currentTool]);
 
   // Add keyboard event listener for arrow keys
   React.useEffect(() => {
@@ -4174,17 +4202,17 @@ function App() {
           {openMenu === 'transform' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
               <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
-              <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>Top Image</button>
-              <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>Bottom Image</button>
+              <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
+              <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { if (selectedImageForTransform) updateImageTransform(selectedImageForTransform, { flipX: !(selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false)) }); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Horizontal Flip</button>
               <button onClick={() => { if (selectedImageForTransform) updateImageTransform(selectedImageForTransform, { flipY: !(selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false)) }); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Vertical Flip</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setTransformMode('nudge'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Mode: Nudge</button>
-              <button onClick={() => { setTransformMode('scale'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Mode: Scale</button>
-              <button onClick={() => { setTransformMode('rotate'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Mode: Rotate</button>
-              <button onClick={() => { setTransformMode('slant'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Mode: Slant</button>
-              <button onClick={() => { setTransformMode('keystone'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Mode: Keystone</button>
+              <button onClick={() => { setTransformMode('nudge'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'nudge' ? '✓ ' : ''}Mode: Nudge</button>
+              <button onClick={() => { setTransformMode('scale'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'scale' ? '✓ ' : ''}Mode: Scale</button>
+              <button onClick={() => { setTransformMode('rotate'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'rotate' ? '✓ ' : ''}Mode: Rotate</button>
+              <button onClick={() => { setTransformMode('slant'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'slant' ? '✓ ' : ''}Mode: Slant</button>
+              <button onClick={() => { setTransformMode('keystone'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'keystone' ? '✓ ' : ''}Mode: Keystone</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => {
                 setCurrentTool('transform');
@@ -4742,7 +4770,7 @@ function App() {
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
           <div style={{ position: 'absolute', top: 6, left: 56, bottom: 6, width: 168, padding: 8, display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#333', marginBottom: 2 }}>Layers</div>
-            <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedDrawingLayer === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
+            <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedImageForTransform === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div style={{ fontSize: 12, color: '#444', fontWeight: 600 }}>Top Image</div>
                 <label className="radio-label" style={{ margin: 0 }}>
@@ -4751,7 +4779,7 @@ function App() {
               </div>
               <canvas ref={topThumbRef} width={140} height={90} />
             </div>
-            <div onClick={() => setSelectedDrawingLayer('bottom')} title="Bottom layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedDrawingLayer === 'bottom' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
+            <div onClick={() => setSelectedDrawingLayer('bottom')} title="Bottom layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedImageForTransform === 'bottom' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div style={{ fontSize: 12, color: '#444', fontWeight: 600 }}>Bottom Image</div>
                 <label className="radio-label" style={{ margin: 0 }}>
