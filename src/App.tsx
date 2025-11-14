@@ -73,6 +73,8 @@ interface GroundSymbol {
   y: number;
   color: string;
   size: number;
+  type?: string; // Type of ground symbol (e.g., "GND", "AGND", "DGND", etc.)
+  pointId?: number; // globally unique point ID (for netlist connections)
 }
 interface PowerBus {
   id: string;
@@ -89,6 +91,8 @@ interface PowerSymbol {
   size: number;
   powerBusId: string; // Reference to which power bus this node belongs to
   layer: 'top' | 'bottom'; // Layer on which the power node is placed
+  type?: string; // Type of power symbol (e.g., "VCC", "VDD", "VSS", etc.)
+  pointId?: number; // globally unique point ID (for netlist connections)
 }
 type ViewMode = 'top' | 'bottom' | 'overlay';
 type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground' | 'power';
@@ -767,9 +771,15 @@ function App() {
       const hitTolerance = Math.max(6 / viewScale, 4);
       let hitPower: PowerSymbol | null = null;
       for (const p of powers) {
-        const radius = Math.max(1, p.size / 2);
+        const radius = Math.max(6, p.size / 2);
+        const lineExtension = radius * 0.8;
+        const hitRadius = radius + lineExtension; // Include extended lines in hit detection
         const d = Math.hypot(p.x - x, p.y - y);
-        if (d <= Math.max(radius, hitTolerance)) {
+        // Check if click is within circle or on extended lines (vertical or horizontal)
+        const onVerticalLine = Math.abs(x - p.x) <= hitTolerance && Math.abs(y - p.y) <= hitRadius;
+        const onHorizontalLine = Math.abs(y - p.y) <= hitTolerance && Math.abs(x - p.x) <= hitRadius;
+        const inCircle = d <= Math.max(radius, hitTolerance);
+        if (inCircle || onVerticalLine || onHorizontalLine) {
           hitPower = p;
           break;
         }
@@ -800,9 +810,15 @@ function App() {
       // Check for ground node hit
       let hitGround: GroundSymbol | null = null;
       for (const g of grounds) {
-        const radius = Math.max(1, (g.size || 18) / 2);
+        const radius = Math.max(6, (g.size || 18) / 2);
+        const lineExtension = radius * 0.8;
+        const hitRadius = radius + lineExtension; // Include extended lines in hit detection
         const d = Math.hypot(g.x - x, g.y - y);
-        if (d <= Math.max(radius, hitTolerance)) {
+        // Check if click is within circle or on extended lines (vertical or horizontal)
+        const onVerticalLine = Math.abs(x - g.x) <= hitTolerance && Math.abs(y - g.y) <= hitRadius;
+        const onHorizontalLine = Math.abs(y - g.y) <= hitTolerance && Math.abs(x - g.x) <= hitRadius;
+        const inCircle = d <= Math.max(radius, hitTolerance);
+        if (inCircle || onVerticalLine || onHorizontalLine) {
           hitGround = g;
           break;
         }
@@ -973,10 +989,12 @@ function App() {
           id: `power-${Date.now()}-${Math.random()}`,
           x: snapped.x,
           y: snapped.y,
-          color: bus.color,
+          color: '#ff0000', // Power symbols are always red
           size: brushSize,
           powerBusId: bus.id,
           layer: selectedDrawingLayer,
+          type: `${bus.voltage} Power Node`, // Auto-populate type with voltage
+          pointId: generatePointId(), // Generate unique integer Node ID
         };
         setPowers(prev => [...prev, p]);
       }
@@ -1006,6 +1024,8 @@ function App() {
         y: gy,
         color: '#000000', // Ground symbols are always black
         size: toolRegistry.get('ground')?.settings.size || 18,
+        type: 'Ground Node', // Auto-populate type
+        pointId: generatePointId(), // Generate unique integer Node ID
       };
       setGrounds(prev => [...prev, g]);
       return;
@@ -1098,9 +1118,15 @@ function App() {
       const hitTolerance = Math.max(6 / viewScale, 4);
       let hitPower: PowerSymbol | null = null;
       for (const p of powers) {
-        const radius = Math.max(1, p.size / 2);
+        const radius = Math.max(6, p.size / 2);
+        const lineExtension = radius * 0.8;
+        const hitRadius = radius + lineExtension; // Include extended lines in hit detection
         const d = Math.hypot(p.x - x, p.y - y);
-        if (d <= Math.max(radius, hitTolerance)) {
+        // Check if click is within circle or on extended lines (vertical or horizontal)
+        const onVerticalLine = Math.abs(x - p.x) <= hitTolerance && Math.abs(y - p.y) <= hitRadius;
+        const onHorizontalLine = Math.abs(y - p.y) <= hitTolerance && Math.abs(x - p.x) <= hitRadius;
+        const inCircle = d <= Math.max(radius, hitTolerance);
+        if (inCircle || onVerticalLine || onHorizontalLine) {
           hitPower = p;
           break;
         }
@@ -1371,14 +1397,13 @@ function App() {
             const minY = y - half;
             const maxY = y + half;
             const intersects = (g: GroundSymbol): boolean => {
-              const unit = Math.max(6, (g.size || 18));
-              const vLen = unit * 0.9;
-              const barG = unit * 0.24;
-              const width = unit * 1.6;
-              const bbMinX = g.x - width / 2;
-              const bbMaxX = g.x + width / 2;
-              const bbMinY = g.y;
-              const bbMaxY = g.y + vLen + barG * 2;
+              const radius = Math.max(6, (g.size || 18) / 2);
+              const lineExtension = radius * 0.8;
+              const hitRadius = radius + lineExtension; // Include extended lines
+              const bbMinX = g.x - hitRadius;
+              const bbMaxX = g.x + hitRadius;
+              const bbMinY = g.y - hitRadius;
+              const bbMaxY = g.y + hitRadius;
               const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
               return !disjoint;
             };
@@ -1552,16 +1577,25 @@ function App() {
         }
         // Power nodes hit-test
         const powerInRect = (p: PowerSymbol) => {
-          const radius = Math.max(1, p.size / 2);
-          return (p.x - radius) <= maxX && (p.x + radius) >= minX && (p.y - radius) <= maxY && (p.y + radius) >= minY;
+          const radius = Math.max(6, p.size / 2);
+          const lineExtension = radius * 0.8;
+          const hitRadius = radius + lineExtension; // Include extended lines in selection
+          return (p.x - hitRadius) <= maxX && (p.x + hitRadius) >= minX && (p.y - hitRadius) <= maxY && (p.y + hitRadius) >= minY;
         };
         if (tiny) {
           // Click selection: find nearest power node
           let bestPowerHit: { id: string; dist: number } | null = null;
           for (const p of powers) {
-            const radius = Math.max(1, p.size / 2);
-            const dist = Math.hypot(p.x - start.x, p.y - start.y);
-            if (dist <= Math.max(radius, hitTolerance)) {
+            const radius = Math.max(6, p.size / 2);
+            const lineExtension = radius * 0.8;
+            const hitRadius = radius + lineExtension;
+            const d = Math.hypot(p.x - start.x, p.y - start.y);
+            // Check if click is within circle or on extended lines
+            const onVerticalLine = Math.abs(start.x - p.x) <= hitTolerance && Math.abs(start.y - p.y) <= hitRadius;
+            const onHorizontalLine = Math.abs(start.y - p.y) <= hitTolerance && Math.abs(start.x - p.x) <= hitRadius;
+            const inCircle = d <= Math.max(radius, hitTolerance);
+            if (inCircle || onVerticalLine || onHorizontalLine) {
+              const dist = Math.min(d, Math.abs(start.x - p.x) + Math.abs(start.y - p.y)); // Use Manhattan distance for line hits
               if (!bestPowerHit || dist < bestPowerHit.dist) {
                 bestPowerHit = { id: p.id, dist };
               }
@@ -1576,16 +1610,25 @@ function App() {
         }
         // Ground nodes hit-test
         const groundInRect = (g: GroundSymbol) => {
-          const radius = Math.max(1, (g.size || 18) / 2);
-          return (g.x - radius) <= maxX && (g.x + radius) >= minX && (g.y - radius) <= maxY && (g.y + radius) >= minY;
+          const radius = Math.max(6, (g.size || 18) / 2);
+          const lineExtension = radius * 0.8;
+          const hitRadius = radius + lineExtension; // Include extended lines in selection
+          return (g.x - hitRadius) <= maxX && (g.x + hitRadius) >= minX && (g.y - hitRadius) <= maxY && (g.y + hitRadius) >= minY;
         };
         if (tiny) {
           // Click selection: find nearest ground node
           let bestGroundHit: { id: string; dist: number } | null = null;
           for (const g of grounds) {
-            const radius = Math.max(1, (g.size || 18) / 2);
-            const dist = Math.hypot(g.x - start.x, g.y - start.y);
-            if (dist <= Math.max(radius, hitTolerance)) {
+            const radius = Math.max(6, (g.size || 18) / 2);
+            const lineExtension = radius * 0.8;
+            const hitRadius = radius + lineExtension;
+            const d = Math.hypot(g.x - start.x, g.y - start.y);
+            // Check if click is within circle or on extended lines
+            const onVerticalLine = Math.abs(start.x - g.x) <= hitTolerance && Math.abs(start.y - g.y) <= hitRadius;
+            const onHorizontalLine = Math.abs(start.y - g.y) <= hitTolerance && Math.abs(start.x - g.x) <= hitRadius;
+            const inCircle = d <= Math.max(radius, hitTolerance);
+            if (inCircle || onVerticalLine || onHorizontalLine) {
+              const dist = Math.min(d, Math.abs(start.x - g.x) + Math.abs(start.y - g.y)); // Use Manhattan distance for line hits
               if (!bestGroundHit || dist < bestGroundHit.dist) {
                 bestGroundHit = { id: g.id, dist };
               }
@@ -1899,43 +1942,51 @@ function App() {
     if (showPowerLayer && powers.length > 0) {
       const drawPower = (p: PowerSymbol) => {
         ctx.save();
-        // Find the power bus to get its color and voltage
+        // Find the power bus to get its voltage
         const bus = powerBuses.find(b => b.id === p.powerBusId);
-        const displayColor = bus?.color || p.color;
         const isSelected = selectedPowerIds.has(p.id);
-        ctx.strokeStyle = displayColor;
-        ctx.fillStyle = displayColor;
-        ctx.lineWidth = isSelected ? 3 : 2;
+        const powerColor = '#ff0000'; // Power symbols are always red
+        ctx.strokeStyle = powerColor;
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.lineCap = 'round';
-        const radius = p.size / 2;
+        const radius = Math.max(6, p.size / 2);
+        const lineExtension = radius * 0.8; // Lines extend outside the circle
+        
         // Draw selection highlight if selected
         if (isSelected) {
           ctx.strokeStyle = '#0066ff';
-          ctx.lineWidth = 4;
+          ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(p.x, p.y, radius + 3, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, radius + lineExtension + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
-        // Draw circle
-        ctx.strokeStyle = displayColor;
-        ctx.lineWidth = isSelected ? 3 : 2;
+        
+        // Draw empty circle (not filled)
+        ctx.strokeStyle = powerColor;
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
         ctx.stroke();
-        // Draw vertical lines (top and bottom)
+        
+        // Draw vertical line extending above and below the circle
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y - radius);
-        ctx.lineTo(p.x, p.y - radius * 0.6);
-        ctx.moveTo(p.x, p.y + radius);
-        ctx.lineTo(p.x, p.y + radius * 0.6);
+        ctx.moveTo(p.x, p.y - radius - lineExtension);
+        ctx.lineTo(p.x, p.y + radius + lineExtension);
         ctx.stroke();
+        
+        // Draw horizontal line extending left and right of the circle
+        ctx.beginPath();
+        ctx.moveTo(p.x - radius - lineExtension, p.y);
+        ctx.lineTo(p.x + radius + lineExtension, p.y);
+        ctx.stroke();
+        
         // Draw voltage label if bus is found
         if (bus) {
-          ctx.fillStyle = displayColor;
+          ctx.fillStyle = powerColor;
           ctx.font = `${Math.max(10, radius * 0.8)}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(bus.voltage, p.x, p.y + radius + 12);
+          ctx.fillText(bus.voltage, p.x, p.y + radius + lineExtension + 12);
         }
         ctx.restore();
       };
@@ -1945,50 +1996,41 @@ function App() {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
         const isSelected = selectedGroundIds.has(g.id);
-        ctx.strokeStyle = '#000000'; // Ground symbols are always black
+        const groundColor = '#000000'; // Ground symbols are always black
+        ctx.strokeStyle = groundColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.lineCap = 'round';
-        // Attachment point is the TOP of the vertical line at (g.x, g.y)
-        const unit = Math.max(6, (g.size || 18)); // base scale
-        const vLen = unit * 0.9;                 // vertical length
-        const barG = unit * 0.24;                // gap between bars
-        const w1 = unit * 1.6;                   // widths of bars
-        const w2 = unit * 1.0;
-        const w3 = unit * 0.6;
-        const radius = Math.max(1, unit / 2);
+        const radius = Math.max(6, (g.size || 18) / 2);
+        const lineExtension = radius * 0.8; // Lines extend outside the circle
+        
         // Draw selection highlight if selected
         if (isSelected) {
           ctx.strokeStyle = '#0066ff';
           ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(g.x, g.y, radius + 3, 0, Math.PI * 2);
+          ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
-        ctx.strokeStyle = '#000000'; // Ground symbols are always black
+        
+        // Draw empty circle (not filled)
+        ctx.strokeStyle = groundColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
-        // Vertical: from top (attachment) downward to first bar
         ctx.beginPath();
-        ctx.moveTo(g.x, g.y);
-        ctx.lineTo(g.x, g.y + vLen);
+        ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
         ctx.stroke();
-        // First (longest) bar at the bottom end of the vertical line
-        const y1 = g.y + vLen;
+        
+        // Draw vertical line extending above and below the circle
         ctx.beginPath();
-        ctx.moveTo(g.x - w1 / 2, y1);
-        ctx.lineTo(g.x + w1 / 2, y1);
+        ctx.moveTo(g.x, g.y - radius - lineExtension);
+        ctx.lineTo(g.x, g.y + radius + lineExtension);
         ctx.stroke();
-        // Second bar
-        const y2 = y1 + barG;
+        
+        // Draw horizontal line extending left and right of the circle
         ctx.beginPath();
-        ctx.moveTo(g.x - w2 / 2, y2);
-        ctx.lineTo(g.x + w2 / 2, y2);
+        ctx.moveTo(g.x - radius - lineExtension, g.y);
+        ctx.lineTo(g.x + radius + lineExtension, g.y);
         ctx.stroke();
-        // Third bar (shortest)
-        const y3 = y2 + barG;
-        ctx.beginPath();
-        ctx.moveTo(g.x - w3 / 2, y3);
-        ctx.lineTo(g.x + w3 / 2, y3);
-        ctx.stroke();
+        
         ctx.restore();
       };
       grounds.forEach(drawGround);
@@ -2495,7 +2537,6 @@ function App() {
         e.stopPropagation();
         
         const debugInfo: string[] = [];
-        debugInfo.push('=== Selected Objects Debug Info ===\n');
         
         // Check selected drawing strokes (vias, traces)
         if (selectedIds.size > 0) {
@@ -2508,15 +2549,19 @@ function App() {
               debugInfo.push(`Layer: ${stroke.layer}`);
               debugInfo.push(`Color: ${stroke.color}`);
               debugInfo.push(`Size: ${stroke.size}`);
-              debugInfo.push(`Points: ${stroke.points.length}`);
-              if (stroke.points.length > 0) {
-                stroke.points.forEach((p, idx) => {
-                  debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                });
-              }
+              // For vias, show just the center position (vias are always a single point)
               if (stroke.type === 'via' && stroke.points.length > 0) {
                 const point = stroke.points[0];
+                debugInfo.push(`Position: x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`);
                 debugInfo.push(`Node ID: node-${point.id}`);
+              } else {
+                // For traces, show points array
+                debugInfo.push(`Points: ${stroke.points.length}`);
+                if (stroke.points.length > 0) {
+                  stroke.points.forEach((p, idx) => {
+                    debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+                  });
+                }
               }
             } else {
               debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
@@ -3245,7 +3290,6 @@ function App() {
     if (!debugDialog.visible) return;
     
     const debugInfo: string[] = [];
-    debugInfo.push('=== Selected Objects Debug Info ===\n');
     
     // Check selected drawing strokes (vias, traces)
     if (selectedIds.size > 0) {
@@ -3258,15 +3302,19 @@ function App() {
           debugInfo.push(`Layer: ${stroke.layer}`);
           debugInfo.push(`Color: ${stroke.color}`);
           debugInfo.push(`Size: ${stroke.size}`);
-          debugInfo.push(`Points: ${stroke.points.length}`);
-          if (stroke.points.length > 0) {
-            stroke.points.forEach((p, idx) => {
-              debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-            });
-          }
+          // For vias, show just the center position (vias are always a single point)
           if (stroke.type === 'via' && stroke.points.length > 0) {
             const point = stroke.points[0];
+            debugInfo.push(`Position: x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`);
             debugInfo.push(`Node ID: node-${point.id}`);
+          } else {
+            // For traces, show points array
+            debugInfo.push(`Points: ${stroke.points.length}`);
+            if (stroke.points.length > 0) {
+              stroke.points.forEach((p, idx) => {
+                debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
+              });
+            }
           }
         } else {
           debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
@@ -3316,6 +3364,7 @@ function App() {
         const power = powers.find(p => p.id === id);
         if (power) {
           debugInfo.push(`\nID: ${power.id}`);
+          debugInfo.push(`Type: ${power.type || '(empty)'}`);
           debugInfo.push(`Position: x=${power.x.toFixed(2)}, y=${power.y.toFixed(2)}`);
           debugInfo.push(`Color: ${power.color}`);
           debugInfo.push(`Size: ${power.size}`);
@@ -3335,6 +3384,7 @@ function App() {
         const ground = grounds.find(g => g.id === id);
         if (ground) {
           debugInfo.push(`\nID: ${ground.id}`);
+          debugInfo.push(`Type: ${ground.type || '(empty)'}`);
           debugInfo.push(`Position: x=${ground.x.toFixed(2)}, y=${ground.y.toFixed(2)}`);
           debugInfo.push(`Color: ${ground.color}`);
           debugInfo.push(`Size: ${ground.size}`);
@@ -3625,7 +3675,7 @@ function App() {
         ? 'magnify'
         : currentTool === 'ground'
         ? 'ground'
-        : currentTool === 'power' && selectedPowerBusId
+        : currentTool === 'power'
         ? 'power'
         : currentTool === 'component'
         ? 'component'
@@ -3647,10 +3697,6 @@ function App() {
     const r = diameterPx / 2;
     ctx.clearRect(0,0,size,size);
     
-    // Get power bus color if power tool is active
-    const powerBusColor = kind === 'power' && selectedPowerBusId 
-      ? (powerBuses.find(b => b.id === selectedPowerBusId)?.color || brushColor)
-      : brushColor;
     if (kind === 'via') {
       // Outer ring
       ctx.strokeStyle = brushColor;
@@ -3708,44 +3754,50 @@ function App() {
         ctx.stroke();
       }
     } else if (kind === 'ground') {
-      // Draw miniature ground symbol cursor with top attachment at center
-      const unit = Math.max(8, diameterPx); // scale by brush size for visibility
-      const vLen = unit * 0.9;
-      const barG = unit * 0.24;
-      const w1 = unit * 1.6;
-      const w2 = unit * 1.0;
-      const w3 = unit * 0.6;
-      ctx.strokeStyle = brushColor;
+      // Draw ground symbol cursor: empty black circle with extending vertical and horizontal lines
+      ctx.strokeStyle = '#000000'; // Ground symbols are always black
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-      // Vertical from center downward
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx, cy + vLen * 0.7);
-      ctx.stroke();
-      // Bars
-      const y1 = cy + vLen * 0.7;
-      const y2 = y1 + barG * 0.7;
-      const y3 = y2 + barG * 0.7;
-      ctx.beginPath(); ctx.moveTo(cx - w1 * 0.4, y1); ctx.lineTo(cx + w1 * 0.4, y1); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx - w2 * 0.4, y2); ctx.lineTo(cx + w2 * 0.4, y2); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(cx - w3 * 0.4, y3); ctx.lineTo(cx + w3 * 0.4, y3); ctx.stroke();
-    } else if (kind === 'power') {
-      // Draw miniature power symbol cursor (circle with vertical lines at top and bottom)
-      ctx.strokeStyle = powerBusColor;
-      ctx.fillStyle = powerBusColor;
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      // Draw circle
+      const lineExtension = r * 0.8; // Lines extend outside the circle
+      
+      // Draw empty circle (not filled)
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.stroke();
-      // Draw vertical lines (top and bottom)
+      
+      // Draw vertical line extending above and below the circle
       ctx.beginPath();
-      ctx.moveTo(cx, cy - r);
-      ctx.lineTo(cx, cy - r * 0.6);
-      ctx.moveTo(cx, cy + r);
-      ctx.lineTo(cx, cy + r * 0.6);
+      ctx.moveTo(cx, cy - r - lineExtension);
+      ctx.lineTo(cx, cy + r + lineExtension);
+      ctx.stroke();
+      
+      // Draw horizontal line extending left and right of the circle
+      ctx.beginPath();
+      ctx.moveTo(cx - r - lineExtension, cy);
+      ctx.lineTo(cx + r + lineExtension, cy);
+      ctx.stroke();
+    } else if (kind === 'power') {
+      // Draw power symbol cursor: empty red circle with extending vertical and horizontal lines
+      ctx.strokeStyle = '#ff0000'; // Power symbols are always red
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      const lineExtension = r * 0.8; // Lines extend outside the circle
+      
+      // Draw empty circle (not filled)
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw vertical line extending above and below the circle
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r - lineExtension);
+      ctx.lineTo(cx, cy + r + lineExtension);
+      ctx.stroke();
+      
+      // Draw horizontal line extending left and right of the circle
+      ctx.beginPath();
+      ctx.moveTo(cx - r - lineExtension, cy);
+      ctx.lineTo(cx + r + lineExtension, cy);
       ctx.stroke();
     } else if (kind === 'component') {
       // Draw square component icon with abbreviation text
@@ -4288,16 +4340,23 @@ function App() {
       if (project.drawing?.grounds) {
         const loadedGrounds = project.drawing.grounds as GroundSymbol[];
         // Filter out ground symbols with invalid coordinates (in border area or negative)
-        const validGrounds = loadedGrounds.filter(g => {
-          const isValid = g.y >= 0 && g.x >= 0 && 
-                         typeof g.x === 'number' && typeof g.y === 'number' && 
-                         !isNaN(g.x) && !isNaN(g.y) &&
-                         isFinite(g.x) && isFinite(g.y);
-          if (!isValid) {
-            console.warn(`Filtered out invalid ground symbol at (${g.x}, ${g.y}) - likely in border area or invalid coordinates`);
-          }
-          return isValid;
-        });
+        // Also ensure pointId exists (for legacy projects without it)
+        const validGrounds = loadedGrounds
+          .map(g => {
+            // Ensure pointId exists (for legacy projects without it)
+            const pointId = g.pointId || generatePointId();
+            return { ...g, pointId };
+          })
+          .filter(g => {
+            const isValid = g.y >= 0 && g.x >= 0 && 
+                           typeof g.x === 'number' && typeof g.y === 'number' && 
+                           !isNaN(g.x) && !isNaN(g.y) &&
+                           isFinite(g.x) && isFinite(g.y);
+            if (!isValid) {
+              console.warn(`Filtered out invalid ground symbol at (${g.x}, ${g.y}) - likely in border area or invalid coordinates`);
+            }
+            return isValid;
+          });
         setGrounds(validGrounds);
       }
       // Load power buses first (needed for legacy power node migration)
@@ -4312,11 +4371,13 @@ function App() {
         // Also filter out power nodes with invalid coordinates (in border area or negative)
         const powersWithBusId = loadedPowers
           .map(p => {
+            // Ensure pointId exists (for legacy projects without it)
+            const pointId = p.pointId || generatePointId();
             if (!p.powerBusId) {
               // Assign to first power bus or create a default one
-              return { ...p, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
+              return { ...p, pointId, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
             }
-            return { ...p, layer: p.layer || 'top' };
+            return { ...p, pointId, layer: p.layer || 'top' };
           })
           .filter(p => {
             // Filter out power nodes with negative coordinates or invalid values
@@ -4798,14 +4859,8 @@ function App() {
             </button>
             {/* Power tool */}
             <button onClick={() => setCurrentTool('power')} title="Draw Power (P)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'power' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'power' ? '#e6f0ff' : '#fff', color: '#222' }}>
-              {/* Power symbol icon */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <g stroke={toolRegistry.get('power')?.settings.color || '#ff0000'} strokeWidth="2" strokeLinecap="round" fill="none">
-                  <circle cx="12" cy="12" r="8" />
-                  <line x1="12" y1="6" x2="12" y2="10" />
-                  <line x1="12" y1="14" x2="12" y2="18" />
-                </g>
-              </svg>
+              {/* Power symbol icon - red V for volts */}
+              <span style={{ color: '#ff0000', fontSize: '18px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
             </button>
             {/* Ground tool */}
             <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
@@ -6033,12 +6088,37 @@ function App() {
                 color: '#000',
               }}
             >
-              {/* Display text info for non-editable items */}
+              {/* Display text info for non-editable items (excluding Power and Ground which have formatted UI below) */}
               <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {debugDialog.text.split('\n').filter(line => 
-                  !line.includes('Position: x=') || 
-                  (!selectedPowerIds.size && !selectedGroundIds.size)
-                ).join('\n')}
+                {(() => {
+                  const lines = debugDialog.text.split('\n');
+                  const filtered: string[] = [];
+                  let skipSection = false;
+                  
+                  for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    // Start skipping when we hit Power or Ground section header
+                    if (line.includes('--- Power Symbols') || line.includes('--- Ground Symbols')) {
+                      skipSection = true;
+                      continue;
+                    }
+                    // Stop skipping when we hit the next section or empty line followed by new section
+                    if (skipSection) {
+                      if (line.trim() === '' && i + 1 < lines.length && lines[i + 1].includes('--- ')) {
+                        skipSection = false;
+                        continue;
+                      }
+                      if (line.includes('--- ') && !line.includes('Power Symbols') && !line.includes('Ground Symbols')) {
+                        skipSection = false;
+                      } else {
+                        continue; // Skip this line
+                      }
+                    }
+                    filtered.push(line);
+                  }
+                  
+                  return filtered.join('\n');
+                })()}
               </pre>
               
               {/* Editable Power Symbol Properties */}
@@ -6048,36 +6128,20 @@ function App() {
                   <div key={power.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                     <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Power Symbol: {power.id}</div>
                     <div style={{ marginBottom: '8px' }}>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>X Position:</label>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Type:</label>
                       <input
-                        type="number"
-                        value={power.x.toFixed(2)}
+                        type="text"
+                        value={power.type || ''}
                         onChange={(e) => {
-                          const newX = parseFloat(e.target.value);
-                          if (!isNaN(newX)) {
-                            setPowers(prev => prev.map(p => p.id === power.id ? { ...p, x: newX } : p));
-                          }
+                          setPowers(prev => prev.map(p => p.id === power.id ? { ...p, type: e.target.value } : p));
                         }}
+                        placeholder="e.g., VCC, VDD, VSS"
                         style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                        step="0.01"
-                      />
-                    </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Y Position:</label>
-                      <input
-                        type="number"
-                        value={power.y.toFixed(2)}
-                        onChange={(e) => {
-                          const newY = parseFloat(e.target.value);
-                          if (!isNaN(newY)) {
-                            setPowers(prev => prev.map(p => p.id === power.id ? { ...p, y: newY } : p));
-                          }
-                        }}
-                        style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                        step="0.01"
                       />
                     </div>
                     <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
+                      <div>Node ID: node-{power.pointId || '(not assigned)'}</div>
                       <div>Color: {power.color}</div>
                       <div>Size: {power.size}</div>
                       <div>Layer: {power.layer}</div>
@@ -6092,36 +6156,20 @@ function App() {
                 <div key={ground.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                   <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Ground Symbol: {ground.id}</div>
                   <div style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>X Position:</label>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Type:</label>
                     <input
-                      type="number"
-                      value={ground.x.toFixed(2)}
+                      type="text"
+                      value={ground.type || ''}
                       onChange={(e) => {
-                        const newX = parseFloat(e.target.value);
-                        if (!isNaN(newX)) {
-                          setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, x: newX } : g));
-                        }
+                        setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, type: e.target.value } : g));
                       }}
+                      placeholder="e.g., GND, AGND, DGND"
                       style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                      step="0.01"
-                    />
-                  </div>
-                  <div style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Y Position:</label>
-                    <input
-                      type="number"
-                      value={ground.y.toFixed(2)}
-                      onChange={(e) => {
-                        const newY = parseFloat(e.target.value);
-                        if (!isNaN(newY)) {
-                          setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, y: newY } : g));
-                        }
-                      }}
-                      style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                      step="0.01"
                     />
                   </div>
                   <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                    <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
+                    <div>Node ID: node-{ground.pointId || '(not assigned)'}</div>
                     <div>Color: {ground.color}</div>
                     <div>Size: {ground.size}</div>
                   </div>
