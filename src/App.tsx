@@ -2654,10 +2654,14 @@ function App() {
     // Reset view and selection (O key)
     if (e.key === 'O' || e.key === 'o') {
       // Ignore if user is typing in an input field, textarea, or contenteditable
+      // But allow shortcuts when focus is on checkboxes, radio buttons, or range sliders
       const active = document.activeElement as HTMLElement | null;
       const isEditing =
         !!active &&
-        ((active.tagName === 'INPUT' && (active as HTMLInputElement).type !== 'range') ||
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
           active.tagName === 'TEXTAREA' ||
           active.isContentEditable);
       if (isEditing) {
@@ -2889,10 +2893,15 @@ function App() {
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      // But allow shortcuts when focus is on checkboxes, radio buttons, or range sliders
       const active = document.activeElement as HTMLElement | null;
       const isEditing =
         !!active &&
-        ((active.tagName === 'INPUT' && (active as HTMLInputElement).type !== 'range') ||
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
           active.tagName === 'TEXTAREA' ||
           active.isContentEditable);
       if (!isEditing) {
