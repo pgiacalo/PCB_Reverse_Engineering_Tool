@@ -249,8 +249,14 @@ function App() {
   const [transparency, setTransparency] = useState(50);
   const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
   const [currentTool, setCurrentTool] = useState<Tool>('none');
-  const [brushColor, setBrushColor] = useState('#ff0000');
-  const [brushSize, setBrushSize] = useState(10);
+  const [brushColor, setBrushColor] = useState('#008080'); // Default to Teal for Top trace
+  const [brushSize, setBrushSize] = useState(6); // Default to 6px
+  // Trace colors per layer (default: Teal for Top, Dark Blue for Bottom)
+  const [topTraceColor, setTopTraceColor] = useState('#008080'); // Teal
+  const [bottomTraceColor, setBottomTraceColor] = useState('#00008b'); // Dark Blue
+  // Trace sizes per layer (default: 6px for both Top and Bottom)
+  const [topTraceSize, setTopTraceSize] = useState(6);
+  const [bottomTraceSize, setBottomTraceSize] = useState(6);
   const [showColorPicker, setShowColorPicker] = useState(false);
   
   // Tool registry - centralized tool definitions with settings as attributes
@@ -370,11 +376,11 @@ function App() {
   const [, setViaOrderBottom] = useState<string[]>([]);
   
   // Lock states
-  const [isImagesLocked, setIsImagesLocked] = useState(false);
+  const [areImagesLocked, setAreImagesLocked] = useState(false);
   const [areViasLocked, setAreViasLocked] = useState(false);
   const [areTracesLocked, setAreTracesLocked] = useState(false);
   const [areComponentsLocked, setAreComponentsLocked] = useState(false);
-  const [isGroundLocked, setIsGroundLocked] = useState(false);
+  const [areGroundNodesLocked, setAreGroundNodesLocked] = useState(false);
   const [arePowerNodesLocked, setArePowerNodesLocked] = useState(false);
   const [, setTraceOrderTop] = useState<string[]>([]);
   const [, setTraceOrderBottom] = useState<string[]>([]);
@@ -441,9 +447,23 @@ function App() {
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
   const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
+  const [showAutoSaveSubmenu, setShowAutoSaveSubmenu] = useState(false);
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
   const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
+  // Auto Save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(null); // Interval in minutes
+  const [autoSaveDirHandle, setAutoSaveDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [autoSaveBaseName, setAutoSaveBaseName] = useState<string>('');
+  const autoSaveIntervalRef = useRef<number | null>(null);
+  // Track if there have been changes since the last auto save
+  const hasChangesSinceLastAutoSaveRef = useRef<boolean>(false);
+  // Track current project file path/name
+  const [currentProjectFilePath, setCurrentProjectFilePath] = useState<string>('');
+  // Track auto-saved file history for navigation
+  const [autoSaveFileHistory, setAutoSaveFileHistory] = useState<string[]>([]);
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -946,7 +966,7 @@ function App() {
       console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       // Don't start transforming if images are locked
-      if (isImagesLocked) return;
+      if (areImagesLocked) return;
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
@@ -1389,7 +1409,7 @@ function App() {
         }
         // Also erase ground symbols intersecting the eraser square
         // Don't erase ground if locked
-        if (!isGroundLocked) {
+        if (!areGroundNodesLocked) {
           setGrounds(prev => {
             const half = brushSize / 2;
             const minX = x - half;
@@ -1414,7 +1434,7 @@ function App() {
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
       // Don't allow transforms if images are locked
-      if (isImagesLocked) return;
+      if (areImagesLocked) return;
       const deltaX = x - transformStartPos.x;
       const deltaY = y - transformStartPos.y;
       
@@ -1434,7 +1454,7 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, isImagesLocked, areViasLocked, areTracesLocked, arePowerNodesLocked, isGroundLocked]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -2411,13 +2431,13 @@ function App() {
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom', updates: Partial<PCBImage>) => {
     // Don't allow transforms if images are locked
-    if (isImagesLocked) return;
+    if (areImagesLocked) return;
     if (type === 'top' && topImage) {
       setTopImage(prev => prev ? { ...prev, ...updates } : null);
     } else if (type === 'bottom' && bottomImage) {
       setBottomImage(prev => prev ? { ...prev, ...updates } : null);
     }
-  }, [topImage, bottomImage, isImagesLocked]);
+  }, [topImage, bottomImage, areImagesLocked]);
 
   const resetImageTransform = useCallback(() => {
     // Reset only the selected image to its original transform
@@ -2453,7 +2473,7 @@ function App() {
       }
       if (selectedComponentIds.size > 0 && areComponentsLocked) return;
       if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-      if (selectedGroundIds.size > 0 && isGroundLocked) return;
+      if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
       
       setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
       if (selectedComponentIds.size > 0) {
@@ -2467,9 +2487,20 @@ function App() {
         setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
       }
     } else {
-      setBrushSize(b => Math.min(40, b + 1));
+      setBrushSize(b => {
+        const newSize = Math.min(40, b + 1);
+        // If trace tool is active, save size to the appropriate layer
+        if (currentTool === 'draw' && drawingMode === 'trace') {
+          if (selectedDrawingLayer === 'top') {
+            setTopTraceSize(newSize);
+          } else {
+            setBottomTraceSize(newSize);
+          }
+        }
+        return newSize;
+      });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, isGroundLocked]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer]);
 
   const decreaseSize = useCallback(() => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
@@ -2482,7 +2513,7 @@ function App() {
       }
       if (selectedComponentIds.size > 0 && areComponentsLocked) return;
       if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-      if (selectedGroundIds.size > 0 && isGroundLocked) return;
+      if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
       
       setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
       if (selectedComponentIds.size > 0) {
@@ -2496,9 +2527,20 @@ function App() {
         setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
       }
     } else {
-      setBrushSize(b => Math.max(1, b - 1));
+      setBrushSize(b => {
+        const newSize = Math.max(1, b - 1);
+        // If trace tool is active, save size to the appropriate layer
+        if (currentTool === 'draw' && drawingMode === 'trace') {
+          if (selectedDrawingLayer === 'top') {
+            setTopTraceSize(newSize);
+          } else {
+            setBottomTraceSize(newSize);
+          }
+        }
+        return newSize;
+      });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, isGroundLocked]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Ignore keyboard shortcuts if user is typing in an input field, textarea, or contenteditable
@@ -2530,9 +2572,9 @@ function App() {
       return;
     }
     
-    // Debug: Display properties of selected objects (Ctrl+Shift+I)
+    // Detailed Information: Display properties of selected objects (Cmd+I / Ctrl+I)
     if (e.key === 'I' || e.key === 'i') {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
         
@@ -2540,104 +2582,12 @@ function App() {
         
         // Check selected drawing strokes (vias, traces)
         if (selectedIds.size > 0) {
-          debugInfo.push(`\n--- Drawing Strokes (${selectedIds.size} selected) ---`);
-          for (const id of selectedIds) {
-            const stroke = drawingStrokes.find(s => s.id === id);
-            if (stroke) {
-              debugInfo.push(`\nID: ${stroke.id}`);
-              debugInfo.push(`Type: ${stroke.type || 'unknown'}`);
-              debugInfo.push(`Layer: ${stroke.layer}`);
-              debugInfo.push(`Color: ${stroke.color}`);
-              debugInfo.push(`Size: ${stroke.size}`);
-              // For vias, show just the center position (vias are always a single point)
-              if (stroke.type === 'via' && stroke.points.length > 0) {
-                const point = stroke.points[0];
-                debugInfo.push(`Position: x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`);
-                debugInfo.push(`Node ID: node-${point.id}`);
-              } else {
-                // For traces, show points array
-                debugInfo.push(`Points: ${stroke.points.length}`);
-                if (stroke.points.length > 0) {
-                  stroke.points.forEach((p, idx) => {
-                    debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-                  });
-                }
-              }
-            } else {
-              debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
-            }
-          }
+          // Drawing strokes are now displayed in formatted UI sections below
+          // No need to add to debugInfo text
         }
         
-        // Check selected components
-        if (selectedComponentIds.size > 0) {
-          debugInfo.push(`\n--- Components (${selectedComponentIds.size} selected) ---`);
-          for (const id of selectedComponentIds) {
-            const compTop = componentsTop.find(c => c.id === id);
-            const compBottom = componentsBottom.find(c => c.id === id);
-            const comp = compTop || compBottom;
-            if (comp) {
-              debugInfo.push(`\nID: ${comp.id}`);
-              debugInfo.push(`Type: ${comp.componentType}`);
-              debugInfo.push(`Layer: ${comp.layer}`);
-              debugInfo.push(`Designator: ${comp.designator || '(empty)'}`);
-              debugInfo.push(`Abbreviation: ${(comp as any).abbreviation || '(empty)'}`);
-              debugInfo.push(`Position: x=${comp.x.toFixed(2)}, y=${comp.y.toFixed(2)}`);
-              debugInfo.push(`Color: ${comp.color}`);
-              debugInfo.push(`Size: ${comp.size}`);
-              debugInfo.push(`Pin Count: ${comp.pinCount}`);
-              if (comp.pinConnections && comp.pinConnections.length > 0) {
-                debugInfo.push(`Pin Connections:`);
-                comp.pinConnections.forEach((conn, idx) => {
-                  debugInfo.push(`  Pin ${idx + 1}: ${conn || '(not connected)'}`);
-                });
-              }
-              if ('manufacturer' in comp) {
-                debugInfo.push(`Manufacturer: ${(comp as any).manufacturer || '(empty)'}`);
-              }
-              if ('partNumber' in comp) {
-                debugInfo.push(`Part Number: ${(comp as any).partNumber || '(empty)'}`);
-              }
-            } else {
-              debugInfo.push(`\nID: ${id} (not found in components)`);
-            }
-          }
-        }
-        
-        // Check selected power symbols
-        if (selectedPowerIds.size > 0) {
-          debugInfo.push(`\n--- Power Symbols (${selectedPowerIds.size} selected) ---`);
-          for (const id of selectedPowerIds) {
-            const power = powers.find(p => p.id === id);
-            if (power) {
-              debugInfo.push(`\nID: ${power.id}`);
-              debugInfo.push(`Position: x=${power.x.toFixed(2)}, y=${power.y.toFixed(2)}`);
-              debugInfo.push(`Color: ${power.color}`);
-              debugInfo.push(`Size: ${power.size}`);
-              debugInfo.push(`Layer: ${power.layer}`);
-              const bus = powerBuses.find(b => b.id === power.powerBusId);
-              debugInfo.push(`Power Bus: ${bus?.name || power.powerBusId || '(unknown)'}`);
-            } else {
-              debugInfo.push(`\nID: ${id} (not found in powers)`);
-            }
-          }
-        }
-        
-        // Check selected ground symbols
-        if (selectedGroundIds.size > 0) {
-          debugInfo.push(`\n--- Ground Symbols (${selectedGroundIds.size} selected) ---`);
-          for (const id of selectedGroundIds) {
-            const ground = grounds.find(g => g.id === id);
-            if (ground) {
-              debugInfo.push(`\nID: ${ground.id}`);
-              debugInfo.push(`Position: x=${ground.x.toFixed(2)}, y=${ground.y.toFixed(2)}`);
-              debugInfo.push(`Color: ${ground.color}`);
-              debugInfo.push(`Size: ${ground.size}`);
-            } else {
-              debugInfo.push(`\nID: ${id} (not found in grounds)`);
-            }
-          }
-        }
+        // Components, Power, and Ground symbols are now displayed in formatted UI sections below
+        // No need to add to debugInfo text
         
         if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
           debugInfo.push('\nNo objects selected.');
@@ -2786,7 +2736,7 @@ function App() {
       }
       if (selectedGroundIds.size > 0) {
         // Don't delete if ground is locked
-        if (!isGroundLocked) {
+        if (!areGroundNodesLocked) {
           setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
           setSelectedGroundIds(new Set());
         }
@@ -2932,7 +2882,23 @@ function App() {
             e.preventDefault();
             setDrawingMode('trace');
             setCurrentTool('draw');
-            setSelectedDrawingLayer(traceToolLayer);
+            // Default to Top layer, but use last choice if available
+            const layerToUse = traceToolLayer || 'top';
+            setSelectedDrawingLayer(layerToUse);
+            // Set brush color and size to the values for the selected layer (default to 6 if not set)
+            const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
+            // Ensure minimum size of 6 for both layers
+            const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
+            const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
+            const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
+            // If sizes were less than 6, update them
+            if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
+              setTopTraceSize(6);
+            } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
+              setBottomTraceSize(6);
+            }
+            setBrushColor(colorForLayer);
+            setBrushSize(sizeForLayer);
             setShowTraceLayerChooser(true);
             return;
           case 'c':
@@ -3191,7 +3157,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -3212,11 +3178,47 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, isGroundLocked, powers, grounds, increaseSize, decreaseSize]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize]);
+
+  // Consolidated initialization function - sets all application defaults
+  // This is used on app startup, browser refresh, and when creating a new project
+  const initializeApplicationDefaults = useCallback(() => {
+    // Reset trace colors and sizes to defaults
+    setTopTraceColor('#008080'); // Teal
+    setBottomTraceColor('#00008b'); // Dark Blue
+    setTopTraceSize(6);
+    setBottomTraceSize(6);
+    setTraceToolLayer('top'); // Reset to top layer
+    // Set brush color and size to match top layer defaults
+    setBrushColor('#008080'); // Teal
+    setBrushSize(6);
+    // Reset power buses to defaults
+    setPowerBuses([
+      { id: 'powerbus-1', name: '+3.3VDC', voltage: '+3.3VDC', color: '#ff0000' },
+      { id: 'powerbus-2', name: '+5VDC', voltage: '+5VDC', color: '#ff0000' },
+    ]);
+    // Reset locks
+    setAreImagesLocked(false);
+    setAreViasLocked(false);
+    setAreTracesLocked(false);
+    setAreComponentsLocked(false);
+    setAreGroundNodesLocked(false);
+    setArePowerNodesLocked(false);
+    // Reset view and tool settings
+    setSelectedDrawingLayer('top');
+    setCurrentTool('select');
+    setTransparency(50);
+    setIsTransparencyCycling(false);
+    setCurrentView('overlay');
+    // Reset point ID counter
+    setPointIdCounter(1);
+  }, []);
 
   // Initialize application with default keyboard shortcuts (o and s)
   // This function performs the same initialization as when the app first loads
   const initializeApplication = useCallback(() => {
+    // First, set all defaults
+    initializeApplicationDefaults();
     // Use setTimeout to ensure DOM is ready and refs are available
     setTimeout(() => {
       // Execute 'o' shortcut: Reset view and selection
@@ -3278,21 +3280,19 @@ function App() {
         document.documentElement.style.zoom = '1';
       }
       setViewPan({ x: panX, y: panY });
-      setCurrentView('overlay');
       // Clear all selections
       setSelectedIds(new Set());
       setSelectedComponentIds(new Set());
       setSelectedPowerIds(new Set());
       setSelectedGroundIds(new Set());
-      // Set tool to Select (from both 'o' and 's' shortcuts)
-      setCurrentTool('select');
     }, 100); // Small delay to ensure DOM is ready
-  }, []);
+  }, [initializeApplicationDefaults]);
 
   // Initialize application on first load
   React.useEffect(() => {
     initializeApplication();
   }, []); // Run only once on mount
+
 
   // Update debug dialog when selection changes (if dialog is open)
   React.useEffect(() => {
@@ -3302,106 +3302,12 @@ function App() {
     
     // Check selected drawing strokes (vias, traces)
     if (selectedIds.size > 0) {
-      debugInfo.push(`\n--- Drawing Strokes (${selectedIds.size} selected) ---`);
-      for (const id of selectedIds) {
-        const stroke = drawingStrokes.find(s => s.id === id);
-        if (stroke) {
-          debugInfo.push(`\nID: ${stroke.id}`);
-          debugInfo.push(`Type: ${stroke.type || 'unknown'}`);
-          debugInfo.push(`Layer: ${stroke.layer}`);
-          debugInfo.push(`Color: ${stroke.color}`);
-          debugInfo.push(`Size: ${stroke.size}`);
-          // For vias, show just the center position (vias are always a single point)
-          if (stroke.type === 'via' && stroke.points.length > 0) {
-            const point = stroke.points[0];
-            debugInfo.push(`Position: x=${point.x.toFixed(2)}, y=${point.y.toFixed(2)}`);
-            debugInfo.push(`Node ID: node-${point.id}`);
-          } else {
-            // For traces, show points array
-            debugInfo.push(`Points: ${stroke.points.length}`);
-            if (stroke.points.length > 0) {
-              stroke.points.forEach((p, idx) => {
-                debugInfo.push(`  Point ${idx}: id=${p.id}, x=${p.x.toFixed(2)}, y=${p.y.toFixed(2)}`);
-              });
-            }
-          }
-        } else {
-          debugInfo.push(`\nID: ${id} (not found in drawingStrokes)`);
-        }
-      }
+      // Drawing strokes are now displayed in formatted UI sections below
+      // No need to add to debugInfo text
     }
     
-    // Check selected components
-    if (selectedComponentIds.size > 0) {
-      debugInfo.push(`\n--- Components (${selectedComponentIds.size} selected) ---`);
-      for (const id of selectedComponentIds) {
-        const compTop = componentsTop.find(c => c.id === id);
-        const compBottom = componentsBottom.find(c => c.id === id);
-        const comp = compTop || compBottom;
-        if (comp) {
-          debugInfo.push(`\nID: ${comp.id}`);
-          debugInfo.push(`Type: ${comp.componentType}`);
-          debugInfo.push(`Layer: ${comp.layer}`);
-          debugInfo.push(`Designator: ${comp.designator || '(empty)'}`);
-          debugInfo.push(`Abbreviation: ${(comp as any).abbreviation || '(empty)'}`);
-          debugInfo.push(`Position: x=${comp.x.toFixed(2)}, y=${comp.y.toFixed(2)}`);
-          debugInfo.push(`Color: ${comp.color}`);
-          debugInfo.push(`Size: ${comp.size}`);
-          debugInfo.push(`Pin Count: ${comp.pinCount}`);
-          if (comp.pinConnections && comp.pinConnections.length > 0) {
-            debugInfo.push(`Pin Connections:`);
-            comp.pinConnections.forEach((conn, idx) => {
-              debugInfo.push(`  Pin ${idx + 1}: ${conn || '(not connected)'}`);
-            });
-          }
-          if ('manufacturer' in comp) {
-            debugInfo.push(`Manufacturer: ${(comp as any).manufacturer || '(empty)'}`);
-          }
-          if ('partNumber' in comp) {
-            debugInfo.push(`Part Number: ${(comp as any).partNumber || '(empty)'}`);
-          }
-        } else {
-          debugInfo.push(`\nID: ${id} (not found in components)`);
-        }
-      }
-    }
-    
-    // Check selected power symbols
-    if (selectedPowerIds.size > 0) {
-      debugInfo.push(`\n--- Power Symbols (${selectedPowerIds.size} selected) ---`);
-      for (const id of selectedPowerIds) {
-        const power = powers.find(p => p.id === id);
-        if (power) {
-          debugInfo.push(`\nID: ${power.id}`);
-          debugInfo.push(`Type: ${power.type || '(empty)'}`);
-          debugInfo.push(`Position: x=${power.x.toFixed(2)}, y=${power.y.toFixed(2)}`);
-          debugInfo.push(`Color: ${power.color}`);
-          debugInfo.push(`Size: ${power.size}`);
-          debugInfo.push(`Layer: ${power.layer}`);
-          const bus = powerBuses.find(b => b.id === power.powerBusId);
-          debugInfo.push(`Power Bus: ${bus?.name || power.powerBusId || '(unknown)'}`);
-        } else {
-          debugInfo.push(`\nID: ${id} (not found in powers)`);
-        }
-      }
-    }
-    
-    // Check selected ground symbols
-    if (selectedGroundIds.size > 0) {
-      debugInfo.push(`\n--- Ground Symbols (${selectedGroundIds.size} selected) ---`);
-      for (const id of selectedGroundIds) {
-        const ground = grounds.find(g => g.id === id);
-        if (ground) {
-          debugInfo.push(`\nID: ${ground.id}`);
-          debugInfo.push(`Type: ${ground.type || '(empty)'}`);
-          debugInfo.push(`Position: x=${ground.x.toFixed(2)}, y=${ground.y.toFixed(2)}`);
-          debugInfo.push(`Color: ${ground.color}`);
-          debugInfo.push(`Size: ${ground.size}`);
-        } else {
-          debugInfo.push(`\nID: ${id} (not found in grounds)`);
-        }
-      }
-    }
+    // Components, Power, and Ground symbols are now displayed in formatted UI sections below
+    // No need to add to debugInfo text
     
     if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
       debugInfo.push('\nNo objects selected.');
@@ -3844,9 +3750,20 @@ function App() {
 
   // If selection exists, changing brush size updates selected items' size
   React.useEffect(() => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) {
+      // If no selection and trace tool is active, save size to the appropriate layer
+      // Only save if the size is valid (>= 1) to avoid saving invalid values
+      if (currentTool === 'draw' && drawingMode === 'trace' && brushSize >= 1) {
+        if (selectedDrawingLayer === 'top') {
+          setTopTraceSize(brushSize);
+        } else {
+          setBottomTraceSize(brushSize);
+        }
+      }
+      return;
+    }
     setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: brushSize } : s));
-  }, [brushSize]); // Only run when brushSize changes, not when selection changes
+  }, [brushSize, currentTool, drawingMode, selectedDrawingLayer]); // Only run when brushSize changes, not when selection changes
 
   // Selection size slider removed; size can be set via Tools menu
 
@@ -3947,12 +3864,11 @@ function App() {
     setTracesBottom(tBot);
   }, [drawingStrokes]);
 
-  // Save project state as JSON (including embedded images)
-  const saveProject = useCallback(async () => {
+  // Build project data object (used by both saveProject and autoSave)
+  const buildProjectData = useCallback(() => {
     const now = new Date();
     const pad2 = (n: number) => String(n).padStart(2, '0');
-    const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
-    const filename = `pcb_project_${ts}.json`;
+    const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}_${pad2(now.getMinutes())}_${pad2(now.getSeconds())}`;
     const project = {
       version: 1,
       savedAt: ts,
@@ -4008,6 +3924,15 @@ function App() {
       },
       powerBuses, // Save power bus definitions
       pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
+      traceColors: {
+        top: topTraceColor,
+        bottom: bottomTraceColor,
+      },
+      traceSizes: {
+        top: topTraceSize,
+        bottom: bottomTraceSize,
+      },
+      traceToolLayer, // Save last layer choice
       toolSettings: {
         // Convert Map to plain object for JSON serialization
         trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
@@ -4017,14 +3942,88 @@ function App() {
         power: toolRegistry.get('power')?.settings || { color: '#ff0000', size: 18 },
       },
       locks: {
-        isImagesLocked,
+        areImagesLocked,
         areViasLocked,
         areTracesLocked,
         areComponentsLocked,
-        isGroundLocked,
+        areGroundNodesLocked,
         arePowerNodesLocked,
       },
     };
+    return { project, timestamp: ts };
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer]);
+
+  // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
+  const buildProjectDataRef = useRef(buildProjectData);
+  buildProjectDataRef.current = buildProjectData;
+
+  // Refs to store latest auto save configuration
+  const autoSaveDirHandleRef = useRef(autoSaveDirHandle);
+  autoSaveDirHandleRef.current = autoSaveDirHandle;
+  const autoSaveBaseNameRef = useRef(autoSaveBaseName);
+  autoSaveBaseNameRef.current = autoSaveBaseName;
+  // Ref to store the setter for current project file path so we can update it from auto save
+  const setCurrentProjectFilePathRef = useRef(setCurrentProjectFilePath);
+  setCurrentProjectFilePathRef.current = setCurrentProjectFilePath;
+  // Refs to access current state values in callbacks
+  const autoSaveFileHistoryRef = useRef<string[]>([]);
+  autoSaveFileHistoryRef.current = autoSaveFileHistory;
+  const currentFileIndexRef = useRef<number>(-1);
+  currentFileIndexRef.current = currentFileIndex;
+
+  // Auto Save function - saves to a file handle with timestamped filename
+  // Use refs to avoid recreating this function on every state change
+  const performAutoSave = useCallback(async () => {
+    const dirHandle = autoSaveDirHandleRef.current;
+    const baseName = autoSaveBaseNameRef.current;
+    
+    if (!dirHandle || !baseName) {
+      console.warn('Auto save: Missing directory handle or base name');
+      return;
+    }
+    
+    // Only save if there have been changes since the last save
+    if (!hasChangesSinceLastAutoSaveRef.current) {
+      console.log('Auto save: Skipping - no changes since last save');
+      return;
+    }
+    
+    console.log('Auto save: Starting save...');
+    // Use ref to get latest buildProjectData without causing dependency changes
+    const { project, timestamp } = buildProjectDataRef.current();
+    const filename = `${baseName}_${timestamp}.json`;
+    const json = JSON.stringify(project, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    
+    try {
+      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      console.log(`Auto save: Successfully saved ${filename}`);
+      // Update the displayed file path to reflect the current auto-saved file
+      setCurrentProjectFilePathRef.current(filename);
+      // Refresh file history and update index
+      const history = autoSaveFileHistoryRef.current;
+      const newHistory = [filename, ...history.filter(f => f !== filename)].sort((a, b) => b.localeCompare(a));
+      setAutoSaveFileHistory(newHistory);
+      autoSaveFileHistoryRef.current = newHistory;
+      setCurrentFileIndex(0); // Newest file is at index 0
+      currentFileIndexRef.current = 0;
+      // Reset the changes flag after successful save
+      hasChangesSinceLastAutoSaveRef.current = false;
+    } catch (e) {
+      console.error('Auto save failed:', e);
+    }
+  }, []); // Empty dependencies - function never changes
+
+  // Save project state as JSON (including embedded images)
+  const saveProject = useCallback(async () => {
+    const { project } = buildProjectData();
+    const pad2 = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}_${pad2(now.getMinutes())}_${pad2(now.getSeconds())}`;
+    const filename = `pcb_project_${ts}.json`;
     const json = JSON.stringify(project, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
 
@@ -4039,6 +4038,15 @@ function App() {
         const writable = await handle.createWritable();
         await writable.write(blob);
         await writable.close();
+        // Update current project file path
+        try {
+          // Try to get the full path from the file handle
+          const file = await handle.getFile();
+          setCurrentProjectFilePath(file.name);
+        } catch (e) {
+          // If we can't get the full path, just use the filename
+          setCurrentProjectFilePath(handle.name);
+        }
         return;
       } catch (e) {
         // If user cancels, fall back to download is unnecessary; just return
@@ -4056,7 +4064,70 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, isImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, isGroundLocked, arePowerNodesLocked]);
+  }, [buildProjectData]);
+
+  // Manage auto save interval (must be after performAutoSave is defined)
+  // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
+  React.useEffect(() => {
+    // Clear existing interval if any
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
+    }
+
+    // Set up new interval if auto save is enabled
+    if (autoSaveEnabled && autoSaveInterval && autoSaveDirHandle && autoSaveBaseName) {
+      const intervalMs = autoSaveInterval * 60 * 1000; // Convert minutes to milliseconds
+      console.log(`Auto save: Setting up interval for ${autoSaveInterval} minute(s) (${intervalMs}ms)`);
+      // Mark that we have changes so the initial save will happen
+      hasChangesSinceLastAutoSaveRef.current = true;
+      // Perform initial save immediately
+      performAutoSave();
+      // Then set up the interval - use the latest performAutoSave via closure
+      autoSaveIntervalRef.current = window.setInterval(() => {
+        performAutoSave();
+      }, intervalMs);
+    }
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+    };
+    // Only depend on configuration, not performAutoSave itself
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSaveEnabled, autoSaveInterval, autoSaveDirHandle, autoSaveBaseName]);
+
+  // Track changes to project data for auto save
+  React.useEffect(() => {
+    // Only track changes if auto save is enabled
+    if (autoSaveEnabled) {
+      hasChangesSinceLastAutoSaveRef.current = true;
+    }
+  }, [
+    topImage,
+    bottomImage,
+    drawingStrokes,
+    componentsTop,
+    componentsBottom,
+    powers,
+    grounds,
+    powerBuses,
+    topTraceColor,
+    bottomTraceColor,
+    topTraceSize,
+    bottomTraceSize,
+    autoSaveEnabled, // Reset when auto save is disabled
+  ]);
+
+  // Reset change tracking when auto save is disabled or a new project is created
+  React.useEffect(() => {
+    if (!autoSaveEnabled) {
+      hasChangesSinceLastAutoSaveRef.current = false;
+    }
+  }, [autoSaveEnabled]);
 
   // Check if there are unsaved changes
   const hasUnsavedChanges = useCallback(() => {
@@ -4087,25 +4158,13 @@ function App() {
     setCurrentView('overlay');
     setViewScale(1);
     setViewPan({ x: 0, y: 0 });
-    setSelectedDrawingLayer('top');
-    setCurrentTool('select');
-    setTransparency(50);
-    setIsTransparencyCycling(false);
-    // Reset power buses to defaults
-    setPowerBuses([
-      { id: 'powerbus-1', name: '+3.3VDC', voltage: '+3.3VDC', color: '#ff0000' },
-      { id: 'powerbus-2', name: '+5VDC', voltage: '+5VDC', color: '#ff0000' },
-    ]);
-    // Reset locks
-    setIsImagesLocked(false);
-    setAreViasLocked(false);
-    setAreTracesLocked(false);
-    setAreComponentsLocked(false);
-    setIsGroundLocked(false);
-    setArePowerNodesLocked(false);
-    // Reset point ID counter
-    setPointIdCounter(1);
-  }, []);
+    // Reset change tracking for auto save
+    hasChangesSinceLastAutoSaveRef.current = false;
+    // Clear current project file path
+    setCurrentProjectFilePath('');
+    // Use consolidated initialization function for all defaults
+    initializeApplicationDefaults();
+  }, [initializeApplicationDefaults]);
 
   // Handler functions for new project dialog (defined after saveProject and newProject)
   const handleNewProjectYes = useCallback(async () => {
@@ -4164,6 +4223,43 @@ function App() {
         if (project.view.viewPan) setViewPan(project.view.viewPan);
         if (project.view.showBothLayers != null) setShowBothLayers(project.view.showBothLayers);
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
+      }
+      // Restore trace colors, sizes, and layer choice
+      if (project.traceColors) {
+        if (project.traceColors.top) setTopTraceColor(project.traceColors.top);
+        if (project.traceColors.bottom) setBottomTraceColor(project.traceColors.bottom);
+      }
+      if (project.traceSizes) {
+        // Use defaults (6) if values are missing or invalid
+        // For existing projects, if bottom size is less than 6, default it to 6
+        const topSize = project.traceSizes.top != null && project.traceSizes.top > 0 ? project.traceSizes.top : 6;
+        let bottomSize = project.traceSizes.bottom != null && project.traceSizes.bottom > 0 ? project.traceSizes.bottom : 6;
+        // Ensure bottom size defaults to 6 if it's less than 6 (migration for old projects)
+        if (bottomSize < 6) {
+          bottomSize = 6;
+        }
+        setTopTraceSize(topSize);
+        setBottomTraceSize(bottomSize);
+      } else {
+        // If traceSizes doesn't exist in project, ensure defaults are set
+        setTopTraceSize(6);
+        setBottomTraceSize(6);
+      }
+      if (project.traceToolLayer) {
+        setTraceToolLayer(project.traceToolLayer);
+        // If trace tool is active, update brush color and size to match the restored layer
+        if (currentTool === 'draw' && drawingMode === 'trace') {
+          const layer = project.traceToolLayer;
+          setBrushColor(layer === 'top' ? (project.traceColors?.top || topTraceColor) : (project.traceColors?.bottom || bottomTraceColor));
+          // Use defaults (6) if values are missing
+          // Ensure bottom size is at least 6 (migration for old projects)
+          const topSize = project.traceSizes?.top != null && project.traceSizes.top > 0 ? project.traceSizes.top : 6;
+          let bottomSize = project.traceSizes?.bottom != null && project.traceSizes.bottom > 0 ? project.traceSizes.bottom : 6;
+          if (bottomSize < 6) {
+            bottomSize = 6;
+          }
+          setBrushSize(layer === 'top' ? topSize : bottomSize);
+        }
       }
       // Restore tool settings
       if (project.toolSettings) {
@@ -4258,11 +4354,23 @@ function App() {
       
       // Restore lock states if present
       if (project.locks) {
-        if (typeof project.locks.isImagesLocked === 'boolean') setIsImagesLocked(project.locks.isImagesLocked);
+        // Support both new and old property names for backward compatibility
+        if (typeof project.locks.areImagesLocked === 'boolean') {
+          setAreImagesLocked(project.locks.areImagesLocked);
+        } else if (typeof (project.locks as any).isImagesLocked === 'boolean') {
+          // Legacy: support old name
+          setAreImagesLocked((project.locks as any).isImagesLocked);
+        }
         if (typeof project.locks.areViasLocked === 'boolean') setAreViasLocked(project.locks.areViasLocked);
         if (typeof project.locks.areTracesLocked === 'boolean') setAreTracesLocked(project.locks.areTracesLocked);
         if (typeof project.locks.areComponentsLocked === 'boolean') setAreComponentsLocked(project.locks.areComponentsLocked);
-        if (typeof project.locks.isGroundLocked === 'boolean') setIsGroundLocked(project.locks.isGroundLocked);
+        // Support both new and old property names for backward compatibility
+        if (typeof project.locks.areGroundNodesLocked === 'boolean') {
+          setAreGroundNodesLocked(project.locks.areGroundNodesLocked);
+        } else if (typeof (project.locks as any).isGroundLocked === 'boolean') {
+          // Legacy: support old name
+          setAreGroundNodesLocked((project.locks as any).isGroundLocked);
+        }
         if (typeof project.locks.arePowerNodesLocked === 'boolean') setArePowerNodesLocked(project.locks.arePowerNodesLocked);
       }
 
@@ -4403,11 +4511,197 @@ function App() {
           });
         setPowers(powersWithBusId);
       }
+      // Reset change tracking for auto save after loading project
+      hasChangesSinceLastAutoSaveRef.current = false;
     } catch (err) {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
     }
   }, [currentTool, drawingMode]);
+
+  // Function to get list of auto-saved files from directory, sorted by timestamp
+  const refreshAutoSaveFileHistory = useCallback(async () => {
+    const dirHandle = autoSaveDirHandleRef.current;
+    const baseName = autoSaveBaseNameRef.current;
+    
+    if (!dirHandle || !baseName) return;
+    
+    try {
+      const files: string[] = [];
+      // Iterate through directory entries
+      // File System Access API: use keys() to get file names, then check if it's a file
+      for await (const name of (dirHandle as any).keys()) {
+        try {
+          // Try to get the file handle to verify it's a file
+          await dirHandle.getFileHandle(name);
+          if (name.startsWith(baseName) && name.endsWith('.json')) {
+            files.push(name);
+          }
+        } catch (e) {
+          // Skip if not a file or doesn't exist
+          continue;
+        }
+      }
+      // Sort by filename (which includes timestamp) in descending order (newest first)
+      files.sort((a, b) => b.localeCompare(a));
+      setAutoSaveFileHistory(files);
+      autoSaveFileHistoryRef.current = files;
+      
+      // Find current file index
+      const currentFile = currentProjectFilePath;
+      const index = files.indexOf(currentFile);
+      setCurrentFileIndex(index);
+      currentFileIndexRef.current = index;
+    } catch (e) {
+      console.error('Failed to refresh file history:', e);
+    }
+  }, [currentProjectFilePath]);
+
+  // Function to load a file from auto-save history
+  const loadFileFromHistory = useCallback(async (filename: string) => {
+    const dirHandle = autoSaveDirHandleRef.current;
+    if (!dirHandle) {
+      console.warn('Cannot load file: no directory handle');
+      return;
+    }
+    
+    try {
+      const fileHandle = await dirHandle.getFileHandle(filename);
+      const file = await fileHandle.getFile();
+      
+      // Check if file is empty
+      if (file.size === 0) {
+        console.warn(`File ${filename} is empty, skipping`);
+        // Remove empty file from history
+        const history = autoSaveFileHistoryRef.current;
+        const newHistory = history.filter((f: string) => f !== filename);
+        setAutoSaveFileHistory(newHistory);
+        autoSaveFileHistoryRef.current = newHistory;
+        return;
+      }
+      
+      const text = await file.text();
+      
+      // Check if text is empty or whitespace only
+      if (!text || text.trim().length === 0) {
+        console.warn(`File ${filename} contains no data, skipping`);
+        // Remove invalid file from history
+        const history = autoSaveFileHistoryRef.current;
+        const newHistory = history.filter((f: string) => f !== filename);
+        setAutoSaveFileHistory(newHistory);
+        autoSaveFileHistoryRef.current = newHistory;
+        return;
+      }
+      
+      let project;
+      try {
+        project = JSON.parse(text);
+      } catch (parseError) {
+        console.error(`Failed to parse JSON from file ${filename}:`, parseError);
+        // Remove invalid file from history
+        const history = autoSaveFileHistoryRef.current;
+        const newHistory = history.filter((f: string) => f !== filename);
+        setAutoSaveFileHistory(newHistory);
+        autoSaveFileHistoryRef.current = newHistory;
+        // Refresh history to update UI
+        await refreshAutoSaveFileHistory();
+        return;
+      }
+      
+      // Call initialization BEFORE loading project to prevent visual flash
+      // This sets the view state before the images are rendered
+      // Set defaults immediately
+      initializeApplicationDefaults();
+      // Set view state immediately (synchronously) to prevent flash
+      setViewScale(1);
+      // Reset browser zoom to 100% immediately
+      if (document.body) {
+        document.body.style.zoom = '1';
+      }
+      if (document.documentElement) {
+        document.documentElement.style.zoom = '1';
+      }
+      // Clear all selections immediately
+      setSelectedIds(new Set());
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
+      // Also call full initialization for pan calculation (uses setTimeout)
+      initializeApplication();
+      
+      await loadProject(project);
+      setCurrentProjectFilePath(filename);
+      
+      // Update history and index
+      const history = autoSaveFileHistoryRef.current;
+      const index = history.indexOf(filename);
+      if (index >= 0) {
+        setCurrentFileIndex(index);
+        currentFileIndexRef.current = index;
+      } else {
+        // File not in history, refresh it
+        await refreshAutoSaveFileHistory();
+      }
+      
+      // Reset change tracking since we loaded a saved file
+      hasChangesSinceLastAutoSaveRef.current = false;
+    } catch (e) {
+      console.error('Failed to load file from history:', e);
+      // Don't show alert for navigation errors, just log
+      // Remove invalid file from history if it exists
+      const history = autoSaveFileHistoryRef.current;
+      if (history.includes(filename)) {
+        const newHistory = history.filter((f: string) => f !== filename);
+        setAutoSaveFileHistory(newHistory);
+        autoSaveFileHistoryRef.current = newHistory;
+        // Refresh history to update UI
+        await refreshAutoSaveFileHistory();
+      }
+    }
+  }, [loadProject, refreshAutoSaveFileHistory, initializeApplication]);
+
+  // Navigate to previous file (older file, higher index)
+  const navigateToPreviousFile = useCallback(async () => {
+    const index = currentFileIndexRef.current;
+    const history = autoSaveFileHistoryRef.current;
+    if (index >= 0 && index < history.length - 1) {
+      const nextIndex = index + 1; // Next index is older (higher index)
+      const nextFile = history[nextIndex];
+      if (nextFile) {
+        await loadFileFromHistory(nextFile);
+      }
+    }
+  }, [loadFileFromHistory]);
+
+  // Navigate to next file (newer file, lower index)
+  const navigateToNextFile = useCallback(async () => {
+    const index = currentFileIndexRef.current;
+    const history = autoSaveFileHistoryRef.current;
+    
+    // Early return if conditions aren't met
+    if (index <= 0 || index >= history.length || history.length === 0) {
+      console.warn('Cannot navigate to newer file: index is', index, 'history length is', history.length);
+      return;
+    }
+    
+    // Only navigate if we're not at the newest file (index 0) and there's a file to navigate to
+    // Also check that index is valid and within bounds
+    if (index > 0 && index < history.length && history.length > 0) {
+      const prevIndex = index - 1; // Previous index is newer (lower index)
+      if (prevIndex >= 0 && prevIndex < history.length) {
+        const prevFile = history[prevIndex];
+        if (prevFile) {
+          await loadFileFromHistory(prevFile);
+        } else {
+          console.warn('No newer file found at index', prevIndex);
+          // Refresh history in case files were removed
+          await refreshAutoSaveFileHistory();
+        }
+      } else {
+        console.warn('Cannot navigate to newer file: prevIndex', prevIndex, 'is out of bounds');
+      }
+    }
+  }, [loadFileFromHistory, refreshAutoSaveFileHistory]);
 
   React.useEffect(() => {
     currentStrokeRef.current = currentStroke;
@@ -4511,7 +4805,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Reverse Engineering Tool</h1>
+        <h1>🔧 PCB Reverse Engineering Tool (v2.0)</h1>
       </header>
 
       {/* Application menu bar */}
@@ -4537,6 +4831,113 @@ function App() {
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { void saveProject(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Save Project…</button>
               <button onClick={() => { void saveProject(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Save As…</button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <div style={{ position: 'relative' }}>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setShowAutoSaveSubmenu(!showAutoSaveSubmenu); }} 
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+                >
+                  Auto Save {showAutoSaveSubmenu ? '▴' : '▾'}
+                </button>
+                {showAutoSaveSubmenu && (
+                  <div style={{ position: 'absolute', left: '100%', top: 0, marginLeft: 6, minWidth: 150, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
+                    <button 
+                      onClick={async () => {
+                        setShowAutoSaveSubmenu(false);
+                        setOpenMenu(null);
+                        // Prompt user for directory and base name
+                        const w = window as any;
+                        if (typeof w.showDirectoryPicker === 'function') {
+                          try {
+                            // Use showDirectoryPicker to get the directory
+                            const dirHandle = await w.showDirectoryPicker();
+                            
+                            // Prompt user for base name using a simple prompt
+                            const baseName = prompt('Enter a base name for auto-save files (e.g., "pcb_project_autosave"):', 'pcb_project_autosave');
+                            if (!baseName) {
+                              // User cancelled
+                              return;
+                            }
+                            
+                            // Clean up the base name (remove extension if present, remove invalid characters)
+                            const cleanBaseName = baseName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                            
+                            setAutoSaveDirHandle(dirHandle);
+                            setAutoSaveBaseName(cleanBaseName);
+                            setAutoSaveInterval(1); // Default to 1 minute
+                            setAutoSaveEnabled(true);
+                            console.log('Auto save: Enabled with base name:', cleanBaseName);
+                            // Refresh file history when auto save is enabled
+                            setTimeout(async () => {
+                              await refreshAutoSaveFileHistory();
+                            }, 100);
+                          } catch (e) {
+                            if ((e as any)?.name !== 'AbortError') {
+                              console.error('Failed to set up auto save:', e);
+                            }
+                          }
+                        } else {
+                          alert('Directory picker is not supported in this browser. Please use a modern browser like Chrome or Edge.');
+                        }
+                      }} 
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+                    >
+                      {autoSaveEnabled ? 'Change Location…' : 'Enable Auto Save…'}
+                    </button>
+                    {autoSaveEnabled && (
+                      <>
+                        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+                        <button 
+                          onClick={() => {
+                            setShowAutoSaveSubmenu(false);
+                            setAutoSaveInterval(1);
+                          }} 
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 1 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
+                        >
+                          {autoSaveInterval === 1 ? '✓ ' : ''}1 minute
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setShowAutoSaveSubmenu(false);
+                            setAutoSaveInterval(5);
+                          }} 
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 5 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
+                        >
+                          {autoSaveInterval === 5 ? '✓ ' : ''}5 minutes
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setShowAutoSaveSubmenu(false);
+                            setAutoSaveInterval(10);
+                          }} 
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 10 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
+                        >
+                          {autoSaveInterval === 10 ? '✓ ' : ''}10 minutes
+                        </button>
+                        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+                        <button 
+                          onClick={() => {
+                            setShowAutoSaveSubmenu(false);
+                            setOpenMenu(null);
+                            setAutoSaveEnabled(false);
+                            setAutoSaveInterval(null);
+                            setAutoSaveDirHandle(null);
+                            setAutoSaveBaseName('');
+                            if (autoSaveIntervalRef.current) {
+                              clearInterval(autoSaveIntervalRef.current);
+                              autoSaveIntervalRef.current = null;
+                            }
+                            console.log('Auto save: Disabled');
+                          }} 
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+                        >
+                          Disable Auto Save
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
               <button onClick={async () => {
                 const w = window as any;
                 if (typeof w.showOpenFilePicker === 'function') {
@@ -4553,6 +4954,8 @@ function App() {
                       setOpenMenu(null);
                       return;
                     }
+                    // Update current project file path
+                    setCurrentProjectFilePath(file.name);
                     const text = await file.text();
                     const project = JSON.parse(text);
                     await loadProject(project);
@@ -4620,8 +5023,8 @@ function App() {
               </button>
               <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setIsImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Images {isImagesLocked ? '✓' : ''}
+              <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Images {areImagesLocked ? '✓' : ''}
               </button>
             </div>
           )}
@@ -4678,7 +5081,7 @@ function App() {
                             }
                             if (selectedComponentIds.size > 0 && areComponentsLocked) return;
                             if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-                            if (selectedGroundIds.size > 0 && isGroundLocked) return;
+                            if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
                             
                             setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
                             if (selectedComponentIds.size > 0) {
@@ -4715,8 +5118,8 @@ function App() {
               <button onClick={() => { setAreComponentsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Components {areComponentsLocked ? '✓' : ''}
               </button>
-              <button onClick={() => { setIsGroundLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Ground Node {isGroundLocked ? '✓' : ''}
+              <button onClick={() => { setAreGroundNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Ground Node {areGroundNodesLocked ? '✓' : ''}
               </button>
               <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
@@ -4809,6 +5212,75 @@ function App() {
             </div>
           )}
         </div>
+        {/* File path display with navigation buttons - right justified */}
+        {currentProjectFilePath && (
+          <div style={{ 
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            paddingLeft: '16px'
+          }}>
+            {/* Back button (older file) */}
+            <button
+              onClick={navigateToPreviousFile}
+              disabled={currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1}
+              title="Navigate to older file"
+              style={{
+                padding: '4px 8px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? '#f5f5f5' : '#fff',
+                color: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? '#999' : '#333',
+                cursor: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              ←
+            </button>
+            {/* Forward button (newer file) */}
+            <button
+              onClick={(e) => {
+                // Double-check before navigating - prevent if disabled
+                const isDisabled = currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0;
+                if (isDisabled) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  return;
+                }
+                navigateToNextFile();
+              }}
+              disabled={currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0}
+              title="Navigate to newer file"
+              style={{
+                padding: '4px 8px',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+                background: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? '#f5f5f5' : '#fff',
+                color: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? '#999' : '#333',
+                cursor: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                pointerEvents: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? 'none' : 'auto'
+              }}
+            >
+              →
+            </button>
+            {/* File path */}
+            <div style={{ 
+              fontSize: '12px',
+              color: '#333',
+              fontFamily: 'monospace',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '40vw'
+            }} title={currentProjectFilePath}>
+              {currentProjectFilePath}
+            </div>
+          </div>
+        )}
       </div>
 
       
@@ -4844,7 +5316,28 @@ function App() {
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
               </svg>
             </button>
-            <button onClick={() => { setDrawingMode('trace'); setCurrentTool('draw'); setSelectedDrawingLayer(traceToolLayer); setShowTraceLayerChooser(true); }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button onClick={() => { 
+              setDrawingMode('trace'); 
+              setCurrentTool('draw'); 
+              // Default to Top layer, but use last choice if available
+              const layerToUse = traceToolLayer || 'top';
+              setSelectedDrawingLayer(layerToUse);
+              // Set brush color and size to the values for the selected layer (default to 6 if not set)
+              const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
+              // Ensure minimum size of 6 for both layers
+              const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
+              const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
+              const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
+              // If sizes were less than 6, update them
+              if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
+                setTopTraceSize(6);
+              } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
+                setBottomTraceSize(6);
+              }
+              setBrushColor(colorForLayer);
+              setBrushSize(sizeForLayer);
+              setShowTraceLayerChooser(true); 
+            }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
               <PenLine size={16} color={brushColor} />
             </button>
             <button onClick={() => { setCurrentTool('component'); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'component' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
@@ -4952,7 +5445,15 @@ function App() {
                         key={c}
                       onClick={() => { 
                         setBrushColor(c); 
-                        setShowColorPicker(false); 
+                        setShowColorPicker(false);
+                        // If trace tool is active, save color to the appropriate layer
+                        if (currentTool === 'draw' && drawingMode === 'trace') {
+                          if (selectedDrawingLayer === 'top') {
+                            setTopTraceColor(c);
+                          } else {
+                            setBottomTraceColor(c);
+                          }
+                        }
                         if (selectedIds.size > 0) {
                           setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, color: c } : s));
                         }
@@ -4980,11 +5481,39 @@ function App() {
           {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
             <div ref={traceChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
-                <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('top'); setSelectedDrawingLayer('top'); setShowTraceLayerChooser(false); setShowTopImage(true); }} />
+                <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'top'} onChange={() => { 
+                  setTraceToolLayer('top'); 
+                  setSelectedDrawingLayer('top'); 
+                  // Update brush color and size to top layer values (default to 6 if not set)
+                  // Ensure top size is exactly 6 if it's less than 6 (fix for existing projects)
+                  setBrushColor(topTraceColor);
+                  const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
+                  setBrushSize(topSize);
+                  // If topTraceSize was less than 6, update it to 6
+                  if (!topTraceSize || topTraceSize < 6) {
+                    setTopTraceSize(6);
+                  }
+                  setShowTraceLayerChooser(false); 
+                  setShowTopImage(true); 
+                }} />
                 <span>Top</span>
               </label>
               <label className="radio-label">
-                <input type="radio" name="traceToolLayer" onChange={() => { setTraceToolLayer('bottom'); setSelectedDrawingLayer('bottom'); setShowTraceLayerChooser(false); setShowBottomImage(true); }} />
+                <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'bottom'} onChange={() => { 
+                  setTraceToolLayer('bottom'); 
+                  setSelectedDrawingLayer('bottom'); 
+                  // Update brush color and size to bottom layer values (default to 6 if not set)
+                  // Ensure bottom size is exactly 6 if it's less than 6 (fix for existing projects)
+                  setBrushColor(bottomTraceColor);
+                  const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
+                  setBrushSize(bottomSize);
+                  // If bottomTraceSize was less than 6, update it to 6
+                  if (!bottomTraceSize || bottomTraceSize < 6) {
+                    setBottomTraceSize(6);
+                  }
+                  setShowTraceLayerChooser(false); 
+                  setShowBottomImage(true); 
+                }} />
                 <span>Bottom</span>
               </label>
             </div>
@@ -6087,7 +6616,7 @@ function App() {
             <div
               style={{
                 margin: 0,
-                padding: '12px',
+                padding: 0,
                 backgroundColor: '#f5f5f5',
                 borderRadius: 4,
                 fontSize: '12px',
@@ -6097,61 +6626,143 @@ function App() {
                 color: '#000',
               }}
             >
-              {/* Display text info for non-editable items (excluding Power and Ground which have formatted UI below) */}
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {(() => {
-                  const lines = debugDialog.text.split('\n');
-                  const filtered: string[] = [];
-                  let skipSection = false;
-                  
-                  for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i];
-                    // Start skipping when we hit Power or Ground section header
-                    if (line.includes('--- Power Symbols') || line.includes('--- Ground Symbols')) {
-                      skipSection = true;
-                      continue;
-                    }
-                    // Stop skipping when we hit the next section or empty line followed by new section
-                    if (skipSection) {
-                      if (line.trim() === '' && i + 1 < lines.length && lines[i + 1].includes('--- ')) {
-                        skipSection = false;
-                        continue;
-                      }
-                      if (line.includes('--- ') && !line.includes('Power Symbols') && !line.includes('Ground Symbols')) {
-                        skipSection = false;
-                      } else {
-                        continue; // Skip this line
-                      }
-                    }
-                    filtered.push(line);
-                  }
-                  
-                  return filtered.join('\n');
-                })()}
-              </pre>
+              {/* Drawing Strokes (Vias and Traces) - Formatted UI */}
+              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id)).map((stroke) => {
+                if (stroke.type === 'via' && stroke.points.length > 0) {
+                  const point = stroke.points[0];
+                  return (
+                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <div style={{ 
+                          color: '#fff', 
+                          padding: '4px 8px', 
+                          fontSize: '12px',
+                          fontWeight: 500
+                        }}>
+                          {stroke.type || 'unknown'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                        <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                        <div>Node ID: {point.id}</div>
+                        <div>Layer: {stroke.layer}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>Color:</span>
+                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                          <span>{stroke.color}</span>
+                        </div>
+                        <div>Size: {stroke.size}</div>
+                      </div>
+                    </div>
+                  );
+                } else if (stroke.type === 'trace') {
+                  return (
+                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <div style={{ 
+                          color: '#fff', 
+                          padding: '4px 8px', 
+                          fontSize: '12px',
+                          fontWeight: 500
+                        }}>
+                          {stroke.type || 'unknown'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                        <div>Points: {stroke.points.length}</div>
+                        {stroke.points.length > 0 && (
+                          <div style={{ marginTop: '4px' }}>
+                            {stroke.points.map((p, idx) => (
+                              <div key={idx} style={{ marginLeft: '12px' }}>
+                                Point {idx}: x={p.x.toFixed(2)}, y={p.y.toFixed(2)} {idx === 0 && `(Node ID: ${p.id})`}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ marginTop: '4px' }}>Layer: {stroke.layer}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>Color:</span>
+                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                          <span>{stroke.color}</span>
+                        </div>
+                        <div>Size: {stroke.size}</div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })}
               
-              {/* Editable Power Symbol Properties */}
+              {/* Components - Formatted UI */}
+              {selectedComponentIds.size > 0 && [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
+                <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                  <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{ 
+                      color: '#fff', 
+                      padding: '4px 8px', 
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {comp.componentType}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                    <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
+                    <div>Layer: {comp.layer}</div>
+                    <div>Designator: {comp.designator || '(empty)'}</div>
+                    <div>Abbreviation: {(comp as any).abbreviation || '(empty)'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>Color:</span>
+                      <div style={{ width: '16px', height: '16px', backgroundColor: comp.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                      <span>{comp.color}</span>
+                    </div>
+                    <div>Size: {comp.size}</div>
+                    <div>Pin Count: {comp.pinCount}</div>
+                    {comp.pinConnections && comp.pinConnections.length > 0 && (
+                      <div style={{ marginTop: '4px' }}>
+                        <div>Pin Connections:</div>
+                        {comp.pinConnections.map((conn, idx) => (
+                          <div key={idx} style={{ marginLeft: '12px' }}>Pin {idx + 1}: {conn || '(not connected)'}</div>
+                        ))}
+                      </div>
+                    )}
+                    {'manufacturer' in comp && (comp as any).manufacturer && (
+                      <div>Manufacturer: {(comp as any).manufacturer}</div>
+                    )}
+                    {'partNumber' in comp && (comp as any).partNumber && (
+                      <div>Part Number: {(comp as any).partNumber}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {/* Power Symbol Properties */}
               {selectedPowerIds.size > 0 && powers.filter(p => selectedPowerIds.has(p.id)).map((power) => {
                 const bus = powerBuses.find(b => b.id === power.powerBusId);
                 return (
-                  <div key={power.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Power Symbol: {power.id}</div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Type:</label>
-                      <input
-                        type="text"
-                        value={power.type || ''}
-                        onChange={(e) => {
-                          setPowers(prev => prev.map(p => p.id === power.id ? { ...p, type: e.target.value } : p));
-                        }}
-                        placeholder="e.g., VCC, VDD, VSS"
-                        style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                      />
+                  <div key={power.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{ 
+                        color: '#fff', 
+                        padding: '4px 8px', 
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {power.type || (bus ? `${bus.name} Power Node` : 'Power Node')}
+                      </div>
                     </div>
                     <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                       <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
-                      <div>Node ID: node-{power.pointId || '(not assigned)'}</div>
-                      <div>Color: {power.color}</div>
+                      <div>Node ID: {power.pointId || '(not assigned)'}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Color:</span>
+                        <div style={{ width: '16px', height: '16px', backgroundColor: power.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                        <span>{power.color}</span>
+                      </div>
                       <div>Size: {power.size}</div>
                       <div>Layer: {power.layer}</div>
                       <div>Power Bus: {bus?.name || power.powerBusId || '(unknown)'}</div>
@@ -6160,26 +6771,28 @@ function App() {
                 );
               })}
               
-              {/* Editable Ground Symbol Properties */}
+              {/* Ground Symbol Properties */}
               {selectedGroundIds.size > 0 && grounds.filter(g => selectedGroundIds.has(g.id)).map((ground) => (
-                <div key={ground.id} style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                  <div style={{ fontWeight: 600, marginBottom: '8px', color: '#333' }}>Ground Symbol: {ground.id}</div>
-                  <div style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '11px', color: '#666' }}>Type:</label>
-                    <input
-                      type="text"
-                      value={ground.type || ''}
-                      onChange={(e) => {
-                        setGrounds(prev => prev.map(g => g.id === ground.id ? { ...g, type: e.target.value } : g));
-                      }}
-                      placeholder="e.g., GND, AGND, DGND"
-                      style={{ width: '100%', padding: '4px', fontSize: '12px', border: '1px solid #ccc', borderRadius: 3 }}
-                    />
+                <div key={ground.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                  <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{ 
+                      color: '#fff', 
+                      padding: '4px 8px', 
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {ground.type || 'Ground Node'}
+                    </div>
                   </div>
                   <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                     <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
-                    <div>Node ID: node-{ground.pointId || '(not assigned)'}</div>
-                    <div>Color: {ground.color}</div>
+                    <div>Node ID: {ground.pointId || '(not assigned)'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>Color:</span>
+                      <div style={{ width: '16px', height: '16px', backgroundColor: ground.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                      <span>{ground.color}</span>
+                    </div>
                     <div>Size: {ground.size}</div>
                   </div>
                 </div>
