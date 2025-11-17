@@ -40,7 +40,7 @@ export interface DrawingStroke {
   color: string;
   size: number;
   layer: 'top' | 'bottom';
-  type?: 'trace' | 'via';
+  type?: 'trace' | 'via' | 'pad';
 }
 
 // ============================================================================

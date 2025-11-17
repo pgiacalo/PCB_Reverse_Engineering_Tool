@@ -43,7 +43,7 @@ interface DrawingStroke {
   color: string;
   size: number;
   layer: 'top' | 'bottom';
-  type?: 'trace' | 'via';
+  type?: 'trace' | 'via' | 'pad';
 }
 
 // Independent stacks for saved/managed drawing objects
@@ -121,7 +121,7 @@ interface ToolDefinition {
   id: string; // Unique identifier: 'select', 'trace', 'via', 'component', 'ground', etc.
   name: string; // Display name
   toolType: Tool; // The underlying tool type
-  drawingMode?: 'trace' | 'via'; // For draw tools, which mode
+  drawingMode?: 'trace' | 'via' | 'pad'; // For draw tools, which mode
   icon?: string; // Icon/symbol for the tool
   shortcut?: string; // Keyboard shortcut
   tooltip?: string; // Tooltip text
@@ -158,6 +158,19 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     defaultLayer: 'top',
   });
   
+  registry.set('pad', {
+    id: 'pad',
+    name: 'Pad',
+    toolType: 'draw',
+    drawingMode: 'pad',
+    icon: '▢',
+    shortcut: 'P',
+    tooltip: 'Place pad connection',
+    colorReflective: true,
+    settings: { color: '#ff0000', size: 26 },
+    defaultLayer: 'top',
+  });
+  
   registry.set('trace', {
     id: 'trace',
     name: 'Trace',
@@ -188,7 +201,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     name: 'Power',
     toolType: 'power',
     icon: '⊕',
-    shortcut: 'P',
+    shortcut: 'W',
     tooltip: 'Place power node',
     colorReflective: true,
     settings: { color: '#ff0000', size: 18 },
@@ -262,6 +275,8 @@ function App() {
       bottomTraceSize: parseInt(localStorage.getItem('defaultBottomTraceSize') || '6', 10),
       viaSize: parseInt(localStorage.getItem('defaultViaSize') || '26', 10),
       viaColor: localStorage.getItem('defaultViaColor') || '#ff0000',
+      padSize: parseInt(localStorage.getItem('defaultPadSize') || '26', 10),
+      padColor: localStorage.getItem('defaultPadColor') || '#ff0000',
       componentSize: parseInt(localStorage.getItem('defaultComponentSize') || '18', 10),
       componentColor: localStorage.getItem('defaultComponentColor') || '#ff0000',
       powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
@@ -271,7 +286,7 @@ function App() {
   }, []);
 
   // Save defaults to localStorage
-  const saveDefaultSize = useCallback((type: 'via' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
+  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceSize', String(size));
@@ -280,6 +295,8 @@ function App() {
       }
     } else if (type === 'via') {
       localStorage.setItem('defaultViaSize', String(size));
+    } else if (type === 'pad') {
+      localStorage.setItem('defaultPadSize', String(size));
     } else if (type === 'component') {
       localStorage.setItem('defaultComponentSize', String(size));
     } else if (type === 'power') {
@@ -291,7 +308,7 @@ function App() {
     }
   }, []);
 
-  const saveDefaultColor = useCallback((type: 'via' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => {
+  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceColor', color);
@@ -300,6 +317,8 @@ function App() {
       }
     } else if (type === 'via') {
       localStorage.setItem('defaultViaColor', color);
+    } else if (type === 'pad') {
+      localStorage.setItem('defaultPadColor', color);
     } else if (type === 'component') {
       localStorage.setItem('defaultComponentColor', color);
     } else if (type === 'brush') {
@@ -336,7 +355,7 @@ function App() {
   const [isShiftConstrained, setIsShiftConstrained] = useState(false);
   const [viewScale, setViewScale] = useState(1);
   const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [drawingMode, setDrawingMode] = useState<'trace' | 'via'>('trace');
+  const [drawingMode, setDrawingMode] = useState<'trace' | 'via' | 'pad'>('trace');
   
   // Save current settings when switching away from a tool and restore new tool's settings
   const prevToolIdRef = React.useRef<string | null>(null);
@@ -437,6 +456,7 @@ function App() {
   // Lock states
   const [areImagesLocked, setAreImagesLocked] = useState(false);
   const [areViasLocked, setAreViasLocked] = useState(false);
+  const [arePadsLocked, setArePadsLocked] = useState(false);
   const [areTracesLocked, setAreTracesLocked] = useState(false);
   const [areComponentsLocked, setAreComponentsLocked] = useState(false);
   const [areGroundNodesLocked, setAreGroundNodesLocked] = useState(false);
@@ -569,6 +589,8 @@ function App() {
   const [showViasLayer, setShowViasLayer] = useState(true);
   const [showTopTracesLayer, setShowTopTracesLayer] = useState(true);
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
+  const [showTopPadsLayer, setShowTopPadsLayer] = useState(true);
+  const [showBottomPadsLayer, setShowBottomPadsLayer] = useState(true);
   const [showTopComponents, setShowTopComponents] = useState(true);
   const [showBottomComponents, setShowBottomComponents] = useState(true);
   // Power layer
@@ -1032,9 +1054,10 @@ function App() {
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Use persisted via defaults if available
-        const viaColor = persistedDefaults.viaColor || brushColor;
-        const viaSize = persistedDefaults.viaSize || brushSize;
+        // Use toolRegistry settings first, then persisted defaults, then brush color/size
+        const viaDef = toolRegistry.get('via');
+        const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
+        const viaSize = viaDef?.settings.size || persistedDefaults.viaSize || brushSize;
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -1052,6 +1075,27 @@ function App() {
         } else {
           setViaOrderBottom(prev => [...prev, viaStroke.id]);
         }
+        return;
+      }
+
+      if (drawingMode === 'pad') {
+        // Add a square representing a pad at click location
+        // Use toolRegistry settings first, then persisted defaults, then brush color/size
+        const padDef = toolRegistry.get('pad');
+        const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
+        const padSize = padDef?.settings.size || persistedDefaults.padSize || brushSize;
+        // Truncate coordinates to 3 decimal places for exact matching
+        const truncatedPos = truncatePoint({ x, y });
+        const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
+        const padStroke: DrawingStroke = {
+          id: `${Date.now()}-pad`,
+          points: [center],
+          color: padColor,
+          size: padSize,
+          layer: selectedDrawingLayer,
+          type: 'pad',
+        };
+        setDrawingStrokes(prev => [...prev, padStroke]);
         return;
       }
 
@@ -1414,8 +1458,9 @@ function App() {
         setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
         setDrawingStrokes(prev => {
           const filtered = prev.filter(stroke => {
-            // Don't erase locked vias or traces
+            // Don't erase locked vias, pads, or traces
             if (stroke.type === 'via' && areViasLocked) return true;
+            if (stroke.type === 'pad' && arePadsLocked) return true;
             if (stroke.type === 'trace' && areTracesLocked) return true;
             
             // Only check strokes on the selected drawing layer
@@ -1582,7 +1627,7 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -2257,7 +2302,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -2457,51 +2502,75 @@ function App() {
       }
     });
 
-    // Pass 2: draw vias on top of traces
+    // Pass 2: draw vias and pads on top of traces
     drawingStrokes.forEach(stroke => {
-      if (stroke.type !== 'via') return;
-      if (!showViasLayer) return;
+      if (stroke.type === 'via') {
+        if (!showViasLayer) return;
+      } else if (stroke.type === 'pad') {
+        // Check pad visibility based on layer
+        if (stroke.layer === 'top' && !showTopPadsLayer) return;
+        if (stroke.layer === 'bottom' && !showBottomPadsLayer) return;
+      } else {
+        return;
+      }
+      const c = stroke.points[0];
+      
       // Selection highlight
       if (selectedIds.has(stroke.id)) {
-        const c = stroke.points[0];
-        const rOuter = Math.max(0.5, stroke.size / 2) + 3;
-        ctx.strokeStyle = '#00bfff';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 3]);
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        if (stroke.type === 'via') {
+          const rOuter = Math.max(0.5, stroke.size / 2) + 3;
+          ctx.strokeStyle = '#00bfff';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        } else if (stroke.type === 'pad') {
+          const halfSize = Math.max(0.5, stroke.size / 2) + 3;
+          ctx.strokeStyle = '#00bfff';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(c.x - halfSize, c.y - halfSize, stroke.size + 6, stroke.size + 6);
+          ctx.setLineDash([]);
+        }
       }
-      // Draw via with annulus (filled ring with open hole) and bullseye crosshairs
-      const c = stroke.points[0];
-      const rOuter = Math.max(0.5, stroke.size / 2);
-      const rInner = rOuter * 0.5;
-      const crosshairLength = rOuter * 0.7; // Length of crosshair lines
       
-      // Draw annulus (filled ring with open hole in the middle)
-      // Use even-odd fill rule to create a hole in the middle
-      ctx.fillStyle = stroke.color;
-      ctx.beginPath();
-      // Outer circle
-      ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
-      // Inner circle (creates the hole with even-odd fill rule)
-      ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
-      ctx.fill('evenodd');
-      
-      // Draw medium gray crosshairs
-      ctx.strokeStyle = '#808080'; // Medium gray
-      ctx.lineWidth = 1;
-      // Horizontal line
-      ctx.beginPath();
-      ctx.moveTo(c.x - crosshairLength, c.y);
-      ctx.lineTo(c.x + crosshairLength, c.y);
-      ctx.stroke();
-      // Vertical line
-      ctx.beginPath();
-      ctx.moveTo(c.x, c.y - crosshairLength);
-      ctx.lineTo(c.x, c.y + crosshairLength);
-      ctx.stroke();
+      if (stroke.type === 'via') {
+        // Draw via with annulus (filled ring with open hole) and bullseye crosshairs
+        const rOuter = Math.max(0.5, stroke.size / 2);
+        const rInner = rOuter * 0.5;
+        const crosshairLength = rOuter * 0.7;
+        
+        // Draw annulus (filled ring with open hole in the middle)
+        // Use even-odd fill rule to create a hole in the middle
+        ctx.fillStyle = stroke.color;
+        ctx.beginPath();
+        // Outer circle
+        ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+        // Inner circle (creates the hole with even-odd fill rule)
+        ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
+        ctx.fill('evenodd');
+        
+        // Draw medium gray crosshairs
+        ctx.strokeStyle = '#808080'; // Medium gray
+        ctx.lineWidth = 1;
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(c.x - crosshairLength, c.y);
+        ctx.lineTo(c.x + crosshairLength, c.y);
+        ctx.stroke();
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y - crosshairLength);
+        ctx.lineTo(c.x, c.y + crosshairLength);
+        ctx.stroke();
+      } else if (stroke.type === 'pad') {
+        // Draw pad as a square
+        const halfSize = Math.max(0.5, stroke.size / 2);
+        ctx.fillStyle = stroke.color;
+        ctx.fillRect(c.x - halfSize, c.y - halfSize, stroke.size, stroke.size);
+      }
     });
 
     // Draw current stroke if it's on the appropriate layer and visible
@@ -2546,6 +2615,11 @@ function App() {
             ctx.moveTo(center.x, center.y - crosshairLength);
             ctx.lineTo(center.x, center.y + crosshairLength);
             ctx.stroke();
+          } else if (drawingMode === 'pad') {
+            const center = currentStroke[currentStroke.length - 1];
+            const halfSize = Math.max(0.5, brushSize / 2);
+            ctx.fillStyle = brushColor;
+            ctx.fillRect(center.x - halfSize, center.y - halfSize, brushSize, brushSize);
           } else {
             if (currentStroke.length === 1) {
               const p = currentStroke[0];
@@ -2660,6 +2734,8 @@ function App() {
           // Persist default size for this object type
           if (s.type === 'via') {
             saveDefaultSize('via', newSize);
+          } else if (s.type === 'pad') {
+            saveDefaultSize('pad', newSize);
           } else if (s.type === 'trace') {
             saveDefaultSize('trace', newSize, s.layer);
           }
@@ -2697,6 +2773,8 @@ function App() {
           }
         } else if (currentTool === 'draw' && drawingMode === 'via') {
           saveDefaultSize('via', newSize);
+        } else if (currentTool === 'draw' && drawingMode === 'pad') {
+          saveDefaultSize('pad', newSize);
         } else if (currentTool === 'component') {
           saveDefaultSize('component', newSize);
         } else if (currentTool === 'power') {
@@ -2731,6 +2809,8 @@ function App() {
           // Persist default size for this object type
           if (s.type === 'via') {
             saveDefaultSize('via', newSize);
+          } else if (s.type === 'pad') {
+            saveDefaultSize('pad', newSize);
           } else if (s.type === 'trace') {
             saveDefaultSize('trace', newSize, s.layer);
           }
@@ -2768,6 +2848,8 @@ function App() {
           }
         } else if (currentTool === 'draw' && drawingMode === 'via') {
           saveDefaultSize('via', newSize);
+        } else if (currentTool === 'draw' && drawingMode === 'pad') {
+          saveDefaultSize('pad', newSize);
         } else if (currentTool === 'component') {
           saveDefaultSize('component', newSize);
         } else if (currentTool === 'power') {
@@ -2791,8 +2873,9 @@ function App() {
       if (selectedIds.size > 0) {
         const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+        const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (hasLockedVias || hasLockedTraces) {
+        if (hasLockedVias || hasLockedPads || hasLockedTraces) {
           alert('Cannot change size: selected items are locked.');
           return;
         }
@@ -2820,6 +2903,26 @@ function App() {
           // Persist default size for this object type
           if (s.type === 'via') {
             saveDefaultSize('via', sz);
+            // Update toolRegistry
+            setToolRegistry(prev => {
+              const updated = new Map(prev);
+              const viaDef = updated.get('via');
+              if (viaDef) {
+                updated.set('via', { ...viaDef, settings: { ...viaDef.settings, size: sz } });
+              }
+              return updated;
+            });
+          } else if (s.type === 'pad') {
+            saveDefaultSize('pad', sz);
+            // Update toolRegistry
+            setToolRegistry(prev => {
+              const updated = new Map(prev);
+              const padDef = updated.get('pad');
+              if (padDef) {
+                updated.set('pad', { ...padDef, settings: { ...padDef.settings, size: sz } });
+              }
+              return updated;
+            });
           } else if (s.type === 'trace') {
             saveDefaultSize('trace', sz, s.layer);
           }
@@ -2853,6 +2956,26 @@ function App() {
         }
       } else if (currentTool === 'draw' && drawingMode === 'via') {
         saveDefaultSize('via', sz);
+        // Update toolRegistry
+        setToolRegistry(prev => {
+          const updated = new Map(prev);
+          const viaDef = updated.get('via');
+          if (viaDef) {
+            updated.set('via', { ...viaDef, settings: { ...viaDef.settings, size: sz } });
+          }
+          return updated;
+        });
+      } else if (currentTool === 'draw' && drawingMode === 'pad') {
+        saveDefaultSize('pad', sz);
+        // Update toolRegistry
+        setToolRegistry(prev => {
+          const updated = new Map(prev);
+          const padDef = updated.get('pad');
+          if (padDef) {
+            updated.set('pad', { ...padDef, settings: { ...padDef.settings, size: sz } });
+          }
+          return updated;
+        });
       } else if (currentTool === 'component') {
         saveDefaultSize('component', sz);
       } else if (currentTool === 'power') {
@@ -2865,7 +2988,7 @@ function App() {
     }
     
     setSetSizeDialog({ visible: false, size: 6 });
-  }, [setSizeDialog.size, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+  }, [setSizeDialog.size, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize, toolRegistry, setToolRegistry]);
 
   // Handle auto-save prompt dialog - Enable button
   const handleAutoSavePromptEnable = useCallback(() => {
@@ -3247,7 +3370,7 @@ function App() {
         }
         
         // Remove the last stroke of the current type on the selected layer
-        if (currentTool === 'draw' && drawingMode === 'via') {
+        if (currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'pad')) {
           setDrawingStrokes(prev => {
             for (let i = prev.length - 1; i >= 0; i--) {
               const s = prev[i];
@@ -3282,8 +3405,8 @@ function App() {
             e.preventDefault();
             setCurrentTool('select');
             return;
-          case 'p':
-          case 'P':
+          case 'w':
+          case 'W':
             e.preventDefault();
             setCurrentTool('power');
             return;
@@ -3296,6 +3419,12 @@ function App() {
           case 'V':
             e.preventDefault();
             setDrawingMode('via');
+            setCurrentTool('draw');
+            return;
+          case 'p':
+          case 'P':
+            e.preventDefault();
+            setDrawingMode('pad');
             setCurrentTool('draw');
             return;
           case 't':
@@ -4080,7 +4209,7 @@ function App() {
 
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
-    const kind: 'trace' | 'via' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
+    const kind: 'trace' | 'via' | 'pad' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
       currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
@@ -4092,7 +4221,7 @@ function App() {
         : currentTool === 'component'
         ? 'component'
         : currentTool === 'draw'
-        ? (drawingMode === 'via' ? 'via' : 'trace')
+        ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : 'trace')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
     const scale = Math.max(1, viewScale);
@@ -4115,8 +4244,12 @@ function App() {
       const rInner = r * 0.5;
       const crosshairLength = r * 0.7;
       
+      // Use via color from toolRegistry
+      const viaDef = toolRegistry.get('via');
+      const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
+      
       // Draw annulus using even-odd fill rule
-      ctx.fillStyle = brushColor;
+      ctx.fillStyle = viaColor;
       ctx.beginPath();
       // Outer circle
       ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
@@ -4137,6 +4270,14 @@ function App() {
       ctx.moveTo(cx, cy - crosshairLength);
       ctx.lineTo(cx, cy + crosshairLength);
       ctx.stroke();
+    } else if (kind === 'pad') {
+      // Use pad color from toolRegistry
+      const padDef = toolRegistry.get('pad');
+      const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
+      
+      // Draw pad as a square
+      ctx.fillStyle = padColor;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     } else if (kind === 'trace') {
       ctx.fillStyle = brushColor;
       ctx.beginPath();
@@ -4249,7 +4390,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, persistedDefaults]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -4458,7 +4599,8 @@ function App() {
       toolSettings: {
         // Convert Map to plain object for JSON serialization
         trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
-        via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 10 },
+        via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 26 },
+        pad: toolRegistry.get('pad')?.settings || { color: '#ff0000', size: 26 },
         component: toolRegistry.get('component')?.settings || { color: '#ff0000', size: 18 },
         ground: toolRegistry.get('ground')?.settings || { color: '#000000', size: 18 },
         power: toolRegistry.get('power')?.settings || { color: '#ff0000', size: 18 },
@@ -4466,10 +4608,22 @@ function App() {
       locks: {
         areImagesLocked,
         areViasLocked,
+        arePadsLocked,
         areTracesLocked,
         areComponentsLocked,
         areGroundNodesLocked,
         arePowerNodesLocked,
+      },
+      visibility: {
+        showViasLayer,
+        showTopPadsLayer,
+        showBottomPadsLayer,
+        showTopTracesLayer,
+        showBottomTracesLayer,
+        showTopComponents,
+        showBottomComponents,
+        showPowerLayer,
+        showGroundLayer,
       },
       autoSave: {
         enabled: autoSaveEnabled,
@@ -4482,7 +4636,7 @@ function App() {
       },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -5441,6 +5595,12 @@ function App() {
               updated.set('via', { ...viaDef, settings: project.toolSettings.via });
             }
           }
+          if (project.toolSettings.pad) {
+            const padDef = updated.get('pad');
+            if (padDef) {
+              updated.set('pad', { ...padDef, settings: project.toolSettings.pad });
+            }
+          }
           if (project.toolSettings.component) {
             const componentDef = updated.get('component');
             if (componentDef) {
@@ -5464,6 +5624,7 @@ function App() {
           const currentToolDef = (() => {
             if (currentTool === 'draw' && drawingMode === 'trace') return updated.get('trace');
             if (currentTool === 'draw' && drawingMode === 'via') return updated.get('via');
+            if (currentTool === 'draw' && drawingMode === 'pad') return updated.get('pad');
             if (currentTool === 'component') return updated.get('component');
             if (currentTool === 'power') return updated.get('power');
             if (currentTool === 'ground') return updated.get('ground');
@@ -5525,6 +5686,7 @@ function App() {
           setAreImagesLocked((project.locks as any).isImagesLocked);
         }
         if (typeof project.locks.areViasLocked === 'boolean') setAreViasLocked(project.locks.areViasLocked);
+        if (typeof project.locks.arePadsLocked === 'boolean') setArePadsLocked(project.locks.arePadsLocked);
         if (typeof project.locks.areTracesLocked === 'boolean') setAreTracesLocked(project.locks.areTracesLocked);
         if (typeof project.locks.areComponentsLocked === 'boolean') setAreComponentsLocked(project.locks.areComponentsLocked);
         // Support both new and old property names for backward compatibility
@@ -5535,6 +5697,19 @@ function App() {
           setAreGroundNodesLocked((project.locks as any).isGroundLocked);
         }
         if (typeof project.locks.arePowerNodesLocked === 'boolean') setArePowerNodesLocked(project.locks.arePowerNodesLocked);
+      }
+
+      // Restore visibility states if present
+      if (project.visibility) {
+        if (typeof project.visibility.showViasLayer === 'boolean') setShowViasLayer(project.visibility.showViasLayer);
+        if (typeof project.visibility.showTopPadsLayer === 'boolean') setShowTopPadsLayer(project.visibility.showTopPadsLayer);
+        if (typeof project.visibility.showBottomPadsLayer === 'boolean') setShowBottomPadsLayer(project.visibility.showBottomPadsLayer);
+        if (typeof project.visibility.showTopTracesLayer === 'boolean') setShowTopTracesLayer(project.visibility.showTopTracesLayer);
+        if (typeof project.visibility.showBottomTracesLayer === 'boolean') setShowBottomTracesLayer(project.visibility.showBottomTracesLayer);
+        if (typeof project.visibility.showTopComponents === 'boolean') setShowTopComponents(project.visibility.showTopComponents);
+        if (typeof project.visibility.showBottomComponents === 'boolean') setShowBottomComponents(project.visibility.showBottomComponents);
+        if (typeof project.visibility.showPowerLayer === 'boolean') setShowPowerLayer(project.visibility.showPowerLayer);
+        if (typeof project.visibility.showGroundLayer === 'boolean') setShowGroundLayer(project.visibility.showGroundLayer);
       }
 
       // Restore auto save settings if present
@@ -5966,7 +6141,7 @@ function App() {
   }, [currentStroke]);
 
   // Finalize in-progress trace when switching mode (not on layer change) to avoid unintended commits
-  const prevModeRef = React.useRef<'trace' | 'via'>(drawingMode);
+  const prevModeRef = React.useRef<'trace' | 'via' | 'pad'>(drawingMode);
   const prevLayerRef = React.useRef<'top' | 'bottom'>(selectedDrawingLayer);
   React.useEffect(() => {
     // Only react when mode actually changed; do NOT auto-finalize on layer change
@@ -6427,6 +6602,9 @@ function App() {
               <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Vias {areViasLocked ? '✓' : ''}
               </button>
+              <button onClick={() => { setArePadsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+                Lock Pads {arePadsLocked ? '✓' : ''}
+              </button>
               <button onClick={() => { setAreTracesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Traces {areTracesLocked ? '✓' : ''}
               </button>
@@ -6459,6 +6637,38 @@ function App() {
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
                 Select all vias
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all pads (top)
+                  const padIds = drawingStrokes.filter(s => s.type === 'pad' && s.layer === 'top').map(s => s.id);
+                  setSelectedIds(new Set(padIds));
+                  setSelectedComponentIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Pads (Top)
+              </button>
+              <button 
+                onClick={() => {
+                  // Select all pads (bottom)
+                  const padIds = drawingStrokes.filter(s => s.type === 'pad' && s.layer === 'bottom').map(s => s.id);
+                  setSelectedIds(new Set(padIds));
+                  setSelectedComponentIds(new Set());
+                  setSelectedPowerIds(new Set());
+                  setSelectedGroundIds(new Set());
+                  setCurrentTool('select');
+                  // Close menu after a brief delay to ensure state updates are processed
+                  setTimeout(() => setOpenMenu(null), 0);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              >
+                Select all Pads (Bottom)
               </button>
               <button 
                 onClick={() => {
@@ -6665,8 +6875,46 @@ function App() {
               }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
-                <circle cx="12" cy="12" r="4" fill={brushColor} />
+                {(() => {
+                  const viaDef = toolRegistry.get('via');
+                  const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
+                  return (
+                    <>
+                      <circle cx="12" cy="12" r="8" fill="none" stroke={viaColor} strokeWidth="3" />
+                      <circle cx="12" cy="12" r="4" fill={viaColor} />
+                    </>
+                  );
+                })()}
+              </svg>
+            </button>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) { setDrawingMode('pad'); setCurrentTool('draw'); } }} 
+              disabled={isReadOnlyMode}
+              title="Draw Pads (P)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: (currentTool === 'draw' && drawingMode === 'pad') ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'draw' && drawingMode === 'pad' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                {(() => {
+                  const padDef = toolRegistry.get('pad');
+                  const padSize = padDef?.settings.size || persistedDefaults.padSize || 26;
+                  const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
+                  // Scale pad size to fit in 16x16 icon (max 14 to leave some margin)
+                  const iconSize = Math.min(14, Math.max(4, (padSize / 26) * 14));
+                  const iconX = (24 - iconSize) / 2;
+                  const iconY = (24 - iconSize) / 2;
+                  return <rect x={iconX} y={iconY} width={iconSize} height={iconSize} fill={padColor} />;
+                })()}
               </svg>
             </button>
             <button 
@@ -6938,6 +7186,26 @@ function App() {
                           }
                         } else if (currentTool === 'draw' && drawingMode === 'via') {
                           saveDefaultColor('via', c);
+                          // Update toolRegistry
+                          setToolRegistry(prev => {
+                            const updated = new Map(prev);
+                            const viaDef = updated.get('via');
+                            if (viaDef) {
+                              updated.set('via', { ...viaDef, settings: { ...viaDef.settings, color: c } });
+                            }
+                            return updated;
+                          });
+                        } else if (currentTool === 'draw' && drawingMode === 'pad') {
+                          saveDefaultColor('pad', c);
+                          // Update toolRegistry
+                          setToolRegistry(prev => {
+                            const updated = new Map(prev);
+                            const padDef = updated.get('pad');
+                            if (padDef) {
+                              updated.set('pad', { ...padDef, settings: { ...padDef.settings, color: c } });
+                            }
+                            return updated;
+                          });
                         } else if (currentTool === 'component') {
                           saveDefaultColor('component', c);
                         }
@@ -6948,6 +7216,26 @@ function App() {
                               // Persist default color for this object type
                               if (s.type === 'via') {
                                 saveDefaultColor('via', c);
+                                // Update toolRegistry
+                                setToolRegistry(prev => {
+                                  const updated = new Map(prev);
+                                  const viaDef = updated.get('via');
+                                  if (viaDef) {
+                                    updated.set('via', { ...viaDef, settings: { ...viaDef.settings, color: c } });
+                                  }
+                                  return updated;
+                                });
+                              } else if (s.type === 'pad') {
+                                saveDefaultColor('pad', c);
+                                // Update toolRegistry
+                                setToolRegistry(prev => {
+                                  const updated = new Map(prev);
+                                  const padDef = updated.get('pad');
+                                  if (padDef) {
+                                    updated.set('pad', { ...padDef, settings: { ...padDef.settings, color: c } });
+                                  }
+                                  return updated;
+                                });
                               } else if (s.type === 'trace') {
                                 saveDefaultColor('trace', c, s.layer);
                               }
@@ -7187,7 +7475,7 @@ function App() {
                   <input type="checkbox" checked={showTopImage} onChange={(e) => setShowTopImage(e.target.checked)} />
                 </label>
               </div>
-              <canvas ref={topThumbRef} width={140} height={90} />
+              <canvas ref={topThumbRef} width={100} height={64} />
             </div>
             <div onClick={() => setSelectedDrawingLayer('bottom')} title="Bottom layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedImageForTransform === 'bottom' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -7196,7 +7484,7 @@ function App() {
                   <input type="checkbox" checked={showBottomImage} onChange={(e) => setShowBottomImage(e.target.checked)} />
                 </label>
               </div>
-              <canvas ref={bottomThumbRef} width={140} height={90} />
+              <canvas ref={bottomThumbRef} width={100} height={64} />
             </div>
             <div style={{ height: 1, background: '#e9e9ef', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -7204,20 +7492,28 @@ function App() {
               <span>Vias</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showTopPadsLayer} onChange={(e) => setShowTopPadsLayer(e.target.checked)} />
+              <span>Pads (Top)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
+              <span>Pads (Bottom)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopTracesLayer} onChange={(e) => setShowTopTracesLayer(e.target.checked)} />
-              <span>Top Traces</span>
+              <span>Traces (Top)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
-              <span>Bottom Traces</span>
+              <span>Traces (Bottom)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopComponents} onChange={(e) => setShowTopComponents(e.target.checked)} />
-              <span>Top Components</span>
+              <span>Components (Top)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
-              <span>Bottom Components</span>
+              <span>Components (Bottom)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showPowerLayer} onChange={(e) => setShowPowerLayer(e.target.checked)} />

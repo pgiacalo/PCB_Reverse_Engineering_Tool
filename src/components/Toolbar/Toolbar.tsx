@@ -13,8 +13,8 @@ interface ToolbarProps {
   onBrushSizeChange: (size: number) => void;
   onColorPickerClick: () => void;
   isShiftPressed?: boolean;
-  drawingMode?: 'trace' | 'via';
-  onDrawingModeChange?: (mode: 'trace' | 'via') => void;
+  drawingMode?: 'trace' | 'via' | 'pad';
+  onDrawingModeChange?: (mode: 'trace' | 'via' | 'pad') => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -47,6 +47,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       tooltip: 'Place via connection',
       colorReflective: true,
       mode: 'via' as const,
+    },
+    {
+      tool: 'draw' as Tool,
+      icon: '▢',
+      label: 'Pad',
+      shortcut: 'D',
+      tooltip: 'Place pad connection',
+      colorReflective: true,
+      mode: 'pad' as const,
     },
     {
       tool: 'draw' as Tool, // Trace uses draw mode
@@ -113,7 +122,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     },
   ];
 
-  const handleToolClick = (tool: Tool, mode?: 'trace' | 'via') => {
+  const handleToolClick = (tool: Tool, mode?: 'trace' | 'via' | 'pad') => {
     if (mode && onDrawingModeChange) {
       onDrawingModeChange(mode);
     }
