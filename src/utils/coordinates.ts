@@ -252,3 +252,28 @@ export function generateUniqueId(prefix: string = 'id'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+/**
+ * Truncate coordinate to 3 decimal places
+ * This ensures consistent precision for all coordinates and enables exact matches
+ * when objects snap to each other.
+ * 
+ * @param coord - The coordinate value to truncate
+ * @returns The coordinate truncated to 3 decimal places
+ */
+export function truncateCoordinate(coord: number): number {
+  return Math.round(coord * 1000) / 1000;
+}
+
+/**
+ * Truncate a point's x and y coordinates to 3 decimal places
+ * 
+ * @param point - The point with x and y coordinates
+ * @returns A new point with truncated coordinates
+ */
+export function truncatePoint(point: { x: number; y: number }): { x: number; y: number } {
+  return {
+    x: truncateCoordinate(point.x),
+    y: truncateCoordinate(point.y)
+  };
+}
+

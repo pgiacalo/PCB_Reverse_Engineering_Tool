@@ -3,7 +3,9 @@ import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometr
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent } from './utils/components';
 import { COMPONENT_TYPE_INFO } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
+import { generateKiCadNetlist, generateProtelNetlist } from './utils/netlist';
+import { generateSimpleSchematic } from './utils/schematic';
 import type { ComponentType, PCBComponent } from './types';
 import './App.css';
 
@@ -152,7 +154,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'V',
     tooltip: 'Place via connection',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 10 },
+    settings: { color: '#ff0000', size: 26 },
     defaultLayer: 'top',
   });
   
@@ -249,14 +251,71 @@ function App() {
   const [transparency, setTransparency] = useState(50);
   const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
   const [currentTool, setCurrentTool] = useState<Tool>('none');
-  const [brushColor, setBrushColor] = useState('#008080'); // Default to Teal for Top trace
-  const [brushSize, setBrushSize] = useState(6); // Default to 6px
-  // Trace colors per layer (default: Teal for Top, Dark Blue for Bottom)
-  const [topTraceColor, setTopTraceColor] = useState('#008080'); // Teal
-  const [bottomTraceColor, setBottomTraceColor] = useState('#00008b'); // Dark Blue
-  // Trace sizes per layer (default: 6px for both Top and Bottom)
-  const [topTraceSize, setTopTraceSize] = useState(6);
-  const [bottomTraceSize, setBottomTraceSize] = useState(6);
+  // Load persisted defaults from localStorage
+  const loadPersistedDefaults = useCallback(() => {
+    const defaults = {
+      brushColor: localStorage.getItem('defaultBrushColor') || '#008080',
+      brushSize: parseInt(localStorage.getItem('defaultBrushSize') || '6', 10),
+      topTraceColor: localStorage.getItem('defaultTopTraceColor') || '#008080',
+      bottomTraceColor: localStorage.getItem('defaultBottomTraceColor') || '#00008b',
+      topTraceSize: parseInt(localStorage.getItem('defaultTopTraceSize') || '6', 10),
+      bottomTraceSize: parseInt(localStorage.getItem('defaultBottomTraceSize') || '6', 10),
+      viaSize: parseInt(localStorage.getItem('defaultViaSize') || '26', 10),
+      viaColor: localStorage.getItem('defaultViaColor') || '#ff0000',
+      componentSize: parseInt(localStorage.getItem('defaultComponentSize') || '18', 10),
+      componentColor: localStorage.getItem('defaultComponentColor') || '#ff0000',
+      powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
+      groundSize: parseInt(localStorage.getItem('defaultGroundSize') || '18', 10),
+    };
+    return defaults;
+  }, []);
+
+  // Save defaults to localStorage
+  const saveDefaultSize = useCallback((type: 'via' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
+    if (type === 'trace' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopTraceSize', String(size));
+      } else {
+        localStorage.setItem('defaultBottomTraceSize', String(size));
+      }
+    } else if (type === 'via') {
+      localStorage.setItem('defaultViaSize', String(size));
+    } else if (type === 'component') {
+      localStorage.setItem('defaultComponentSize', String(size));
+    } else if (type === 'power') {
+      localStorage.setItem('defaultPowerSize', String(size));
+    } else if (type === 'ground') {
+      localStorage.setItem('defaultGroundSize', String(size));
+    } else if (type === 'brush') {
+      localStorage.setItem('defaultBrushSize', String(size));
+    }
+  }, []);
+
+  const saveDefaultColor = useCallback((type: 'via' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => {
+    if (type === 'trace' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopTraceColor', color);
+      } else {
+        localStorage.setItem('defaultBottomTraceColor', color);
+      }
+    } else if (type === 'via') {
+      localStorage.setItem('defaultViaColor', color);
+    } else if (type === 'component') {
+      localStorage.setItem('defaultComponentColor', color);
+    } else if (type === 'brush') {
+      localStorage.setItem('defaultBrushColor', color);
+    }
+  }, []);
+
+  const persistedDefaults = loadPersistedDefaults();
+  const [brushColor, setBrushColor] = useState(persistedDefaults.brushColor);
+  const [brushSize, setBrushSize] = useState(persistedDefaults.brushSize);
+  // Trace colors per layer
+  const [topTraceColor, setTopTraceColor] = useState(persistedDefaults.topTraceColor);
+  const [bottomTraceColor, setBottomTraceColor] = useState(persistedDefaults.bottomTraceColor);
+  // Trace sizes per layer
+  const [topTraceSize, setTopTraceSize] = useState(persistedDefaults.topTraceSize);
+  const [bottomTraceSize, setBottomTraceSize] = useState(persistedDefaults.bottomTraceSize);
   const [showColorPicker, setShowColorPicker] = useState(false);
   
   // Tool registry - centralized tool definitions with settings as attributes
@@ -265,7 +324,7 @@ function App() {
   const [drawingStrokes, setDrawingStrokes] = useState<DrawingStroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
-  const [selectedImageForTransform, setSelectedImageForTransform] = useState<'top' | 'bottom' | null>(null);
+  const [selectedImageForTransform, setSelectedImageForTransform] = useState<'top' | 'bottom' | 'both' | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
   const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone'>('nudge');
@@ -447,20 +506,56 @@ function App() {
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
   const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
-  const [showAutoSaveSubmenu, setShowAutoSaveSubmenu] = useState(false);
+  // Set Size dialog state
+  const [setSizeDialog, setSetSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 6 });
+  const setSizeInputRef = useRef<HTMLInputElement>(null);
+  // Auto Save dialog state
+  const [autoSaveDialog, setAutoSaveDialog] = useState<{ visible: boolean; interval: number | null }>({ visible: false, interval: 5 });
+  const [autoSavePromptDialog, setAutoSavePromptDialog] = useState<{ visible: boolean; source: 'new' | 'open' | null }>({ visible: false, source: null });
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
   const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
-  // Auto Save state
+  // New project setup dialog (for project name and directory selection)
+  const [newProjectSetupDialog, setNewProjectSetupDialog] = useState<{ 
+    visible: boolean; 
+    projectName: string; 
+    locationPath: string; 
+    locationHandle: FileSystemDirectoryHandle | null;
+  }>({ 
+    visible: false, 
+    projectName: '', 
+    locationPath: '',
+    locationHandle: null,
+  });
+  const newProjectNameInputRef = useRef<HTMLInputElement>(null);
+  // Save As dialog (for file name and directory selection)
+  const [saveAsDialog, setSaveAsDialog] = useState<{ 
+    visible: boolean; 
+    filename: string; 
+    locationPath: string; 
+    locationHandle: FileSystemDirectoryHandle | null;
+  }>({ 
+    visible: false, 
+    filename: '', 
+    locationPath: '',
+    locationHandle: null,
+  });
+  const saveAsFilenameInputRef = useRef<HTMLInputElement>(null);
+  // Auto Save state - default to disabled, user must enable it
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
-  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(null); // Interval in minutes
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(0.5); // Interval in minutes, default 0.5 (30 seconds)
   const [autoSaveDirHandle, setAutoSaveDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [autoSaveBaseName, setAutoSaveBaseName] = useState<string>('');
   const autoSaveIntervalRef = useRef<number | null>(null);
   // Track if there have been changes since the last auto save
   const hasChangesSinceLastAutoSaveRef = useRef<boolean>(false);
+  // Track previous autoSaveEnabled state to detect when it transitions from disabled to enabled
+  const prevAutoSaveEnabledRef = useRef<boolean>(false);
   // Track current project file path/name
   const [currentProjectFilePath, setCurrentProjectFilePath] = useState<string>('');
+  // Project directory and name for new projects
+  const [projectDirHandle, setProjectDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [projectName, setProjectName] = useState<string>('pcb_project');
   // Track auto-saved file history for navigation
   const [autoSaveFileHistory, setAutoSaveFileHistory] = useState<string[]>([]);
   const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
@@ -930,17 +1025,24 @@ function App() {
           const d = Math.hypot(c.x - wx, c.y - wy);
           if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
         }
-        return bestCenter ?? { x: wx, y: wy };
+        // Truncate coordinates to 3 decimal places for exact matching
+        const result = bestCenter ?? { x: wx, y: wy };
+        return truncatePoint(result);
       };
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        const center = { id: generatePointId(), x, y };
+        // Use persisted via defaults if available
+        const viaColor = persistedDefaults.viaColor || brushColor;
+        const viaSize = persistedDefaults.viaSize || brushSize;
+        // Truncate coordinates to 3 decimal places for exact matching
+        const truncatedPos = truncatePoint({ x, y });
+        const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
         const viaStroke: DrawingStroke = {
           id: `${Date.now()}-via`,
           points: [center],
-          color: brushColor,
-          size: brushSize,
+          color: viaColor,
+          size: viaSize,
           layer: selectedDrawingLayer,
           type: 'via',
         };
@@ -954,7 +1056,7 @@ function App() {
       }
 
       // Traces mode: connected segments by clicks, snapping to via centers unless ESC is held
-      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y) : { x, y };
+      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
       const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
@@ -971,7 +1073,9 @@ function App() {
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
       // Store the click position and show type chooser (like trace pattern)
-      setPendingComponentPosition({ x, y, layer: 'top' });
+      // Truncate coordinates to 3 decimal places for exact matching
+      const truncatedPos = truncatePoint({ x, y });
+      setPendingComponentPosition({ x: truncatedPos.x, y: truncatedPos.y, layer: 'top' });
       setShowComponentTypeChooser(true);
       return;
     } else if (currentTool === 'power') {
@@ -997,9 +1101,11 @@ function App() {
             }
           }
         });
-        return bestCenter || { x: wx, y: wy };
+        // Truncate coordinates to 3 decimal places for exact matching
+        const result = bestCenter || { x: wx, y: wy };
+        return truncatePoint(result);
       };
-      const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
+      const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
       
       // Find the selected power bus
       const bus = powerBuses.find(b => b.id === selectedPowerBusId);
@@ -1035,9 +1141,11 @@ function App() {
             bestCenter = { x: c.x, y: c.y }; 
           }
         }
-        return bestCenter ?? { x: wx, y: wy };
+        // Truncate coordinates to 3 decimal places for exact matching
+        const result = bestCenter ?? { x: wx, y: wy };
+        return truncatePoint(result);
       };
-      const { x: gx, y: gy } = !isEscHeld ? snapToNearestViaCenter(x, y) : { x, y };
+      const { x: gx, y: gy } = !isEscHeld ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         x: gx,
@@ -1293,10 +1401,14 @@ function App() {
         if (isShiftConstrained) {
           const startPt = currentStroke[0];
           const snapped = snapConstrainedPoint(startPt, x, y);
-          const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
+          // Truncate coordinates to 3 decimal places for exact matching
+          const truncatedSnapped = truncatePoint(snapped);
+          const pt = { id: generatePointId(), x: truncatedSnapped.x, y: truncatedSnapped.y };
           setCurrentStroke([startPt, pt]);
         } else {
-          setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
+          // Truncate coordinates to 3 decimal places for exact matching
+          const truncatedPos = truncatePoint({ x, y });
+          setCurrentStroke(prev => [...prev, { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y }]);
         }
       } else if (currentTool === 'erase') {
         setCurrentStroke(prev => [...prev, { id: generatePointId(), x, y }]);
@@ -1450,6 +1562,22 @@ function App() {
           x: prev.x + deltaX,
           y: prev.y + deltaY
         } : null);
+      } else if (selectedImageForTransform === 'both') {
+        // Apply transform to both images
+        if (topImage) {
+          setTopImage(prev => prev ? {
+            ...prev,
+            x: prev.x + deltaX,
+            y: prev.y + deltaY
+          } : null);
+        }
+        if (bottomImage) {
+          setBottomImage(prev => prev ? {
+            ...prev,
+            x: prev.x + deltaX,
+            y: prev.y + deltaY
+          } : null);
+        }
       }
       
       setTransformStartPos({ x, y });
@@ -2265,7 +2393,7 @@ function App() {
   }, []);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
-    // Pass 1: draw non-via strokes (traces) first
+    // Pass 1: draw traces first (so vias appear on top)
     drawingStrokes.forEach(stroke => {
       if (stroke.type === 'via') return;
       let shouldShowStroke = false;
@@ -2319,10 +2447,17 @@ function App() {
           }
         });
         ctx.stroke();
+
+        // Draw points at each vertex
+        for (const pt of stroke.points) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     });
 
-    // Pass 2: draw vias on top of all other strokes
+    // Pass 2: draw vias on top of traces
     drawingStrokes.forEach(stroke => {
       if (stroke.type !== 'via') return;
       if (!showViasLayer) return;
@@ -2338,19 +2473,35 @@ function App() {
         ctx.stroke();
         ctx.setLineDash([]);
       }
-      // Outer ring + inner filled pad (inner = 1/2 outer diameter)
+      // Draw via with annulus (filled ring with open hole) and bullseye crosshairs
       const c = stroke.points[0];
       const rOuter = Math.max(0.5, stroke.size / 2);
       const rInner = rOuter * 0.5;
-      ctx.strokeStyle = stroke.color;
-      ctx.lineWidth = Math.max(1, Math.min(2, rOuter * 0.25));
-      ctx.beginPath();
-      ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
-      ctx.stroke();
+      const crosshairLength = rOuter * 0.7; // Length of crosshair lines
+      
+      // Draw annulus (filled ring with open hole in the middle)
+      // Use even-odd fill rule to create a hole in the middle
       ctx.fillStyle = stroke.color;
       ctx.beginPath();
+      // Outer circle
+      ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+      // Inner circle (creates the hole with even-odd fill rule)
       ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fill('evenodd');
+      
+      // Draw medium gray crosshairs
+      ctx.strokeStyle = '#808080'; // Medium gray
+      ctx.lineWidth = 1;
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(c.x - crosshairLength, c.y);
+      ctx.lineTo(c.x + crosshairLength, c.y);
+      ctx.stroke();
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y - crosshairLength);
+      ctx.lineTo(c.x, c.y + crosshairLength);
+      ctx.stroke();
     });
 
     // Draw current stroke if it's on the appropriate layer and visible
@@ -2371,15 +2522,30 @@ function App() {
             const center = currentStroke[currentStroke.length - 1];
             const rOuter = Math.max(0.5, brushSize / 2);
             const rInner = rOuter * 0.5;
-            ctx.strokeStyle = brushColor;
-            ctx.lineWidth = Math.max(1, Math.min(2, rOuter * 0.25));
-            ctx.beginPath();
-            ctx.arc(center.x, center.y, rOuter, 0, Math.PI * 2);
-            ctx.stroke();
+            const crosshairLength = rOuter * 0.7;
+            
+            // Draw annulus using even-odd fill rule
             ctx.fillStyle = brushColor;
             ctx.beginPath();
+            // Outer circle
+            ctx.arc(center.x, center.y, rOuter, 0, Math.PI * 2);
+            // Inner circle (creates the hole with even-odd fill rule)
             ctx.arc(center.x, center.y, rInner, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.fill('evenodd');
+            
+            // Draw medium gray crosshairs
+            ctx.strokeStyle = '#808080'; // Medium gray
+            ctx.lineWidth = 1;
+            // Horizontal line
+            ctx.beginPath();
+            ctx.moveTo(center.x - crosshairLength, center.y);
+            ctx.lineTo(center.x + crosshairLength, center.y);
+            ctx.stroke();
+            // Vertical line
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y - crosshairLength);
+            ctx.lineTo(center.x, center.y + crosshairLength);
+            ctx.stroke();
           } else {
             if (currentStroke.length === 1) {
               const p = currentStroke[0];
@@ -2429,13 +2595,21 @@ function App() {
   };
 
   // Transformation functions
-  const updateImageTransform = useCallback((type: 'top' | 'bottom', updates: Partial<PCBImage>) => {
+  const updateImageTransform = useCallback((type: 'top' | 'bottom' | 'both', updates: Partial<PCBImage>) => {
     // Don't allow transforms if images are locked
     if (areImagesLocked) return;
     if (type === 'top' && topImage) {
       setTopImage(prev => prev ? { ...prev, ...updates } : null);
     } else if (type === 'bottom' && bottomImage) {
       setBottomImage(prev => prev ? { ...prev, ...updates } : null);
+    } else if (type === 'both') {
+      // Apply to both images
+      if (topImage) {
+        setTopImage(prev => prev ? { ...prev, ...updates } : null);
+      }
+      if (bottomImage) {
+        setBottomImage(prev => prev ? { ...prev, ...updates } : null);
+      }
     }
   }, [topImage, bottomImage, areImagesLocked]);
 
@@ -2475,32 +2649,67 @@ function App() {
       if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
       if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
       
-      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: s.size + 1 } : s));
+      // Determine object types from selected items to persist defaults
+      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      const hasVias = selectedStrokes.some(s => s.type === 'via');
+      const hasTraces = selectedStrokes.some(s => s.type === 'trace');
+      
+      setDrawingStrokes(prev => prev.map(s => {
+        if (selectedIds.has(s.id)) {
+          const newSize = s.size + 1;
+          // Persist default size for this object type
+          if (s.type === 'via') {
+            saveDefaultSize('via', newSize);
+          } else if (s.type === 'trace') {
+            saveDefaultSize('trace', newSize, s.layer);
+          }
+          return { ...s, size: newSize };
+        }
+        return s;
+      }));
       if (selectedComponentIds.size > 0) {
+        const newSize = (selectedComponentIds.size > 0 ? (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) : 18) + 1;
+        saveDefaultSize('component', newSize);
         setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
         setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
       }
       if (selectedPowerIds.size > 0) {
+        const newSize = (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) + 1;
+        saveDefaultSize('power', newSize);
         setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
       }
       if (selectedGroundIds.size > 0) {
+        const newSize = (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) + 1;
+        saveDefaultSize('ground', newSize);
         setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
       }
     } else {
       setBrushSize(b => {
         const newSize = Math.min(40, b + 1);
-        // If trace tool is active, save size to the appropriate layer
+        // Persist default size based on current tool
         if (currentTool === 'draw' && drawingMode === 'trace') {
           if (selectedDrawingLayer === 'top') {
             setTopTraceSize(newSize);
+            saveDefaultSize('trace', newSize, 'top');
           } else {
             setBottomTraceSize(newSize);
+            saveDefaultSize('trace', newSize, 'bottom');
           }
+        } else if (currentTool === 'draw' && drawingMode === 'via') {
+          saveDefaultSize('via', newSize);
+        } else if (currentTool === 'component') {
+          saveDefaultSize('component', newSize);
+        } else if (currentTool === 'power') {
+          saveDefaultSize('power', newSize);
+        } else if (currentTool === 'ground') {
+          saveDefaultSize('ground', newSize);
+        } else {
+          saveDefaultSize('brush', newSize);
         }
         return newSize;
       });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
 
   const decreaseSize = useCallback(() => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
@@ -2515,45 +2724,257 @@ function App() {
       if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
       if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
       
-      setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: Math.max(1, s.size - 1) } : s));
+      // Determine object types from selected items to persist defaults
+      setDrawingStrokes(prev => prev.map(s => {
+        if (selectedIds.has(s.id)) {
+          const newSize = Math.max(1, s.size - 1);
+          // Persist default size for this object type
+          if (s.type === 'via') {
+            saveDefaultSize('via', newSize);
+          } else if (s.type === 'trace') {
+            saveDefaultSize('trace', newSize, s.layer);
+          }
+          return { ...s, size: newSize };
+        }
+        return s;
+      }));
       if (selectedComponentIds.size > 0) {
+        const newSize = Math.max(1, (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) - 1);
+        saveDefaultSize('component', newSize);
         setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
         setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
       }
       if (selectedPowerIds.size > 0) {
+        const newSize = Math.max(1, (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) - 1);
+        saveDefaultSize('power', newSize);
         setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
       }
       if (selectedGroundIds.size > 0) {
+        const newSize = Math.max(1, (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) - 1);
+        saveDefaultSize('ground', newSize);
         setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
       }
     } else {
       setBrushSize(b => {
         const newSize = Math.max(1, b - 1);
-        // If trace tool is active, save size to the appropriate layer
+        // Persist default size based on current tool
         if (currentTool === 'draw' && drawingMode === 'trace') {
           if (selectedDrawingLayer === 'top') {
             setTopTraceSize(newSize);
+            saveDefaultSize('trace', newSize, 'top');
           } else {
             setBottomTraceSize(newSize);
+            saveDefaultSize('trace', newSize, 'bottom');
           }
+        } else if (currentTool === 'draw' && drawingMode === 'via') {
+          saveDefaultSize('via', newSize);
+        } else if (currentTool === 'component') {
+          saveDefaultSize('component', newSize);
+        } else if (currentTool === 'power') {
+          saveDefaultSize('power', newSize);
+        } else if (currentTool === 'ground') {
+          saveDefaultSize('ground', newSize);
+        } else {
+          saveDefaultSize('brush', newSize);
         }
         return newSize;
       });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+
+  // Handle applying size from Set Size dialog
+  const handleSetSizeApply = useCallback(() => {
+    const sz = setSizeDialog.size;
+    
+    if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
+      // Check if any selected items are locked
+      if (selectedIds.size > 0) {
+        const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+        const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+        const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+        if (hasLockedVias || hasLockedTraces) {
+          alert('Cannot change size: selected items are locked.');
+          return;
+        }
+      }
+      if (selectedComponentIds.size > 0 && areComponentsLocked) {
+        alert('Cannot change size: selected components are locked.');
+        return;
+      }
+      if (selectedPowerIds.size > 0 && arePowerNodesLocked) {
+        alert('Cannot change size: selected power nodes are locked.');
+        return;
+      }
+      if (selectedGroundIds.size > 0 && areGroundNodesLocked) {
+        alert('Cannot change size: selected ground nodes are locked.');
+        return;
+      }
+      
+      // Determine object types from selected items to persist defaults
+      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      const hasVias = selectedStrokes.some(s => s.type === 'via');
+      const hasTraces = selectedStrokes.some(s => s.type === 'trace');
+      
+      setDrawingStrokes(prev => prev.map(s => {
+        if (selectedIds.has(s.id)) {
+          // Persist default size for this object type
+          if (s.type === 'via') {
+            saveDefaultSize('via', sz);
+          } else if (s.type === 'trace') {
+            saveDefaultSize('trace', sz, s.layer);
+          }
+          return { ...s, size: sz };
+        }
+        return s;
+      }));
+      if (selectedComponentIds.size > 0) {
+        saveDefaultSize('component', sz);
+        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
+      }
+      if (selectedPowerIds.size > 0) {
+        saveDefaultSize('power', sz);
+        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: sz } : p));
+      }
+      if (selectedGroundIds.size > 0) {
+        saveDefaultSize('ground', sz);
+        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: sz } : g));
+      }
+    } else {
+      setBrushSize(sz);
+      // Persist default size based on current tool
+      if (currentTool === 'draw' && drawingMode === 'trace') {
+        if (selectedDrawingLayer === 'top') {
+          setTopTraceSize(sz);
+          saveDefaultSize('trace', sz, 'top');
+        } else {
+          setBottomTraceSize(sz);
+          saveDefaultSize('trace', sz, 'bottom');
+        }
+      } else if (currentTool === 'draw' && drawingMode === 'via') {
+        saveDefaultSize('via', sz);
+      } else if (currentTool === 'component') {
+        saveDefaultSize('component', sz);
+      } else if (currentTool === 'power') {
+        saveDefaultSize('power', sz);
+      } else if (currentTool === 'ground') {
+        saveDefaultSize('ground', sz);
+      } else {
+        saveDefaultSize('brush', sz);
+      }
+    }
+    
+    setSetSizeDialog({ visible: false, size: 6 });
+  }, [setSizeDialog.size, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+
+  // Handle auto-save prompt dialog - Enable button
+  const handleAutoSavePromptEnable = useCallback(() => {
+    // Close the prompt dialog and open the auto-save interval selection dialog
+    setAutoSavePromptDialog({ visible: false, source: null });
+    setAutoSaveDialog({ visible: true, interval: 5 }); // Default to 5 minutes
+  }, []);
+
+  // Handle auto-save prompt dialog - Skip button
+  const handleAutoSavePromptSkip = useCallback(() => {
+    // Just close the prompt dialog
+    setAutoSavePromptDialog({ visible: false, source: null });
+  }, []);
+
+  // Handle applying auto-save interval from dialog
+  const handleAutoSaveApply = useCallback(async () => {
+    const interval = autoSaveDialog.interval;
+    
+    // If interval is null, disable auto-save
+    if (interval === null) {
+      setAutoSaveEnabled(false);
+      setAutoSaveInterval(null);
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
+      setAutoSaveDialog({ visible: false, interval: 5 });
+      console.log('Auto save: Disabled');
+      return;
+    }
+    
+    // Use project name (should be set from New Project or Open Project)
+    if (!projectName) {
+      alert('Please create a new project (File -> New Project) or open an existing project (File -> Open Project) first.');
+      return;
+    }
+    
+    // If we don't have auto-save directory/base name set up, set them up
+    let dirHandleToUse = projectDirHandle;
+    if (!dirHandleToUse) {
+      // This only happens when opening a project (can't get directory from file handle)
+      // Prompt user once to select the project directory
+      const w = window as any;
+      if (typeof w.showDirectoryPicker === 'function') {
+        try {
+          dirHandleToUse = await w.showDirectoryPicker();
+          setProjectDirHandle(dirHandleToUse);
+        } catch (e) {
+          if ((e as any)?.name !== 'AbortError') {
+            console.error('Failed to get directory:', e);
+            alert('Failed to select project directory.');
+          }
+          return; // User cancelled
+        }
+      } else {
+        alert('Directory picker is not supported in this browser.');
+        return;
+      }
+    }
+    
+    // Use project directory for auto-save (same directory as project.json)
+    setAutoSaveDirHandle(dirHandleToUse);
+    // Use project name as base name for auto-save files
+    const cleanBaseName = projectName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    setAutoSaveBaseName(cleanBaseName);
+    
+    // Update refs immediately so performAutoSave can use them
+    autoSaveDirHandleRef.current = dirHandleToUse;
+    autoSaveBaseNameRef.current = cleanBaseName;
+    
+    // Set interval and enable auto-save
+    setAutoSaveInterval(interval);
+    setAutoSaveEnabled(true);
+    
+    // Mark that we have changes so initial save will happen
+    hasChangesSinceLastAutoSaveRef.current = true;
+    
+    // Close dialog
+    setAutoSaveDialog({ visible: false, interval: 5 });
+    
+    // Perform initial save immediately after state updates
+    setTimeout(() => {
+      console.log(`Auto save: Enabled with interval ${interval} minutes`);
+      performAutoSave();
+    }, 200);
+  }, [autoSaveDialog.interval, projectName, projectDirHandle]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Ignore keyboard shortcuts if user is typing in an input field, textarea, or contenteditable
+    // FIRST: Check if user is typing in an input field, textarea, or contenteditable
+    // This must be checked BEFORE any other keyboard shortcuts to allow normal typing
     const activeElement = document.activeElement;
     if (activeElement && (
       activeElement.tagName === 'INPUT' ||
       activeElement.tagName === 'TEXTAREA' ||
       (activeElement as HTMLElement).isContentEditable
     )) {
-      // Only ignore Delete/Backspace if typing in an input (let other shortcuts work)
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        return; // Let the input field handle Delete/Backspace
-      }
+      // Allow all normal input field behavior - don't intercept any keys
+      // This includes underscore, dash, and all other characters
+      return;
+    }
+    
+    // In read-only mode (viewing file history), only allow Zoom (Z key) shortcut
+    // Check currentFileIndexRef to get the latest value without causing re-renders
+    const isReadOnly = currentFileIndexRef.current > 0;
+    
+    // Allow Zoom (Z key) even in read-only mode
+    if (isReadOnly && (e.key !== 'z' && e.key !== 'Z')) {
+      // Block all other shortcuts in read-only mode
+      return;
     }
     
     // Size change shortcuts: + and - keys
@@ -2987,6 +3408,22 @@ function App() {
             x: prev.x + deltaX,
             y: prev.y + deltaY
           } : null);
+        } else if (selectedImageForTransform === 'both') {
+          // Apply to both images
+          if (topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              x: prev.x + deltaX,
+              y: prev.y + deltaY
+            } : null);
+          }
+          if (bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              x: prev.x + deltaX,
+              y: prev.y + deltaY
+            } : null);
+          }
         }
       } else if (transformMode === 'scale') {
         // Scaling: 1% for up/down, 0.1% for left/right
@@ -3019,6 +3456,20 @@ function App() {
             ...prev,
             scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
           } : null);
+        } else if (selectedImageForTransform === 'both') {
+          // Apply to both images
+          if (topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
+            } : null);
+          }
+          if (bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
+            } : null);
+          }
         }
       } else if (transformMode === 'rotate') {
         // Rotation: 1 degree for up/down, 0.1 degree for left/right
@@ -3051,6 +3502,20 @@ function App() {
             ...prev,
             rotation: prev.rotation + rotationDelta
           } : null);
+        } else if (selectedImageForTransform === 'both') {
+          // Apply to both images
+          if (topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              rotation: prev.rotation + rotationDelta
+            } : null);
+          }
+          if (bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              rotation: prev.rotation + rotationDelta
+            } : null);
+          }
         }
       } else if (transformMode === 'slant') {
         // Keystone (skew): Up/Down adjust vertical skew, Left/Right adjust horizontal; all at ±0.5°
@@ -3089,6 +3554,22 @@ function App() {
               skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
               skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
             } : null);
+          } else if (selectedImageForTransform === 'both') {
+            // Apply to both images
+            if (topImage) {
+              setTopImage(prev => prev ? {
+                ...prev,
+                skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+                skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+              } : null);
+            }
+            if (bottomImage) {
+              setBottomImage(prev => prev ? {
+                ...prev,
+                skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+                skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+              } : null);
+            }
           }
         }
       } else if (transformMode === 'keystone') {
@@ -3128,6 +3609,22 @@ function App() {
               keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
               keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
             } : null);
+          } else if (selectedImageForTransform === 'both') {
+            // Apply to both images
+            if (topImage) {
+              setTopImage(prev => prev ? {
+                ...prev,
+                keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+                keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+              } : null);
+            }
+            if (bottomImage) {
+              setBottomImage(prev => prev ? {
+                ...prev,
+                keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+                keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+              } : null);
+            }
           }
         }
       }
@@ -3613,17 +4110,33 @@ function App() {
     ctx.clearRect(0,0,size,size);
     
     if (kind === 'via') {
-      // Outer ring
-      ctx.strokeStyle = brushColor;
-      ctx.lineWidth = Math.max(1, Math.min(2, r * 0.25));
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-      // Inner filled pad (half diameter)
+      // Draw annulus (filled ring with open hole in the middle)
+      const rOuter = r;
+      const rInner = r * 0.5;
+      const crosshairLength = r * 0.7;
+      
+      // Draw annulus using even-odd fill rule
       ctx.fillStyle = brushColor;
       ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
-      ctx.fill();
+      // Outer circle
+      ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+      // Inner circle (creates the hole with even-odd fill rule)
+      ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+      ctx.fill('evenodd');
+      
+      // Draw medium gray crosshairs
+      ctx.strokeStyle = '#808080'; // Medium gray
+      ctx.lineWidth = 1;
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(cx - crosshairLength, cy);
+      ctx.lineTo(cx + crosshairLength, cy);
+      ctx.stroke();
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - crosshairLength);
+      ctx.lineTo(cx, cy + crosshairLength);
+      ctx.stroke();
     } else if (kind === 'trace') {
       ctx.fillStyle = brushColor;
       ctx.beginPath();
@@ -3864,14 +4377,22 @@ function App() {
     setTracesBottom(tBot);
   }, [drawingStrokes]);
 
+  // Ref to access current drawingStrokes in callbacks (for auto-save cleanup)
+  const drawingStrokesRef = useRef(drawingStrokes);
+  drawingStrokesRef.current = drawingStrokes;
+
   // Build project data object (used by both saveProject and autoSave)
   const buildProjectData = useCallback(() => {
     const now = new Date();
+    // Use ISO 8601 format for standard datetime (e.g., "2025-11-16T01:27:14.123Z")
+    const savedAt = now.toISOString();
+    // Also generate timestamp for filename (keep the old format for filename compatibility)
     const pad2 = (n: number) => String(n).padStart(2, '0');
     const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}_${pad2(now.getMinutes())}_${pad2(now.getSeconds())}`;
     const project = {
       version: 1,
-      savedAt: ts,
+      fileType: 'PCB_REVERSE_ENGINEERING_AUTOSAVE', // Identifier for auto-saved files
+      savedAt: savedAt,
       view: {
         currentView,
         viewScale,
@@ -3908,7 +4429,8 @@ function App() {
       drawing: {
         // Filter out single-point traces (traces must have at least 2 points to form a line)
         // Keep vias (which are single points by design) and traces with 2+ points
-        drawingStrokes: drawingStrokes.filter(s => {
+        // Use ref to get latest value (important for auto-save which cleans up before saving)
+        drawingStrokes: drawingStrokesRef.current.filter(s => {
           if (s.type === 'trace' && s.points.length < 2) {
             return false; // Remove single-point traces
           }
@@ -3949,9 +4471,18 @@ function App() {
         areGroundNodesLocked,
         arePowerNodesLocked,
       },
+      autoSave: {
+        enabled: autoSaveEnabled,
+        interval: autoSaveInterval,
+        baseName: autoSaveBaseName,
+      },
+      projectInfo: {
+        name: projectName,
+        // Note: directory handle cannot be serialized, but project name is stored for persistence
+      },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -3965,6 +4496,9 @@ function App() {
   // Ref to store the setter for current project file path so we can update it from auto save
   const setCurrentProjectFilePathRef = useRef(setCurrentProjectFilePath);
   setCurrentProjectFilePathRef.current = setCurrentProjectFilePath;
+  // Ref to access current project file path in callbacks
+  const currentProjectFilePathRef = useRef(currentProjectFilePath);
+  currentProjectFilePathRef.current = currentProjectFilePath;
   // Refs to access current state values in callbacks
   const autoSaveFileHistoryRef = useRef<string[]>([]);
   autoSaveFileHistoryRef.current = autoSaveFileHistory;
@@ -3974,11 +4508,26 @@ function App() {
   // Auto Save function - saves to a file handle with timestamped filename
   // Use refs to avoid recreating this function on every state change
   const performAutoSave = useCallback(async () => {
-    const dirHandle = autoSaveDirHandleRef.current;
-    const baseName = autoSaveBaseNameRef.current;
+    console.log('Auto save: performAutoSave called');
+    let dirHandle = autoSaveDirHandleRef.current;
+    let baseName = autoSaveBaseNameRef.current;
     
+    console.log(`Auto save: dirHandle=${dirHandle ? 'set' : 'missing'}, baseName=${baseName || 'missing'}`);
+    
+    // If directory handle is missing but we have a current project file, try to get directory
+    const currentFilePath = currentProjectFilePathRef.current;
+    console.log(`Auto save: currentFilePath=${currentFilePath || 'none'}`);
+    
+    // Don't prompt for directory here - it requires a user gesture
+    // Directory should be set when file is opened (which is a user gesture)
     if (!dirHandle || !baseName) {
-      console.warn('Auto save: Missing directory handle or base name');
+      console.warn(`Auto save: Missing directory handle (${!dirHandle}) or base name (${!baseName}). Please use File -> Auto Save -> Enable to set up auto save.`);
+      // Disable auto save if configuration is incomplete
+      setAutoSaveEnabled(false);
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+        autoSaveIntervalRef.current = null;
+      }
       return;
     }
     
@@ -3988,19 +4537,122 @@ function App() {
       return;
     }
     
+    // Clean up single-point traces before saving
+    // Remove traces that have less than 2 points (traces need at least 2 points to form a line)
+    // Keep vias (which are single points by design)
+    const currentDrawingStrokes = drawingStrokesRef.current;
+    const singlePointTraces = currentDrawingStrokes.filter(s => s.type === 'trace' && s.points.length < 2);
+    if (singlePointTraces.length > 0) {
+      console.log(`Auto save: Cleaning up ${singlePointTraces.length} single-point trace(s) before save`);
+      singlePointTraces.forEach(s => console.log(`  - Removing single-point trace ${s.id}`));
+      const cleanedDrawingStrokes = currentDrawingStrokes.filter(s => {
+        if (s.type === 'trace' && s.points.length < 2) {
+          return false; // Remove single-point traces
+        }
+        return true; // Keep vias and valid traces
+      });
+      // Update state to remove single-point traces
+      setDrawingStrokes(cleanedDrawingStrokes);
+      // Update ref immediately so buildProjectData uses cleaned version
+      drawingStrokesRef.current = cleanedDrawingStrokes;
+    }
+    
     console.log('Auto save: Starting save...');
     // Use ref to get latest buildProjectData without causing dependency changes
+    // buildProjectData will use the cleaned drawingStrokes from the ref
     const { project, timestamp } = buildProjectDataRef.current();
     const filename = `${baseName}_${timestamp}.json`;
     const json = JSON.stringify(project, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     
     try {
+      // Get or create history directory
+      let historyDirHandle: FileSystemDirectoryHandle;
+      try {
+        historyDirHandle = await dirHandle.getDirectoryHandle('history', { create: true });
+      } catch (e) {
+        console.error('Failed to get/create history directory:', e);
+        return;
+      }
+      
+      // Before saving new file, check if there's a previous auto-saved file in root directory
+      // and move it to history/
+      try {
+        // Look for auto-saved files in root directory by checking file content
+        const rootFiles: string[] = [];
+        for await (const name of (dirHandle as any).keys()) {
+          try {
+            // Skip directories and the file we're about to create
+            if (name === 'history' || name === filename) {
+              continue;
+            }
+            
+            const fileHandle = await dirHandle.getFileHandle(name);
+            const file = await fileHandle.getFile();
+            
+            // Only check .json files
+            if (!name.endsWith('.json')) {
+              continue;
+            }
+            
+            // Read file content to check if it's a PCB project file
+            const fileContent = await file.text();
+            try {
+              const parsed = JSON.parse(fileContent);
+              // Check if this is a PCB project file (has version field)
+              // Move it to history if it's either:
+              // 1. An auto-saved file (has fileType field), OR
+              // 2. A manually saved/opened project file (has version but no fileType)
+              if (parsed.version && (
+                parsed.fileType === 'PCB_REVERSE_ENGINEERING_AUTOSAVE' ||
+                !parsed.fileType // Manually saved files don't have fileType
+              )) {
+                rootFiles.push(name);
+                console.log(`Auto save: Found PCB project file in root: ${name} (${parsed.fileType ? 'auto-saved' : 'manually saved'})`);
+              }
+            } catch (parseError) {
+              // Not valid JSON, skip
+              continue;
+            }
+          } catch (e) {
+            // Skip if not a file or doesn't exist
+            continue;
+          }
+        }
+        
+        // Move any existing auto-saved files from root to history
+        for (const oldFilename of rootFiles) {
+          try {
+            const oldFileHandle = await dirHandle.getFileHandle(oldFilename);
+            const oldFile = await oldFileHandle.getFile();
+            const oldFileContent = await oldFile.text();
+            
+            // Write to history directory
+            const historyFileHandle = await historyDirHandle.getFileHandle(oldFilename, { create: true });
+            const historyWritable = await historyFileHandle.createWritable();
+            await historyWritable.write(new Blob([oldFileContent], { type: 'application/json' }));
+            await historyWritable.close();
+            
+            // Remove from root directory
+            await dirHandle.removeEntry(oldFilename);
+            console.log(`Auto save: Moved ${oldFilename} from root to history/`);
+          } catch (e) {
+            console.warn(`Auto save: Failed to move ${oldFilename} to history:`, e);
+            // Continue with other files even if one fails
+          }
+        }
+      } catch (e) {
+        console.warn('Auto save: Error checking for old files in root:', e);
+        // Continue with save even if moving old files fails
+      }
+      
+      // Save new file to root directory (most recent file stays in root)
       const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
       const writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
-      console.log(`Auto save: Successfully saved ${filename}`);
+      console.log(`Auto save: Successfully saved ${filename} to root directory`);
+      
       // Update the displayed file path to reflect the current auto-saved file
       setCurrentProjectFilePathRef.current(filename);
       // Refresh file history and update index
@@ -4020,12 +4672,59 @@ function App() {
   // Save project state as JSON (including embedded images)
   const saveProject = useCallback(async () => {
     const { project } = buildProjectData();
+    const json = JSON.stringify(project, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+
+    // If we have a project directory handle and name, use them (from New Project or previous save)
+    // Standard IDE pattern: save as project.json inside the project folder
+    if (projectDirHandle && projectName) {
+      try {
+        const filename = 'project.json'; // Standard name inside project folder
+        const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        setCurrentProjectFilePath(filename);
+        console.log(`Project saved: ${projectName}/${filename}`);
+        return;
+      } catch (e) {
+        console.error('Failed to save to project directory:', e);
+        // Directory handle may have been revoked - clear it so user can select a new one
+        setProjectDirHandle(null);
+        // Fall through to prompt user for directory
+      }
+    }
+    
+    // If we have a project name but no directory handle, prompt for directory
+    if (projectName && !projectDirHandle) {
+      const w = window as any;
+      if (typeof w.showDirectoryPicker === 'function') {
+        try {
+          const dirHandle = await w.showDirectoryPicker();
+          setProjectDirHandle(dirHandle);
+          // Now save using the new directory handle
+          const filename = `${projectName}.json`;
+          const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setCurrentProjectFilePath(filename);
+          console.log(`Project saved: ${filename} in selected directory`);
+          return;
+        } catch (e) {
+          if ((e as any)?.name !== 'AbortError') {
+            console.error('Failed to get directory:', e);
+          }
+          // Fall through to file picker
+        }
+      }
+    }
+
+    // Fallback: use file picker (original behavior)
     const pad2 = (n: number) => String(n).padStart(2, '0');
     const now = new Date();
     const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}_${pad2(now.getMinutes())}_${pad2(now.getSeconds())}`;
     const filename = `pcb_project_${ts}.json`;
-    const json = JSON.stringify(project, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
 
     // Prefer File System Access API when available (lets user choose folder/create folder)
     const w = window as any;
@@ -4047,6 +4746,43 @@ function App() {
           // If we can't get the full path, just use the filename
           setCurrentProjectFilePath(handle.name);
         }
+        
+        // Extract project name from filename and store it
+        const filename = handle.name;
+        const projectNameFromFile = filename.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (projectNameFromFile) {
+          setProjectName(projectNameFromFile);
+          localStorage.setItem('pcb_project_name', projectNameFromFile);
+        }
+        
+        // Note: We can't get the directory handle from FileSystemFileHandle directly
+        // The directory handle will need to be set when creating a new project or when user selects it
+        // For now, we'll clear it so user can select directory on next save if needed
+        // setProjectDirHandle(null); // Don't clear - keep existing if we have one
+        
+        // For new files, set up auto save with default settings
+        // Extract directory and base name from the saved file
+        try {
+          // Get the directory handle - we need to get it from the file's parent
+          // Since FileSystemFileHandle doesn't expose parent directly,
+          // we'll need to prompt user or use a workaround
+          // For now, set base name from filename
+          const baseName = handle.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+          setAutoSaveBaseName(baseName);
+          
+          // Try to get directory handle - we'll need user to select it
+          // For auto save to work, we need the directory handle
+          // We'll set it up when auto save first runs if not already set
+          if (!autoSaveDirHandle) {
+            console.log('Auto save: Directory handle not set. Will prompt on first auto save.');
+          }
+          
+          // Auto save is disabled by default - user must enable it manually
+          // Don't automatically enable auto save for new files
+        } catch (e) {
+          console.warn('Could not set up auto save for new file:', e);
+        }
+        
         return;
       } catch (e) {
         // If user cancels, fall back to download is unnecessary; just return
@@ -4066,8 +4802,117 @@ function App() {
     }, 0);
   }, [buildProjectData]);
 
+  // Export netlist function
+  const exportNetlist = useCallback(async (format: 'kicad' | 'protel' = 'kicad') => {
+    // Generate netlist
+    const allComponents = [...componentsTop, ...componentsBottom];
+    const netlistContent = format === 'protel'
+      ? generateProtelNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses
+        )
+      : generateKiCadNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses
+        );
+
+    // Create blob
+    const blob = new Blob([netlistContent], { type: 'text/plain' });
+
+    // Determine filename
+    const baseName = projectName || 'pcb_project';
+    const filename = format === 'protel' ? `${baseName}.Net` : `${baseName}.net`;
+
+    // Try to use File System Access API
+    const w = window as any;
+    if (typeof w.showSaveFilePicker === 'function') {
+      try {
+        const handle = await w.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: format === 'protel' ? 'Protel Netlist' : 'KiCad Netlist', accept: { 'text/plain': [format === 'protel' ? '.Net' : '.net'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        console.log(`Netlist exported (${format}): ${handle.name}`);
+        return;
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        console.warn('showSaveFilePicker failed, falling back to download', e);
+      }
+    }
+
+    // Fallback: regular download
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      document.body.removeChild(a);
+    }, 0);
+  }, [componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName]);
+
+  // Export simple schematic function
+  const exportSimpleSchematic = useCallback(async () => {
+    // Generate schematic
+    const allComponents = [...componentsTop, ...componentsBottom];
+    const schematicContent = generateSimpleSchematic(
+      allComponents,
+      drawingStrokes,
+      powers,
+      grounds,
+      powerBuses
+    );
+
+    // Create blob
+    const blob = new Blob([schematicContent], { type: 'text/plain' });
+
+    // Determine filename
+    const baseName = projectName || 'pcb_project';
+    const filename = `${baseName}.kicad_sch`;
+
+    // Try to use File System Access API
+    const w = window as any;
+    if (typeof w.showSaveFilePicker === 'function') {
+      try {
+        const handle = await w.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'KiCad Schematic', accept: { 'text/plain': ['kicad_sch'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        console.log(`Simple schematic exported: ${handle.name}`);
+        return;
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        console.warn('showSaveFilePicker failed, falling back to download', e);
+      }
+    }
+
+    // Fallback: regular download
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(a.href);
+      document.body.removeChild(a);
+    }, 0);
+  }, [componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName]);
+
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
+  // Autosave is only active when the most recent file is the current file (currentFileIndex === 0)
   React.useEffect(() => {
     // Clear existing interval if any
     if (autoSaveIntervalRef.current) {
@@ -4076,18 +4921,58 @@ function App() {
     }
 
     // Set up new interval if auto save is enabled
-    if (autoSaveEnabled && autoSaveInterval && autoSaveDirHandle && autoSaveBaseName) {
-      const intervalMs = autoSaveInterval * 60 * 1000; // Convert minutes to milliseconds
-      console.log(`Auto save: Setting up interval for ${autoSaveInterval} minute(s) (${intervalMs}ms)`);
-      // Mark that we have changes so the initial save will happen
-      hasChangesSinceLastAutoSaveRef.current = true;
-      // Perform initial save immediately
-      performAutoSave();
-      // Then set up the interval - use the latest performAutoSave via closure
-      autoSaveIntervalRef.current = window.setInterval(() => {
-        performAutoSave();
-      }, intervalMs);
-    }
+    // Note: Removed file history navigation restrictions - auto save always works when enabled
+    const wasAutoSaveEnabled = prevAutoSaveEnabledRef.current;
+    prevAutoSaveEnabledRef.current = autoSaveEnabled;
+    
+      // Set up auto save interval if enabled and interval is set
+      // Only set up interval if we have both directory handle and base name
+      if (autoSaveEnabled && autoSaveInterval) {
+        const intervalMs = autoSaveInterval * 60 * 1000; // Convert minutes to milliseconds
+        
+        // Only set up interval if we have both directory handle and base name
+        if (autoSaveDirHandle && autoSaveBaseName) {
+          console.log(`Auto save: Setting up interval for ${autoSaveInterval} minute(s) (${intervalMs}ms)`);
+          
+          // Only perform initial save when autosave transitions from disabled to enabled
+          if (!wasAutoSaveEnabled) {
+            // Mark that we have changes so the initial save will happen
+            hasChangesSinceLastAutoSaveRef.current = true;
+            // Perform initial save immediately after a short delay to ensure state is updated
+            setTimeout(() => {
+              performAutoSave();
+            }, 100);
+          }
+          
+          // Set up the interval - use the latest performAutoSave via closure
+          if (autoSaveIntervalRef.current) {
+            clearInterval(autoSaveIntervalRef.current);
+            autoSaveIntervalRef.current = null;
+          }
+          autoSaveIntervalRef.current = window.setInterval(() => {
+            console.log('Auto save: Interval triggered, calling performAutoSave...');
+            console.log(`  - hasChangesSinceLastAutoSave: ${hasChangesSinceLastAutoSaveRef.current}`);
+            console.log(`  - dirHandle: ${autoSaveDirHandleRef.current ? 'set' : 'missing'}`);
+            console.log(`  - baseName: ${autoSaveBaseNameRef.current || 'missing'}`);
+            performAutoSave();
+          }, intervalMs);
+          console.log(`Auto save: Interval set up for ${intervalMs}ms (${autoSaveInterval} minutes)`);
+          console.log(`  - Directory handle: ${autoSaveDirHandle ? 'set' : 'missing'}`);
+          console.log(`  - Base name: ${autoSaveBaseName || 'missing'}`);
+        } else {
+          // Auto save is enabled but directory handle or base name is missing
+          // Disable auto save and clear interval
+          console.warn(`Auto save: Cannot set up interval - missing directory handle (${!autoSaveDirHandle}) or base name (${!autoSaveBaseName}). Disabling auto save.`);
+          setAutoSaveEnabled(false);
+          if (autoSaveIntervalRef.current) {
+            clearInterval(autoSaveIntervalRef.current);
+            autoSaveIntervalRef.current = null;
+          }
+        }
+      } else if (!autoSaveEnabled) {
+        // Reset the previous state ref when autosave is disabled
+        prevAutoSaveEnabledRef.current = false;
+      }
 
     // Cleanup on unmount or when dependencies change
     return () => {
@@ -4101,11 +4986,42 @@ function App() {
   }, [autoSaveEnabled, autoSaveInterval, autoSaveDirHandle, autoSaveBaseName]);
 
   // Track changes to project data for auto save
+  // Only track changes if auto save is enabled
+  // Use a ref to track if this is the first run after enabling auto save
+  const isFirstRunAfterEnableRef = useRef<boolean>(false);
+  
   React.useEffect(() => {
-    // Only track changes if auto save is enabled
-    if (autoSaveEnabled) {
-      hasChangesSinceLastAutoSaveRef.current = true;
+    // Skip if auto save is not enabled (don't track changes when disabled)
+    if (!autoSaveEnabled) {
+      isFirstRunAfterEnableRef.current = false;
+      return;
     }
+    
+    // On first run after enabling, skip (initial save is handled by enable action)
+    if (isFirstRunAfterEnableRef.current) {
+      isFirstRunAfterEnableRef.current = false;
+      console.log('Auto save: Skipping change tracking on first run after enable (initial save handled separately)');
+      return;
+    }
+    
+    // Track changes if auto save is enabled
+    hasChangesSinceLastAutoSaveRef.current = true;
+    console.log('Auto save: Change detected, marking for save', {
+      topImage: !!topImage,
+      bottomImage: !!bottomImage,
+      drawingStrokesCount: drawingStrokes.length,
+      componentsTopCount: componentsTop.length,
+      componentsBottomCount: componentsBottom.length,
+      powersCount: powers.length,
+      groundsCount: grounds.length,
+      powerBusesCount: powerBuses.length,
+      areImagesLocked,
+      areViasLocked,
+      areTracesLocked,
+      areComponentsLocked,
+      areGroundNodesLocked,
+      arePowerNodesLocked,
+    });
   }, [
     topImage,
     bottomImage,
@@ -4119,8 +5035,24 @@ function App() {
     bottomTraceColor,
     topTraceSize,
     bottomTraceSize,
-    autoSaveEnabled, // Reset when auto save is disabled
+    areImagesLocked,
+    areViasLocked,
+    areTracesLocked,
+    areComponentsLocked,
+    areGroundNodesLocked,
+    arePowerNodesLocked,
+    autoSaveEnabled, // Need to include this to check if enabled, but we skip on first run
   ]);
+  
+  // Mark first run when auto save is enabled
+  React.useEffect(() => {
+    if (autoSaveEnabled) {
+      isFirstRunAfterEnableRef.current = true;
+      console.log('Auto save: Enabled, marking first run');
+    } else {
+      isFirstRunAfterEnableRef.current = false;
+    }
+  }, [autoSaveEnabled]);
 
   // Reset change tracking when auto save is disabled or a new project is created
   React.useEffect(() => {
@@ -4142,8 +5074,86 @@ function App() {
     );
   }, [topImage, bottomImage, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
 
+  // Load project name from localStorage on startup
+  React.useEffect(() => {
+    const savedProjectName = localStorage.getItem('pcb_project_name');
+    if (savedProjectName) {
+      setProjectName(savedProjectName);
+    }
+  }, []);
+
   // Create a new project (reset all state)
+  // This function opens a dialog following standard IDE pattern
   const newProject = useCallback(() => {
+    setNewProjectSetupDialog({ 
+      visible: true, 
+      projectName: '',
+      locationPath: '',
+      locationHandle: null,
+    });
+  }, []);
+
+  // Handle browsing for project location (parent directory)
+  const handleNewProjectBrowseLocation = useCallback(async () => {
+    const w = window as any;
+    if (typeof w.showDirectoryPicker === 'function') {
+      try {
+        const locationHandle = await w.showDirectoryPicker();
+        // Try to get a display name for the path (browser limitation - we can't get full path)
+        // Store the handle and update the dialog
+        setNewProjectSetupDialog(prev => ({
+          ...prev,
+          locationHandle,
+          locationPath: locationHandle.name || 'Selected folder',
+        }));
+        localStorage.setItem('pcb_project_location_path', locationHandle.name || '');
+      } catch (e) {
+        if ((e as any)?.name !== 'AbortError') {
+          console.error('Failed to get directory:', e);
+          alert('Failed to select location directory.');
+        }
+      }
+    } else {
+      alert('Directory picker is not supported in this browser. Please use a modern browser like Chrome or Edge.');
+    }
+  }, []);
+
+  // Handle creating the project (standard IDE pattern)
+  const handleNewProjectCreate = useCallback(async () => {
+    const projectNameInput = newProjectSetupDialog.projectName.trim();
+    if (!projectNameInput) {
+      alert('Please enter a project name.');
+      return;
+    }
+    const cleanProjectName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
+    
+    if (!newProjectSetupDialog.locationHandle) {
+      alert('Please select a location for the project.');
+      return;
+    }
+    
+    const parentDirHandle = newProjectSetupDialog.locationHandle;
+    
+    // Create project folder inside the selected location (standard IDE pattern)
+    let projectDirHandle: FileSystemDirectoryHandle;
+    try {
+      projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
+    } catch (e) {
+      console.error('Failed to create project folder:', e);
+      alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
+      return;
+    }
+    
+    // Close the dialog
+    setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
+    
+    // Store project name and project directory handle (not parent)
+    setProjectName(cleanProjectName);
+    setProjectDirHandle(projectDirHandle);
+    localStorage.setItem('pcb_project_name', cleanProjectName);
+    localStorage.setItem('pcb_project_location_path', parentDirHandle.name || '');
+    
+    // Reset all state
     setTopImage(null);
     setBottomImage(null);
     setDrawingStrokes([]);
@@ -4162,9 +5172,148 @@ function App() {
     hasChangesSinceLastAutoSaveRef.current = false;
     // Clear current project file path
     setCurrentProjectFilePath('');
+    // Disable auto save for new project
+    setAutoSaveEnabled(false);
+    setAutoSaveInterval(null);
+    setAutoSaveDirHandle(null);
+    setAutoSaveBaseName('');
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
+    }
     // Use consolidated initialization function for all defaults
     initializeApplicationDefaults();
-  }, [initializeApplicationDefaults]);
+    
+    // Save the project file immediately (standard name: project.json)
+    try {
+      const { project } = buildProjectData();
+      const filename = 'project.json'; // Standard IDE pattern: project.json inside project folder
+      const json = JSON.stringify(project, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      
+      const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      
+      // Update current project file path
+      setCurrentProjectFilePath(filename);
+      console.log(`New project created: ${cleanProjectName}/project.json`);
+      
+      // Prompt user to enable auto-save
+      setAutoSavePromptDialog({ visible: true, source: 'new' });
+    } catch (e) {
+      console.error('Failed to save new project:', e);
+      alert('Failed to save new project file. See console for details.');
+    }
+  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog]);
+
+  // Handle canceling new project setup
+  const handleNewProjectSetupCancel = useCallback(() => {
+    setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
+  }, []);
+
+  // Open Save As dialog
+  const openSaveAsDialog = useCallback(() => {
+    // Default filename based on current project name or generate one
+    const defaultFilename = projectName ? `${projectName}.json` : '';
+    setSaveAsDialog({ 
+      visible: true, 
+      filename: defaultFilename,
+      locationPath: '',
+      locationHandle: null,
+    });
+    // Focus the filename input after a short delay to allow dialog to render
+    setTimeout(() => {
+      saveAsFilenameInputRef.current?.focus();
+      if (saveAsFilenameInputRef.current && defaultFilename) {
+        // Select the filename part (without extension) for easy editing
+        const nameWithoutExt = defaultFilename.replace(/\.json$/i, '');
+        saveAsFilenameInputRef.current.setSelectionRange(0, nameWithoutExt.length);
+      }
+    }, 100);
+  }, [projectName]);
+
+  // Handle browsing for Save As location
+  const handleSaveAsBrowseLocation = useCallback(async () => {
+    const w = window as any;
+    if (typeof w.showDirectoryPicker === 'function') {
+      try {
+        const locationHandle = await w.showDirectoryPicker();
+        setSaveAsDialog(prev => ({
+          ...prev,
+          locationHandle,
+          locationPath: locationHandle.name || 'Selected folder',
+        }));
+      } catch (e) {
+        if ((e as any)?.name !== 'AbortError') {
+          console.error('Failed to get directory:', e);
+          alert('Failed to select location directory.');
+        }
+      }
+    } else {
+      alert('Directory picker is not supported in this browser. Please use a modern browser that supports the File System Access API.');
+    }
+  }, []);
+
+  // Handle Save As save action
+  const handleSaveAsSave = useCallback(async () => {
+    const filenameInput = saveAsDialog.filename.trim();
+    if (!filenameInput) {
+      alert('Please enter a file name.');
+      return;
+    }
+    
+    // Ensure filename ends with .json
+    const filename = filenameInput.endsWith('.json') ? filenameInput : `${filenameInput}.json`;
+    const cleanFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+    
+    if (!saveAsDialog.locationHandle) {
+      alert('Please select a location for the file.');
+      return;
+    }
+    
+    const dirHandle = saveAsDialog.locationHandle;
+    
+    // Build project data and save
+    try {
+      const { project } = buildProjectData();
+      const json = JSON.stringify(project, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      
+      const fileHandle = await dirHandle.getFileHandle(cleanFilename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      
+      // Update current project file path
+      setCurrentProjectFilePath(cleanFilename);
+      
+      // Extract project name from filename and store it
+      const projectNameFromFile = cleanFilename.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (projectNameFromFile) {
+        setProjectName(projectNameFromFile);
+        localStorage.setItem('pcb_project_name', projectNameFromFile);
+      }
+      
+      // Update project directory handle
+      setProjectDirHandle(dirHandle);
+      
+      // Close the dialog
+      setSaveAsDialog({ visible: false, filename: '', locationPath: '', locationHandle: null });
+      setOpenMenu(null);
+      
+      console.log(`Project saved as: ${cleanFilename} in selected directory`);
+    } catch (e) {
+      console.error('Failed to save project:', e);
+      alert(`Failed to save project file "${cleanFilename}". See console for details.`);
+    }
+  }, [saveAsDialog, buildProjectData]);
+
+  // Handle canceling Save As
+  const handleSaveAsCancel = useCallback(() => {
+    setSaveAsDialog({ visible: false, filename: '', locationPath: '', locationHandle: null });
+  }, []);
 
   // Handler functions for new project dialog (defined after saveProject and newProject)
   const handleNewProjectYes = useCallback(async () => {
@@ -4216,6 +5365,20 @@ function App() {
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
+      // Restore project info (name and directory) if present
+      if (project.projectInfo) {
+        if (project.projectInfo.name) {
+          setProjectName(project.projectInfo.name);
+          localStorage.setItem('pcb_project_name', project.projectInfo.name);
+        }
+      } else {
+        // If no project info, try to extract name from filename if available
+        const savedName = localStorage.getItem('pcb_project_name');
+        if (savedName) {
+          setProjectName(savedName);
+        }
+      }
+
       // Restore view state
       if (project.view) {
         if (project.view.currentView) setCurrentView(project.view.currentView);
@@ -4374,12 +5537,68 @@ function App() {
         if (typeof project.locks.arePowerNodesLocked === 'boolean') setArePowerNodesLocked(project.locks.arePowerNodesLocked);
       }
 
+      // Restore auto save settings if present
+      if (project.autoSave) {
+        if (typeof project.autoSave.enabled === 'boolean') {
+          setAutoSaveEnabled(project.autoSave.enabled);
+        }
+        if (typeof project.autoSave.interval === 'number') {
+          setAutoSaveInterval(project.autoSave.interval);
+        }
+        if (typeof project.autoSave.baseName === 'string' && project.autoSave.baseName) {
+          setAutoSaveBaseName(project.autoSave.baseName);
+          // Update ref immediately
+          autoSaveBaseNameRef.current = project.autoSave.baseName;
+          // Directory handle cannot be restored from file handle (browser security restriction)
+          // If auto save is enabled but directory handle is missing, disable auto save
+          // User will need to re-enable it and select the directory again
+          if (project.autoSave.enabled && !autoSaveDirHandle) {
+            // This is expected behavior after page reload - directory handles can't be persisted
+            // Silently disable auto save (user can re-enable via menu)
+            // Only log at debug level, not as a warning
+            console.log('Auto save: Directory handle not available after page reload (expected). Auto save disabled. Use File -> Auto Save -> Enable to re-enable.');
+            setAutoSaveEnabled(false);
+            setAutoSaveInterval(null);
+            // Keep base name so user doesn't have to re-enter it
+          }
+        } else {
+          // If auto save is enabled but base name is missing, disable auto save
+          // User will need to re-enable it and provide the base name
+          if (project.autoSave.enabled) {
+            console.warn('Auto save was enabled in project file but base name is missing. Disabling auto save.');
+            setAutoSaveEnabled(false);
+            setAutoSaveInterval(null);
+            setAutoSaveBaseName('');
+            autoSaveBaseNameRef.current = '';
+          }
+        }
+      } else {
+        // Default: disable auto save when opening a project without auto save settings
+        setAutoSaveEnabled(false);
+        setAutoSaveInterval(null);
+        setAutoSaveDirHandle(null);
+        setAutoSaveBaseName('');
+        autoSaveDirHandleRef.current = null;
+        autoSaveBaseNameRef.current = '';
+        if (autoSaveIntervalRef.current) {
+          clearInterval(autoSaveIntervalRef.current);
+          autoSaveIntervalRef.current = null;
+        }
+      }
+
       // Restore drawing strokes - prefer saved drawingStrokes with point IDs
       if (project.drawing?.drawingStrokes && Array.isArray(project.drawing.drawingStrokes)) {
         // New format: restore strokes with preserved point IDs
+        // Truncate coordinates to 3 decimal places for consistency with new objects
         // Filter out single-point traces (traces must have at least 2 points to form a line)
         // Keep vias (which are single points by design) and traces with 2+ points
-        const validStrokes = (project.drawing.drawingStrokes as DrawingStroke[]).filter(s => {
+        const validStrokes = (project.drawing.drawingStrokes as DrawingStroke[]).map(s => ({
+          ...s,
+          points: s.points.map(p => ({
+            ...p,
+            ...truncatePoint(p)
+          }))
+        })).filter(s => {
           if (s.type === 'trace' && s.points.length < 2) {
             return false; // Remove single-point traces
           }
@@ -4390,12 +5609,14 @@ function App() {
         // Legacy format: rebuild from vias/traces arrays (point IDs will be regenerated)
         const strokes: DrawingStroke[] = [];
         const pushVia = (v: Via, layer: 'top' | 'bottom') => {
+          // Truncate coordinates to 3 decimal places for consistency with new objects
+          const truncatedPos = truncatePoint({ x: v.x, y: v.y });
           strokes.push({
             id: v.id || `${Date.now()}-via-${Math.random()}`,
             points: [{ 
               id: v.pointId || generatePointId(), // Use saved point ID or generate new
-              x: v.x, 
-              y: v.y 
+              x: truncatedPos.x, 
+              y: truncatedPos.y 
             }],
             color: v.color,
             size: v.size,
@@ -4406,11 +5627,14 @@ function App() {
         const pushSeg = (s: TraceSegment, layer: 'top' | 'bottom') => {
           // For legacy format, create separate strokes for each segment
           // This loses the original stroke grouping but preserves point IDs
+          // Truncate coordinates to 3 decimal places for consistency with new objects
+          const startPos = truncatePoint({ x: s.x1, y: s.y1 });
+          const endPos = truncatePoint({ x: s.x2, y: s.y2 });
           strokes.push({
             id: s.id || `${Date.now()}-trace-${Math.random()}`,
             points: [
-              { id: s.startPointId || generatePointId(), x: s.x1, y: s.y1 },
-              { id: s.endPointId || generatePointId(), x: s.x2, y: s.y2 }
+              { id: s.startPointId || generatePointId(), x: startPos.x, y: startPos.y },
+              { id: s.endPointId || generatePointId(), x: endPos.x, y: endPos.y }
             ],
             color: s.color,
             size: s.size,
@@ -4439,19 +5663,31 @@ function App() {
       }
       // load components if present, ensuring all properties are preserved
       if (project.drawing?.componentsTop) {
-        const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => ({
-          ...comp,
-          // Ensure pinConnections is always an array
-          pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
-        }));
+        const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => {
+          // Truncate coordinates to 3 decimal places for consistency with new objects
+          const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
+          return {
+            ...comp,
+            x: truncatedPos.x,
+            y: truncatedPos.y,
+            // Ensure pinConnections is always an array
+            pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
+          };
+        });
         setComponentsTop(compsTop);
       }
       if (project.drawing?.componentsBottom) {
-        const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => ({
-          ...comp,
-          // Ensure pinConnections is always an array
-          pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
-        }));
+        const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => {
+          // Truncate coordinates to 3 decimal places for consistency with new objects
+          const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
+          return {
+            ...comp,
+            x: truncatedPos.x,
+            y: truncatedPos.y,
+            // Ensure pinConnections is always an array
+            pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
+          };
+        });
         setComponentsBottom(compsBottom);
       }
       if (project.drawing?.grounds) {
@@ -4462,7 +5698,9 @@ function App() {
           .map(g => {
             // Ensure pointId exists (for legacy projects without it)
             const pointId = g.pointId || generatePointId();
-            return { ...g, pointId };
+            // Truncate coordinates to 3 decimal places for consistency with new objects
+            const truncatedPos = truncatePoint({ x: g.x, y: g.y });
+            return { ...g, pointId, x: truncatedPos.x, y: truncatedPos.y };
           })
           .filter(g => {
             const isValid = g.y >= 0 && g.x >= 0 && 
@@ -4490,11 +5728,13 @@ function App() {
           .map(p => {
             // Ensure pointId exists (for legacy projects without it)
             const pointId = p.pointId || generatePointId();
+            // Truncate coordinates to 3 decimal places for consistency with new objects
+            const truncatedPos = truncatePoint({ x: p.x, y: p.y });
             if (!p.powerBusId) {
               // Assign to first power bus or create a default one
-              return { ...p, pointId, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
+              return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
             }
-            return { ...p, pointId, layer: p.layer || 'top' };
+            return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, layer: p.layer || 'top' };
           })
           .filter(p => {
             // Filter out power nodes with negative coordinates or invalid values
@@ -4519,21 +5759,38 @@ function App() {
     }
   }, [currentTool, drawingMode]);
 
-  // Function to get list of auto-saved files from directory, sorted by timestamp
+  // Function to get list of auto-saved files from history subdirectory, sorted by timestamp
+  // COMMENTED OUT: File history navigation is disabled
   const refreshAutoSaveFileHistory = useCallback(async () => {
+    // File history navigation is disabled - this function is kept for potential future use
+    return;
+    /*
     const dirHandle = autoSaveDirHandleRef.current;
     const baseName = autoSaveBaseNameRef.current;
     
     if (!dirHandle || !baseName) return;
     
     try {
+      // Get history subdirectory
+      let historyDirHandle: FileSystemDirectoryHandle;
+      try {
+        historyDirHandle = await dirHandle.getDirectoryHandle('history', { create: false });
+      } catch (e) {
+        // History directory doesn't exist yet
+        setAutoSaveFileHistory([]);
+        autoSaveFileHistoryRef.current = [];
+        setCurrentFileIndex(-1);
+        currentFileIndexRef.current = -1;
+        return;
+      }
+      
       const files: string[] = [];
       // Iterate through directory entries
       // File System Access API: use keys() to get file names, then check if it's a file
-      for await (const name of (dirHandle as any).keys()) {
+      for await (const name of (historyDirHandle as any).keys()) {
         try {
           // Try to get the file handle to verify it's a file
-          await dirHandle.getFileHandle(name);
+          await historyDirHandle.getFileHandle(name);
           if (name.startsWith(baseName) && name.endsWith('.json')) {
             files.push(name);
           }
@@ -4555,6 +5812,7 @@ function App() {
     } catch (e) {
       console.error('Failed to refresh file history:', e);
     }
+    */
   }, [currentProjectFilePath]);
 
   // Function to load a file from auto-save history
@@ -4802,6 +6060,9 @@ function App() {
     requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
   }, [viewPan.x, viewPan.y]);
 
+  // Determine if we're in read-only mode (viewing file history, not the most recent file)
+  const isReadOnlyMode = currentFileIndex > 0;
+
   return (
     <div className="app">
       <header className="app-header">
@@ -4812,132 +6073,37 @@ function App() {
       <div ref={menuBarRef} style={{ position: 'relative', background: 'rgba(250,250,255,0.9)', borderBottom: '1px solid #e6e6ef', padding: '6px 12px', display: 'flex', gap: 16, alignItems: 'center', zIndex: 3 }}>
         {/* File menu */}
         <div style={{ position: 'relative' }}>
-          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'file' ? null : 'file'); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: openMenu === 'file' ? '#eef3ff' : '#fff', fontWeight: 600, color: '#222' }}>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'file' ? null : 'file'); }} 
+            style={{ 
+              padding: '6px 10px', 
+              borderRadius: 6, 
+              border: '1px solid #ddd', 
+              background: openMenu === 'file' ? '#eef3ff' : '#fff', 
+              fontWeight: 600, 
+              color: '#222'
+            }}
+          >
             File ▾
           </button>
           {openMenu === 'file' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <button onClick={() => {
-                setOpenMenu(null);
-                if (hasUnsavedChanges()) {
-                  setNewProjectDialog({ visible: true });
-                } else {
-                  newProject();
-                }
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>New Project</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { fileInputTopRef.current?.click(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Load Top PCB…</button>
-              <button onClick={() => { fileInputBottomRef.current?.click(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Load Bottom PCB…</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { void saveProject(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Save Project…</button>
-              <button onClick={() => { void saveProject(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Save As…</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <div style={{ position: 'relative' }}>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setShowAutoSaveSubmenu(!showAutoSaveSubmenu); }} 
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-                >
-                  Auto Save {showAutoSaveSubmenu ? '▴' : '▾'}
-                </button>
-                {showAutoSaveSubmenu && (
-                  <div style={{ position: 'absolute', left: '100%', top: 0, marginLeft: 6, minWidth: 150, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-                    <button 
-                      onClick={async () => {
-                        setShowAutoSaveSubmenu(false);
-                        setOpenMenu(null);
-                        // Prompt user for directory and base name
-                        const w = window as any;
-                        if (typeof w.showDirectoryPicker === 'function') {
-                          try {
-                            // Use showDirectoryPicker to get the directory
-                            const dirHandle = await w.showDirectoryPicker();
-                            
-                            // Prompt user for base name using a simple prompt
-                            const baseName = prompt('Enter a base name for auto-save files (e.g., "pcb_project_autosave"):', 'pcb_project_autosave');
-                            if (!baseName) {
-                              // User cancelled
-                              return;
-                            }
-                            
-                            // Clean up the base name (remove extension if present, remove invalid characters)
-                            const cleanBaseName = baseName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-                            
-                            setAutoSaveDirHandle(dirHandle);
-                            setAutoSaveBaseName(cleanBaseName);
-                            setAutoSaveInterval(1); // Default to 1 minute
-                            setAutoSaveEnabled(true);
-                            console.log('Auto save: Enabled with base name:', cleanBaseName);
-                            // Refresh file history when auto save is enabled
-                            setTimeout(async () => {
-                              await refreshAutoSaveFileHistory();
-                            }, 100);
-                          } catch (e) {
-                            if ((e as any)?.name !== 'AbortError') {
-                              console.error('Failed to set up auto save:', e);
-                            }
-                          }
-                        } else {
-                          alert('Directory picker is not supported in this browser. Please use a modern browser like Chrome or Edge.');
-                        }
-                      }} 
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-                    >
-                      {autoSaveEnabled ? 'Change Location…' : 'Enable Auto Save…'}
-                    </button>
-                    {autoSaveEnabled && (
-                      <>
-                        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-                        <button 
-                          onClick={() => {
-                            setShowAutoSaveSubmenu(false);
-                            setAutoSaveInterval(1);
-                          }} 
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 1 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
-                        >
-                          {autoSaveInterval === 1 ? '✓ ' : ''}1 minute
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setShowAutoSaveSubmenu(false);
-                            setAutoSaveInterval(5);
-                          }} 
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 5 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
-                        >
-                          {autoSaveInterval === 5 ? '✓ ' : ''}5 minutes
-                        </button>
-                        <button 
-                          onClick={() => {
-                            setShowAutoSaveSubmenu(false);
-                            setAutoSaveInterval(10);
-                          }} 
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: autoSaveInterval === 10 ? '#4CAF50' : '#f2f2f2', background: 'transparent', border: 'none' }}
-                        >
-                          {autoSaveInterval === 10 ? '✓ ' : ''}10 minutes
-                        </button>
-                        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-                        <button 
-                          onClick={() => {
-                            setShowAutoSaveSubmenu(false);
-                            setOpenMenu(null);
-                            setAutoSaveEnabled(false);
-                            setAutoSaveInterval(null);
-                            setAutoSaveDirHandle(null);
-                            setAutoSaveBaseName('');
-                            if (autoSaveIntervalRef.current) {
-                              clearInterval(autoSaveIntervalRef.current);
-                              autoSaveIntervalRef.current = null;
-                            }
-                            console.log('Auto save: Disabled');
-                          }} 
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-                        >
-                          Disable Auto Save
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
+              <button 
+                onClick={() => {
+                  if (!isReadOnlyMode) {
+                    setOpenMenu(null);
+                    if (hasUnsavedChanges()) {
+                      setNewProjectDialog({ visible: true });
+                    } else {
+                      newProject();
+                    }
+                  }
+                }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                New Project
+              </button>
               <button onClick={async () => {
                 const w = window as any;
                 if (typeof w.showOpenFilePicker === 'function') {
@@ -4958,7 +6124,46 @@ function App() {
                     setCurrentProjectFilePath(file.name);
                     const text = await file.text();
                     const project = JSON.parse(text);
+                    
+                    // Try to get the directory handle from the file handle
+                    // Note: FileSystemFileHandle doesn't expose parent directly, but we can try to get it
+                    // For now, we'll store the file handle and try to get directory when saving
+                    // The directory handle will be restored when user saves next time
+                    
                     await loadProject(project);
+                    
+                    // Extract project name from project data or filename
+                    let projectNameToUse: string;
+                    if (project.projectInfo?.name) {
+                      // Project name is already restored from project data in loadProject
+                      projectNameToUse = project.projectInfo.name;
+                    } else {
+                      // Extract from filename (remove .json extension)
+                      const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                      projectNameToUse = projectNameFromFile || 'pcb_project';
+                      setProjectName(projectNameToUse);
+                      localStorage.setItem('pcb_project_name', projectNameToUse);
+                    }
+                    
+                    // Ensure project name is set (loadProject may have set it, but verify)
+                    if (!projectName) {
+                      setProjectName(projectNameToUse);
+                      localStorage.setItem('pcb_project_name', projectNameToUse);
+                    }
+                    
+                    // Auto save settings are restored from project file if present
+                    // Check if auto-save is enabled in the project file
+                    // Use setTimeout to allow React state updates from loadProject to complete
+                    setTimeout(() => {
+                      // Check both the original project data and current state
+                      // If project file doesn't have autoSave enabled, or if it was disabled by loadProject
+                      // (e.g., due to missing directory handle), show the prompt
+                      const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
+                      if (!wasAutoSaveEnabledInFile) {
+                        setAutoSavePromptDialog({ visible: true, source: 'open' });
+                      }
+                    }, 100);
+                    
                     setOpenMenu(null);
                     return;
                   } catch (e) {
@@ -4970,6 +6175,86 @@ function App() {
                 setOpenMenu(null);
               }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Open Project…</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Load Top PCB…
+              </button>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Load Bottom PCB…
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { void saveProject(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Save Project…
+              </button>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { openSaveAsDialog(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Save As…
+              </button>
+              <button 
+                onClick={() => { 
+                  if (!isReadOnlyMode) { 
+                    // Show dialog with 5 minutes as default
+                    setAutoSaveDialog({ visible: true, interval: 5 });
+                    setOpenMenu(null);
+                  }
+                }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Auto Save…
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              <button
+                onClick={() => {
+                  if (!isReadOnlyMode) {
+                    void exportNetlist('kicad'); 
+                    setOpenMenu(null); 
+                  }
+                }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Export Netlist (KiCad)…
+              </button>
+              <button
+                onClick={() => {
+                  if (!isReadOnlyMode) {
+                    void exportNetlist('protel'); 
+                    setOpenMenu(null); 
+                  }
+                }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Export Netlist (Protel/nl2sch)…
+              </button>
+              <button
+                onClick={() => {
+                  if (!isReadOnlyMode) {
+                    void exportSimpleSchematic(); 
+                    setOpenMenu(null); 
+                  }
+                }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Export Simple Schematic…
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
               <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
             </div>
@@ -4978,7 +6263,20 @@ function App() {
 
         {/* Transform menu */}
         <div style={{ position: 'relative' }}>
-          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'transform' ? null : 'transform'); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: openMenu === 'transform' ? '#eef3ff' : '#fff', fontWeight: 600, color: '#222' }}>
+          <button 
+            onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'transform' ? null : 'transform'); } }} 
+            disabled={isReadOnlyMode}
+            style={{ 
+              padding: '6px 10px', 
+              borderRadius: 6, 
+              border: '1px solid #ddd', 
+              background: openMenu === 'transform' ? '#eef3ff' : '#fff', 
+              fontWeight: 600, 
+              color: isReadOnlyMode ? '#999' : '#222',
+              cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+              opacity: isReadOnlyMode ? 0.5 : 1
+            }}
+          >
             Transform ▾
           </button>
           {openMenu === 'transform' && (
@@ -4986,9 +6284,34 @@ function App() {
               <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
               <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
               <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
+              <button disabled={!topImage || !bottomImage} onClick={() => { setSelectedImageForTransform('both'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (topImage && bottomImage) ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'both' ? '✓ ' : ''}Both Images</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { if (selectedImageForTransform) updateImageTransform(selectedImageForTransform, { flipX: !(selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false)) }); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Horizontal Flip</button>
-              <button onClick={() => { if (selectedImageForTransform) updateImageTransform(selectedImageForTransform, { flipY: !(selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false)) }); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Vertical Flip</button>
+              <button onClick={() => { 
+                if (selectedImageForTransform) {
+                  if (selectedImageForTransform === 'both') {
+                    // For both, toggle based on top image state
+                    const newFlipX = !(topImage?.flipX || false);
+                    updateImageTransform('both', { flipX: newFlipX });
+                  } else {
+                    const currentFlipX = selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
+                    updateImageTransform(selectedImageForTransform, { flipX: !currentFlipX });
+                  }
+                }
+                setOpenMenu(null);
+              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Horizontal Flip</button>
+              <button onClick={() => { 
+                if (selectedImageForTransform) {
+                  if (selectedImageForTransform === 'both') {
+                    // For both, toggle based on top image state
+                    const newFlipY = !(topImage?.flipY || false);
+                    updateImageTransform('both', { flipY: newFlipY });
+                  } else {
+                    const currentFlipY = selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
+                    updateImageTransform(selectedImageForTransform, { flipY: !currentFlipY });
+                  }
+                }
+                setOpenMenu(null);
+              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Vertical Flip</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { setTransformMode('nudge'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'nudge' ? '✓ ' : ''}Mode: Nudge</button>
               <button onClick={() => { setTransformMode('scale'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'scale' ? '✓ ' : ''}Mode: Scale</button>
@@ -5031,7 +6354,20 @@ function App() {
         </div>
         {/* Tools menu */}
         <div style={{ position: 'relative' }}>
-          <button onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); }} style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: openMenu === 'tools' ? '#eef3ff' : '#fff', fontWeight: 600, color: '#222' }}>
+          <button 
+            onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); } }} 
+            disabled={isReadOnlyMode}
+            style={{ 
+              padding: '6px 10px', 
+              borderRadius: 6, 
+              border: '1px solid #ddd', 
+              background: openMenu === 'tools' ? '#eef3ff' : '#fff', 
+              fontWeight: 600, 
+              color: isReadOnlyMode ? '#999' : '#222',
+              cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+              opacity: isReadOnlyMode ? 0.5 : 1
+            }}
+          >
             Tools ▾
           </button>
           {openMenu === 'tools' && (
@@ -5055,59 +6391,38 @@ function App() {
                 Decrease Size (-)
               </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <div 
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setShowSetSizeSubmenu(true)}
-                onMouseLeave={() => setShowSetSizeSubmenu(false)}
+              <button 
+                onClick={() => {
+                  // Determine current size to show in dialog
+                  let currentSize = brushSize;
+                  if (selectedIds.size > 0) {
+                    const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+                    if (selectedStrokes.length > 0) {
+                      currentSize = selectedStrokes[0].size;
+                    }
+                  } else if (selectedComponentIds.size > 0) {
+                    const selectedComp = [...componentsTop, ...componentsBottom].find(c => selectedComponentIds.has(c.id));
+                    if (selectedComp) {
+                      currentSize = selectedComp.size || 18;
+                    }
+                  } else if (selectedPowerIds.size > 0) {
+                    const selectedPower = powers.find(p => selectedPowerIds.has(p.id));
+                    if (selectedPower) {
+                      currentSize = selectedPower.size;
+                    }
+                  } else if (selectedGroundIds.size > 0) {
+                    const selectedGround = grounds.find(g => selectedGroundIds.has(g.id));
+                    if (selectedGround) {
+                      currentSize = selectedGround.size || 18;
+                    }
+                  }
+                  setSetSizeDialog({ visible: true, size: currentSize });
+                  setOpenMenu(null);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
               >
-                <button 
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-                >
-                  Set Size ▸
-                </button>
-                {showSetSizeSubmenu && (
-                  <div style={{ position: 'absolute', top: 0, left: '100%', marginLeft: '4px', minWidth: 120, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 30 }}>
-                    {([2,4,6,8,10,12,14,16,18,20] as number[]).map(sz => (
-                      <button
-                        key={sz}
-                        onClick={() => {
-                          if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
-                            // Check if any selected items are locked
-                            if (selectedIds.size > 0) {
-                              const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-                              const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
-                              const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-                              if (hasLockedVias || hasLockedTraces) return;
-                            }
-                            if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-                            if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-                            if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
-                            
-                            setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: sz } : s));
-                            if (selectedComponentIds.size > 0) {
-                              setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
-                              setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: sz } : c));
-                            }
-                            if (selectedPowerIds.size > 0) {
-                              setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: sz } : p));
-                            }
-                            if (selectedGroundIds.size > 0) {
-                              setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: sz } : g));
-                            }
-                          } else {
-                            setBrushSize(sz);
-                          }
-                          setShowSetSizeSubmenu(false);
-                          setOpenMenu(null);
-                        }}
-                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-                      >
-                        {sz}px
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                Set Size…
+              </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
                 Lock Vias {areViasLocked ? '✓' : ''}
@@ -5212,7 +6527,7 @@ function App() {
             </div>
           )}
         </div>
-        {/* File path display with navigation buttons - right justified */}
+        {/* File path display - right justified */}
         {currentProjectFilePath && (
           <div style={{ 
             marginLeft: 'auto',
@@ -5221,7 +6536,39 @@ function App() {
             gap: '8px',
             paddingLeft: '16px'
           }}>
-            {/* Back button (older file) */}
+            {/* File path */}
+            <div style={{ 
+              fontSize: '12px',
+              color: '#333',
+              fontFamily: 'monospace',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '40vw'
+            }} title={currentProjectFilePath}>
+              {currentProjectFilePath}
+            </div>
+          </div>
+        )}
+        {/* COMMENTED OUT: File navigation buttons and project review functionality
+        {currentProjectFilePath && (
+          <div style={{ 
+            marginLeft: 'auto',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            paddingLeft: '16px'
+          }}>
+            {currentFileIndex > 0 && (
+              <span style={{ 
+                fontSize: '12px',
+                color: '#666',
+                fontStyle: 'italic',
+                marginRight: '8px'
+              }}>
+                Project Review: Read Only
+              </span>
+            )}
             <button
               onClick={navigateToPreviousFile}
               disabled={currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1}
@@ -5239,10 +6586,8 @@ function App() {
             >
               ←
             </button>
-            {/* Forward button (newer file) */}
             <button
               onClick={(e) => {
-                // Double-check before navigating - prevent if disabled
                 const isDisabled = currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0;
                 if (isDisabled) {
                   e.preventDefault();
@@ -5267,20 +6612,9 @@ function App() {
             >
               →
             </button>
-            {/* File path */}
-            <div style={{ 
-              fontSize: '12px',
-              color: '#333',
-              fontFamily: 'monospace',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '40vw'
-            }} title={currentProjectFilePath}>
-              {currentProjectFilePath}
-            </div>
           </div>
         )}
+        */}
       </div>
 
       
@@ -5293,8 +6627,9 @@ function App() {
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
             <button 
-              onClick={() => setCurrentTool('select')} 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('select'); }} 
               onMouseDown={(e) => e.currentTarget.blur()}
+              disabled={isReadOnlyMode}
               title="Select (S)" 
               style={{ 
                 width: 32, 
@@ -5304,43 +6639,95 @@ function App() {
                 borderRadius: 6, 
                 border: currentTool === 'select' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'select' ? '#e6f0ff' : '#fff', 
-                color: '#222',
-                outline: 'none'
+                color: isReadOnlyMode ? '#999' : '#222',
+                outline: 'none',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
               <MousePointer size={16} />
             </button>
-            <button onClick={() => { setDrawingMode('via'); setCurrentTool('draw'); }} title="Draw Vias (V)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'via') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) { setDrawingMode('via'); setCurrentTool('draw'); } }} 
+              disabled={isReadOnlyMode}
+              title="Draw Vias (V)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: (currentTool === 'draw' && drawingMode === 'via') ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="12" cy="12" r="8" fill="none" stroke={brushColor} strokeWidth="3" />
                 <circle cx="12" cy="12" r="4" fill={brushColor} />
               </svg>
             </button>
-            <button onClick={() => { 
-              setDrawingMode('trace'); 
-              setCurrentTool('draw'); 
-              // Default to Top layer, but use last choice if available
-              const layerToUse = traceToolLayer || 'top';
-              setSelectedDrawingLayer(layerToUse);
-              // Set brush color and size to the values for the selected layer (default to 6 if not set)
-              const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
-              // Ensure minimum size of 6 for both layers
-              const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
-              const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
-              const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
-              // If sizes were less than 6, update them
-              if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
-                setTopTraceSize(6);
-              } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
-                setBottomTraceSize(6);
-              }
-              setBrushColor(colorForLayer);
-              setBrushSize(sizeForLayer);
-              setShowTraceLayerChooser(true); 
-            }} title="Draw Traces (T)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  setDrawingMode('trace'); 
+                  setCurrentTool('draw'); 
+                  // Default to Top layer, but use last choice if available
+                  const layerToUse = traceToolLayer || 'top';
+                  setSelectedDrawingLayer(layerToUse);
+                  // Set brush color and size to the values for the selected layer (default to 6 if not set)
+                  const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
+                  // Ensure minimum size of 6 for both layers
+                  const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
+                  const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
+                  const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
+                  // If sizes were less than 6, update them
+                  if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
+                    setTopTraceSize(6);
+                  } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
+                    setBottomTraceSize(6);
+                  }
+                  setBrushColor(colorForLayer);
+                  setBrushSize(sizeForLayer);
+                  setShowTraceLayerChooser(true);
+                }
+              }} 
+              disabled={isReadOnlyMode}
+              title="Draw Traces (T)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               <PenLine size={16} color={brushColor} />
             </button>
-            <button onClick={() => { setCurrentTool('component'); }} title="Draw Component (C)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'component' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'component' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('component'); }} 
+              disabled={isReadOnlyMode}
+              title="Draw Component (C)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'component' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'component' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               {selectedComponentType ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                   {/* Square icon with text - show default abbreviation based on component type */}
@@ -5360,12 +6747,44 @@ function App() {
               )}
             </button>
             {/* Power tool */}
-            <button onClick={() => setCurrentTool('power')} title="Draw Power (P)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'power' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'power' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('power'); }} 
+              disabled={isReadOnlyMode}
+              title="Draw Power (P)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'power' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'power' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               {/* Power symbol icon - red V for volts */}
               <span style={{ color: '#ff0000', fontSize: '18px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
             </button>
             {/* Ground tool */}
-            <button onClick={() => setCurrentTool('ground')} title="Draw Ground (G)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'ground' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('ground'); }} 
+              disabled={isReadOnlyMode}
+              title="Draw Ground (G)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'ground' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               {/* Ground symbol icon */}
               <svg width="16" height="16" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible' }}>
                 <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
@@ -5376,7 +6795,23 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => setCurrentTool('erase')} title="Erase (E)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'erase' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'erase' ? '#ffecec' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('erase'); }} 
+              disabled={isReadOnlyMode}
+              title="Erase (E)" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'erase' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'erase' ? '#ffecec' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
               {/* Tilted pink eraser */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g transform="rotate(-35 12 12)">
@@ -5385,7 +6820,23 @@ function App() {
                 </g>
               </svg>
             </button>
-              <button onClick={() => setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan')} title="Move (H)" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'pan' ? '#e6f0ff' : '#fff', color: '#222' }}>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
+                disabled={isReadOnlyMode}
+                title="Move (H)" 
+                style={{ 
+                  width: 32, 
+                  height: 32, 
+                  display: 'grid', 
+                  placeItems: 'center', 
+                  borderRadius: 6, 
+                  border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
+                  background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
+                  color: isReadOnlyMode ? '#999' : '#222',
+                  cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                  opacity: isReadOnlyMode ? 0.5 : 1
+                }}
+              >
               {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -5395,7 +6846,21 @@ function App() {
                 </g>
               </svg>
             </button>
-            <button onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: currentTool === 'magnify' ? '2px solid #000' : '1px solid #ddd', background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', color: '#222' }}>
+            <button 
+              onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} 
+              title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: currentTool === 'magnify' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', 
+                color: '#222',
+                cursor: 'pointer'
+              }}
+            >
               {/* Enlarged magnifier lens and symbols */}
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 <circle cx="10" cy="10" r="7.5" fill="none" stroke="#111" strokeWidth="2" />
@@ -5412,7 +6877,22 @@ function App() {
             </button>
             {/* Color picker moved just below magnify */}
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowColorPicker(prev => !prev)} title="Color Picker" style={{ width: 32, height: 32, display: 'grid', placeItems: 'center', borderRadius: 6, border: '1px solid #ddd', background: '#fff' }}>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) setShowColorPicker(prev => !prev); }} 
+                disabled={isReadOnlyMode}
+                title="Color Picker" 
+                style={{ 
+                  width: 32, 
+                  height: 32, 
+                  display: 'grid', 
+                  placeItems: 'center', 
+                  borderRadius: 6, 
+                  border: '1px solid #ddd', 
+                  background: '#fff',
+                  cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                  opacity: isReadOnlyMode ? 0.5 : 1
+                }}
+              >
                 {/* Color palette grid icon - 4x4 grid representing the color picker */}
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
                   {/* Row 1 */}
@@ -5444,20 +6924,40 @@ function App() {
                       <div
                         key={c}
                       onClick={() => { 
-                        setBrushColor(c); 
+                        setBrushColor(c);
+                        saveDefaultColor('brush', c);
                         setShowColorPicker(false);
                         // If trace tool is active, save color to the appropriate layer
                         if (currentTool === 'draw' && drawingMode === 'trace') {
                           if (selectedDrawingLayer === 'top') {
                             setTopTraceColor(c);
+                            saveDefaultColor('trace', c, 'top');
                           } else {
                             setBottomTraceColor(c);
+                            saveDefaultColor('trace', c, 'bottom');
                           }
+                        } else if (currentTool === 'draw' && drawingMode === 'via') {
+                          saveDefaultColor('via', c);
+                        } else if (currentTool === 'component') {
+                          saveDefaultColor('component', c);
                         }
                         if (selectedIds.size > 0) {
-                          setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, color: c } : s));
+                          // Determine object types from selected items to persist defaults
+                          setDrawingStrokes(prev => prev.map(s => {
+                            if (selectedIds.has(s.id)) {
+                              // Persist default color for this object type
+                              if (s.type === 'via') {
+                                saveDefaultColor('via', c);
+                              } else if (s.type === 'trace') {
+                                saveDefaultColor('trace', c, s.layer);
+                              }
+                              return { ...s, color: c };
+                            }
+                            return s;
+                          }));
                         }
                         if (selectedComponentIds.size > 0) {
+                          saveDefaultColor('component', c);
                           setComponentsTop(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
                           setComponentsBottom(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
                         }
@@ -5611,11 +7111,13 @@ function App() {
                     // Create component at stored position (from the click)
                     if (pendingComponentPosition) {
                       const { x, y, layer } = pendingComponentPosition;
+                      // Truncate coordinates to 3 decimal places for exact matching
+                      const truncatedPos = truncatePoint({ x, y });
                       const comp = createComponent(
                         componentType,
                         layer,
-                        x,
-                        y,
+                        truncatedPos.x,
+                        truncatedPos.y,
                         brushColor,
                         brushSize
                       );
@@ -5816,17 +7318,18 @@ function App() {
                   background: connectingPin && connectingPin.componentId === comp.id ? 'rgba(255, 255, 255, 0.95)' : '#fff',
                   border: '1px solid #0b5fff',
                   borderRadius: 4,
-                  padding: '6px',
                   boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
                   zIndex: 1000,
                   minWidth: '175px',
                   maxWidth: '250px',
                   maxHeight: '40vh',
-                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
                   pointerEvents: 'auto',
                   cursor: isDraggingDialog ? 'grabbing' : 'default',
                 }}
               >
+                {/* Fixed header - does not scroll */}
                 <div 
                   onMouseDown={(e) => {
                     // Only start dragging if clicking on the header (not buttons/inputs)
@@ -5846,13 +7349,16 @@ function App() {
                   style={{ 
                     display: 'flex', 
                     justifyContent: 'space-between', 
-                    alignItems: 'center', 
-                    marginBottom: '5px',
+                    alignItems: 'center',
+                    padding: '6px',
+                    borderBottom: '1px solid #e0e0e0',
+                    background: '#888', // Medium gray background for grabbable window border
                     cursor: isDraggingDialog ? 'grabbing' : 'grab',
                     userSelect: 'none',
+                    flexShrink: 0,
                   }}
                 >
-                  <h3 style={{ margin: 0, fontSize: '12px', color: '#333', fontWeight: 600 }}>Component Properties</h3>
+                  <h3 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Component Properties</h3>
                   <button
                     onClick={() => {
                       setComponentEditor(null);
@@ -5863,7 +7369,7 @@ function App() {
                       border: 'none',
                       fontSize: '14px',
                       cursor: 'pointer',
-                      color: '#666',
+                      color: '#fff',
                       padding: 0,
                       width: '16px',
                       height: '16px',
@@ -5876,21 +7382,48 @@ function App() {
                   </button>
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {/* Component Type (read-only) */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Component Type:
+                {/* Scrollable content area */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: '4px',
+                  padding: '6px',
+                  overflowY: 'auto',
+                  flex: 1,
+                  minHeight: 0,
+                }}>
+                  {/* Type (read-only) - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Type:
                     </label>
-                    <div style={{ padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
+                    <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
                       {comp.componentType}
                     </div>
                   </div>
                   
-                  {/* Designator */}
-                  <div>
-                    <label htmlFor={`component-designator-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Designator (Name):
+                  {/* Layer (editable) - moved under Component Type, on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Layer:
+                    </label>
+                    <select
+                      id={`component-layer-${comp.id}`}
+                      name={`component-layer-${comp.id}`}
+                      value={componentEditor.layer}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
+                      disabled={areComponentsLocked}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    >
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                  
+                  {/* Part Name - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Part Name:
                     </label>
                     <input
                       id={`component-designator-${comp.id}`}
@@ -5899,15 +7432,15 @@ function App() {
                       value={componentEditor.designator}
                       onChange={(e) => setComponentEditor({ ...componentEditor, designator: e.target.value })}
                       disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                      placeholder="e.g., U1, R5, C3"
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      placeholder="e.g., Op Amp OP07"
                     />
                   </div>
                   
-                  {/* Abbreviation */}
-                  <div>
-                    <label htmlFor={`component-abbreviation-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Abbreviation (shown in icon):
+                  {/* Designator - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-abbreviation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Designator:
                     </label>
                     <input
                       id={`component-abbreviation-${comp.id}`}
@@ -5924,46 +7457,14 @@ function App() {
                         setComponentEditor({ ...componentEditor, abbreviation: val });
                       }}
                       disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '4px 6px', border: '1px solid #ddd', borderRadius: 4, fontSize: '11px', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
-                      placeholder="*"
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      placeholder="e.g., U2, R7, C1"
                     />
                   </div>
                   
-                  {/* Manufacturer */}
-                  <div>
-                    <label htmlFor={`component-manufacturer-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Manufacturer:
-                    </label>
-                    <input
-                      id={`component-manufacturer-${comp.id}`}
-                      name={`component-manufacturer-${comp.id}`}
-                      type="text"
-                      value={componentEditor.manufacturer}
-                      onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-                      disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    />
-                  </div>
-                  
-                  {/* Part Number */}
-                  <div>
-                    <label htmlFor={`component-partnumber-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Part Number:
-                    </label>
-                    <input
-                      id={`component-partnumber-${comp.id}`}
-                      name={`component-partnumber-${comp.id}`}
-                      type="text"
-                      value={componentEditor.partNumber}
-                      onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-                      disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    />
-                  </div>
-                  
-                  {/* X Position */}
-                  <div>
-                    <label htmlFor={`component-x-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                  {/* X - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-x-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
                       X:
                     </label>
                     <input
@@ -5976,13 +7477,13 @@ function App() {
                         setComponentEditor({ ...componentEditor, x: val });
                       }}
                       disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
                     />
                   </div>
                   
-                  {/* Y Position */}
-                  <div>
-                    <label htmlFor={`component-y-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
+                  {/* Y - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-y-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
                       Y:
                     </label>
                     <input
@@ -5995,14 +7496,46 @@ function App() {
                         setComponentEditor({ ...componentEditor, y: val });
                       }}
                       disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
                     />
                   </div>
                   
-                  {/* Pin Count */}
-                  <div>
-                    <label htmlFor={`component-pincount-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Number of Pins:
+                  {/* Manufacturer - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-manufacturer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Manufacturer:
+                    </label>
+                    <input
+                      id={`component-manufacturer-${comp.id}`}
+                      name={`component-manufacturer-${comp.id}`}
+                      type="text"
+                      value={componentEditor.manufacturer}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
+                      disabled={areComponentsLocked}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                  
+                  {/* Part Number - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-partnumber-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Part Number:
+                    </label>
+                    <input
+                      id={`component-partnumber-${comp.id}`}
+                      name={`component-partnumber-${comp.id}`}
+                      type="text"
+                      value={componentEditor.partNumber}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
+                      disabled={areComponentsLocked}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    />
+                  </div>
+                  
+                  {/* Pin Count - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Pin Count:
                     </label>
                     <input
                       id={`component-pincount-${comp.id}`}
@@ -6014,27 +7547,38 @@ function App() {
                         const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
                         setComponentEditor({ ...componentEditor, pinCount: newPinCount });
                       }}
+                      onBlur={(e) => {
+                        // Update component immediately when focus leaves the field
+                        if (areComponentsLocked) return;
+                        const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                        // Find the component in the appropriate layer
+                        const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                        const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                        if (currentComp && newPinCount !== currentComp.pinCount) {
+                          // Resize pinConnections array, preserving existing connections
+                          const currentConnections = currentComp.pinConnections || [];
+                          const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
+                            i < currentConnections.length ? currentConnections[i] : ''
+                          );
+                          // Update the component
+                          const updatedComp = {
+                            ...currentComp,
+                            pinCount: newPinCount,
+                            pinConnections: newPinConnections,
+                          };
+                          // Update in the appropriate layer array
+                          if (componentEditor.layer === 'top') {
+                            setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                          } else {
+                            setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                          }
+                          // Update componentEditor to reflect the change
+                          setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                        }
+                      }}
                       disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
                     />
-                  </div>
-                  
-                  {/* Layer (editable) */}
-                  <div>
-                    <label htmlFor={`component-layer-${comp.id}`} style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '1px' }}>
-                      Layer:
-                    </label>
-                    <select
-                      id={`component-layer-${comp.id}`}
-                      name={`component-layer-${comp.id}`}
-                      value={componentEditor.layer}
-                      onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
-                      disabled={areComponentsLocked}
-                      style={{ width: '100%', padding: '2px 3px', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    >
-                      <option value="top">Top</option>
-                      <option value="bottom">Bottom</option>
-                    </select>
                   </div>
                   
                   {/* Pin Connections */}
@@ -6112,7 +7656,15 @@ function App() {
                   {/* TODO: Add type-specific property fields based on componentType */}
                 </div>
                 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '3px', marginTop: '6px' }}>
+                {/* Fixed footer - does not scroll */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'flex-end', 
+                  gap: '3px',
+                  padding: '6px',
+                  borderTop: '1px solid #e0e0e0',
+                  flexShrink: 0,
+                }}>
                   <button
                     onClick={() => {
                       setComponentEditor(null);
@@ -6546,9 +8098,42 @@ function App() {
           const file = e.target.files?.[0];
           if (file) {
             try {
+              // Update current project file path
+              setCurrentProjectFilePath(file.name);
               const text = await file.text();
               const project = JSON.parse(text);
               await loadProject(project);
+              
+              // Extract project name from project data or filename
+              let projectNameToUse: string;
+              if (project.projectInfo?.name) {
+                projectNameToUse = project.projectInfo.name;
+              } else {
+                // Extract from filename (remove .json extension)
+                const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+                projectNameToUse = projectNameFromFile || 'pcb_project';
+                setProjectName(projectNameToUse);
+                localStorage.setItem('pcb_project_name', projectNameToUse);
+              }
+              
+              // Ensure project name is set (loadProject may have set it, but verify)
+              if (!projectName) {
+                setProjectName(projectNameToUse);
+                localStorage.setItem('pcb_project_name', projectNameToUse);
+              }
+              
+              // Auto save settings are restored from project file if present
+              // Check if auto-save is enabled in the project file
+              // Use setTimeout to allow React state updates from loadProject to complete
+              setTimeout(() => {
+                // Check both the original project data and current state
+                // If project file doesn't have autoSave enabled, or if it was disabled by loadProject
+                // (e.g., due to missing directory handle), show the prompt
+                const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
+                if (!wasAutoSaveEnabledInFile) {
+                  setAutoSavePromptDialog({ visible: true, source: 'open' });
+                }
+              }, 100);
             } catch (err) {
               console.error('Failed to open project', err);
               alert('Failed to open project file. See console for details.');
@@ -6626,6 +8211,28 @@ function App() {
                 color: '#000',
               }}
             >
+              {/* Object Count - Display at top */}
+              {(() => {
+                const strokeCount = drawingStrokes.filter(s => selectedIds.has(s.id)).length;
+                const componentCount = [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).length;
+                const powerCount = powers.filter(p => selectedPowerIds.has(p.id)).length;
+                const groundCount = grounds.filter(g => selectedGroundIds.has(g.id)).length;
+                const totalCount = strokeCount + componentCount + powerCount + groundCount;
+                return totalCount > 0 ? (
+                  <div style={{ 
+                    padding: '12px 16px', 
+                    backgroundColor: '#e8e8e8', 
+                    borderBottom: '2px solid #ccc',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#333',
+                    marginBottom: '8px'
+                  }}>
+                    {totalCount} Object{totalCount !== 1 ? 's' : ''} Selected
+                  </div>
+                ) : null;
+              })()}
+              
               {/* Drawing Strokes (Vias and Traces) - Formatted UI */}
               {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id)).map((stroke) => {
                 if (stroke.type === 'via' && stroke.points.length > 0) {
@@ -6725,7 +8332,7 @@ function App() {
                       <div style={{ marginTop: '4px' }}>
                         <div>Pin Connections:</div>
                         {comp.pinConnections.map((conn, idx) => (
-                          <div key={idx} style={{ marginLeft: '12px' }}>Pin {idx + 1}: {conn || '(not connected)'}</div>
+                          <div key={idx} style={{ marginLeft: '12px' }}>Pin {idx + 1}: {conn ? `Node ${conn}` : '(not connected)'}</div>
                         ))}
                       </div>
                     )}
@@ -6889,6 +8496,718 @@ function App() {
                 autoFocus
               >
                 Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New Project Setup Dialog */}
+      {newProjectSetupDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10002,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleNewProjectSetupCancel();
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              New Project
+            </h2>
+            
+            {/* Project Name */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Project Name:
+            </label>
+            <input
+              ref={newProjectNameInputRef}
+              type="text"
+              value={newProjectSetupDialog.projectName}
+              onChange={(e) => {
+                // Allow all characters to be typed - validation happens on create
+                setNewProjectSetupDialog(prev => ({ ...prev, projectName: e.target.value }));
+              }}
+              onKeyDown={(e) => {
+                // Don't prevent any keys - allow all input including underscore, hyphen, etc.
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleNewProjectCreate();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  handleNewProjectSetupCancel();
+                }
+                // All other keys (including underscore, hyphen, etc.) are allowed
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '8px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+              placeholder="e.g., my_pcb_project"
+              autoFocus
+            />
+            {/* Validation feedback */}
+            {newProjectSetupDialog.projectName && (() => {
+              const invalidChars = newProjectSetupDialog.projectName.match(/[^a-zA-Z0-9_-]/g);
+              if (invalidChars) {
+                const uniqueInvalid = [...new Set(invalidChars)];
+                return (
+                  <div style={{ 
+                    marginBottom: '12px', 
+                    padding: '6px 10px', 
+                    background: '#3a1f1f', 
+                    border: '1px solid #a44', 
+                    borderRadius: 4,
+                    fontSize: '12px',
+                    color: '#ffaaaa',
+                  }}>
+                    Invalid characters: {uniqueInvalid.map(c => `"${c}"`).join(', ')}. Only letters, numbers, underscore (_), and hyphen (-) are allowed.
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            
+            {/* Project Location */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Location:
+            </label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                value={newProjectSetupDialog.locationPath || 'Not selected'}
+                readOnly
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  background: '#1f1f24',
+                  border: '1px solid #444',
+                  borderRadius: 6,
+                  color: newProjectSetupDialog.locationPath ? '#f2f2f2' : '#888',
+                  fontSize: '14px',
+                  cursor: 'not-allowed',
+                }}
+                placeholder="Select a location..."
+              />
+              <button
+                onClick={handleNewProjectBrowseLocation}
+                style={{
+                  padding: '8px 16px',
+                  background: '#555',
+                  color: '#f2f2f2',
+                  border: '1px solid #666',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Browse...
+              </button>
+            </div>
+            
+            {/* Project Path Preview */}
+            {newProjectSetupDialog.projectName && newProjectSetupDialog.locationPath && (
+              <div style={{ 
+                marginBottom: '20px', 
+                padding: '8px 12px', 
+                background: '#1a1a1f', 
+                border: '1px solid #333', 
+                borderRadius: 6,
+                fontSize: '12px',
+                color: '#aaa',
+                fontFamily: 'monospace',
+              }}>
+                <div style={{ marginBottom: '4px', color: '#888' }}>Project will be created at:</div>
+                <div style={{ color: '#4CAF50' }}>
+                  {newProjectSetupDialog.locationPath}/{newProjectSetupDialog.projectName}/project.json
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleNewProjectSetupCancel}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleNewProjectCreate}
+                disabled={!newProjectSetupDialog.projectName.trim() || !newProjectSetupDialog.locationHandle}
+                style={{
+                  padding: '8px 16px',
+                  background: (!newProjectSetupDialog.projectName.trim() || !newProjectSetupDialog.locationHandle) ? '#555' : '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid ' + ((!newProjectSetupDialog.projectName.trim() || !newProjectSetupDialog.locationHandle) ? '#666' : '#45a049'),
+                  borderRadius: 6,
+                  cursor: (!newProjectSetupDialog.projectName.trim() || !newProjectSetupDialog.locationHandle) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  opacity: (!newProjectSetupDialog.projectName.trim() || !newProjectSetupDialog.locationHandle) ? 0.6 : 1,
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save As Dialog */}
+      {saveAsDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10002,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleSaveAsCancel();
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              Save As
+            </h2>
+            
+            {/* File Name */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              File Name:
+            </label>
+            <input
+              ref={saveAsFilenameInputRef}
+              type="text"
+              value={saveAsDialog.filename}
+              onChange={(e) => {
+                setSaveAsDialog(prev => ({ ...prev, filename: e.target.value }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSaveAsSave();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  handleSaveAsCancel();
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '8px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+              placeholder="e.g., my_project.json"
+              autoFocus
+            />
+            
+            {/* Location */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Location:
+            </label>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                value={saveAsDialog.locationPath || 'Not selected'}
+                readOnly
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  background: '#1f1f24',
+                  border: '1px solid #444',
+                  borderRadius: 6,
+                  color: saveAsDialog.locationPath ? '#f2f2f2' : '#888',
+                  fontSize: '14px',
+                  cursor: 'not-allowed',
+                }}
+                placeholder="Select a location..."
+              />
+              <button
+                onClick={handleSaveAsBrowseLocation}
+                style={{
+                  padding: '8px 16px',
+                  background: '#555',
+                  color: '#f2f2f2',
+                  border: '1px solid #666',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Browse...
+              </button>
+            </div>
+            
+            {/* File Path Preview */}
+            {saveAsDialog.filename && saveAsDialog.locationPath && (
+              <div style={{ 
+                marginBottom: '20px', 
+                padding: '8px 12px', 
+                background: '#1a1a1f', 
+                border: '1px solid #333', 
+                borderRadius: 6,
+                fontSize: '12px',
+                color: '#aaa',
+                fontFamily: 'monospace',
+              }}>
+                <div style={{ marginBottom: '4px', color: '#888' }}>File will be saved at:</div>
+                <div style={{ color: '#4CAF50' }}>
+                  {saveAsDialog.locationPath}/{saveAsDialog.filename.endsWith('.json') ? saveAsDialog.filename : `${saveAsDialog.filename}.json`}
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleSaveAsCancel}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAsSave}
+                disabled={!saveAsDialog.filename.trim() || !saveAsDialog.locationHandle}
+                style={{
+                  padding: '8px 16px',
+                  background: (!saveAsDialog.filename.trim() || !saveAsDialog.locationHandle) ? '#555' : '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid ' + ((!saveAsDialog.filename.trim() || !saveAsDialog.locationHandle) ? '#666' : '#45a049'),
+                  borderRadius: 6,
+                  cursor: (!saveAsDialog.filename.trim() || !saveAsDialog.locationHandle) ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  opacity: (!saveAsDialog.filename.trim() || !saveAsDialog.locationHandle) ? 0.6 : 1,
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Set Size Dialog */}
+      {setSizeDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10003,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setSetSizeDialog({ visible: false, size: 6 });
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '300px',
+              maxWidth: '400px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              Set Size
+            </h2>
+            
+            {/* Size Input */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Size (pixels):
+            </label>
+            <input
+              ref={setSizeInputRef}
+              type="number"
+              min="1"
+              max="99"
+              value={setSizeDialog.size}
+              onChange={(e) => {
+                const value = parseInt(e.target.value) || 1;
+                // Limit to 2 digits (max 99)
+                const limitedValue = Math.max(1, Math.min(99, value));
+                setSetSizeDialog(prev => ({ ...prev, size: limitedValue }));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSetSizeApply();
+                } else if (e.key === 'Escape') {
+                  setSetSizeDialog({ visible: false, size: 6 });
+                }
+                // Prevent typing more than 2 digits
+                if (e.key.length === 1 && /[0-9]/.test(e.key)) {
+                  const currentValue = setSizeDialog.size.toString();
+                  if (currentValue.length >= 2 && setSizeInputRef.current?.selectionStart === setSizeInputRef.current?.selectionEnd) {
+                    // If already 2 digits and no selection, prevent adding more
+                    if (setSizeInputRef.current?.selectionStart === currentValue.length) {
+                      e.preventDefault();
+                    }
+                  }
+                }
+              }}
+              onInput={(e) => {
+                // Ensure value doesn't exceed 2 digits
+                const input = e.target as HTMLInputElement;
+                const value = input.value;
+                if (value.length > 2) {
+                  input.value = value.slice(0, 2);
+                  const numValue = parseInt(input.value) || 1;
+                  setSetSizeDialog(prev => ({ ...prev, size: Math.max(1, Math.min(99, numValue)) }));
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '16px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+              autoFocus
+            />
+            
+            {/* Size Dropdown */}
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Or select from list:
+            </label>
+            <select
+              value={(() => {
+                const evenValues = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
+                return evenValues.includes(setSizeDialog.size) ? setSizeDialog.size : '';
+              })()}
+              onChange={(e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value) && value > 0) {
+                  setSetSizeDialog(prev => ({ ...prev, size: value }));
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '20px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+            >
+              <option value="" style={{ background: '#1f1f24', color: '#f2f2f2' }}>-- Select --</option>
+              {[2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32].map(sz => (
+                <option key={sz} value={sz} style={{ background: '#1f1f24', color: '#f2f2f2' }}>
+                  {sz} pixels
+                </option>
+              ))}
+            </select>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setSetSizeDialog({ visible: false, size: 6 })}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetSizeApply}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Save Dialog */}
+      {autoSaveDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10003,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setAutoSaveDialog({ visible: false, interval: 5 });
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '300px',
+              maxWidth: '400px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              Auto Save
+            </h2>
+            
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Select time interval:
+            </label>
+            <select
+              value={autoSaveDialog.interval === null ? 'disable' : (autoSaveDialog.interval || 5).toString()}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'disable') {
+                  setAutoSaveDialog({ visible: true, interval: null });
+                } else {
+                  const numValue = parseFloat(value);
+                  if (!isNaN(numValue) && numValue > 0) {
+                    setAutoSaveDialog({ visible: true, interval: numValue });
+                  }
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '20px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+              autoFocus
+            >
+              <option value="0.5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 seconds</option>
+              <option value="5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>5 minutes</option>
+              <option value="10" style={{ background: '#1f1f24', color: '#f2f2f2' }}>10 minutes</option>
+              <option value="20" style={{ background: '#1f1f24', color: '#f2f2f2' }}>20 minutes</option>
+              <option value="30" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 minutes</option>
+              <option value="disable" style={{ background: '#1f1f24', color: '#f2f2f2' }}>Disable</option>
+            </select>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setAutoSaveDialog({ visible: false, interval: 5 })}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAutoSaveApply}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto Save Prompt Dialog (shown after New Project or Open Project) */}
+      {autoSavePromptDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10004,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleAutoSavePromptSkip();
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              Enable Auto Save?
+            </h2>
+            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
+              We recommend enabling Auto Save to automatically save your project at regular intervals. 
+              This helps protect your work from accidental loss.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleAutoSavePromptSkip}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Skip
+              </button>
+              <button
+                onClick={handleAutoSavePromptEnable}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+                autoFocus
+              >
+                Enable Auto Save
               </button>
             </div>
           </div>
