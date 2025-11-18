@@ -371,10 +371,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'E',
     tooltip: 'Erase objects',
     colorReflective: false,
-    settings: loadToolSettings('erase', '#ffffff', 10),
+    settings: loadToolSettings('erase', '#f5a3b3', 5),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('erase', 'top', '#ffffff', 10)],
-      ['bottom', loadToolLayerSettings('erase', 'bottom', '#ffffff', 10)],
+      ['top', loadToolLayerSettings('erase', 'top', '#f5a3b3', 5)],
+      ['bottom', loadToolLayerSettings('erase', 'bottom', '#f5a3b3', 5)],
     ] as [Layer, ToolSettings][]),
   });
   
@@ -825,7 +825,7 @@ function App() {
   const saveAsFilenameInputRef = useRef<HTMLInputElement>(null);
   // Auto Save state - default to disabled, user must enable it
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
-  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(0.5); // Interval in minutes, default 0.5 (30 seconds)
+  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(1); // Interval in minutes, default 1 minute
   const [autoSaveDirHandle, setAutoSaveDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [autoSaveBaseName, setAutoSaveBaseName] = useState<string>('');
   const autoSaveIntervalRef = useRef<number | null>(null);
@@ -1321,9 +1321,10 @@ function App() {
     } else if (currentTool === 'draw') {
       // Helper: snap to nearest VIA or PAD center when drawing traces
       // Constraint: Traces can only snap to pads on the same layer, but can snap to vias on any layer
-      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number } => {
+      // Returns both coordinates and the Node ID of the snapped object (if any)
+      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
-        let bestCenter: { x: number; y: number } | null = null;
+        let bestCenter: { x: number; y: number; id?: number } | null = null;
         // search all vias and pads (with layer constraint for pads)
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
@@ -1331,7 +1332,10 @@ function App() {
             // Vias can be snapped to from any layer (they go through both layers)
             const c = s.points[0];
             const d = Math.hypot(c.x - wx, c.y - wy);
-            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { 
+              bestDist = d; 
+              bestCenter = c; 
+            }
           } else if (s.type === 'pad') {
             // Pads can only be snapped to if they're on the same layer as the trace
             // Ensure pad has a layer property and it matches the trace layer
@@ -1349,7 +1353,12 @@ function App() {
         }
         // Truncate coordinates to 3 decimal places for exact matching
         const result = bestCenter ?? { x: wx, y: wy };
-        return truncatePoint(result);
+        const truncated = truncatePoint(result);
+        return { 
+          x: truncated.x, 
+          y: truncated.y, 
+          nodeId: bestCenter?.id 
+        };
       };
 
       if (drawingMode === 'via') {
@@ -1410,8 +1419,9 @@ function App() {
       // Pass the trace layer to the snap function so it can enforce layer constraints for pads
       // Use traceToolLayer which is specifically for traces and is set by the layer chooser
       const traceLayer = drawingMode === 'trace' ? (traceToolLayer || 'top') : selectedDrawingLayer;
-      const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y, traceLayer) : truncatePoint({ x, y });
-      const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
+      const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y, traceLayer) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      // If we snapped to an existing object, use its Node ID; otherwise generate a new one
+      const pt = { id: snapped.nodeId ?? generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
       setIsDrawing(false);
@@ -1466,33 +1476,48 @@ function App() {
         return; // Wait for user to select a power bus
       }
       
-      // Snap to nearest via like traces unless ESC is held
-      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
+      // Snap to nearest via, pad, or trace point unless Option/Alt key is held
+      // Returns both coordinates and the Node ID of the snapped object (if any)
+      const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
-        let bestCenter: { x: number; y: number } | null = null;
+        let bestPoint: { x: number; y: number; id?: number } | null = null;
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
-        drawingStrokes.forEach(stroke => {
-          if (stroke.type === 'via') {
-            const via = stroke.points[0];
-            if (via) {
-              const dist = Math.sqrt((via.x - wx) ** 2 + (via.y - wy) ** 2);
-              if (dist < SNAP_THRESHOLD_WORLD && dist < bestDist) {
-                bestDist = dist;
-                bestCenter = { x: via.x, y: via.y };
+        for (const s of drawingStrokes) {
+          if (s.type === 'via' || s.type === 'pad') {
+            // Vias and pads can be snapped to from any layer
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestPoint = c;
+            }
+          } else if (s.type === 'trace') {
+            // Check all trace points
+            for (const point of s.points) {
+              const d = Math.hypot(point.x - wx, point.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = point;
               }
             }
           }
-        });
+        }
         // Truncate coordinates to 3 decimal places for exact matching
-        const result = bestCenter || { x: wx, y: wy };
-        return truncatePoint(result);
+        const result = bestPoint ?? { x: wx, y: wy };
+        const truncated = truncatePoint(result);
+        return {
+          x: truncated.x,
+          y: truncated.y,
+          nodeId: bestPoint?.id
+        };
       };
-      const snapped = !isSnapDisabled ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
+      const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
       
       // Find the selected power bus
       const bus = powerBuses.find(b => b.id === selectedPowerBusId);
       if (bus) {
         // Place power node immediately
+        // If we snapped to an existing object, use its Node ID; otherwise generate a new one
         const p: PowerSymbol = {
           id: `power-${Date.now()}-${Math.random()}`,
           x: snapped.x,
@@ -1502,40 +1527,57 @@ function App() {
           powerBusId: bus.id,
           layer: selectedDrawingLayer,
           type: `${bus.voltage} Power Node`, // Auto-populate type with voltage
-          pointId: generatePointId(), // Generate unique integer Node ID
+          pointId: snapped.nodeId ?? generatePointId(), // Use existing Node ID if snapped, otherwise generate new one
         };
         setPowers(prev => [...prev, p]);
       }
       return;
     } else if (currentTool === 'ground') {
-      // Snap to nearest via like traces unless ESC is held
-      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
+      // Snap to nearest via, pad, or trace point unless Option/Alt key is held
+      // Returns both coordinates and the Node ID of the snapped object (if any)
+      const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
-        let bestCenter: { x: number; y: number } | null = null;
+        let bestPoint: { x: number; y: number; id?: number } | null = null;
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
-          if (s.type !== 'via' || !s.points || s.points.length === 0) continue;
-          const c = s.points[0];
-          if (!c) continue;
-          const d = Math.hypot(c.x - wx, c.y - wy);
-          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { 
-            bestDist = d; 
-            bestCenter = { x: c.x, y: c.y }; 
+          if (s.type === 'via' || s.type === 'pad') {
+            // Vias and pads can be snapped to from any layer
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestPoint = c;
+            }
+          } else if (s.type === 'trace') {
+            // Check all trace points
+            for (const point of s.points) {
+              const d = Math.hypot(point.x - wx, point.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = point;
+              }
+            }
           }
         }
         // Truncate coordinates to 3 decimal places for exact matching
-        const result = bestCenter ?? { x: wx, y: wy };
-        return truncatePoint(result);
+        const result = bestPoint ?? { x: wx, y: wy };
+        const truncated = truncatePoint(result);
+        return {
+          x: truncated.x,
+          y: truncated.y,
+          nodeId: bestPoint?.id
+        };
       };
-      const { x: gx, y: gy } = !isSnapDisabled ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
+      const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      // If we snapped to an existing object, use its Node ID; otherwise generate a new one
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        x: gx,
-        y: gy,
+        x: snapped.x,
+        y: snapped.y,
         color: '#000000', // Ground symbols are always black
         size: toolRegistry.get('ground')?.settings.size || 18,
         type: 'Ground Node', // Auto-populate type
-        pointId: generatePointId(), // Generate unique integer Node ID
+        pointId: snapped.nodeId ?? generatePointId(), // Use existing Node ID if snapped, otherwise generate new one
       };
       setGrounds(prev => [...prev, g]);
       return;
@@ -1671,7 +1713,7 @@ function App() {
           visible: true,
           layer,
           id: comp.id,
-          designator: comp.designator || '',
+          designator: comp.designator || comp.componentType || '',
           abbreviation: abbreviation,
           manufacturer: 'manufacturer' in comp ? (comp as any).manufacturer || '' : '',
           partNumber: 'partNumber' in comp ? (comp as any).partNumber || '' : '',
@@ -4726,15 +4768,43 @@ function App() {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
     } else if (kind === 'erase') {
-      const side = brushSize;
-      const half = side / 2;
-      ctx.fillStyle = '#ffffff';
+      // Draw tilted pink eraser matching toolbar icon shape
+      const width = Math.max(brushSize * 0.75, 8); // Width of eraser
+      const height = Math.max(brushSize * 0.5, 6); // Height of eraser
+      const tipHeight = Math.max(brushSize * 0.2, 2); // Tip height
+      
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(-35 * Math.PI / 180); // Rotate -35 degrees to match toolbar icon
+      
+      // Draw main eraser body (rounded rectangle)
+      ctx.fillStyle = '#f5a3b3'; // Pink color matching toolbar
       ctx.strokeStyle = '#111';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
+      const radius = 1.5;
+      const x = -width / 2;
+      const y = -height / 2;
       ctx.beginPath();
-      ctx.rect(cx - half, cy - half, side, side);
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
       ctx.fill();
       ctx.stroke();
+      
+      // Draw eraser tip (darker pink)
+      ctx.fillStyle = '#f18ea4'; // Darker pink for tip
+      ctx.beginPath();
+      ctx.rect(-width / 2, height / 2 - tipHeight, width, tipHeight);
+      ctx.fill();
+      
+      ctx.restore();
     } else if (kind === 'magnify') {
       // Magnifying glass with +/- sign, handle to bottom-right
       const lensR = r;
@@ -8538,7 +8608,7 @@ function App() {
                         Pin {connectingPin.pinIndex + 1} selected. Click on a via or pad to connect.
                       </div>
                     )}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxHeight: '75px', overflowY: 'auto', padding: '1px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '1px' }}>
                       {Array.from({ length: componentEditor.pinCount }, (_, i) => {
                         // Read pin connection from the current component state (should update reactively)
                         // Re-find the component to ensure we have the latest state
@@ -9220,7 +9290,7 @@ function App() {
                       </div>
                       <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                         <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                        <div>Node ID: {point.id}</div>
+                        {point.id && <div>Node ID: {point.id}</div>}
                         <div>Layer: {stroke.layer}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>Color:</span>
@@ -9248,7 +9318,7 @@ function App() {
                       </div>
                       <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                         <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                        <div>Node ID: {point.id}</div>
+                        {point.id && <div>Node ID: {point.id}</div>}
                         <div>Layer: {stroke.layer}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>Color:</span>
@@ -9279,7 +9349,7 @@ function App() {
                           <div style={{ marginTop: '4px' }}>
                             {stroke.points.map((p, idx) => (
                               <div key={idx} style={{ marginLeft: '12px' }}>
-                                Point {idx}: x={p.x.toFixed(2)}, y={p.y.toFixed(2)} {idx === 0 && `(Node ID: ${p.id})`}
+                                Point {idx}: x={p.x.toFixed(2)}, y={p.y.toFixed(2)}{p.id ? ` (Node ID: ${p.id})` : ''}
                               </div>
                             ))}
                           </div>
