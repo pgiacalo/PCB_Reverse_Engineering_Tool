@@ -64,10 +64,12 @@ export const COLOR_SWATCH_SIZE = 24; // pixels
 // ============================================================================
 
 export const DEFAULT_BRUSH_COLOR = '#ff0000';
-export const DEFAULT_VIA_COLOR = '#ff0000';
-export const DEFAULT_TRACE_COLOR = '#ff0000';
-export const DEFAULT_COMPONENT_COLOR = '#0000ff';
-export const DEFAULT_GROUND_COLOR = '#000000';
+export const DEFAULT_VIA_COLOR = '#2CA02C'; // Dark green
+export const DEFAULT_TRACE_COLOR = '#F0E442'; // Bright yellow
+export const DEFAULT_COMPONENT_COLOR = '#00BFC4'; // Bright teal
+export const DEFAULT_GROUND_COLOR = '#000000'; // Dark black
+export const DEFAULT_PAD_COLOR = '#00008b'; // Dark blue
+export const DEFAULT_POWER_COLOR = '#FF0000'; // Bright red
 
 // ============================================================================
 // Selection Colors

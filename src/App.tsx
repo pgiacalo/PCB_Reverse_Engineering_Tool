@@ -2,7 +2,17 @@ import React, { useState, useRef, useCallback } from 'react';
 import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent } from './utils/components';
-import { COMPONENT_TYPE_INFO } from './constants';
+import { 
+  COMPONENT_TYPE_INFO, 
+  DEFAULT_VIA_COLOR, 
+  DEFAULT_TRACE_COLOR, 
+  DEFAULT_COMPONENT_COLOR, 
+  DEFAULT_GROUND_COLOR,
+  DEFAULT_PAD_COLOR,
+  DEFAULT_POWER_COLOR,
+  VIA,
+  COMPONENT_ICON
+} from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
 import { generateKiCadNetlist, generateProtelNetlist } from './utils/netlist';
 import { generateSimpleSchematic } from './utils/schematic';
@@ -130,7 +140,25 @@ interface ToolDefinition {
   defaultLayer?: 'top' | 'bottom'; // Default layer preference
 }
 
+// Helper functions to load/save per-tool settings from localStorage
+const loadToolSettings = (toolId: string, defaultColor: string, defaultSize: number): ToolSettings => {
+  const colorKey = `tool_${toolId}_color`;
+  const sizeKey = `tool_${toolId}_size`;
+  const savedColor = localStorage.getItem(colorKey);
+  const savedSize = localStorage.getItem(sizeKey);
+  return {
+    color: savedColor || defaultColor,
+    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
+  };
+};
+
+const saveToolSettings = (toolId: string, color: string, size: number): void => {
+  localStorage.setItem(`tool_${toolId}_color`, color);
+  localStorage.setItem(`tool_${toolId}_size`, String(size));
+};
+
 // Tool registry - centralized definition of all tools with their attributes
+// Settings are loaded from localStorage with fallback to defaults
 const createToolRegistry = (): Map<string, ToolDefinition> => {
   const registry = new Map<string, ToolDefinition>();
   
@@ -142,7 +170,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'S',
     tooltip: 'Select objects or groups',
     colorReflective: false,
-    settings: { color: '#ff0000', size: 10 },
+    settings: loadToolSettings('select', '#ff0000', 10),
   });
   
   registry.set('via', {
@@ -154,7 +182,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'V',
     tooltip: 'Place via connection',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 26 },
+    settings: loadToolSettings('via', DEFAULT_VIA_COLOR, VIA.DEFAULT_SIZE),
     defaultLayer: 'top',
   });
   
@@ -167,7 +195,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'P',
     tooltip: 'Place pad connection',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 26 },
+    settings: loadToolSettings('pad', DEFAULT_PAD_COLOR, VIA.DEFAULT_SIZE),
     defaultLayer: 'top',
   });
   
@@ -180,7 +208,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'T',
     tooltip: 'Draw copper traces',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 10 },
+    settings: loadToolSettings('trace', DEFAULT_TRACE_COLOR, 2),
     defaultLayer: 'top',
   });
   
@@ -192,7 +220,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'C',
     tooltip: 'Place component',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 18 },
+    settings: loadToolSettings('component', DEFAULT_COMPONENT_COLOR, COMPONENT_ICON.DEFAULT_SIZE),
     defaultLayer: 'top',
   });
   
@@ -204,7 +232,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'W',
     tooltip: 'Place power node',
     colorReflective: true,
-    settings: { color: '#ff0000', size: 18 },
+    settings: loadToolSettings('power', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE),
     defaultLayer: 'top',
   });
   
@@ -216,7 +244,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'G',
     tooltip: 'Place ground symbol',
     colorReflective: true,
-    settings: { color: '#000000', size: 18 },
+    settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE),
     defaultLayer: 'top',
   });
   
@@ -228,7 +256,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'E',
     tooltip: 'Erase objects',
     colorReflective: false,
-    settings: { color: '#ffffff', size: 10 },
+    settings: loadToolSettings('erase', '#ffffff', 10),
   });
   
   registry.set('pan', {
@@ -239,7 +267,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'H',
     tooltip: 'Pan the view',
     colorReflective: false,
-    settings: { color: '#ff0000', size: 10 },
+    settings: loadToolSettings('pan', '#ff0000', 10),
   });
   
   registry.set('magnify', {
@@ -250,7 +278,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'Z',
     tooltip: 'Zoom In (or Zoom Out)',
     colorReflective: false,
-    settings: { color: '#ff0000', size: 10 },
+    settings: loadToolSettings('magnify', '#ff0000', 10),
   });
   
   return registry;
@@ -362,26 +390,32 @@ function App() {
   const prevBrushColorRef = React.useRef<string>(brushColor);
   const prevBrushSizeRef = React.useRef<number>(brushSize);
   
+  // Helper to get current tool definition
+  const getCurrentToolDef = useCallback((registry: Map<string, ToolDefinition>) => {
+    if (currentTool === 'draw' && drawingMode === 'trace') return registry.get('trace');
+    if (currentTool === 'draw' && drawingMode === 'via') return registry.get('via');
+    if (currentTool === 'draw' && drawingMode === 'pad') return registry.get('pad');
+    if (currentTool === 'component') return registry.get('component');
+    if (currentTool === 'power') return registry.get('power');
+    if (currentTool === 'ground') return registry.get('ground');
+    return null;
+  }, [currentTool, drawingMode]);
+  
   React.useEffect(() => {
     // Use functional update to avoid dependency on toolRegistry
     setToolRegistry(prev => {
-      const currentToolDef = (() => {
-        if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
-        if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
-        if (currentTool === 'component') return prev.get('component');
-        if (currentTool === 'power') return prev.get('power');
-        if (currentTool === 'ground') return prev.get('ground');
-        return null;
-      })();
-      
+      const currentToolDef = getCurrentToolDef(prev);
       const currentToolId = currentToolDef?.id || null;
       const prevToolId = prevToolIdRef.current;
       const updated = new Map(prev);
       
-      // Save previous tool's settings before switching
+      // Save previous tool's settings to localStorage before switching
       if (prevToolId && prevToolId !== currentToolId) {
         const prevToolDef = prev.get(prevToolId);
         if (prevToolDef) {
+          // Save to localStorage
+          saveToolSettings(prevToolId, prevBrushColorRef.current, prevBrushSizeRef.current);
+          // Update registry
           updated.set(prevToolId, {
             ...prevToolDef,
             settings: { color: prevBrushColorRef.current, size: prevBrushSizeRef.current }
@@ -389,7 +423,7 @@ function App() {
         }
       }
       
-      // Restore new tool's settings
+      // Restore new tool's settings from registry (which loads from localStorage)
       if (currentToolDef && currentToolId !== prevToolId) {
         const settings = currentToolDef.settings;
         setBrushColor(settings.color);
@@ -401,21 +435,19 @@ function App() {
       prevToolIdRef.current = currentToolId;
       return updated;
     });
-  }, [currentTool, drawingMode]); // Only depend on tool changes
+  }, [currentTool, drawingMode, getCurrentToolDef]); // Only depend on tool changes
   
   // Update tool-specific settings when color/size changes (for the active tool)
+  // This persists to localStorage and updates the registry
   React.useEffect(() => {
     setToolRegistry(prev => {
-      const currentToolDef = (() => {
-        if (currentTool === 'draw' && drawingMode === 'trace') return prev.get('trace');
-        if (currentTool === 'draw' && drawingMode === 'via') return prev.get('via');
-        if (currentTool === 'component') return prev.get('component');
-        if (currentTool === 'power') return prev.get('power');
-        if (currentTool === 'ground') return prev.get('ground');
-        return null;
-      })();
+      const currentToolDef = getCurrentToolDef(prev);
       
       if (currentToolDef) {
+        // Save to localStorage
+        saveToolSettings(currentToolDef.id, brushColor, brushSize);
+        
+        // Update registry
         const updated = new Map(prev);
         updated.set(currentToolDef.id, {
           ...currentToolDef,
@@ -427,7 +459,7 @@ function App() {
       }
       return prev;
     });
-  }, [brushColor, brushSize, currentTool, drawingMode]);
+  }, [brushColor, brushSize, currentTool, drawingMode, getCurrentToolDef]);
   
   // Reset component type selection when switching away from component tool
   React.useEffect(() => {
@@ -1054,10 +1086,13 @@ function App() {
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Use toolRegistry settings first, then persisted defaults, then brush color/size
+        // Read directly from localStorage to ensure we have the latest values
+        // This is critical for immediate drawing after tool selection
         const viaDef = toolRegistry.get('via');
-        const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
-        const viaSize = viaDef?.settings.size || persistedDefaults.viaSize || brushSize;
+        const savedColor = localStorage.getItem('tool_via_color');
+        const savedSize = localStorage.getItem('tool_via_size');
+        const viaColor = savedColor || viaDef?.settings.color || DEFAULT_VIA_COLOR;
+        const viaSize = savedSize ? parseInt(savedSize, 10) : (viaDef?.settings.size || VIA.DEFAULT_SIZE);
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -1080,10 +1115,13 @@ function App() {
 
       if (drawingMode === 'pad') {
         // Add a square representing a pad at click location
-        // Use toolRegistry settings first, then persisted defaults, then brush color/size
+        // Read directly from localStorage to ensure we have the latest values
+        // This is critical for immediate drawing after tool selection
         const padDef = toolRegistry.get('pad');
-        const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
-        const padSize = padDef?.settings.size || persistedDefaults.padSize || brushSize;
+        const savedColor = localStorage.getItem('tool_pad_color');
+        const savedSize = localStorage.getItem('tool_pad_size');
+        const padColor = savedColor || padDef?.settings.color || DEFAULT_PAD_COLOR;
+        const padSize = savedSize ? parseInt(savedSize, 10) : (padDef?.settings.size || VIA.DEFAULT_SIZE);
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -2762,28 +2800,8 @@ function App() {
     } else {
       setBrushSize(b => {
         const newSize = Math.min(40, b + 1);
-        // Persist default size based on current tool
-        if (currentTool === 'draw' && drawingMode === 'trace') {
-          if (selectedDrawingLayer === 'top') {
-            setTopTraceSize(newSize);
-            saveDefaultSize('trace', newSize, 'top');
-          } else {
-            setBottomTraceSize(newSize);
-            saveDefaultSize('trace', newSize, 'bottom');
-          }
-        } else if (currentTool === 'draw' && drawingMode === 'via') {
-          saveDefaultSize('via', newSize);
-        } else if (currentTool === 'draw' && drawingMode === 'pad') {
-          saveDefaultSize('pad', newSize);
-        } else if (currentTool === 'component') {
-          saveDefaultSize('component', newSize);
-        } else if (currentTool === 'power') {
-          saveDefaultSize('power', newSize);
-        } else if (currentTool === 'ground') {
-          saveDefaultSize('ground', newSize);
-        } else {
-          saveDefaultSize('brush', newSize);
-        }
+        // The useEffect hook will automatically save to localStorage via saveToolSettings
+        // when brushSize changes, so we don't need to call saveDefaultSize here
         return newSize;
       });
     }
@@ -2837,28 +2855,8 @@ function App() {
     } else {
       setBrushSize(b => {
         const newSize = Math.max(1, b - 1);
-        // Persist default size based on current tool
-        if (currentTool === 'draw' && drawingMode === 'trace') {
-          if (selectedDrawingLayer === 'top') {
-            setTopTraceSize(newSize);
-            saveDefaultSize('trace', newSize, 'top');
-          } else {
-            setBottomTraceSize(newSize);
-            saveDefaultSize('trace', newSize, 'bottom');
-          }
-        } else if (currentTool === 'draw' && drawingMode === 'via') {
-          saveDefaultSize('via', newSize);
-        } else if (currentTool === 'draw' && drawingMode === 'pad') {
-          saveDefaultSize('pad', newSize);
-        } else if (currentTool === 'component') {
-          saveDefaultSize('component', newSize);
-        } else if (currentTool === 'power') {
-          saveDefaultSize('power', newSize);
-        } else if (currentTool === 'ground') {
-          saveDefaultSize('ground', newSize);
-        } else {
-          saveDefaultSize('brush', newSize);
-        }
+        // The useEffect hook will automatically save to localStorage via saveToolSettings
+        // when brushSize changes, so we don't need to call saveDefaultSize here
         return newSize;
       });
     }
@@ -2945,7 +2943,9 @@ function App() {
       }
     } else {
       setBrushSize(sz);
-      // Persist default size based on current tool
+      // The useEffect hook will automatically save to localStorage via saveToolSettings
+      // when brushSize changes, so we don't need to manually save here
+      // Legacy support: also save using old system for backward compatibility
       if (currentTool === 'draw' && drawingMode === 'trace') {
         if (selectedDrawingLayer === 'top') {
           setTopTraceSize(sz);
@@ -2956,26 +2956,8 @@ function App() {
         }
       } else if (currentTool === 'draw' && drawingMode === 'via') {
         saveDefaultSize('via', sz);
-        // Update toolRegistry
-        setToolRegistry(prev => {
-          const updated = new Map(prev);
-          const viaDef = updated.get('via');
-          if (viaDef) {
-            updated.set('via', { ...viaDef, settings: { ...viaDef.settings, size: sz } });
-          }
-          return updated;
-        });
       } else if (currentTool === 'draw' && drawingMode === 'pad') {
         saveDefaultSize('pad', sz);
-        // Update toolRegistry
-        setToolRegistry(prev => {
-          const updated = new Map(prev);
-          const padDef = updated.get('pad');
-          if (padDef) {
-            updated.set('pad', { ...padDef, settings: { ...padDef.settings, size: sz } });
-          }
-          return updated;
-        });
       } else if (currentTool === 'component') {
         saveDefaultSize('component', sz);
       } else if (currentTool === 'power') {
@@ -3420,12 +3402,14 @@ function App() {
             e.preventDefault();
             setDrawingMode('via');
             setCurrentTool('draw');
+            // The useEffect hook will load via tool settings automatically
             return;
           case 'p':
           case 'P':
             e.preventDefault();
             setDrawingMode('pad');
             setCurrentTool('draw');
+            // The useEffect hook will load pad tool settings automatically
             return;
           case 't':
           case 'T':
@@ -3435,26 +3419,14 @@ function App() {
             // Default to Top layer, but use last choice if available
             const layerToUse = traceToolLayer || 'top';
             setSelectedDrawingLayer(layerToUse);
-            // Set brush color and size to the values for the selected layer (default to 6 if not set)
-            const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
-            // Ensure minimum size of 6 for both layers
-            const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
-            const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
-            const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
-            // If sizes were less than 6, update them
-            if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
-              setTopTraceSize(6);
-            } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
-              setBottomTraceSize(6);
-            }
-            setBrushColor(colorForLayer);
-            setBrushSize(sizeForLayer);
+            // The useEffect hook will load trace tool settings automatically
             setShowTraceLayerChooser(true);
             return;
           case 'c':
           case 'C':
             e.preventDefault();
             setCurrentTool('component');
+            // The useEffect hook will load component tool settings automatically
             return;
           case 'e':
           case 'E':
@@ -6925,20 +6897,7 @@ function App() {
                   // Default to Top layer, but use last choice if available
                   const layerToUse = traceToolLayer || 'top';
                   setSelectedDrawingLayer(layerToUse);
-                  // Set brush color and size to the values for the selected layer (default to 6 if not set)
-                  const colorForLayer = layerToUse === 'top' ? topTraceColor : bottomTraceColor;
-                  // Ensure minimum size of 6 for both layers
-                  const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
-                  const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
-                  const sizeForLayer = layerToUse === 'top' ? topSize : bottomSize;
-                  // If sizes were less than 6, update them
-                  if (layerToUse === 'top' && (!topTraceSize || topTraceSize < 6)) {
-                    setTopTraceSize(6);
-                  } else if (layerToUse === 'bottom' && (!bottomTraceSize || bottomTraceSize < 6)) {
-                    setBottomTraceSize(6);
-                  }
-                  setBrushColor(colorForLayer);
-                  setBrushSize(sizeForLayer);
+                  // The useEffect hook will load trace tool settings automatically
                   setShowTraceLayerChooser(true);
                 }
               }} 
@@ -6957,7 +6916,7 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <PenLine size={16} color={brushColor} />
+              <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || DEFAULT_TRACE_COLOR} />
             </button>
             <button 
               onClick={() => { if (!isReadOnlyMode) setCurrentTool('component'); }} 
@@ -6976,23 +6935,27 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {selectedComponentType ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                  {/* Square icon with text - show default abbreviation based on component type */}
-                  <rect x="4" y="4" width="16" height="16" fill="rgba(255,255,255,0.9)" stroke={brushColor} strokeWidth="1.5" />
-                  <text x="12" y="14" textAnchor="middle" fontSize="7" fill={brushColor} fontWeight="bold" fontFamily="monospace">{getDefaultAbbreviation(selectedComponentType)}</text>
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                  {/* top body */}
-                  <rect x="5" y="3" width="14" height="7" fill={brushColor} stroke={brushColor} strokeWidth="0.5" />
-                  {/* pin headers */}
-                  <g stroke={brushColor} fill="none" strokeWidth="1.5">
-                    <rect x="5" y="10" width="14" height="4" rx="1.2" />
-                    <path d="M7 14 v4 M10 14 v4 M13 14 v4 M16 14 v4" stroke={brushColor} />
-                  </g>
-                </svg>
-              )}
+              {(() => {
+                const componentDef = toolRegistry.get('component');
+                const componentColor = componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
+                return selectedComponentType ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    {/* Square icon with text - show default abbreviation based on component type */}
+                    <rect x="4" y="4" width="16" height="16" fill="rgba(255,255,255,0.9)" stroke={componentColor} strokeWidth="1.5" />
+                    <text x="12" y="14" textAnchor="middle" fontSize="7" fill={componentColor} fontWeight="bold" fontFamily="monospace">{getDefaultAbbreviation(selectedComponentType)}</text>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    {/* top body */}
+                    <rect x="5" y="3" width="14" height="7" fill={componentColor} stroke={componentColor} strokeWidth="0.5" />
+                    {/* pin headers */}
+                    <g stroke={componentColor} fill="none" strokeWidth="1.5">
+                      <rect x="5" y="10" width="14" height="4" rx="1.2" />
+                      <path d="M7 14 v4 M10 14 v4 M13 14 v4 M16 14 v4" stroke={componentColor} />
+                    </g>
+                  </svg>
+                );
+              })()}
             </button>
             {/* Power tool */}
             <button 
@@ -7012,8 +6975,8 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Power symbol icon - red V for volts */}
-              <span style={{ color: '#ff0000', fontSize: '18px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
+              {/* Power symbol icon - use tool-specific color */}
+              <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
             </button>
             {/* Ground tool */}
             <button 
@@ -7173,9 +7136,16 @@ function App() {
                         key={c}
                       onClick={() => { 
                         setBrushColor(c);
-                        saveDefaultColor('brush', c);
                         setShowColorPicker(false);
-                        // If trace tool is active, save color to the appropriate layer
+                        // Save color for the current tool using the new per-tool system
+                        const currentToolDef = getCurrentToolDef(toolRegistry);
+                        if (currentToolDef) {
+                          // This will trigger the useEffect that saves to localStorage
+                          // The useEffect will call saveToolSettings automatically
+                        }
+                        // Legacy support: also save using old system for backward compatibility
+                        saveDefaultColor('brush', c);
+                        // If trace tool is active, save color to the appropriate layer (legacy)
                         if (currentTool === 'draw' && drawingMode === 'trace') {
                           if (selectedDrawingLayer === 'top') {
                             setTopTraceColor(c);
@@ -7186,26 +7156,8 @@ function App() {
                           }
                         } else if (currentTool === 'draw' && drawingMode === 'via') {
                           saveDefaultColor('via', c);
-                          // Update toolRegistry
-                          setToolRegistry(prev => {
-                            const updated = new Map(prev);
-                            const viaDef = updated.get('via');
-                            if (viaDef) {
-                              updated.set('via', { ...viaDef, settings: { ...viaDef.settings, color: c } });
-                            }
-                            return updated;
-                          });
                         } else if (currentTool === 'draw' && drawingMode === 'pad') {
                           saveDefaultColor('pad', c);
-                          // Update toolRegistry
-                          setToolRegistry(prev => {
-                            const updated = new Map(prev);
-                            const padDef = updated.get('pad');
-                            if (padDef) {
-                              updated.set('pad', { ...padDef, settings: { ...padDef.settings, color: c } });
-                            }
-                            return updated;
-                          });
                         } else if (currentTool === 'component') {
                           saveDefaultColor('component', c);
                         }
@@ -7272,15 +7224,12 @@ function App() {
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'top'} onChange={() => { 
                   setTraceToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
-                  // Update brush color and size to top layer values (default to 6 if not set)
-                  // Ensure top size is exactly 6 if it's less than 6 (fix for existing projects)
-                  setBrushColor(topTraceColor);
-                  const topSize = (topTraceSize && topTraceSize >= 6) ? topTraceSize : 6;
-                  setBrushSize(topSize);
-                  // If topTraceSize was less than 6, update it to 6
-                  if (!topTraceSize || topTraceSize < 6) {
-                    setTopTraceSize(6);
-                  }
+                  // Use trace tool's settings from registry (per-tool color and size)
+                  const traceDef = toolRegistry.get('trace');
+                  const traceColor = traceDef?.settings.color || DEFAULT_TRACE_COLOR;
+                  const traceSize = traceDef?.settings.size || 2;
+                  setBrushColor(traceColor);
+                  setBrushSize(traceSize);
                   setShowTraceLayerChooser(false); 
                   setShowTopImage(true); 
                 }} />
@@ -7290,15 +7239,12 @@ function App() {
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'bottom'} onChange={() => { 
                   setTraceToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
-                  // Update brush color and size to bottom layer values (default to 6 if not set)
-                  // Ensure bottom size is exactly 6 if it's less than 6 (fix for existing projects)
-                  setBrushColor(bottomTraceColor);
-                  const bottomSize = (bottomTraceSize && bottomTraceSize >= 6) ? bottomTraceSize : 6;
-                  setBrushSize(bottomSize);
-                  // If bottomTraceSize was less than 6, update it to 6
-                  if (!bottomTraceSize || bottomTraceSize < 6) {
-                    setBottomTraceSize(6);
-                  }
+                  // Use trace tool's settings from registry (per-tool color and size)
+                  const traceDef = toolRegistry.get('trace');
+                  const traceColor = traceDef?.settings.color || DEFAULT_TRACE_COLOR;
+                  const traceSize = traceDef?.settings.size || 2;
+                  setBrushColor(traceColor);
+                  setBrushSize(traceSize);
                   setShowTraceLayerChooser(false); 
                   setShowBottomImage(true); 
                 }} />
