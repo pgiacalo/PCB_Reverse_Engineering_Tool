@@ -244,7 +244,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
   const DEFAULT_PAD_SIZES = { top: VIA.DEFAULT_SIZE, bottom: VIA.DEFAULT_SIZE };
   const DEFAULT_TRACE_COLORS = { top: '#AA4499', bottom: '#F781BF' };
   const DEFAULT_TRACE_SIZES = { top: 6, bottom: 6 };
-  const DEFAULT_COMPONENT_COLORS = { top: '#8C564B', bottom: '#9C755F' };
+  const DEFAULT_COMPONENT_COLORS = { top: '#6A3D9A', bottom: '#9467BD' };
   const DEFAULT_COMPONENT_SIZES = { top: 18, bottom: 18 };
   
   registry.set('select', {
@@ -337,10 +337,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'W',
     tooltip: 'Place power node',
     colorReflective: true,
-    settings: loadToolSettings('power', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE),
+    settings: loadToolSettings('power', DEFAULT_POWER_COLOR, 26),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('power', 'top', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE)],
-      ['bottom', loadToolLayerSettings('power', 'bottom', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE)],
+      ['top', loadToolLayerSettings('power', 'top', DEFAULT_POWER_COLOR, 26)],
+      ['bottom', loadToolLayerSettings('power', 'bottom', DEFAULT_POWER_COLOR, 26)],
     ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
@@ -353,10 +353,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'G',
     tooltip: 'Place ground symbol',
     colorReflective: true,
-    settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE),
+    settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, 26),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('ground', 'top', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE)],
-      ['bottom', loadToolLayerSettings('ground', 'bottom', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE)],
+      ['top', loadToolLayerSettings('ground', 'top', DEFAULT_GROUND_COLOR, 26)],
+      ['bottom', loadToolLayerSettings('ground', 'bottom', DEFAULT_GROUND_COLOR, 26)],
     ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
@@ -4189,13 +4189,13 @@ function App() {
     saveDefaultSize('pad', 26, 'top');
     saveDefaultSize('pad', 26, 'bottom');
     // Reset component colors and sizes to defaults
-    setTopComponentColor('#8C564B');
-    setBottomComponentColor('#9C755F');
+    setTopComponentColor('#6A3D9A');
+    setBottomComponentColor('#9467BD');
     setTopComponentSize(18);
     setBottomComponentSize(18);
     // Save component defaults to localStorage
-    saveDefaultColor('component', '#8C564B', 'top');
-    saveDefaultColor('component', '#9C755F', 'bottom');
+    saveDefaultColor('component', '#6A3D9A', 'top');
+    saveDefaultColor('component', '#9467BD', 'bottom');
     saveDefaultSize('component', 18, 'top');
     saveDefaultSize('component', 18, 'bottom');
     setTraceToolLayer('top'); // Reset to top layer
