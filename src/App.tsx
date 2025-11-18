@@ -123,7 +123,7 @@ type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pa
 const getDefaultAbbreviation = (componentType: ComponentType): string => {
   const info = COMPONENT_TYPE_INFO[componentType];
   if (!info || !info.prefix || info.prefix.length < 1) {
-    return '*';
+    return '?';
   }
   // Use just the first letter of the first prefix
   const firstPrefix = info.prefix[0];
@@ -136,6 +136,9 @@ interface ToolSettings {
   size: number;
 }
 
+// Layer type
+type Layer = 'top' | 'bottom';
+
 // Tool definition interface - each tool has its own attributes including settings
 interface ToolDefinition {
   id: string; // Unique identifier: 'select', 'trace', 'via', 'component', 'ground', etc.
@@ -146,7 +149,8 @@ interface ToolDefinition {
   shortcut?: string; // Keyboard shortcut
   tooltip?: string; // Tooltip text
   colorReflective?: boolean; // Whether icon color reflects brush color
-  settings: ToolSettings; // Tool-specific color and size settings
+  settings: ToolSettings; // Legacy: current/default settings (for backward compatibility)
+  layerSettings: Map<Layer, ToolSettings>; // Layer-specific settings: Map<Layer, {color, size}>
   defaultLayer?: 'top' | 'bottom'; // Default layer preference
 }
 
@@ -167,10 +171,81 @@ const saveToolSettings = (toolId: string, color: string, size: number): void => 
   localStorage.setItem(`tool_${toolId}_size`, String(size));
 };
 
+// Helper functions to load/save layer-specific tool settings from localStorage
+const loadToolLayerSettings = (toolId: string, layer: Layer, defaultColor: string, defaultSize: number): ToolSettings => {
+  const colorKey = `tool_${toolId}_${layer}_color`;
+  const sizeKey = `tool_${toolId}_${layer}_size`;
+  const savedColor = localStorage.getItem(colorKey);
+  const savedSize = localStorage.getItem(sizeKey);
+  return {
+    color: savedColor || defaultColor,
+    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
+  };
+};
+
+const saveToolLayerSettings = (toolId: string, layer: Layer, color: string, size: number): void => {
+  localStorage.setItem(`tool_${toolId}_${layer}_color`, color);
+  localStorage.setItem(`tool_${toolId}_${layer}_size`, String(size));
+};
+
+// Helper function to get tool color for a specific layer
+const getToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): string => {
+  const toolDef = registry.get(toolId);
+  if (!toolDef) return '#000000';
+  const layerSettings = toolDef.layerSettings.get(layer);
+  return layerSettings?.color || toolDef.settings.color || '#000000';
+};
+
+// Helper function to get tool size for a specific layer
+const getToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): number => {
+  const toolDef = registry.get(toolId);
+  if (!toolDef) return 10;
+  const layerSettings = toolDef.layerSettings.get(layer);
+  return layerSettings?.size || toolDef.settings.size || 10;
+};
+
+// Helper function to set tool color for a specific layer
+const setToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, color: string): Map<string, ToolDefinition> => {
+  const updated = new Map(registry);
+  const toolDef = updated.get(toolId);
+  if (!toolDef) return updated;
+  
+  const layerSettings = new Map(toolDef.layerSettings);
+  const currentLayerSettings = layerSettings.get(layer) || { color: toolDef.settings.color, size: toolDef.settings.size };
+  layerSettings.set(layer, { ...currentLayerSettings, color });
+  
+  updated.set(toolId, { ...toolDef, layerSettings });
+  saveToolLayerSettings(toolId, layer, color, currentLayerSettings.size);
+  return updated;
+};
+
+// Helper function to set tool size for a specific layer
+const setToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, size: number): Map<string, ToolDefinition> => {
+  const updated = new Map(registry);
+  const toolDef = updated.get(toolId);
+  if (!toolDef) return updated;
+  
+  const layerSettings = new Map(toolDef.layerSettings);
+  const currentLayerSettings = layerSettings.get(layer) || { color: toolDef.settings.color, size: toolDef.settings.size };
+  layerSettings.set(layer, { ...currentLayerSettings, size });
+  
+  updated.set(toolId, { ...toolDef, layerSettings });
+  saveToolLayerSettings(toolId, layer, currentLayerSettings.color, size);
+  return updated;
+};
+
 // Tool registry - centralized definition of all tools with their attributes
 // Settings are loaded from localStorage with fallback to defaults
 const createToolRegistry = (): Map<string, ToolDefinition> => {
   const registry = new Map<string, ToolDefinition>();
+  
+  // Default layer-specific colors and sizes (from user requirements)
+  const DEFAULT_PAD_COLORS = { top: '#0072B2', bottom: '#56B4E9' };
+  const DEFAULT_PAD_SIZES = { top: VIA.DEFAULT_SIZE, bottom: VIA.DEFAULT_SIZE };
+  const DEFAULT_TRACE_COLORS = { top: '#AA4499', bottom: '#F781BF' };
+  const DEFAULT_TRACE_SIZES = { top: 6, bottom: 6 };
+  const DEFAULT_COMPONENT_COLORS = { top: '#8C564B', bottom: '#9C755F' };
+  const DEFAULT_COMPONENT_SIZES = { top: 18, bottom: 18 };
   
   registry.set('select', {
     id: 'select',
@@ -181,6 +256,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Select objects or groups',
     colorReflective: false,
     settings: loadToolSettings('select', '#ff0000', 10),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('select', 'top', '#ff0000', 10)],
+      ['bottom', loadToolLayerSettings('select', 'bottom', '#ff0000', 10)],
+    ] as [Layer, ToolSettings][]),
   });
   
   registry.set('via', {
@@ -193,6 +272,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Place via connection',
     colorReflective: true,
     settings: loadToolSettings('via', DEFAULT_VIA_COLOR, VIA.DEFAULT_SIZE),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('via', 'top', DEFAULT_VIA_COLOR, VIA.DEFAULT_SIZE)],
+      ['bottom', loadToolLayerSettings('via', 'bottom', DEFAULT_VIA_COLOR, VIA.DEFAULT_SIZE)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -206,6 +289,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Place pad connection',
     colorReflective: true,
     settings: loadToolSettings('pad', DEFAULT_PAD_COLOR, VIA.DEFAULT_SIZE),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('pad', 'top', DEFAULT_PAD_COLORS.top, DEFAULT_PAD_SIZES.top)],
+      ['bottom', loadToolLayerSettings('pad', 'bottom', DEFAULT_PAD_COLORS.bottom, DEFAULT_PAD_SIZES.bottom)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -219,6 +306,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Draw copper traces',
     colorReflective: true,
     settings: loadToolSettings('trace', DEFAULT_TRACE_COLOR, 2),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('trace', 'top', DEFAULT_TRACE_COLORS.top, DEFAULT_TRACE_SIZES.top)],
+      ['bottom', loadToolLayerSettings('trace', 'bottom', DEFAULT_TRACE_COLORS.bottom, DEFAULT_TRACE_SIZES.bottom)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -231,6 +322,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Place component',
     colorReflective: true,
     settings: loadToolSettings('component', DEFAULT_COMPONENT_COLOR, COMPONENT_ICON.DEFAULT_SIZE),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('component', 'top', DEFAULT_COMPONENT_COLORS.top, DEFAULT_COMPONENT_SIZES.top)],
+      ['bottom', loadToolLayerSettings('component', 'bottom', DEFAULT_COMPONENT_COLORS.bottom, DEFAULT_COMPONENT_SIZES.bottom)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -243,6 +338,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Place power node',
     colorReflective: true,
     settings: loadToolSettings('power', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('power', 'top', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE)],
+      ['bottom', loadToolLayerSettings('power', 'bottom', DEFAULT_POWER_COLOR, VIA.DEFAULT_SIZE)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -255,6 +354,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Place ground symbol',
     colorReflective: true,
     settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('ground', 'top', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE)],
+      ['bottom', loadToolLayerSettings('ground', 'bottom', DEFAULT_GROUND_COLOR, VIA.DEFAULT_SIZE)],
+    ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
   
@@ -267,6 +370,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Erase objects',
     colorReflective: false,
     settings: loadToolSettings('erase', '#ffffff', 10),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('erase', 'top', '#ffffff', 10)],
+      ['bottom', loadToolLayerSettings('erase', 'bottom', '#ffffff', 10)],
+    ] as [Layer, ToolSettings][]),
   });
   
   registry.set('pan', {
@@ -278,6 +385,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Pan the view',
     colorReflective: false,
     settings: loadToolSettings('pan', '#ff0000', 10),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('pan', 'top', '#ff0000', 10)],
+      ['bottom', loadToolLayerSettings('pan', 'bottom', '#ff0000', 10)],
+    ] as [Layer, ToolSettings][]),
   });
   
   registry.set('magnify', {
@@ -289,6 +400,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     tooltip: 'Zoom In (or Zoom Out)',
     colorReflective: false,
     settings: loadToolSettings('magnify', '#ff0000', 10),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('magnify', 'top', '#ff0000', 10)],
+      ['bottom', loadToolLayerSettings('magnify', 'bottom', '#ff0000', 10)],
+    ] as [Layer, ToolSettings][]),
   });
   
   return registry;
@@ -307,16 +422,20 @@ function App() {
     const defaults = {
       brushColor: localStorage.getItem('defaultBrushColor') || '#008080',
       brushSize: parseInt(localStorage.getItem('defaultBrushSize') || '6', 10),
-      topTraceColor: localStorage.getItem('defaultTopTraceColor') || '#008080',
-      bottomTraceColor: localStorage.getItem('defaultBottomTraceColor') || '#00008b',
+      topTraceColor: localStorage.getItem('defaultTopTraceColor') || '#AA4499',
+      bottomTraceColor: localStorage.getItem('defaultBottomTraceColor') || '#F781BF',
       topTraceSize: parseInt(localStorage.getItem('defaultTopTraceSize') || '6', 10),
       bottomTraceSize: parseInt(localStorage.getItem('defaultBottomTraceSize') || '6', 10),
       viaSize: parseInt(localStorage.getItem('defaultViaSize') || '26', 10),
       viaColor: localStorage.getItem('defaultViaColor') || '#ff0000',
-      padSize: parseInt(localStorage.getItem('defaultPadSize') || '26', 10),
-      padColor: localStorage.getItem('defaultPadColor') || '#ff0000',
-      componentSize: parseInt(localStorage.getItem('defaultComponentSize') || '18', 10),
-      componentColor: localStorage.getItem('defaultComponentColor') || '#ff0000',
+      topPadColor: localStorage.getItem('defaultTopPadColor') || '#0072B2',
+      bottomPadColor: localStorage.getItem('defaultBottomPadColor') || '#56B4E9',
+      topPadSize: parseInt(localStorage.getItem('defaultTopPadSize') || '26', 10),
+      bottomPadSize: parseInt(localStorage.getItem('defaultBottomPadSize') || '26', 10),
+      topComponentColor: localStorage.getItem('defaultTopComponentColor') || '#8C564B',
+      bottomComponentColor: localStorage.getItem('defaultBottomComponentColor') || '#9C755F',
+      topComponentSize: parseInt(localStorage.getItem('defaultTopComponentSize') || '18', 10),
+      bottomComponentSize: parseInt(localStorage.getItem('defaultBottomComponentSize') || '18', 10),
       powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
       groundSize: parseInt(localStorage.getItem('defaultGroundSize') || '18', 10),
     };
@@ -331,12 +450,20 @@ function App() {
       } else {
         localStorage.setItem('defaultBottomTraceSize', String(size));
       }
+    } else if (type === 'pad' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopPadSize', String(size));
+      } else {
+        localStorage.setItem('defaultBottomPadSize', String(size));
+      }
+    } else if (type === 'component' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopComponentSize', String(size));
+      } else {
+        localStorage.setItem('defaultBottomComponentSize', String(size));
+      }
     } else if (type === 'via') {
       localStorage.setItem('defaultViaSize', String(size));
-    } else if (type === 'pad') {
-      localStorage.setItem('defaultPadSize', String(size));
-    } else if (type === 'component') {
-      localStorage.setItem('defaultComponentSize', String(size));
     } else if (type === 'power') {
       localStorage.setItem('defaultPowerSize', String(size));
     } else if (type === 'ground') {
@@ -353,12 +480,20 @@ function App() {
       } else {
         localStorage.setItem('defaultBottomTraceColor', color);
       }
+    } else if (type === 'pad' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopPadColor', color);
+      } else {
+        localStorage.setItem('defaultBottomPadColor', color);
+      }
+    } else if (type === 'component' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopComponentColor', color);
+      } else {
+        localStorage.setItem('defaultBottomComponentColor', color);
+      }
     } else if (type === 'via') {
       localStorage.setItem('defaultViaColor', color);
-    } else if (type === 'pad') {
-      localStorage.setItem('defaultPadColor', color);
-    } else if (type === 'component') {
-      localStorage.setItem('defaultComponentColor', color);
     } else if (type === 'brush') {
       localStorage.setItem('defaultBrushColor', color);
     }
@@ -373,6 +508,16 @@ function App() {
   // Trace sizes per layer
   const [topTraceSize, setTopTraceSize] = useState(persistedDefaults.topTraceSize);
   const [bottomTraceSize, setBottomTraceSize] = useState(persistedDefaults.bottomTraceSize);
+  // Pad colors and sizes per layer
+  const [topPadColor, setTopPadColor] = useState(persistedDefaults.topPadColor);
+  const [bottomPadColor, setBottomPadColor] = useState(persistedDefaults.bottomPadColor);
+  const [topPadSize, setTopPadSize] = useState(persistedDefaults.topPadSize);
+  const [bottomPadSize, setBottomPadSize] = useState(persistedDefaults.bottomPadSize);
+  // Component colors and sizes per layer
+  const [topComponentColor, setTopComponentColor] = useState(persistedDefaults.topComponentColor);
+  const [bottomComponentColor, setBottomComponentColor] = useState(persistedDefaults.bottomComponentColor);
+  const [topComponentSize, setTopComponentSize] = useState(persistedDefaults.topComponentSize);
+  const [bottomComponentSize, setBottomComponentSize] = useState(persistedDefaults.bottomComponentSize);
   const [showColorPicker, setShowColorPicker] = useState(false);
   
   // Tool registry - centralized tool definitions with settings as attributes
@@ -434,21 +579,59 @@ function App() {
       }
       
       // Restore new tool's settings from registry (which loads from localStorage)
+      // For trace, pad, and component tools, use layer-specific colors
       if (currentToolDef && currentToolId !== prevToolId) {
-        const settings = currentToolDef.settings;
-        setBrushColor(settings.color);
-        setBrushSize(settings.size);
-        prevBrushColorRef.current = settings.color;
-        prevBrushSizeRef.current = settings.size;
+        if (currentTool === 'draw' && drawingMode === 'trace') {
+          // Use layer-specific trace colors
+          const layer = traceToolLayer || 'top';
+          const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
+          const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
+          setBrushColor(traceColor);
+          setBrushSize(traceSize);
+          prevBrushColorRef.current = traceColor;
+          prevBrushSizeRef.current = traceSize;
+          // Update toolRegistry to reflect current layer's color
+          updated.set('trace', { ...currentToolDef, settings: { color: traceColor, size: traceSize } });
+        } else if (currentTool === 'draw' && drawingMode === 'pad') {
+          // Use layer-specific pad colors
+          const layer = padToolLayer || 'top';
+          const padColor = layer === 'top' ? topPadColor : bottomPadColor;
+          const padSize = layer === 'top' ? topPadSize : bottomPadSize;
+          setBrushColor(padColor);
+          setBrushSize(padSize);
+          prevBrushColorRef.current = padColor;
+          prevBrushSizeRef.current = padSize;
+          // Update toolRegistry to reflect current layer's color
+          updated.set('pad', { ...currentToolDef, settings: { color: padColor, size: padSize } });
+        } else if (currentTool === 'component') {
+          // Use layer-specific component colors
+          const layer = componentToolLayer || 'top';
+          const componentColor = layer === 'top' ? topComponentColor : bottomComponentColor;
+          const componentSize = layer === 'top' ? topComponentSize : bottomComponentSize;
+          setBrushColor(componentColor);
+          setBrushSize(componentSize);
+          prevBrushColorRef.current = componentColor;
+          prevBrushSizeRef.current = componentSize;
+          // Update toolRegistry to reflect current layer's color
+          updated.set('component', { ...currentToolDef, settings: { color: componentColor, size: componentSize } });
+        } else {
+          // For other tools, use registry settings
+          const settings = currentToolDef.settings;
+          setBrushColor(settings.color);
+          setBrushSize(settings.size);
+          prevBrushColorRef.current = settings.color;
+          prevBrushSizeRef.current = settings.size;
+        }
       }
       
       prevToolIdRef.current = currentToolId;
       return updated;
     });
-  }, [currentTool, drawingMode, getCurrentToolDef]); // Only depend on tool changes
+  }, [currentTool, drawingMode, getCurrentToolDef, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]); // Only depend on tool changes
   
   // Update tool-specific settings when color/size changes (for the active tool)
   // This persists to localStorage and updates the registry
+  // Also saves layer-specific defaults for trace, pad, and component tools
   React.useEffect(() => {
     setToolRegistry(prev => {
       const currentToolDef = getCurrentToolDef(prev);
@@ -456,6 +639,48 @@ function App() {
       if (currentToolDef) {
         // Save to localStorage
         saveToolSettings(currentToolDef.id, brushColor, brushSize);
+        
+        // Also save layer-specific defaults for trace, pad, and component
+        if (currentTool === 'draw' && drawingMode === 'trace') {
+          const layer = traceToolLayer || 'top';
+          if (layer === 'top') {
+            setTopTraceColor(brushColor);
+            setTopTraceSize(brushSize);
+            saveDefaultColor('trace', brushColor, 'top');
+            saveDefaultSize('trace', brushSize, 'top');
+          } else {
+            setBottomTraceColor(brushColor);
+            setBottomTraceSize(brushSize);
+            saveDefaultColor('trace', brushColor, 'bottom');
+            saveDefaultSize('trace', brushSize, 'bottom');
+          }
+        } else if (currentTool === 'draw' && drawingMode === 'pad') {
+          const layer = padToolLayer || 'top';
+          if (layer === 'top') {
+            setTopPadColor(brushColor);
+            setTopPadSize(brushSize);
+            saveDefaultColor('pad', brushColor, 'top');
+            saveDefaultSize('pad', brushSize, 'top');
+          } else {
+            setBottomPadColor(brushColor);
+            setBottomPadSize(brushSize);
+            saveDefaultColor('pad', brushColor, 'bottom');
+            saveDefaultSize('pad', brushSize, 'bottom');
+          }
+        } else if (currentTool === 'component') {
+          const layer = componentToolLayer || 'top';
+          if (layer === 'top') {
+            setTopComponentColor(brushColor);
+            setTopComponentSize(brushSize);
+            saveDefaultColor('component', brushColor, 'top');
+            saveDefaultSize('component', brushSize, 'top');
+          } else {
+            setBottomComponentColor(brushColor);
+            setBottomComponentSize(brushSize);
+            saveDefaultColor('component', brushColor, 'bottom');
+            saveDefaultSize('component', brushSize, 'bottom');
+          }
+        }
         
         // Update registry
         const updated = new Map(prev);
@@ -469,7 +694,7 @@ function App() {
       }
       return prev;
     });
-  }, [brushColor, brushSize, currentTool, drawingMode, getCurrentToolDef]);
+  }, [brushColor, brushSize, currentTool, drawingMode, getCurrentToolDef, saveDefaultColor, saveDefaultSize]);
   
   // Show power bus selector when power tool is selected
   React.useEffect(() => {
@@ -652,24 +877,16 @@ function App() {
   const padChooserRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
+  const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
   const componentTypeChooserRef = useRef<HTMLDivElement>(null);
+  const componentLayerChooserRef = useRef<HTMLDivElement>(null);
+  // Component layer chooser (like pad/trace layer chooser)
+  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   
-  // Show component type chooser when component tool is selected (like power bus selector)
-  React.useEffect(() => {
-    if (currentTool === 'component') {
-      setShowComponentTypeChooser(true);
-      setSelectedComponentType(null); // Reset selection when tool is selected
-    } else {
-      setShowComponentTypeChooser(false);
-      setSelectedComponentType(null);
-      setPendingComponentPosition(null);
-    }
-  }, [currentTool]);
-  
-  const [isEscHeld, setIsEscHeld] = useState(false);
+  const [isSnapDisabled, setIsSnapDisabled] = useState(false); // Control key disables snap-to
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isSelecting, setIsSelecting] = useState(false);
@@ -750,8 +967,21 @@ function App() {
         let bestStroke: DrawingStroke | null = null;
         const hitTolerance = Math.max(6 / viewScale, 4); // Same as selection logic
         
+        // Get the component's layer to enforce layer constraint
+        const component = [...componentsTop, ...componentsBottom].find(c => c.id === connectingPin.componentId);
+        const componentLayer = component?.layer || 'top';
+        
         for (const s of drawingStrokes) {
           if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
+            // Vias can be connected from any layer (they connect both layers)
+            // Pads can only be connected if they're on the same layer as the component
+            if (s.type === 'pad') {
+              const padLayer = s.layer || 'top';
+              if (padLayer !== componentLayer) {
+                continue; // Skip pads on different layers
+              }
+            }
+            
             const c = s.points[0];
             const radius = Math.max(1, s.size / 2);
             const d = Math.hypot(c.x - x, c.y - y);
@@ -1155,13 +1385,9 @@ function App() {
         }
         
         // Add a square representing a pad at click location
-        // Read directly from localStorage to ensure we have the latest values
-        // This is critical for immediate drawing after tool selection
-        const padDef = toolRegistry.get('pad');
-        const savedColor = localStorage.getItem('tool_pad_color');
-        const savedSize = localStorage.getItem('tool_pad_size');
-        const padColor = savedColor || padDef?.settings.color || DEFAULT_PAD_COLOR;
-        const padSize = savedSize ? parseInt(savedSize, 10) : (padDef?.settings.size || VIA.DEFAULT_SIZE);
+        // Use layer-specific colors and sizes
+        const padColor = padToolLayer === 'top' ? topPadColor : bottomPadColor;
+        const padSize = padToolLayer === 'top' ? topPadSize : bottomPadSize;
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -1177,11 +1403,11 @@ function App() {
         return;
       }
 
-      // Traces mode: connected segments by clicks, snapping to via centers unless ESC is held
+      // Traces mode: connected segments by clicks, snapping to via centers unless Option/Alt key is held
       // Pass the trace layer to the snap function so it can enforce layer constraints for pads
       // Use traceToolLayer which is specifically for traces and is set by the layer chooser
       const traceLayer = drawingMode === 'trace' ? (traceToolLayer || 'top') : selectedDrawingLayer;
-      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y, traceLayer) : truncatePoint({ x, y });
+      const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y, traceLayer) : truncatePoint({ x, y });
       const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
@@ -1204,13 +1430,12 @@ function App() {
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      // Use toolRegistry settings for component color and size
-      const componentDef = toolRegistry.get('component');
-      const componentColor = componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
-      const componentSize = componentDef?.settings.size || COMPONENT_ICON.DEFAULT_SIZE;
+      // Use layer-specific colors and sizes for components
+      const componentColor = componentToolLayer === 'top' ? topComponentColor : bottomComponentColor;
+      const componentSize = componentToolLayer === 'top' ? topComponentSize : bottomComponentSize;
       const comp = createComponent(
         selectedComponentType,
-        selectedDrawingLayer,
+        componentToolLayer, // Use componentToolLayer instead of selectedDrawingLayer
         truncatedPos.x,
         truncatedPos.y,
         componentColor,
@@ -1221,7 +1446,7 @@ function App() {
       (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentType);
       
       // Add component to appropriate layer
-      if (selectedDrawingLayer === 'top') {
+      if (componentToolLayer === 'top') {
         setShowTopComponents(true);
         setComponentsTop(prev => [...prev, comp]);
       } else {
@@ -1259,7 +1484,7 @@ function App() {
         const result = bestCenter || { x: wx, y: wy };
         return truncatePoint(result);
       };
-      const snapped = !isEscHeld ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
+      const snapped = !isSnapDisabled ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
       
       // Find the selected power bus
       const bus = powerBuses.find(b => b.id === selectedPowerBusId);
@@ -1299,7 +1524,7 @@ function App() {
         const result = bestCenter ?? { x: wx, y: wy };
         return truncatePoint(result);
       };
-      const { x: gx, y: gy } = !isEscHeld ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
+      const { x: gx, y: gy } = !isSnapDisabled ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         x: gx,
@@ -1312,7 +1537,7 @@ function App() {
       setGrounds(prev => [...prev, g]);
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isEscHeld, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -1453,22 +1678,26 @@ function App() {
         });
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
     const pts = currentStrokeRef.current;
     if (currentTool === 'draw' && drawingMode === 'trace' && pts.length >= 2) {
+      // Use traceToolLayer and layer-specific colors
+      const layer = traceToolLayer || 'top';
+      const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
+      const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
       const newStroke: DrawingStroke = {
         id: `${Date.now()}-trace`,
         points: pts,
-        color: brushColor,
-        size: brushSize,
-        layer: selectedDrawingLayer,
+        color: traceColor,
+        size: traceSize,
+        layer: layer,
         type: 'trace',
       };
       setDrawingStrokes(prev => [...prev, newStroke]);
-      if (selectedDrawingLayer === 'top') {
+      if (layer === 'top') {
         setTraceOrderTop(prev => [...prev, newStroke.id]);
       } else {
         setTraceOrderBottom(prev => [...prev, newStroke.id]);
@@ -1477,16 +1706,20 @@ function App() {
     } else {
       // If only a single point was placed, treat it as a dot trace
       if (currentTool === 'draw' && drawingMode === 'trace' && pts.length === 1) {
+        // Use traceToolLayer and layer-specific colors
+        const layer = traceToolLayer || 'top';
+        const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
+        const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
         const newStroke: DrawingStroke = {
           id: `${Date.now()}-trace-dot`,
           points: pts,
-          color: brushColor,
-          size: brushSize,
-          layer: selectedDrawingLayer,
+          color: traceColor,
+          size: traceSize,
+          layer: layer,
           type: 'trace',
         };
         setDrawingStrokes(prev => [...prev, newStroke]);
-        if (selectedDrawingLayer === 'top') {
+        if (layer === 'top') {
           setTraceOrderTop(prev => [...prev, newStroke.id]);
         } else {
           setTraceOrderBottom(prev => [...prev, newStroke.id]);
@@ -1494,7 +1727,7 @@ function App() {
         setCurrentStroke([]);
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, setDrawingStrokes]);
+  }, [currentTool, drawingMode, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setDrawingStrokes]);
 
   const snapConstrainedPoint = useCallback((start: DrawingPoint, x: number, y: number): { x: number; y: number } => {
     const dx = x - start.x;
@@ -2354,7 +2587,7 @@ function App() {
       // Draw abbreviation text (default based on component type prefix)
       let abbreviation = ('abbreviation' in c && (c as any).abbreviation) ? 
         String((c as any).abbreviation).trim() : '';
-      if (!abbreviation || abbreviation === '' || abbreviation === '****' || abbreviation === '*') {
+      if (!abbreviation || abbreviation === '' || abbreviation === '****' || abbreviation === '*' || abbreviation === '?') {
         abbreviation = getDefaultAbbreviation(c.componentType);
       }
       ctx.fillStyle = c.color || '#111';
@@ -2413,7 +2646,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -2780,16 +3013,20 @@ function App() {
             ctx.lineTo(center.x, center.y + crosshairLength);
             ctx.stroke();
           } else {
+            // For traces, use layer-specific colors
+            const layer = traceToolLayer || 'top';
+            const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
+            const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
             if (currentStroke.length === 1) {
               const p = currentStroke[0];
-              const r = Math.max(0.5, brushSize / 2);
-              ctx.fillStyle = brushColor;
+              const r = Math.max(0.5, traceSize / 2);
+              ctx.fillStyle = traceColor;
               ctx.beginPath();
               ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
               ctx.fill();
             } else {
-              ctx.strokeStyle = brushColor;
-              ctx.lineWidth = brushSize;
+              ctx.strokeStyle = traceColor;
+              ctx.lineWidth = traceSize;
               ctx.lineCap = 'round';
               ctx.lineJoin = 'round';
               ctx.globalAlpha = 1;
@@ -3341,9 +3578,27 @@ function App() {
       return;
     }
     
-    // Track ESC hold for disabling snapping
+    // Option/Alt key: Disable snap-to while drawing
+    if (e.key === 'Alt' || e.altKey) {
+      setIsSnapDisabled(true);
+    }
+    
+    // Escape key: Always return to Select tool
     if (e.key === 'Escape') {
-      setIsEscHeld(true);
+      e.preventDefault();
+      e.stopPropagation();
+      // Switch to Select tool
+      setCurrentTool('select');
+      // Close any open choosers/dialogs
+      setShowTraceLayerChooser(false);
+      setShowPadLayerChooser(false);
+      setShowComponentLayerChooser(false);
+      setShowComponentTypeChooser(false);
+      setShowPowerBusSelector(false);
+      setShowColorPicker(false);
+      // Clear any pending component position
+      setPendingComponentPosition(null);
+      return;
     }
     // Finalize an in-progress trace with Enter/Return
     if ((e.key === 'Enter') && currentTool === 'draw' && drawingMode === 'trace') {
@@ -3550,13 +3805,12 @@ function App() {
           case 'c':
           case 'C':
             e.preventDefault();
-            // If already on component tool, show chooser again
-            if (currentTool === 'component') {
-              setShowComponentTypeChooser(true);
-            } else {
-              setCurrentTool('component');
-              // The useEffect hook will show the chooser when tool changes
-            }
+            setCurrentTool('component');
+            // Use current global layer setting (selectedDrawingLayer is the source of truth)
+            // Show layer chooser first (like trace/pad pattern)
+            setShowComponentLayerChooser(true);
+            setShowComponentTypeChooser(false);
+            setSelectedComponentType(null);
             return;
           case 'e':
           case 'E':
@@ -3899,7 +4153,10 @@ function App() {
     // Use capture to intercept before default handling on focused controls (e.g., radios)
     window.addEventListener('keydown', handleKeyDown, true);
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsEscHeld(false);
+      // Option/Alt key released: Re-enable snap-to
+      if (e.key === 'Alt') {
+        setIsSnapDisabled(false);
+      }
     };
     window.addEventListener('keyup', onKeyUp, true);
     return () => {
@@ -3912,13 +4169,38 @@ function App() {
   // This is used on app startup, browser refresh, and when creating a new project
   const initializeApplicationDefaults = useCallback(() => {
     // Reset trace colors and sizes to defaults
-    setTopTraceColor('#008080'); // Teal
-    setBottomTraceColor('#00008b'); // Dark Blue
+    setTopTraceColor('#AA4499');
+    setBottomTraceColor('#F781BF');
     setTopTraceSize(6);
     setBottomTraceSize(6);
+    // Save trace defaults to localStorage
+    saveDefaultColor('trace', '#AA4499', 'top');
+    saveDefaultColor('trace', '#F781BF', 'bottom');
+    saveDefaultSize('trace', 6, 'top');
+    saveDefaultSize('trace', 6, 'bottom');
+    // Reset pad colors and sizes to defaults
+    setTopPadColor('#0072B2');
+    setBottomPadColor('#56B4E9');
+    setTopPadSize(26);
+    setBottomPadSize(26);
+    // Save pad defaults to localStorage
+    saveDefaultColor('pad', '#0072B2', 'top');
+    saveDefaultColor('pad', '#56B4E9', 'bottom');
+    saveDefaultSize('pad', 26, 'top');
+    saveDefaultSize('pad', 26, 'bottom');
+    // Reset component colors and sizes to defaults
+    setTopComponentColor('#8C564B');
+    setBottomComponentColor('#9C755F');
+    setTopComponentSize(18);
+    setBottomComponentSize(18);
+    // Save component defaults to localStorage
+    saveDefaultColor('component', '#8C564B', 'top');
+    saveDefaultColor('component', '#9C755F', 'bottom');
+    saveDefaultSize('component', 18, 'top');
+    saveDefaultSize('component', 18, 'bottom');
     setTraceToolLayer('top'); // Reset to top layer
-    // Set brush color and size to match top layer defaults
-    setBrushColor('#008080'); // Teal
+    // Set brush color and size to match top layer trace defaults
+    setBrushColor('#AA4499');
     setBrushSize(6);
     // Reset power buses to defaults
     setPowerBuses([
@@ -3940,7 +4222,7 @@ function App() {
     setCurrentView('overlay');
     // Reset point ID counter
     setPointIdCounter(1);
-  }, []);
+  }, [saveDefaultColor, saveDefaultSize]);
 
   // Initialize application with default keyboard shortcuts (o and s)
   // This function performs the same initialization as when the app first loads
@@ -4051,6 +4333,11 @@ function App() {
       // If click originated on the canvas, ignore (canvas handlers will manage)
       const canvas = canvasRef.current;
       if (!canvas) return;
+      
+      // Don't close component layer chooser if click is on the chooser itself
+      if (componentLayerChooserRef.current && componentLayerChooserRef.current.contains(e.target as Node)) {
+        return;
+      }
       if (e.target instanceof Node && canvas.contains(e.target)) return;
       // Otherwise, finalize any in-progress trace
       finalizeTraceIfAny();
@@ -4059,6 +4346,14 @@ function App() {
         const el = traceChooserRef.current;
         if (!el || !(e.target instanceof Node) || !el.contains(e.target)) {
           setShowTraceLayerChooser(false);
+        }
+      }
+      if (showComponentLayerChooser) {
+        const el2 = componentLayerChooserRef.current;
+        if (!el2 || !(e.target instanceof Node) || !el2.contains(e.target)) {
+          setShowComponentLayerChooser(false);
+          // Switch back to select tool if layer chooser is closed
+          setCurrentTool('select');
         }
       }
       if (showComponentTypeChooser) {
@@ -4079,7 +4374,7 @@ function App() {
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showComponentTypeChooser, showColorPicker]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showComponentLayerChooser, showComponentTypeChooser, showColorPicker]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -4128,8 +4423,21 @@ function App() {
       let bestStroke: DrawingStroke | null = null;
       const hitTolerance = Math.max(6 / viewScale, 4);
       
+      // Get the component's layer to enforce layer constraint
+      const component = [...componentsTop, ...componentsBottom].find(c => c.id === connectingPin.componentId);
+      const componentLayer = component?.layer || 'top';
+      
       for (const s of drawingStrokes) {
         if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
+          // Vias can be connected from any layer (they connect both layers)
+          // Pads can only be connected if they're on the same layer as the component
+          if (s.type === 'pad') {
+            const padLayer = s.layer || 'top';
+            if (padLayer !== componentLayer) {
+              continue; // Skip pads on different layers
+            }
+          }
+          
           const c = s.points[0];
           const radius = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
@@ -4373,9 +4681,9 @@ function App() {
       ctx.lineTo(cx, cy + crosshairLength);
       ctx.stroke();
     } else if (kind === 'pad') {
-      // Use pad color from toolRegistry
+      // Use pad color from toolRegistry (layer-specific colors are used when drawing)
       const padDef = toolRegistry.get('pad');
-      const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
+      const padColor = padDef?.settings.color || topPadColor || brushColor;
       
       // Draw pad as square annulus (square with square hole) - similar to via but square
       const outerSize = r * 2;
@@ -4405,7 +4713,10 @@ function App() {
       ctx.lineTo(cx, cy + crosshairLength);
       ctx.stroke();
     } else if (kind === 'trace') {
-      ctx.fillStyle = brushColor;
+      // Use layer-specific trace colors (like pad pattern)
+      const traceDef = toolRegistry.get('trace');
+      const traceColor = traceDef?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || brushColor;
+      ctx.fillStyle = traceColor;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
@@ -4496,19 +4807,25 @@ function App() {
       ctx.stroke();
     } else if (kind === 'component') {
       // Draw square component icon with abbreviation text
+      // Use layer-specific component colors based on componentToolLayer (like pad pattern)
+      // Priority: componentToolLayer -> toolRegistry -> fallback
+      const layer = componentToolLayer || 'top';
+      const componentDef = toolRegistry.get('component');
+      // Use layer-specific color based on componentToolLayer (this is the source of truth)
+      const componentColor = (layer === 'top' ? topComponentColor : bottomComponentColor) || componentDef?.settings.color || brushColor;
       const compSize = diameterPx;
       const half = compSize / 2;
       // Draw square
-      ctx.strokeStyle = brushColor;
+      ctx.strokeStyle = componentColor;
       ctx.lineWidth = 2;
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
       ctx.beginPath();
       ctx.rect(cx - half, cy - half, compSize, compSize);
       ctx.fill();
       ctx.stroke();
-      // Draw abbreviation text (use selected type if available, otherwise show generic '*')
-      const abbrev = selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '*';
-      ctx.fillStyle = brushColor;
+      // Draw abbreviation text (use selected type if available, otherwise show generic '?')
+      const abbrev = selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '?';
+      ctx.fillStyle = componentColor;
       ctx.font = `bold ${Math.max(8, compSize * 0.35)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -4516,7 +4833,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, persistedDefaults]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, persistedDefaults, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -4787,6 +5104,22 @@ function App() {
         top: topTraceSize,
         bottom: bottomTraceSize,
       },
+      padColors: {
+        top: topPadColor,
+        bottom: bottomPadColor,
+      },
+      padSizes: {
+        top: topPadSize,
+        bottom: bottomPadSize,
+      },
+      componentColors: {
+        top: topComponentColor,
+        bottom: bottomComponentColor,
+      },
+      componentSizes: {
+        top: topComponentSize,
+        bottom: bottomComponentSize,
+      },
       traceToolLayer, // Save last layer choice
       toolSettings: {
         // Convert Map to plain object for JSON serialization
@@ -4828,7 +5161,7 @@ function App() {
       },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -5735,8 +6068,14 @@ function App() {
       }
       // Restore trace colors, sizes, and layer choice
       if (project.traceColors) {
-        if (project.traceColors.top) setTopTraceColor(project.traceColors.top);
-        if (project.traceColors.bottom) setBottomTraceColor(project.traceColors.bottom);
+        if (project.traceColors.top) {
+          setTopTraceColor(project.traceColors.top);
+          saveDefaultColor('trace', project.traceColors.top, 'top');
+        }
+        if (project.traceColors.bottom) {
+          setBottomTraceColor(project.traceColors.bottom);
+          saveDefaultColor('trace', project.traceColors.bottom, 'bottom');
+        }
       }
       if (project.traceSizes) {
         // Use defaults (6) if values are missing or invalid
@@ -5749,10 +6088,50 @@ function App() {
         }
         setTopTraceSize(topSize);
         setBottomTraceSize(bottomSize);
+        saveDefaultSize('trace', topSize, 'top');
+        saveDefaultSize('trace', bottomSize, 'bottom');
       } else {
         // If traceSizes doesn't exist in project, ensure defaults are set
         setTopTraceSize(6);
         setBottomTraceSize(6);
+      }
+      // Restore pad colors and sizes
+      if (project.padColors) {
+        if (project.padColors.top) {
+          setTopPadColor(project.padColors.top);
+          saveDefaultColor('pad', project.padColors.top, 'top');
+        }
+        if (project.padColors.bottom) {
+          setBottomPadColor(project.padColors.bottom);
+          saveDefaultColor('pad', project.padColors.bottom, 'bottom');
+        }
+      }
+      if (project.padSizes) {
+        const topSize = project.padSizes.top != null && project.padSizes.top > 0 ? project.padSizes.top : 26;
+        const bottomSize = project.padSizes.bottom != null && project.padSizes.bottom > 0 ? project.padSizes.bottom : 26;
+        setTopPadSize(topSize);
+        setBottomPadSize(bottomSize);
+        saveDefaultSize('pad', topSize, 'top');
+        saveDefaultSize('pad', bottomSize, 'bottom');
+      }
+      // Restore component colors and sizes
+      if (project.componentColors) {
+        if (project.componentColors.top) {
+          setTopComponentColor(project.componentColors.top);
+          saveDefaultColor('component', project.componentColors.top, 'top');
+        }
+        if (project.componentColors.bottom) {
+          setBottomComponentColor(project.componentColors.bottom);
+          saveDefaultColor('component', project.componentColors.bottom, 'bottom');
+        }
+      }
+      if (project.componentSizes) {
+        const topSize = project.componentSizes.top != null && project.componentSizes.top > 0 ? project.componentSizes.top : 18;
+        const bottomSize = project.componentSizes.bottom != null && project.componentSizes.bottom > 0 ? project.componentSizes.bottom : 18;
+        setTopComponentSize(topSize);
+        setBottomComponentSize(bottomSize);
+        saveDefaultSize('component', topSize, 'top');
+        saveDefaultSize('component', bottomSize, 'bottom');
       }
       if (project.traceToolLayer) {
         setTraceToolLayer(project.traceToolLayer);
@@ -6028,7 +6407,7 @@ function App() {
         });
         setDrawingStrokes(validStrokes);
       }
-      // load components if present, ensuring all properties are preserved
+      // load components if present, ensuring all properties are preserved including layer
       if (project.drawing?.componentsTop) {
         const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => {
           // Truncate coordinates to 3 decimal places for consistency with new objects
@@ -6037,6 +6416,7 @@ function App() {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
+            layer: comp.layer || 'top', // Ensure layer property is set (default to 'top' for backward compatibility)
             // Ensure pinConnections is always an array
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
@@ -6051,6 +6431,7 @@ function App() {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
+            layer: comp.layer || 'bottom', // Ensure layer property is set (default to 'bottom' for backward compatibility)
             // Ensure pinConnections is always an array
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
@@ -7109,8 +7490,8 @@ function App() {
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 {(() => {
                   const padDef = toolRegistry.get('pad');
-                  const padSize = padDef?.settings.size || persistedDefaults.padSize || 26;
-                  const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
+                  const padSize = padDef?.settings.size || topPadSize || 26;
+                  const padColor = padDef?.settings.color || topPadColor || brushColor;
                   // Scale pad size to fit in 16x16 icon (max 14 to leave some margin)
                   const iconSize = Math.min(14, Math.max(4, (padSize / 26) * 14));
                   const iconX = (24 - iconSize) / 2;
@@ -7146,18 +7527,17 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || DEFAULT_TRACE_COLOR} />
+              <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
             </button>
             <button 
               onClick={() => { 
                 if (!isReadOnlyMode) {
-                  // If already on component tool, show chooser again
-                  if (currentTool === 'component') {
-                    setShowComponentTypeChooser(true);
-                  } else {
-                    setCurrentTool('component');
-                    // The useEffect hook will show the chooser when tool changes
-                  }
+                  setCurrentTool('component');
+                  // Use current global layer setting (selectedDrawingLayer is the source of truth)
+                  // Show layer chooser first (like trace/pad pattern)
+                  setShowComponentLayerChooser(true);
+                  setShowComponentTypeChooser(false);
+                  setSelectedComponentType(null);
                 }
               }} 
               disabled={isReadOnlyMode}
@@ -7176,8 +7556,12 @@ function App() {
               }}
             >
               {(() => {
+                // Use layer-specific component colors based on componentToolLayer (like pad pattern)
+                // Priority: componentToolLayer -> toolRegistry -> fallback
+                const layer = componentToolLayer || 'top';
                 const componentDef = toolRegistry.get('component');
-                const componentColor = componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
+                // Use layer-specific color based on componentToolLayer (this is the source of truth)
+                const componentColor = (layer === 'top' ? topComponentColor : bottomComponentColor) || componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
                 return selectedComponentType ? (
                   <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                     {/* Square icon with text - show default abbreviation based on component type */}
@@ -7464,12 +7848,18 @@ function App() {
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'top'} onChange={() => { 
                   setTraceToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
-                  // Use trace tool's settings from registry (per-tool color and size)
-                  const traceDef = toolRegistry.get('trace');
-                  const traceColor = traceDef?.settings.color || DEFAULT_TRACE_COLOR;
-                  const traceSize = traceDef?.settings.size || 2;
-                  setBrushColor(traceColor);
-                  setBrushSize(traceSize);
+                  // Use layer-specific trace colors and sizes
+                  setBrushColor(topTraceColor);
+                  setBrushSize(topTraceSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const traceDef = updated.get('trace');
+                    if (traceDef) {
+                      updated.set('trace', { ...traceDef, settings: { color: topTraceColor, size: topTraceSize } });
+                    }
+                    return updated;
+                  });
                   setShowTraceLayerChooser(false); 
                   setShowTopImage(true); 
                 }} />
@@ -7479,12 +7869,18 @@ function App() {
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'bottom'} onChange={() => { 
                   setTraceToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
-                  // Use trace tool's settings from registry (per-tool color and size)
-                  const traceDef = toolRegistry.get('trace');
-                  const traceColor = traceDef?.settings.color || DEFAULT_TRACE_COLOR;
-                  const traceSize = traceDef?.settings.size || 2;
-                  setBrushColor(traceColor);
-                  setBrushSize(traceSize);
+                  // Use layer-specific trace colors and sizes
+                  setBrushColor(bottomTraceColor);
+                  setBrushSize(bottomTraceSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const traceDef = updated.get('trace');
+                    if (traceDef) {
+                      updated.set('trace', { ...traceDef, settings: { color: bottomTraceColor, size: bottomTraceSize } });
+                    }
+                    return updated;
+                  });
                   setShowTraceLayerChooser(false); 
                   setShowBottomImage(true); 
                 }} />
@@ -7499,12 +7895,18 @@ function App() {
                 <input type="radio" name="padToolLayer" checked={padToolLayer === 'top'} onChange={() => { 
                   setPadToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
-                  // Use pad tool's settings from registry (per-tool color and size)
-                  const padDef = toolRegistry.get('pad');
-                  const padColor = padDef?.settings.color || DEFAULT_PAD_COLOR;
-                  const padSize = padDef?.settings.size || VIA.DEFAULT_SIZE;
-                  setBrushColor(padColor);
-                  setBrushSize(padSize);
+                  // Use layer-specific pad colors and sizes
+                  setBrushColor(topPadColor);
+                  setBrushSize(topPadSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const padDef = updated.get('pad');
+                    if (padDef) {
+                      updated.set('pad', { ...padDef, settings: { color: topPadColor, size: topPadSize } });
+                    }
+                    return updated;
+                  });
                   setShowPadLayerChooser(false); 
                   setShowTopImage(true); 
                 }} />
@@ -7514,12 +7916,18 @@ function App() {
                 <input type="radio" name="padToolLayer" checked={padToolLayer === 'bottom'} onChange={() => { 
                   setPadToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
-                  // Use pad tool's settings from registry (per-tool color and size)
-                  const padDef = toolRegistry.get('pad');
-                  const padColor = padDef?.settings.color || DEFAULT_PAD_COLOR;
-                  const padSize = padDef?.settings.size || VIA.DEFAULT_SIZE;
-                  setBrushColor(padColor);
-                  setBrushSize(padSize);
+                  // Use layer-specific pad colors and sizes
+                  setBrushColor(bottomPadColor);
+                  setBrushSize(bottomPadSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const padDef = updated.get('pad');
+                    if (padDef) {
+                      updated.set('pad', { ...padDef, settings: { color: bottomPadColor, size: bottomPadSize } });
+                    }
+                    return updated;
+                  });
                   setShowPadLayerChooser(false); 
                   setShowBottomImage(true); 
                 }} />
@@ -7603,6 +8011,58 @@ function App() {
               </button>
       </div>
           )}
+          {/* Active tool layer chooser for Component */}
+          {(currentTool === 'component' && showComponentLayerChooser) && (
+            <div ref={componentLayerChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+              <label className="radio-label" style={{ marginRight: 6 }}>
+                <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'top'} onClick={() => { 
+                  setComponentToolLayer('top'); 
+                  setSelectedDrawingLayer('top'); 
+                  // Use layer-specific component colors and sizes
+                  setBrushColor(topComponentColor);
+                  setBrushSize(topComponentSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const componentDef = updated.get('component');
+                    if (componentDef) {
+                      updated.set('component', { ...componentDef, settings: { color: topComponentColor, size: topComponentSize } });
+                    }
+                    return updated;
+                  });
+                  setShowComponentLayerChooser(false); 
+                  setShowTopImage(true);
+                  // Always show component type chooser after layer button is clicked
+                  setShowComponentTypeChooser(true);
+                }} />
+                <span>Top</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'bottom'} onClick={() => { 
+                  setComponentToolLayer('bottom'); 
+                  setSelectedDrawingLayer('bottom'); 
+                  // Use layer-specific component colors and sizes
+                  setBrushColor(bottomComponentColor);
+                  setBrushSize(bottomComponentSize);
+                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const componentDef = updated.get('component');
+                    if (componentDef) {
+                      updated.set('component', { ...componentDef, settings: { color: bottomComponentColor, size: bottomComponentSize } });
+                    }
+                    return updated;
+                  });
+                  setShowComponentLayerChooser(false); 
+                  setShowBottomImage(true);
+                  // Always show component type chooser after layer button is clicked
+                  setShowComponentTypeChooser(true);
+                }} />
+                <span>Bottom</span>
+              </label>
+            </div>
+          )}
+          {/* Component Type Chooser - appears after layer is selected */}
           {currentTool === 'component' && showComponentTypeChooser && (
             <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '400px', overflowY: 'auto', minWidth: '200px' }}>
               <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Component Type:</div>
@@ -8171,6 +8631,7 @@ function App() {
                         updated.designator = componentEditor.designator;
                         updated.x = componentEditor.x;
                         updated.y = componentEditor.y;
+                        updated.layer = componentEditor.layer; // Update layer property
                         // Store abbreviation as a dynamic property (no padding needed, just use as-is)
                         (updated as any).abbreviation = componentEditor.abbreviation.trim() || getDefaultAbbreviation(comp.componentType);
                         if ('manufacturer' in updated) {
@@ -8195,37 +8656,57 @@ function App() {
                       };
                       
                       // Handle layer changes - move component between layers if needed
-                      const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                      const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                      // First, find the component in either layer array
+                      const compInTop = componentsTop.find(c => c.id === componentEditor.id);
+                      const compInBottom = componentsBottom.find(c => c.id === componentEditor.id);
+                      const currentComp = compInTop || compInBottom;
                       
                       if (currentComp) {
-                        // Component exists on current layer
+                        // Component exists - update it
                         const updatedComp = updateComponent(currentComp);
                         
                         // Check if layer changed
-                        if (updatedComp.layer !== componentEditor.layer) {
-                          // Remove from old layer
-                          if (componentEditor.layer === 'top') {
+                        const oldLayer = currentComp.layer;
+                        const newLayer = componentEditor.layer;
+                        
+                        if (oldLayer !== newLayer) {
+                          // Layer changed - move component between arrays
+                          if (oldLayer === 'top') {
+                            // Remove from top, add to bottom
                             setComponentsTop(prev => prev.filter(c => c.id !== componentEditor.id));
-                            setComponentsBottom(prev => [...prev, { ...updatedComp, layer: 'bottom' }]);
+                            setComponentsBottom(prev => [...prev, updatedComp]);
                           } else {
+                            // Remove from bottom, add to top
                             setComponentsBottom(prev => prev.filter(c => c.id !== componentEditor.id));
-                            setComponentsTop(prev => [...prev, { ...updatedComp, layer: 'top' }]);
+                            setComponentsTop(prev => [...prev, updatedComp]);
                           }
                         } else {
-                          // Update in place
-                          if (componentEditor.layer === 'top') {
+                          // Layer unchanged - update in place
+                          if (newLayer === 'top') {
                             setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
                           } else {
                             setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
                           }
                         }
                       } else {
-                        // Component not found on current layer, update based on new layer
+                        // Component not found - this shouldn't happen, but handle gracefully
+                        console.warn(`Component ${componentEditor.id} not found in either layer array`);
+                        // Try to find in the other layer and move it, or create a minimal component
+                        // This is a fallback that shouldn't normally be needed
                         if (componentEditor.layer === 'top') {
-                          setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                          const compInBottom = componentsBottom.find(c => c.id === componentEditor.id);
+                          if (compInBottom) {
+                            const updatedComp = updateComponent(compInBottom);
+                            setComponentsBottom(prev => prev.filter(c => c.id !== componentEditor.id));
+                            setComponentsTop(prev => [...prev, updatedComp]);
+                          }
                         } else {
-                          setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updateComponent(c) : c));
+                          const compInTop = componentsTop.find(c => c.id === componentEditor.id);
+                          if (compInTop) {
+                            const updatedComp = updateComponent(compInTop);
+                            setComponentsTop(prev => prev.filter(c => c.id !== componentEditor.id));
+                            setComponentsBottom(prev => [...prev, updatedComp]);
+                          }
                         }
                       }
                       
