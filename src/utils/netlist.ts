@@ -108,7 +108,8 @@ class UnionFind {
  * Calculate component pin position based on component center and pin index
  * Pins are arranged in a rectangular pattern: left side (1 to pinCount/2), right side (rest)
  */
-function calculateComponentPinPosition(
+// @ts-ignore - Reserved for future use
+function _calculateComponentPinPosition(
   comp: PCBComponent,
   pinIndex: number
 ): { x: number; y: number } {
@@ -340,7 +341,7 @@ export function buildConnectivityGraphCoordinateBased(
  */
 function buildConnectionsCoordinateBased(
   drawingStrokes: DrawingStroke[],
-  coordinateToNode: Map<string, NetlistNode>
+  _coordinateToNode: Map<string, NetlistNode>
 ): Array<[string, string]> {
   const connections: Array<[string, string]> = [];
   
@@ -591,9 +592,10 @@ export function buildConnectivityGraph(
  * Build connections from drawing strokes (traces connect points, vias are single points)
  * Also includes connections from component pins, power, and ground nodes that share point IDs
  */
+// @ts-ignore - Reserved for future use
 function buildConnections(
   drawingStrokes: DrawingStroke[],
-  nodes: Map<number, NetlistNode>
+  _nodes: Map<number, NetlistNode>
 ): Array<[number, number]> {
   const connections: Array<[number, number]> = [];
   
@@ -709,7 +711,7 @@ export function groupNodesIntoNets(
  */
 export function generateNetNamesCoordinateBased(
   netGroups: Map<string, NetlistNode[]>,
-  coordinateToNode: Map<string, NetlistNode>
+  _coordinateToNode: Map<string, NetlistNode>
 ): Map<string, string> {
   const netNames = new Map<string, string>();
   let signalNetCounter = 1;
@@ -911,7 +913,7 @@ export function generateProtelNetlist(
   
   // Collect all designators used in nets
   const designatorsInNets = new Set<string>();
-  for (const [rootCoordKey, netNodes] of netGroups) {
+  for (const [, netNodes] of netGroups) {
     for (const node of netNodes) {
       if (node.type === 'component_pin' && node.componentId && node.pinIndex !== undefined) {
         const comp = components.find(c => c.id === node.componentId);
@@ -984,7 +986,7 @@ export function generateProtelNetlist(
  */
 export function generateNetNames(
   netGroups: Map<number, NetlistNode[]>,
-  nodes: Map<number, NetlistNode>
+  _nodes: Map<number, NetlistNode>
 ): Map<number, string> {
   const netNames = new Map<number, string>();
   let signalNetCounter = 1;

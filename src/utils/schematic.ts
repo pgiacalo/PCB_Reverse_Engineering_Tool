@@ -309,7 +309,7 @@ export function generateSimpleSchematic(
   for (const [designator, info] of componentMap) {
     const uuid = generateUuid();
     const comp = info.comp;
-    const pinCount = comp.pinCount;
+    // const pinCount = comp.pinCount; // Reserved for future use
     
     // Reference the library symbol - pins are already defined there
     schematic += `  (symbol (lib_id "simple:Generic") (at ${info.x} ${info.y} 0) (unit 1)\n`;
@@ -352,7 +352,7 @@ export function generateSimpleSchematic(
       if (!compInfo) continue;
       
       const PIN_SPACING = 2.54;
-      const WIDTH = 10.16; // Fixed width for library symbol
+      // const WIDTH = 10.16; // Fixed width for library symbol - reserved for future use
       const isLeftSide = pinInfo.pin <= 10;
       
       let pinX: number;

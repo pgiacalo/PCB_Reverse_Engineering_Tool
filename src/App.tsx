@@ -188,24 +188,26 @@ const saveToolLayerSettings = (toolId: string, layer: Layer, color: string, size
   localStorage.setItem(`tool_${toolId}_${layer}_size`, String(size));
 };
 
-// Helper function to get tool color for a specific layer
-const getToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): string => {
+// Helper functions for tool registry (prepared for future use)
+// These functions are part of the generalized tool registry system but not yet used
+// @ts-ignore - Reserved for future use in generalized tool system
+const _getToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): string => {
   const toolDef = registry.get(toolId);
   if (!toolDef) return '#000000';
   const layerSettings = toolDef.layerSettings.get(layer);
   return layerSettings?.color || toolDef.settings.color || '#000000';
 };
 
-// Helper function to get tool size for a specific layer
-const getToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): number => {
+// @ts-ignore - Reserved for future use
+const _getToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer): number => {
   const toolDef = registry.get(toolId);
   if (!toolDef) return 10;
   const layerSettings = toolDef.layerSettings.get(layer);
   return layerSettings?.size || toolDef.settings.size || 10;
 };
 
-// Helper function to set tool color for a specific layer
-const setToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, color: string): Map<string, ToolDefinition> => {
+// @ts-ignore - Reserved for future use
+const _setToolColor = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, color: string): Map<string, ToolDefinition> => {
   const updated = new Map(registry);
   const toolDef = updated.get(toolId);
   if (!toolDef) return updated;
@@ -219,8 +221,8 @@ const setToolColor = (registry: Map<string, ToolDefinition>, toolId: string, lay
   return updated;
 };
 
-// Helper function to set tool size for a specific layer
-const setToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, size: number): Map<string, ToolDefinition> => {
+// @ts-ignore - Reserved for future use
+const _setToolSize = (registry: Map<string, ToolDefinition>, toolId: string, layer: Layer, size: number): Map<string, ToolDefinition> => {
   const updated = new Map(registry);
   const toolDef = updated.get(toolId);
   if (!toolDef) return updated;
@@ -723,6 +725,7 @@ function App() {
   const [, setTraceOrderBottom] = useState<string[]>([]);
   // Independent lists (stacks) derived from drawingStrokes
   const [vias, setVias] = useState<Via[]>([]);
+  // @ts-ignore - Reserved for future use: pads extracted from drawingStrokes
   const [pads, setPads] = useState<Pad[]>([]);
   const [tracesTop, setTracesTop] = useState<TraceSegment[]>([]);
   const [tracesBottom, setTracesBottom] = useState<TraceSegment[]>([]);
@@ -784,7 +787,7 @@ function App() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
-  const [showSetSizeSubmenu, setShowSetSizeSubmenu] = useState(false);
+  // Removed unused showSetSizeSubmenu state
   // Set Size dialog state
   const [setSizeDialog, setSetSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 6 });
   const setSizeInputRef = useRef<HTMLInputElement>(null);
@@ -3120,9 +3123,10 @@ function App() {
       if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
       
       // Determine object types from selected items to persist defaults
-      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-      const hasVias = selectedStrokes.some(s => s.type === 'via');
-      const hasTraces = selectedStrokes.some(s => s.type === 'trace');
+      // Note: selectedStrokes, hasVias, and hasTraces are reserved for future use
+      // const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      // const hasVias = selectedStrokes.some(s => s.type === 'via');
+      // const hasTraces = selectedStrokes.some(s => s.type === 'trace');
       
       setDrawingStrokes(prev => prev.map(s => {
         if (selectedIds.has(s.id)) {
@@ -3250,9 +3254,10 @@ function App() {
       }
       
       // Determine object types from selected items to persist defaults
-      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-      const hasVias = selectedStrokes.some(s => s.type === 'via');
-      const hasTraces = selectedStrokes.some(s => s.type === 'trace');
+      // Note: selectedStrokes, hasVias, and hasTraces are reserved for future use
+      // const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      // const hasVias = selectedStrokes.some(s => s.type === 'via');
+      // const hasTraces = selectedStrokes.some(s => s.type === 'trace');
       
       setDrawingStrokes(prev => prev.map(s => {
         if (selectedIds.has(s.id)) {
@@ -5409,7 +5414,7 @@ function App() {
     const w = window as any;
     if (typeof w.showSaveFilePicker === 'function') {
       try {
-        const handle = await w.showSaveFilePicker({
+        const handle: FileSystemFileHandle = await w.showSaveFilePicker({
           suggestedName: filename,
           types: [{ description: 'PCB Project', accept: { 'application/json': ['.json'] } }],
         });
@@ -5417,18 +5422,19 @@ function App() {
         await writable.write(blob);
         await writable.close();
         // Update current project file path
+        const savedFilename: string = handle.name;
         try {
           // Try to get the full path from the file handle
           const file = await handle.getFile();
           setCurrentProjectFilePath(file.name);
         } catch (e) {
           // If we can't get the full path, just use the filename
-          setCurrentProjectFilePath(handle.name);
+          setCurrentProjectFilePath(savedFilename);
         }
         
         // Extract project name from filename and store it
-        const filename = handle.name;
-        const projectNameFromFile = filename.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filenameFromHandle = savedFilename;
+        const projectNameFromFile = filenameFromHandle.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
         if (projectNameFromFile) {
           setProjectName(projectNameFromFile);
           localStorage.setItem('pcb_project_name', projectNameFromFile);
@@ -6666,8 +6672,9 @@ function App() {
     }
   }, [loadProject, refreshAutoSaveFileHistory, initializeApplication]);
 
-  // Navigate to previous file (older file, higher index)
-  const navigateToPreviousFile = useCallback(async () => {
+  // Navigate to previous file (older file, higher index) - reserved for future use
+  // @ts-ignore - Reserved for future use
+  const _navigateToPreviousFile = useCallback(async () => {
     const index = currentFileIndexRef.current;
     const history = autoSaveFileHistoryRef.current;
     if (index >= 0 && index < history.length - 1) {
@@ -6679,8 +6686,9 @@ function App() {
     }
   }, [loadFileFromHistory]);
 
-  // Navigate to next file (newer file, lower index)
-  const navigateToNextFile = useCallback(async () => {
+  // Navigate to next file (newer file, lower index) - reserved for future use
+  // @ts-ignore - Reserved for future use
+  const _navigateToNextFile = useCallback(async () => {
     const index = currentFileIndexRef.current;
     const history = autoSaveFileHistoryRef.current;
     
