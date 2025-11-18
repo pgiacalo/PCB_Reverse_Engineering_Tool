@@ -4393,7 +4393,59 @@ function App() {
 
   // Selection size slider removed; size can be set via Tools menu
 
-  // (Printing uses the browser's native dialog)
+  // Print function - prints only the canvas area
+  const handlePrint = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    // Get the canvas as a data URL
+    const dataUrl = canvas.toDataURL('image/png');
+    
+    // Create a new window with just the canvas image
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to print the canvas.');
+      return;
+    }
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>PCB Drawing</title>
+          <style>
+            @media print {
+              @page {
+                margin: 0;
+                size: auto;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+            }
+            body {
+              margin: 0;
+              padding: 20px;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              background: white;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
+              display: block;
+            }
+          </style>
+        </head>
+        <body>
+          <img src="${dataUrl}" alt="PCB Drawing" onload="window.setTimeout(function() { window.print(); }, 250);" />
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, []);
 
   // Track Shift key for Magnify icon +/- hint
   React.useEffect(() => {
@@ -6402,8 +6454,8 @@ function App() {
                 Export Simple Schematic…
               </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
-              <button onClick={() => { window.print(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
+              <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
+              <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
             </div>
           )}
         </div>
