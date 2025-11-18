@@ -66,6 +66,16 @@ interface Via {
   color: string;
 }
 
+interface Pad {
+  id?: string; // stroke ID (for deletion/selection tracking)
+  pointId?: number; // globally unique point ID (for netlist connections)
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  layer: 'top' | 'bottom'; // Pad layer (unlike vias which are shared)
+}
+
 interface TraceSegment {
   id?: string; // stroke ID (for deletion/selection tracking)
   startPointId?: number; // globally unique point ID for start point (for netlist connections)
@@ -461,15 +471,6 @@ function App() {
     });
   }, [brushColor, brushSize, currentTool, drawingMode, getCurrentToolDef]);
   
-  // Reset component type selection when switching away from component tool
-  React.useEffect(() => {
-    if (currentTool !== 'component') {
-      setSelectedComponentType(null);
-      setShowComponentTypeChooser(false);
-      setPendingComponentPosition(null);
-    }
-  }, [currentTool]);
-
   // Show power bus selector when power tool is selected
   React.useEffect(() => {
     if (currentTool === 'power') {
@@ -497,6 +498,7 @@ function App() {
   const [, setTraceOrderBottom] = useState<string[]>([]);
   // Independent lists (stacks) derived from drawingStrokes
   const [vias, setVias] = useState<Via[]>([]);
+  const [pads, setPads] = useState<Pad[]>([]);
   const [tracesTop, setTracesTop] = useState<TraceSegment[]>([]);
   const [tracesBottom, setTracesBottom] = useState<TraceSegment[]>([]);
 
@@ -644,12 +646,29 @@ function App() {
   // Show chooser popovers only when tool is (re)selected
   const [showTraceLayerChooser, setShowTraceLayerChooser] = useState(false);
   const traceChooserRef = useRef<HTMLDivElement>(null);
+  // Pad layer chooser (like trace layer chooser)
+  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
+  const [showPadLayerChooser, setShowPadLayerChooser] = useState(false);
+  const padChooserRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
   const componentTypeChooserRef = useRef<HTMLDivElement>(null);
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
+  
+  // Show component type chooser when component tool is selected (like power bus selector)
+  React.useEffect(() => {
+    if (currentTool === 'component') {
+      setShowComponentTypeChooser(true);
+      setSelectedComponentType(null); // Reset selection when tool is selected
+    } else {
+      setShowComponentTypeChooser(false);
+      setSelectedComponentType(null);
+      setPendingComponentPosition(null);
+    }
+  }, [currentTool]);
+  
   const [isEscHeld, setIsEscHeld] = useState(false);
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -725,19 +744,19 @@ function App() {
       if (connectingPin) {
         let bestDist = Infinity;
         
-        // Search all vias for the nearest one using the same hit detection as selection
+        // Search all vias and pads for the nearest one using the same hit detection as selection
         // Use the globally unique point ID directly (no "node-" prefix needed)
         let bestPointId: number | null = null;
         let bestStroke: DrawingStroke | null = null;
         const hitTolerance = Math.max(6 / viewScale, 4); // Same as selection logic
         
         for (const s of drawingStrokes) {
-          if (s.type === 'via' && s.points.length > 0) {
+          if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
             const c = s.points[0];
-            const viaRadius = Math.max(1, s.size / 2);
+            const radius = Math.max(1, s.size / 2);
             const d = Math.hypot(c.x - x, c.y - y);
-            // Use the same hit detection logic as selection: max(via radius, hit tolerance)
-            const hitDistance = Math.max(viaRadius, hitTolerance);
+            // Use the same hit detection logic as selection: max(radius, hit tolerance)
+            const hitDistance = Math.max(radius, hitTolerance);
             if (d <= hitDistance && d < bestDist) {
               bestDist = d;
               // Use the globally unique point ID directly
@@ -747,7 +766,7 @@ function App() {
           }
         }
         
-        // Debug: log which via we found
+        // Debug: log which via/pad we found
         if (bestStroke) {
           console.log(`\n[PIN CONNECTION] Found via!`);
           console.log(`  Stroke ID: ${bestStroke.id}`);
@@ -1018,11 +1037,11 @@ function App() {
       }
       
       // Check if clicking on empty space - clear selection immediately
-      // But first check if we hit a via (for rectangle selection)
+      // But first check if we hit a via or pad (for rectangle selection)
       const hitToleranceSelect = Math.max(6 / viewScale, 4);
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
-        if (s.type === 'via' && s.points.length > 0) {
+        if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
           const c = s.points[0];
           const r = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
@@ -1067,17 +1086,33 @@ function App() {
       setIsPanning(true);
       return;
     } else if (currentTool === 'draw') {
-      // Helper: snap to nearest VIA center when drawing traces
-      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number } => {
+      // Helper: snap to nearest VIA or PAD center when drawing traces
+      // Constraint: Traces can only snap to pads on the same layer, but can snap to vias on any layer
+      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number } => {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number } | null = null;
-        // search all vias on both layers
+        // search all vias and pads (with layer constraint for pads)
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
-          if (s.type !== 'via') continue;
-          const c = s.points[0];
-          const d = Math.hypot(c.x - wx, c.y - wy);
-          if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
+          if (s.type === 'via') {
+            // Vias can be snapped to from any layer (they go through both layers)
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { bestDist = d; bestCenter = c; }
+          } else if (s.type === 'pad') {
+            // Pads can only be snapped to if they're on the same layer as the trace
+            // Ensure pad has a layer property and it matches the trace layer
+            const padLayer = s.layer || 'top'; // Default to 'top' if layer is undefined
+            // Debug: log when checking pads (can be removed later)
+            if (padLayer === traceLayer) {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestCenter = c;
+              }
+            }
+          }
         }
         // Truncate coordinates to 3 decimal places for exact matching
         const result = bestCenter ?? { x: wx, y: wy };
@@ -1114,6 +1149,11 @@ function App() {
       }
 
       if (drawingMode === 'pad') {
+        // Only place pad if a layer has been selected (like trace tool)
+        if (!padToolLayer) {
+          return; // Wait for user to select a layer
+        }
+        
         // Add a square representing a pad at click location
         // Read directly from localStorage to ensure we have the latest values
         // This is critical for immediate drawing after tool selection
@@ -1130,7 +1170,7 @@ function App() {
           points: [center],
           color: padColor,
           size: padSize,
-          layer: selectedDrawingLayer,
+          layer: padToolLayer, // Use padToolLayer instead of selectedDrawingLayer
           type: 'pad',
         };
         setDrawingStrokes(prev => [...prev, padStroke]);
@@ -1138,7 +1178,10 @@ function App() {
       }
 
       // Traces mode: connected segments by clicks, snapping to via centers unless ESC is held
-      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y) : truncatePoint({ x, y });
+      // Pass the trace layer to the snap function so it can enforce layer constraints for pads
+      // Use traceToolLayer which is specifically for traces and is set by the layer chooser
+      const traceLayer = drawingMode === 'trace' ? (traceToolLayer || 'top') : selectedDrawingLayer;
+      const snapped = (drawingMode === 'trace' && !isEscHeld) ? snapToNearestViaCenter(x, y, traceLayer) : truncatePoint({ x, y });
       const pt = { id: generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       // Do not start drag drawing when in traces mode; use click-to-add points
@@ -1154,11 +1197,40 @@ function App() {
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
-      // Store the click position and show type chooser (like trace pattern)
+      // Only place component if a type has been selected (like power tool)
+      if (!selectedComponentType) {
+        return; // Wait for user to select a component type
+      }
+      
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      setPendingComponentPosition({ x: truncatedPos.x, y: truncatedPos.y, layer: 'top' });
-      setShowComponentTypeChooser(true);
+      // Use toolRegistry settings for component color and size
+      const componentDef = toolRegistry.get('component');
+      const componentColor = componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
+      const componentSize = componentDef?.settings.size || COMPONENT_ICON.DEFAULT_SIZE;
+      const comp = createComponent(
+        selectedComponentType,
+        selectedDrawingLayer,
+        truncatedPos.x,
+        truncatedPos.y,
+        componentColor,
+        componentSize
+      );
+      
+      // Initialize abbreviation to default based on component type prefix
+      (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentType);
+      
+      // Add component to appropriate layer
+      if (selectedDrawingLayer === 'top') {
+        setShowTopComponents(true);
+        setComponentsTop(prev => [...prev, comp]);
+      } else {
+        setShowBottomComponents(true);
+        setComponentsBottom(prev => [...prev, comp]);
+      }
+      
+      // Don't open properties dialog automatically - user will double-click to edit
+      // Don't switch back to select tool - stay in component tool for multiple placements
       return;
     } else if (currentTool === 'power') {
       // Only place power node if a bus has been selected
@@ -1240,7 +1312,7 @@ function App() {
       setGrounds(prev => [...prev, g]);
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isEscHeld, selectedPowerBusId, powerBuses]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isEscHeld, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -1292,7 +1364,8 @@ function App() {
     }
     
     // Handle component double-click to open properties editor
-    if (currentTool === 'select') {
+    // Works in both select tool and component tool
+    if (currentTool === 'select' || currentTool === 'component') {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -1380,7 +1453,7 @@ function App() {
         });
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isEscHeld, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -1741,11 +1814,11 @@ function App() {
         const nextGrounds = new Set<string>(shiftWasPressed ? Array.from(selectedGroundIds) : []);
         
         if (tiny) {
-          // Click selection: find the single nearest via or trace
+          // Click selection: find the single nearest via, pad, or trace
           let bestHit: { id: string; dist: number } | null = null;
           for (const s of drawingStrokes) {
             let dist = Infinity;
-            if (s.type === 'via') {
+            if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
               const r = Math.max(1, s.size / 2);
               dist = Math.hypot(c.x - start.x, c.y - start.y);
@@ -1775,7 +1848,7 @@ function App() {
           // Rectangle selection: find all hits
           for (const s of drawingStrokes) {
             let hit = false;
-            if (s.type === 'via') {
+            if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
               hit = withinRect(c.x, c.y);
             } else {
@@ -2476,9 +2549,9 @@ function App() {
   }, []);
 
   const drawStrokes = (ctx: CanvasRenderingContext2D) => {
-    // Pass 1: draw traces first (so vias appear on top)
+    // Pass 1: draw traces first (so vias and pads appear on top)
     drawingStrokes.forEach(stroke => {
-      if (stroke.type === 'via') return;
+      if (stroke.type === 'via' || stroke.type === 'pad') return;
       let shouldShowStroke = false;
       if (stroke.layer === 'top') shouldShowStroke = showTopTracesLayer;
       else if (stroke.layer === 'bottom') shouldShowStroke = showBottomTracesLayer;
@@ -2604,10 +2677,34 @@ function App() {
         ctx.lineTo(c.x, c.y + crosshairLength);
         ctx.stroke();
       } else if (stroke.type === 'pad') {
-        // Draw pad as a square
+        // Draw pad as square annulus (square with square hole in the middle) - similar to via but square
         const halfSize = Math.max(0.5, stroke.size / 2);
+        const outerSize = stroke.size;
+        const innerSize = outerSize * 0.5; // Inner square is half the size
+        const crosshairLength = halfSize * 0.7;
+        
+        // Draw square annulus using even-odd fill rule to create a hole in the middle
         ctx.fillStyle = stroke.color;
-        ctx.fillRect(c.x - halfSize, c.y - halfSize, stroke.size, stroke.size);
+        ctx.beginPath();
+        // Outer square
+        ctx.rect(c.x - halfSize, c.y - halfSize, outerSize, outerSize);
+        // Inner square (creates the hole with even-odd fill rule)
+        ctx.rect(c.x - innerSize / 2, c.y - innerSize / 2, innerSize, innerSize);
+        ctx.fill('evenodd');
+        
+        // Draw medium gray crosshairs
+        ctx.strokeStyle = '#808080'; // Medium gray
+        ctx.lineWidth = 1;
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(c.x - crosshairLength, c.y);
+        ctx.lineTo(c.x + crosshairLength, c.y);
+        ctx.stroke();
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y - crosshairLength);
+        ctx.lineTo(c.x, c.y + crosshairLength);
+        ctx.stroke();
       }
     });
 
@@ -2656,8 +2753,32 @@ function App() {
           } else if (drawingMode === 'pad') {
             const center = currentStroke[currentStroke.length - 1];
             const halfSize = Math.max(0.5, brushSize / 2);
+            const outerSize = brushSize;
+            const innerSize = outerSize * 0.5; // Inner square is half the size
+            const crosshairLength = halfSize * 0.7;
+            
+            // Draw square annulus using even-odd fill rule
             ctx.fillStyle = brushColor;
-            ctx.fillRect(center.x - halfSize, center.y - halfSize, brushSize, brushSize);
+            ctx.beginPath();
+            // Outer square
+            ctx.rect(center.x - halfSize, center.y - halfSize, outerSize, outerSize);
+            // Inner square (creates the hole with even-odd fill rule)
+            ctx.rect(center.x - innerSize / 2, center.y - innerSize / 2, innerSize, innerSize);
+            ctx.fill('evenodd');
+            
+            // Draw medium gray crosshairs
+            ctx.strokeStyle = '#808080'; // Medium gray
+            ctx.lineWidth = 1;
+            // Horizontal line
+            ctx.beginPath();
+            ctx.moveTo(center.x - crosshairLength, center.y);
+            ctx.lineTo(center.x + crosshairLength, center.y);
+            ctx.stroke();
+            // Vertical line
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y - crosshairLength);
+            ctx.lineTo(center.x, center.y + crosshairLength);
+            ctx.stroke();
           } else {
             if (currentStroke.length === 1) {
               const p = currentStroke[0];
@@ -3409,7 +3530,11 @@ function App() {
             e.preventDefault();
             setDrawingMode('pad');
             setCurrentTool('draw');
+            // Default to Top layer, but use last choice if available
+            const padLayerToUse = padToolLayer || 'top';
+            setSelectedDrawingLayer(padLayerToUse);
             // The useEffect hook will load pad tool settings automatically
+            setShowPadLayerChooser(true);
             return;
           case 't':
           case 'T':
@@ -3425,8 +3550,13 @@ function App() {
           case 'c':
           case 'C':
             e.preventDefault();
-            setCurrentTool('component');
-            // The useEffect hook will load component tool settings automatically
+            // If already on component tool, show chooser again
+            if (currentTool === 'component') {
+              setShowComponentTypeChooser(true);
+            } else {
+              setCurrentTool('component');
+              // The useEffect hook will show the chooser when tool changes
+            }
             return;
           case 'e':
           case 'E':
@@ -3935,7 +4065,7 @@ function App() {
         const el3 = componentTypeChooserRef.current;
         if (!el3 || !(e.target instanceof Node) || !el3.contains(e.target)) {
           setShowComponentTypeChooser(false);
-          setPendingComponentPosition(null); // Clear pending position if chooser is closed
+          setPendingComponentPosition(null);
         }
       }
       // Close color picker when clicking outside it
@@ -3949,7 +4079,7 @@ function App() {
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showComponentTypeChooser, showColorPicker]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showComponentTypeChooser, showColorPicker]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -3992,18 +4122,18 @@ function App() {
       const x = (contentCanvasX - viewPan.x) / viewScale;
       const y = (contentCanvasY - viewPan.y) / viewScale;
       
-      // Find nearest via
+      // Find nearest via or pad
       let bestDist = Infinity;
       let bestPointId: number | null = null;
       let bestStroke: DrawingStroke | null = null;
       const hitTolerance = Math.max(6 / viewScale, 4);
       
       for (const s of drawingStrokes) {
-        if (s.type === 'via' && s.points.length > 0) {
+        if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
           const c = s.points[0];
-          const viaRadius = Math.max(1, s.size / 2);
+          const radius = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
-          const hitDistance = Math.max(viaRadius, hitTolerance);
+          const hitDistance = Math.max(radius, hitTolerance);
           if (d <= hitDistance && d < bestDist) {
             bestDist = d;
             bestPointId = c.id;
@@ -4247,9 +4377,33 @@ function App() {
       const padDef = toolRegistry.get('pad');
       const padColor = padDef?.settings.color || persistedDefaults.padColor || brushColor;
       
-      // Draw pad as a square
+      // Draw pad as square annulus (square with square hole) - similar to via but square
+      const outerSize = r * 2;
+      const innerSize = outerSize * 0.5; // Inner square is half the size
+      const crosshairLength = r * 0.7;
+      
+      // Draw square annulus using even-odd fill rule
       ctx.fillStyle = padColor;
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.beginPath();
+      // Outer square
+      ctx.rect(cx - r, cy - r, outerSize, outerSize);
+      // Inner square (creates the hole with even-odd fill rule)
+      ctx.rect(cx - innerSize / 2, cy - innerSize / 2, innerSize, innerSize);
+      ctx.fill('evenodd');
+      
+      // Draw medium gray crosshairs
+      ctx.strokeStyle = '#808080'; // Medium gray
+      ctx.lineWidth = 1;
+      // Horizontal line
+      ctx.beginPath();
+      ctx.moveTo(cx - crosshairLength, cy);
+      ctx.lineTo(cx + crosshairLength, cy);
+      ctx.stroke();
+      // Vertical line
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - crosshairLength);
+      ctx.lineTo(cx, cy + crosshairLength);
+      ctx.stroke();
     } else if (kind === 'trace') {
       ctx.fillStyle = brushColor;
       ctx.beginPath();
@@ -4500,10 +4654,11 @@ function App() {
     drawThumb(bottomThumbRef, bottomImage);
   }, [topImage, bottomImage]);
 
-  // Maintain independent stacks for vias and trace segments in insertion order
+  // Maintain independent stacks for vias, pads, and trace segments in insertion order
   // Preserve point IDs for netlist generation
   React.useEffect(() => {
     const vAll: Via[] = [];
+    const pAll: Pad[] = [];
     const tTop: TraceSegment[] = [];
     const tBot: TraceSegment[] = [];
     for (const s of drawingStrokes) {
@@ -4518,6 +4673,18 @@ function App() {
           color: s.color 
         };
         vAll.push(v); // Vias are physical holes shared by both layers
+      } else if (s.type === 'pad' && s.points.length >= 1) {
+        const c = s.points[0];
+        const p: Pad = { 
+          id: s.id, // stroke ID for deletion/selection
+          pointId: c.id, // globally unique point ID for netlist connections
+          x: c.x, 
+          y: c.y, 
+          size: s.size, 
+          color: s.color,
+          layer: s.layer || 'top' // Pad layer (top or bottom)
+        };
+        pAll.push(p);
       } else if (s.type === 'trace' && s.points.length >= 2) {
         for (let i = 0; i < s.points.length - 1; i++) {
           const p1 = s.points[i];
@@ -4538,6 +4705,7 @@ function App() {
       }
     }
     setVias(vAll);
+    setPads(pAll);
     setTracesTop(tTop);
     setTracesBottom(tBot);
   }, [drawingStrokes]);
@@ -6912,7 +7080,17 @@ function App() {
               </svg>
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { setDrawingMode('pad'); setCurrentTool('draw'); } }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) { 
+                  setDrawingMode('pad'); 
+                  setCurrentTool('draw'); 
+                  // Default to Top layer, but use last choice if available
+                  const padLayerToUse = padToolLayer || 'top';
+                  setSelectedDrawingLayer(padLayerToUse);
+                  // The useEffect hook will load pad tool settings automatically
+                  setShowPadLayerChooser(true);
+                } 
+              }} 
               disabled={isReadOnlyMode}
               title="Draw Pads (P)" 
               style={{ 
@@ -6971,7 +7149,17 @@ function App() {
               <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || DEFAULT_TRACE_COLOR} />
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('component'); }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  // If already on component tool, show chooser again
+                  if (currentTool === 'component') {
+                    setShowComponentTypeChooser(true);
+                  } else {
+                    setCurrentTool('component');
+                    // The useEffect hook will show the chooser when tool changes
+                  }
+                }
+              }} 
               disabled={isReadOnlyMode}
               title="Draw Component (C)" 
               style={{ 
@@ -7269,7 +7457,7 @@ function App() {
               )}
             </div>
           </div>
-          {/* Active tool layer chooser for Trace/Component */}
+          {/* Active tool layer chooser for Trace */}
           {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
             <div ref={traceChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
@@ -7298,6 +7486,41 @@ function App() {
                   setBrushColor(traceColor);
                   setBrushSize(traceSize);
                   setShowTraceLayerChooser(false); 
+                  setShowBottomImage(true); 
+                }} />
+                <span>Bottom</span>
+              </label>
+            </div>
+          )}
+          {/* Active tool layer chooser for Pad */}
+          {(currentTool === 'draw' && drawingMode === 'pad' && showPadLayerChooser) && (
+            <div ref={padChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+              <label className="radio-label" style={{ marginRight: 6 }}>
+                <input type="radio" name="padToolLayer" checked={padToolLayer === 'top'} onChange={() => { 
+                  setPadToolLayer('top'); 
+                  setSelectedDrawingLayer('top'); 
+                  // Use pad tool's settings from registry (per-tool color and size)
+                  const padDef = toolRegistry.get('pad');
+                  const padColor = padDef?.settings.color || DEFAULT_PAD_COLOR;
+                  const padSize = padDef?.settings.size || VIA.DEFAULT_SIZE;
+                  setBrushColor(padColor);
+                  setBrushSize(padSize);
+                  setShowPadLayerChooser(false); 
+                  setShowTopImage(true); 
+                }} />
+                <span>Top</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="padToolLayer" checked={padToolLayer === 'bottom'} onChange={() => { 
+                  setPadToolLayer('bottom'); 
+                  setSelectedDrawingLayer('bottom'); 
+                  // Use pad tool's settings from registry (per-tool color and size)
+                  const padDef = toolRegistry.get('pad');
+                  const padColor = padDef?.settings.color || DEFAULT_PAD_COLOR;
+                  const padSize = padDef?.settings.size || VIA.DEFAULT_SIZE;
+                  setBrushColor(padColor);
+                  setBrushSize(padSize);
+                  setShowPadLayerChooser(false); 
                   setShowBottomImage(true); 
                 }} />
                 <span>Bottom</span>
@@ -7389,59 +7612,9 @@ function App() {
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setCurrentTool('component'); // Ensure component tool is active
-                    const componentType = type as ComponentType;
-                    setSelectedComponentType(componentType);
+                    // Set the selected component type and close the chooser (like power bus selector)
+                    setSelectedComponentType(type as ComponentType);
                     setShowComponentTypeChooser(false);
-                    
-                    // Create component at stored position (from the click)
-                    if (pendingComponentPosition) {
-                      const { x, y, layer } = pendingComponentPosition;
-                      // Truncate coordinates to 3 decimal places for exact matching
-                      const truncatedPos = truncatePoint({ x, y });
-                      const comp = createComponent(
-                        componentType,
-                        layer,
-                        truncatedPos.x,
-                        truncatedPos.y,
-                        brushColor,
-                        brushSize
-                      );
-                      
-                      // Initialize abbreviation to default based on component type prefix
-                      (comp as any).abbreviation = getDefaultAbbreviation(componentType);
-                      
-                      // Add component to appropriate layer
-                      if (layer === 'top') {
-                        setShowTopComponents(true);
-                        setComponentsTop(prev => [...prev, comp]);
-                      } else {
-                        setShowBottomComponents(true);
-                        setComponentsBottom(prev => [...prev, comp]);
-                      }
-                      
-                      // Open attribute editor immediately
-                      const defaultAbbrev = getDefaultAbbreviation(componentType);
-                      setComponentEditor({
-                        visible: true,
-                        layer,
-                        id: comp.id,
-                        designator: comp.designator || '',
-                        abbreviation: defaultAbbrev,
-                        manufacturer: 'manufacturer' in comp ? (comp as any).manufacturer || '' : '',
-                        partNumber: 'partNumber' in comp ? (comp as any).partNumber || '' : '',
-                        pinCount: comp.pinCount,
-                        x: comp.x,
-                        y: comp.y,
-                      });
-                      
-                      // Clear pending position
-                      setPendingComponentPosition(null);
-                      
-                      // Switch back to Select tool after component is placed
-                      setCurrentTool('select');
-                      setSelectedComponentType(null);
-                    }
                   }}
                   style={{
                     display: 'block',
@@ -7460,6 +7633,18 @@ function App() {
                   {info.prefix.join(', ')} - {type} ({info.defaultPins} pins)
                 </button>
               ))}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowComponentTypeChooser(false);
+                  // Switch back to select tool if user cancels
+                  setCurrentTool('select');
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '6px 10px', marginTop: '8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+              >
+                Cancel
+              </button>
             </div>
           )}
 
@@ -8530,6 +8715,34 @@ function App() {
               {/* Drawing Strokes (Vias and Traces) - Formatted UI */}
               {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id)).map((stroke) => {
                 if (stroke.type === 'via' && stroke.points.length > 0) {
+                  const point = stroke.points[0];
+                  return (
+                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <div style={{ 
+                          color: '#fff', 
+                          padding: '4px 8px', 
+                          fontSize: '12px',
+                          fontWeight: 500
+                        }}>
+                          {stroke.type || 'unknown'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                        <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                        <div>Node ID: {point.id}</div>
+                        <div>Layer: {stroke.layer}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>Color:</span>
+                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                          <span>{stroke.color}</span>
+                        </div>
+                        <div>Size: {stroke.size}</div>
+                      </div>
+                    </div>
+                  );
+                } else if (stroke.type === 'pad' && stroke.points.length > 0) {
                   const point = stroke.points[0];
                   return (
                     <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
