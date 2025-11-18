@@ -528,6 +528,7 @@ function App() {
   const [drawingStrokes, setDrawingStrokes] = useState<DrawingStroke[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
+  const [tracePreviewMousePos, setTracePreviewMousePos] = useState<{ x: number; y: number } | null>(null);
   const [selectedImageForTransform, setSelectedImageForTransform] = useState<'top' | 'bottom' | 'both' | null>(null);
   const [isTransforming, setIsTransforming] = useState(false);
   const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
@@ -732,6 +733,8 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const currentStrokeRef = useRef<DrawingPoint[]>([]);
+  const lastTraceClickTimeRef = useRef<number>(0);
+  const isDoubleClickingTraceRef = useRef<boolean>(false);
   // Note: Point IDs are now generated globally via generatePointId() from coordinates.ts
   // This ensures globally unique IDs across all vias, traces, and connection points
   const [componentsTop, setComponentsTop] = useState<PCBComponent[]>([]);
@@ -1419,10 +1422,20 @@ function App() {
       // Pass the trace layer to the snap function so it can enforce layer constraints for pads
       // Use traceToolLayer which is specifically for traces and is set by the layer chooser
       const traceLayer = drawingMode === 'trace' ? (traceToolLayer || 'top') : selectedDrawingLayer;
+      
+      // Check if this is the second click of a double-click (ignore it)
+      if (isDoubleClickingTraceRef.current) {
+        // Double-click event already fired, ignore this second click
+        return;
+      }
+      
       const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y, traceLayer) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
       // If we snapped to an existing object, use its Node ID; otherwise generate a new one
       const pt = { id: snapped.nodeId ?? generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
+      lastTraceClickTimeRef.current = Date.now();
+      // Clear preview mouse position when adding a point
+      setTracePreviewMousePos(null);
       // Do not start drag drawing when in traces mode; use click-to-add points
       setIsDrawing(false);
       setIsShiftConstrained(false);
@@ -1613,24 +1626,53 @@ function App() {
 
   const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Handle trace finalization
-    const pts = currentStrokeRef.current;
-    if (currentTool === 'draw' && drawingMode === 'trace' && pts.length >= 2) {
-      const newStroke: DrawingStroke = {
-        id: `${Date.now()}-trace`,
-        points: pts,
-        color: brushColor,
-        size: brushSize,
-        layer: selectedDrawingLayer,
-        type: 'trace',
-      };
-      setDrawingStrokes(prev => [...prev, newStroke]);
-      if (selectedDrawingLayer === 'top') {
-        setTraceOrderTop(prev => [...prev, newStroke.id]);
-      } else {
-        setTraceOrderBottom(prev => [...prev, newStroke.id]);
+    // On double-click, the first click already added the final point
+    // The second click should be ignored - just finalize with current points
+    if (currentTool === 'draw' && drawingMode === 'trace') {
+      isDoubleClickingTraceRef.current = true;
+      let pts = currentStroke;
+      
+      // Remove duplicate consecutive points (same coordinates)
+      if (pts.length > 1) {
+        const deduplicated: DrawingPoint[] = [pts[0]];
+        for (let i = 1; i < pts.length; i++) {
+          const prev = deduplicated[deduplicated.length - 1];
+          const curr = pts[i];
+          // Only add if coordinates are different (allowing for floating point precision)
+          if (Math.abs(prev.x - curr.x) > 0.001 || Math.abs(prev.y - curr.y) > 0.001) {
+            deduplicated.push(curr);
+          }
+        }
+        pts = deduplicated;
       }
-      setCurrentStroke([]);
-      return;
+      
+      if (pts.length >= 1) {
+        // Use layer-specific colors and sizes for traces
+        const layer = traceToolLayer || 'top';
+        const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
+        const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
+        const newStroke: DrawingStroke = {
+          id: `${Date.now()}-trace`,
+          points: pts,
+          color: traceColor,
+          size: traceSize,
+          layer: layer,
+          type: 'trace',
+        };
+        setDrawingStrokes(prev => [...prev, newStroke]);
+        if (layer === 'top') {
+          setTraceOrderTop(prev => [...prev, newStroke.id]);
+        } else {
+          setTraceOrderBottom(prev => [...prev, newStroke.id]);
+        }
+        setCurrentStroke([]);
+        setTracePreviewMousePos(null);
+        // Reset double-click flag after a short delay
+        setTimeout(() => {
+          isDoubleClickingTraceRef.current = false;
+        }, 300);
+        return;
+      }
     }
     
     // Handle component double-click to open properties editor
@@ -1723,19 +1765,30 @@ function App() {
         });
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
     const pts = currentStrokeRef.current;
     if (currentTool === 'draw' && drawingMode === 'trace' && pts.length >= 2) {
+      // Remove duplicate consecutive points (same coordinates)
+      let deduplicated: DrawingPoint[] = [pts[0]];
+      for (let i = 1; i < pts.length; i++) {
+        const prev = deduplicated[deduplicated.length - 1];
+        const curr = pts[i];
+        // Only add if coordinates are different (allowing for floating point precision)
+        if (Math.abs(prev.x - curr.x) > 0.001 || Math.abs(prev.y - curr.y) > 0.001) {
+          deduplicated.push(curr);
+        }
+      }
+      
       // Use traceToolLayer and layer-specific colors
       const layer = traceToolLayer || 'top';
       const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
       const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
       const newStroke: DrawingStroke = {
         id: `${Date.now()}-trace`,
-        points: pts,
+        points: deduplicated,
         color: traceColor,
         size: traceSize,
         layer: layer,
@@ -1748,6 +1801,7 @@ function App() {
         setTraceOrderBottom(prev => [...prev, newStroke.id]);
       }
       setCurrentStroke([]);
+      setTracePreviewMousePos(null);
     } else {
       // If only a single point was placed, treat it as a dot trace
       if (currentTool === 'draw' && drawingMode === 'trace' && pts.length === 1) {
@@ -1819,6 +1873,48 @@ function App() {
     const contentCanvasY = canvasY - CONTENT_BORDER;
     const x = (contentCanvasX - viewPan.x) / viewScale;
     const y = (contentCanvasY - viewPan.y) / viewScale;
+
+    // Track mouse position for trace preview line
+    if (currentTool === 'draw' && drawingMode === 'trace' && currentStroke.length > 0) {
+      // Helper function to snap to nearest via/pad (same as in handleCanvasMouseDown)
+      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number; nodeId?: number } => {
+        let bestDist = Infinity;
+        let bestCenter: { x: number; y: number; id?: number } | null = null;
+        const SNAP_THRESHOLD_WORLD = 15;
+        for (const s of drawingStrokes) {
+          if (s.type === 'via') {
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { 
+              bestDist = d; 
+              bestCenter = c; 
+            }
+          } else if (s.type === 'pad') {
+            const padLayer = s.layer || 'top';
+            if (padLayer === traceLayer) {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestCenter = c;
+              }
+            }
+          }
+        }
+        const result = bestCenter ?? { x: wx, y: wy };
+        const truncated = truncatePoint(result);
+        return { 
+          x: truncated.x, 
+          y: truncated.y, 
+          nodeId: bestCenter?.id 
+        };
+      };
+      const traceLayer = traceToolLayer || 'top';
+      const snapped = !isSnapDisabled ? snapToNearestViaCenter(x, y, traceLayer) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      setTracePreviewMousePos({ x: snapped.x, y: snapped.y });
+    } else {
+      setTracePreviewMousePos(null);
+    }
 
     if (currentTool === 'select' && isSelecting && selectStart) {
       const sx = selectStart.x;
@@ -2691,7 +2787,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -2826,7 +2922,7 @@ function App() {
     return () => window.removeEventListener('resize', computeSize);
   }, []);
 
-  const drawStrokes = (ctx: CanvasRenderingContext2D) => {
+  const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
     // Pass 1: draw traces first (so vias and pads appear on top)
     drawingStrokes.forEach(stroke => {
       if (stroke.type === 'via' || stroke.type === 'pad') return;
@@ -3069,6 +3165,19 @@ function App() {
               ctx.beginPath();
               ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
               ctx.fill();
+              // Draw preview line from first point to mouse position
+              if (tracePreviewMousePos) {
+                ctx.strokeStyle = traceColor;
+                ctx.lineWidth = traceSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = 0.6; // Semi-transparent preview
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(tracePreviewMousePos.x, tracePreviewMousePos.y);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+              }
             } else {
               ctx.strokeStyle = traceColor;
               ctx.lineWidth = traceSize;
@@ -3085,6 +3194,16 @@ function App() {
                 }
               });
               ctx.stroke();
+              // Draw preview line from last point to mouse position
+              if (tracePreviewMousePos && currentStroke.length > 0) {
+                const lastPoint = currentStroke[currentStroke.length - 1];
+                ctx.globalAlpha = 0.6; // Semi-transparent preview
+                ctx.beginPath();
+                ctx.moveTo(lastPoint.x, lastPoint.y);
+                ctx.lineTo(tracePreviewMousePos.x, tracePreviewMousePos.y);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+              }
             }
           }
         } else if (currentTool === 'erase') {
@@ -3107,7 +3226,7 @@ function App() {
         }
       }
     }
-  };
+  }, [drawingStrokes, selectedIds, showTopTracesLayer, showBottomTracesLayer, showViasLayer, showTopPadsLayer, showBottomPadsLayer, currentStroke, currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, tracePreviewMousePos]);
 
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom' | 'both', updates: Partial<PCBImage>) => {
@@ -3464,11 +3583,28 @@ function App() {
   }, [autoSaveDialog.interval, projectName, projectDirHandle]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // FIRST: Check if user is typing in an input field, textarea, or contenteditable
+    // FIRST: Handle Escape key for checkboxes/radio buttons before other checks
+    if (e.key === 'Escape') {
+      const activeElement = document.activeElement as HTMLElement;
+      if (activeElement && (
+        (activeElement.tagName === 'INPUT' && (activeElement as HTMLInputElement).type === 'checkbox') ||
+        (activeElement.tagName === 'INPUT' && (activeElement as HTMLInputElement).type === 'radio')
+      )) {
+        activeElement.blur();
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    
+    // Check if user is typing in an input field, textarea, or contenteditable
     // This must be checked BEFORE any other keyboard shortcuts to allow normal typing
+    // But exclude checkboxes and radio buttons (handled above for Escape, allow normal behavior for other keys)
     const activeElement = document.activeElement;
     if (activeElement && (
-      activeElement.tagName === 'INPUT' ||
+      (activeElement.tagName === 'INPUT' && 
+       (activeElement as HTMLInputElement).type !== 'checkbox' && 
+       (activeElement as HTMLInputElement).type !== 'radio') ||
       activeElement.tagName === 'TEXTAREA' ||
       (activeElement as HTMLElement).isContentEditable
     )) {
@@ -3630,7 +3766,7 @@ function App() {
       setIsSnapDisabled(true);
     }
     
-    // Escape key: Always return to Select tool
+    // Escape key: Always return to Select tool (checkbox/radio blur handled at start of function)
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
