@@ -1516,12 +1516,32 @@ function App() {
       setIsDrawing(false);
       setIsShiftConstrained(false);
     } else if (currentTool === 'erase') {
+      // Check if there are locked items on the current layer that would prevent erasing
+      const hasLockedItemsOnLayer = drawingStrokes.some(s => 
+        s.layer === selectedDrawingLayer && (
+          (s.type === 'via' && areViasLocked) ||
+          (s.type === 'pad' && arePadsLocked) ||
+          (s.type === 'trace' && areTracesLocked)
+        )
+      );
+      if (hasLockedItemsOnLayer) {
+        const lockedTypes: string[] = [];
+        if (areViasLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'via')) lockedTypes.push('vias');
+        if (arePadsLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'pad')) lockedTypes.push('pads');
+        if (areTracesLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'trace')) lockedTypes.push('traces');
+        if (lockedTypes.length > 0) {
+          alert(`Cannot erase: ${lockedTypes.join(', ')} are locked on the ${selectedDrawingLayer} layer. Unlock them to erase.`);
+        }
+      }
       setIsDrawing(true);
       setCurrentStroke([{ id: generatePointId(), x, y }]);
       console.log('Starting erase at:', x, y, 'selectedDrawingLayer:', selectedDrawingLayer, 'total strokes:', drawingStrokes.length);
     } else if (currentTool === 'transform' && selectedImageForTransform) {
       // Don't start transforming if images are locked
-      if (areImagesLocked) return;
+      if (areImagesLocked) {
+        alert('Cannot transform: Images are locked. Unlock images to transform them.');
+        return;
+      }
       setIsTransforming(true);
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
@@ -2225,7 +2245,10 @@ function App() {
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
       // Don't allow transforms if images are locked
-      if (areImagesLocked) return;
+      if (areImagesLocked) {
+        alert('Cannot transform: Images are locked. Unlock images to transform them.');
+        return;
+      }
       const deltaX = x - transformStartPos.x;
       const deltaY = y - transformStartPos.y;
       
@@ -3412,7 +3435,10 @@ function App() {
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom' | 'both', updates: Partial<PCBImage>) => {
     // Don't allow transforms if images are locked
-    if (areImagesLocked) return;
+    if (areImagesLocked) {
+      alert('Cannot transform: Images are locked. Unlock images to transform them.');
+      return;
+    }
     if (type === 'top' && topImage) {
       setTopImage(prev => prev ? { ...prev, ...updates } : null);
     } else if (type === 'bottom' && bottomImage) {
@@ -3458,11 +3484,32 @@ function App() {
         const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (hasLockedVias || hasLockedTraces) return;
+        const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+        if (hasLockedVias) {
+          alert('Cannot change size: Vias are locked. Unlock vias to change their size.');
+          return;
+        }
+        if (hasLockedTraces) {
+          alert('Cannot change size: Traces are locked. Unlock traces to change their size.');
+          return;
+        }
+        if (hasLockedPads) {
+          alert('Cannot change size: Pads are locked. Unlock pads to change their size.');
+          return;
+        }
       }
-      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-      if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-      if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
+      if (selectedComponentIds.size > 0 && areComponentsLocked) {
+        alert('Cannot change size: Components are locked. Unlock components to change their size.');
+        return;
+      }
+      if (selectedPowerIds.size > 0 && arePowerNodesLocked) {
+        alert('Cannot change size: Power nodes are locked. Unlock power nodes to change their size.');
+        return;
+      }
+      if (selectedGroundIds.size > 0 && areGroundNodesLocked) {
+        alert('Cannot change size: Ground nodes are locked. Unlock ground nodes to change their size.');
+        return;
+      }
       
       // Determine object types from selected items to persist defaults
       // Note: selectedStrokes, hasVias, and hasTraces are reserved for future use
@@ -3518,11 +3565,32 @@ function App() {
         const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (hasLockedVias || hasLockedTraces) return;
+        const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+        if (hasLockedVias) {
+          alert('Cannot change size: Vias are locked. Unlock vias to change their size.');
+          return;
+        }
+        if (hasLockedTraces) {
+          alert('Cannot change size: Traces are locked. Unlock traces to change their size.');
+          return;
+        }
+        if (hasLockedPads) {
+          alert('Cannot change size: Pads are locked. Unlock pads to change their size.');
+          return;
+        }
       }
-      if (selectedComponentIds.size > 0 && areComponentsLocked) return;
-      if (selectedPowerIds.size > 0 && arePowerNodesLocked) return;
-      if (selectedGroundIds.size > 0 && areGroundNodesLocked) return;
+      if (selectedComponentIds.size > 0 && areComponentsLocked) {
+        alert('Cannot change size: Components are locked. Unlock components to change their size.');
+        return;
+      }
+      if (selectedPowerIds.size > 0 && arePowerNodesLocked) {
+        alert('Cannot change size: Power nodes are locked. Unlock power nodes to change their size.');
+        return;
+      }
+      if (selectedGroundIds.size > 0 && areGroundNodesLocked) {
+        alert('Cannot change size: Ground nodes are locked. Unlock ground nodes to change their size.');
+        return;
+      }
       
       // Determine object types from selected items to persist defaults
       setDrawingStrokes(prev => prev.map(s => {
@@ -3980,14 +4048,23 @@ function App() {
         const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (!hasLockedVias && !hasLockedTraces) {
+        const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+        if (hasLockedVias) {
+          alert('Cannot delete: Vias are locked. Unlock vias to delete them.');
+        } else if (hasLockedTraces) {
+          alert('Cannot delete: Traces are locked. Unlock traces to delete them.');
+        } else if (hasLockedPads) {
+          alert('Cannot delete: Pads are locked. Unlock pads to delete them.');
+        } else {
           setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
           setSelectedIds(new Set());
         }
       }
       if (selectedComponentIds.size > 0) {
         // Don't delete if components are locked
-        if (!areComponentsLocked) {
+        if (areComponentsLocked) {
+          alert('Cannot delete: Components are locked. Unlock components to delete them.');
+        } else {
           setComponentsTop(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
           setComponentsBottom(prev => prev.filter(c => !selectedComponentIds.has(c.id)));
           setSelectedComponentIds(new Set());
@@ -3995,14 +4072,18 @@ function App() {
       }
       if (selectedPowerIds.size > 0) {
         // Don't delete if power nodes are locked
-        if (!arePowerNodesLocked) {
+        if (arePowerNodesLocked) {
+          alert('Cannot delete: Power nodes are locked. Unlock power nodes to delete them.');
+        } else {
           setPowers(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
           setSelectedPowerIds(new Set());
         }
       }
       if (selectedGroundIds.size > 0) {
         // Don't delete if ground is locked
-        if (!areGroundNodesLocked) {
+        if (areGroundNodesLocked) {
+          alert('Cannot delete: Ground nodes are locked. Unlock ground nodes to delete them.');
+        } else {
           setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
           setSelectedGroundIds(new Set());
         }
@@ -9036,7 +9117,10 @@ function App() {
                       }}
                       onBlur={(e) => {
                         // Update component immediately when focus leaves the field
-                        if (areComponentsLocked) return;
+                        if (areComponentsLocked) {
+                          alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                          return;
+                        }
                         const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
                         // Find the component in the appropriate layer
                         const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
@@ -9113,7 +9197,10 @@ function App() {
                               type="radio"
                               checked={!!isSelected}
                               onChange={() => {
-                                if (areComponentsLocked) return;
+                                if (areComponentsLocked) {
+                                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                  return;
+                                }
                                 if (isSelected) {
                                   // Deselect if already selected
                                   setConnectingPin(null);
@@ -9172,7 +9259,10 @@ function App() {
                   <button
                     onClick={() => {
                       // Don't allow saving if components are locked
-                      if (areComponentsLocked) return;
+                      if (areComponentsLocked) {
+                        alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                        return;
+                      }
                       // Update the component with new values
                       const updateComponent = (comp: PCBComponent): PCBComponent => {
                         const updated = { ...comp };
@@ -9740,127 +9830,132 @@ function App() {
                 ) : null;
               })()}
               
-              {/* Drawing Strokes (Vias and Traces) - Formatted UI */}
-              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id)).map((stroke) => {
-                if (stroke.type === 'via' && stroke.points.length > 0) {
-                  const point = stroke.points[0];
-                  // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
-                  // Vias always have an id, so this is safe
-                  const viaType = stroke.viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
-                  return (
-                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                        <div style={{ 
-                          color: '#fff', 
-                          padding: '4px 8px', 
-                          fontSize: '12px',
-                          fontWeight: 500
-                        }}>
-                          {viaType}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                        <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                        {point.id && <div>Node ID: {point.id}</div>}
-                        <div>Layer: Top and Bottom</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>Color:</span>
-                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                          <span>{stroke.color}</span>
-                        </div>
-                        <div>Size: {stroke.size}</div>
-                      </div>
-                    </div>
-                  );
-                } else if (stroke.type === 'pad' && stroke.points.length > 0) {
-                  const point = stroke.points[0];
-                  // Determine pad type - pads belong to only one layer (top or bottom)
-                  // Pads always have an id, so this is safe
-                  const padType = stroke.padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
-                  return (
-                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                        <div style={{ 
-                          color: '#fff', 
-                          padding: '4px 8px', 
-                          fontSize: '12px',
-                          fontWeight: 500
-                        }}>
-                          {padType}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                        <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                        {point.id && <div>Node ID: {point.id}</div>}
-                        <div>Layer: {stroke.layer}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>Color:</span>
-                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                          <span>{stroke.color}</span>
-                        </div>
-                        <div>Size: {stroke.size}</div>
-                      </div>
-                    </div>
-                  );
-                } else if (stroke.type === 'trace') {
-                  return (
-                    <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                      <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                        <div style={{ 
-                          color: '#fff', 
-                          padding: '4px 8px', 
-                          fontSize: '12px',
-                          fontWeight: 500
-                        }}>
-                          {stroke.type || 'unknown'}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                        <div>Points: {stroke.points.length}</div>
-                        {stroke.points.length > 0 && (
-                          <div style={{ marginTop: '4px' }}>
-                            {stroke.points.map((p, idx) => (
-                              <div key={idx} style={{ marginLeft: '12px' }}>
-                                Point {idx}: x={p.x.toFixed(2)}, y={p.y.toFixed(2)}{p.id ? ` (Node ID: ${p.id})` : ''}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ marginTop: '4px' }}>Layer: {stroke.layer}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span>Color:</span>
-                          <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                          <span>{stroke.color}</span>
-                        </div>
-                        <div>Size: {stroke.size}</div>
-                      </div>
-                    </div>
-                  );
-                }
-                return null;
-              })}
-              
               {/* Components - Formatted UI */}
-              {selectedComponentIds.size > 0 && [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
-                <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                  <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                    <div style={{ 
-                      color: '#fff', 
-                      padding: '4px 8px', 
-                      fontSize: '12px',
-                      fontWeight: 500
-                    }}>
-                      {comp.componentType}
+              {selectedComponentIds.size > 0 && (() => {
+                // Check if there are any vias or pads in the selected items
+                const hasViasOrPads = drawingStrokes.some(s => selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad'));
+                return [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
+                  <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{ 
+                        color: '#fff', 
+                        padding: '4px 8px', 
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {comp.componentType}
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                    <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
-                    <div>Layer: {comp.layer}</div>
-                    <div>Designator: {comp.designator || '(empty)'}</div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      <div>Layer: {comp.layer}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>Designator: {comp.designator || '(empty)'}</span>
+                        {hasViasOrPads && (
+                          <button
+                            onClick={() => {
+                              // Get all selected components of the same type
+                              const allSelectedComponents = [...componentsTop, ...componentsBottom]
+                                .filter(c => selectedComponentIds.has(c.id) && c.componentType === comp.componentType);
+                              
+                              const componentCount = allSelectedComponents.length;
+                              
+                              // Get all selected pads with their Node IDs (prioritize pads over vias)
+                              const selectedPads = drawingStrokes
+                                .filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0 && s.points[0].id !== undefined)
+                                .map(s => ({
+                                  stroke: s,
+                                  nodeId: s.points[0].id!
+                                }))
+                                .sort((a, b) => a.nodeId - b.nodeId); // Sort by Node ID ascending
+                              
+                              // If no pads, get vias instead
+                              const selectedItems = selectedPads.length > 0 
+                                ? selectedPads 
+                                : drawingStrokes
+                                    .filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0 && s.points[0].id !== undefined)
+                                    .map(s => ({
+                                      stroke: s,
+                                      nodeId: s.points[0].id!
+                                    }))
+                                    .sort((a, b) => a.nodeId - b.nodeId); // Sort by Node ID ascending
+                              
+                              const totalItemCount = selectedItems.length;
+                              if (totalItemCount === 0) {
+                                console.warn('No vias or pads with Node IDs found in selection');
+                                return;
+                              }
+                              
+                              // Calculate pins per component
+                              const pinsPerComponent = Math.floor(totalItemCount / componentCount);
+                              if (pinsPerComponent === 0) {
+                                console.warn(`Not enough ${selectedPads.length > 0 ? 'pads' : 'vias'} (${totalItemCount}) for ${componentCount} components`);
+                                return;
+                              }
+                              
+                              // Sort components by ID for consistent assignment
+                              const sortedComponents = [...allSelectedComponents].sort((a, b) => a.id.localeCompare(b.id));
+                              
+                              // Assign pins to each component sequentially
+                              sortedComponents.forEach((component, compIndex) => {
+                                const startIndex = compIndex * pinsPerComponent;
+                                const endIndex = startIndex + pinsPerComponent;
+                                const componentNodeIds = selectedItems.slice(startIndex, endIndex);
+                                
+                                // Create pin connections array for this component
+                                const newPinConnections = componentNodeIds.map(item => item.nodeId.toString());
+                                
+                                // Update component based on layer
+                                if (component.layer === 'top') {
+                                  setComponentsTop(prev => prev.map(c => {
+                                    if (c.id === component.id) {
+                                      return {
+                                        ...c,
+                                        pinCount: pinsPerComponent,
+                                        pinConnections: newPinConnections
+                                      };
+                                    }
+                                    return c;
+                                  }));
+                                } else {
+                                  setComponentsBottom(prev => prev.map(c => {
+                                    if (c.id === component.id) {
+                                      return {
+                                        ...c,
+                                        pinCount: pinsPerComponent,
+                                        pinConnections: newPinConnections
+                                      };
+                                    }
+                                    return c;
+                                  }));
+                                }
+                              });
+                              
+                              const itemType = selectedPads.length > 0 ? 'pads' : 'vias';
+                              console.log(`Connected ${componentCount} components of type ${comp.componentType} to ${totalItemCount} ${itemType} (${pinsPerComponent} pins each)`);
+                            }}
+                            style={{
+                              padding: '2px 8px',
+                              fontSize: '10px',
+                              backgroundColor: '#4CAF50',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#45a049';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#4CAF50';
+                            }}
+                          >
+                            Connect
+                          </button>
+                        )}
+                      </div>
                     <div>Abbreviation: {(comp as any).abbreviation || '(empty)'}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>Color:</span>
@@ -9883,9 +9978,137 @@ function App() {
                     {'partNumber' in comp && (comp as any).partNumber && (
                       <div>Part Number: {(comp as any).partNumber}</div>
                     )}
+                    <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
                   </div>
                 </div>
-              ))}
+              ));
+              })()}
+              
+              {/* Vias - Formatted UI */}
+              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0).map((stroke) => {
+                const point = stroke.points[0];
+                // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
+                // Vias always have an id, so this is safe
+                const viaType = stroke.viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
+                return (
+                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{ 
+                        color: '#fff', 
+                        padding: '4px 8px', 
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {viaType}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      {point.id && <div>Node ID: {point.id}</div>}
+                      <div>Layer: Top and Bottom</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Color:</span>
+                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                        <span>{stroke.color}</span>
+                      </div>
+                      <div>Size: {stroke.size}</div>
+                      <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Pads - Formatted UI */}
+              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0).map((stroke) => {
+                const point = stroke.points[0];
+                // Determine pad type - pads belong to only one layer (top or bottom)
+                // Pads always have an id, so this is safe
+                const padType = stroke.padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
+                return (
+                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{ 
+                        color: '#fff', 
+                        padding: '4px 8px', 
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {padType}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      {point.id && <div>Node ID: {point.id}</div>}
+                      <div>Layer: {stroke.layer}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Color:</span>
+                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                        <span>{stroke.color}</span>
+                      </div>
+                      <div>Size: {stroke.size}</div>
+                      <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Traces - Formatted UI */}
+              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'trace').map((stroke) => {
+                return (
+                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{ 
+                        color: '#fff', 
+                        padding: '4px 8px', 
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {stroke.type || 'unknown'}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                      {stroke.points.length > 0 && (
+                        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                          <div style={{ marginBottom: '4px', fontWeight: 600 }}>Points: {stroke.points.length}</div>
+                          <table style={{ 
+                            width: '100%', 
+                            borderCollapse: 'collapse', 
+                            fontSize: '10px',
+                            border: '1px solid #ddd'
+                          }}>
+                            <thead>
+                              <tr style={{ backgroundColor: '#f0f0f0' }}>
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Point #</th>
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>x</th>
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>y</th>
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stroke.points.map((p, idx) => (
+                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx}</td>
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.x.toFixed(2)}</td>
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.y.toFixed(2)}</td>
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.id || '(none)'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <div style={{ marginTop: '4px' }}>Layer: {stroke.layer}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>Color:</span>
+                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                        <span>{stroke.color}</span>
+                      </div>
+                      <div>Size: {stroke.size}</div>
+                    </div>
+                  </div>
+                );
+              })}
               
               {/* Power Symbol Properties */}
               {selectedPowerIds.size > 0 && powers.filter(p => selectedPowerIds.has(p.id)).map((power) => {
@@ -9904,7 +10127,6 @@ function App() {
                       </div>
                     </div>
                     <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
                       <div>Node ID: {power.pointId || '(not assigned)'}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span>Color:</span>
@@ -9914,6 +10136,7 @@ function App() {
                       <div>Size: {power.size}</div>
                       <div>Layer: {power.layer}</div>
                       <div>Power Bus: {bus?.name || power.powerBusId || '(unknown)'}</div>
+                      <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
                     </div>
                   </div>
                 );
@@ -9934,7 +10157,6 @@ function App() {
                     </div>
                   </div>
                   <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                    <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
                     <div>Node ID: {ground.pointId || '(not assigned)'}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span>Color:</span>
@@ -9942,6 +10164,7 @@ function App() {
                       <span>{ground.color}</span>
                     </div>
                     <div>Size: {ground.size}</div>
+                    <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
                   </div>
                 </div>
               ))}
