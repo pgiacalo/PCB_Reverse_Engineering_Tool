@@ -1332,6 +1332,9 @@ function App() {
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
         if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
+          // Only consider visible vias/pads
+          if (!showViasLayer) continue;
+          
           const c = s.points[0];
           const r = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
@@ -1723,7 +1726,7 @@ function App() {
       }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -2337,6 +2340,16 @@ function App() {
           // Click selection: find the single nearest via, pad, or trace
           let bestHit: { id: string; dist: number } | null = null;
           for (const s of drawingStrokes) {
+            // Check visibility before considering this stroke
+            let isVisible = false;
+            if (s.type === 'via' || s.type === 'pad') {
+              isVisible = showViasLayer;
+            } else {
+              // Trace or default type
+              isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+            }
+            if (!isVisible) continue;
+            
             let dist = Infinity;
             if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
@@ -2367,6 +2380,16 @@ function App() {
         } else {
           // Rectangle selection: find all hits
           for (const s of drawingStrokes) {
+            // Check visibility before considering this stroke
+            let isVisible = false;
+            if (s.type === 'via' || s.type === 'pad') {
+              isVisible = showViasLayer;
+            } else {
+              // Trace or default type
+              isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+            }
+            if (!isVisible) continue;
+            
             let hit = false;
             if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
@@ -2393,11 +2416,19 @@ function App() {
             const half = size / 2;
             return (start.x >= c.x - half && start.x <= c.x + half && start.y >= c.y - half && start.y <= c.y + half);
           };
-          componentsTop.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
-          componentsBottom.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+          if (showTopComponents) {
+            componentsTop.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+          }
+          if (showBottomComponents) {
+            componentsBottom.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+          }
         } else {
-          componentsTop.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
-          componentsBottom.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+          if (showTopComponents) {
+            componentsTop.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+          }
+          if (showBottomComponents) {
+            componentsBottom.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+          }
         }
         // Power nodes hit-test
         const powerInRect = (p: PowerSymbol) => {
@@ -2406,31 +2437,33 @@ function App() {
           const hitRadius = radius + lineExtension; // Include extended lines in selection
           return (p.x - hitRadius) <= maxX && (p.x + hitRadius) >= minX && (p.y - hitRadius) <= maxY && (p.y + hitRadius) >= minY;
         };
-        if (tiny) {
-          // Click selection: find nearest power node
-          let bestPowerHit: { id: string; dist: number } | null = null;
-          for (const p of powers) {
-            const radius = Math.max(6, p.size / 2);
-            const lineExtension = radius * 0.8;
-            const hitRadius = radius + lineExtension;
-            const d = Math.hypot(p.x - start.x, p.y - start.y);
-            // Check if click is within circle or on extended lines
-            const onVerticalLine = Math.abs(start.x - p.x) <= hitTolerance && Math.abs(start.y - p.y) <= hitRadius;
-            const onHorizontalLine = Math.abs(start.y - p.y) <= hitTolerance && Math.abs(start.x - p.x) <= hitRadius;
-            const inCircle = d <= Math.max(radius, hitTolerance);
-            if (inCircle || onVerticalLine || onHorizontalLine) {
-              const dist = Math.min(d, Math.abs(start.x - p.x) + Math.abs(start.y - p.y)); // Use Manhattan distance for line hits
-              if (!bestPowerHit || dist < bestPowerHit.dist) {
-                bestPowerHit = { id: p.id, dist };
+        if (showPowerLayer) {
+          if (tiny) {
+            // Click selection: find nearest power node
+            let bestPowerHit: { id: string; dist: number } | null = null;
+            for (const p of powers) {
+              const radius = Math.max(6, p.size / 2);
+              const lineExtension = radius * 0.8;
+              const hitRadius = radius + lineExtension;
+              const d = Math.hypot(p.x - start.x, p.y - start.y);
+              // Check if click is within circle or on extended lines
+              const onVerticalLine = Math.abs(start.x - p.x) <= hitTolerance && Math.abs(start.y - p.y) <= hitRadius;
+              const onHorizontalLine = Math.abs(start.y - p.y) <= hitTolerance && Math.abs(start.x - p.x) <= hitRadius;
+              const inCircle = d <= Math.max(radius, hitTolerance);
+              if (inCircle || onVerticalLine || onHorizontalLine) {
+                const dist = Math.min(d, Math.abs(start.x - p.x) + Math.abs(start.y - p.y)); // Use Manhattan distance for line hits
+                if (!bestPowerHit || dist < bestPowerHit.dist) {
+                  bestPowerHit = { id: p.id, dist };
+                }
               }
             }
+            if (bestPowerHit) {
+              nextPowers.add(bestPowerHit.id);
+            }
+          } else {
+            // Rectangle selection: find all power nodes in rect
+            powers.forEach(p => { if (powerInRect(p)) nextPowers.add(p.id); });
           }
-          if (bestPowerHit) {
-            nextPowers.add(bestPowerHit.id);
-          }
-        } else {
-          // Rectangle selection: find all power nodes in rect
-          powers.forEach(p => { if (powerInRect(p)) nextPowers.add(p.id); });
         }
         // Ground nodes hit-test
         const groundInRect = (g: GroundSymbol) => {
@@ -2439,31 +2472,33 @@ function App() {
           const hitRadius = radius + lineExtension; // Include extended lines in selection
           return (g.x - hitRadius) <= maxX && (g.x + hitRadius) >= minX && (g.y - hitRadius) <= maxY && (g.y + hitRadius) >= minY;
         };
-        if (tiny) {
-          // Click selection: find nearest ground node
-          let bestGroundHit: { id: string; dist: number } | null = null;
-          for (const g of grounds) {
-            const radius = Math.max(6, (g.size || 18) / 2);
-            const lineExtension = radius * 0.8;
-            const hitRadius = radius + lineExtension;
-            const d = Math.hypot(g.x - start.x, g.y - start.y);
-            // Check if click is within circle or on extended lines
-            const onVerticalLine = Math.abs(start.x - g.x) <= hitTolerance && Math.abs(start.y - g.y) <= hitRadius;
-            const onHorizontalLine = Math.abs(start.y - g.y) <= hitTolerance && Math.abs(start.x - g.x) <= hitRadius;
-            const inCircle = d <= Math.max(radius, hitTolerance);
-            if (inCircle || onVerticalLine || onHorizontalLine) {
-              const dist = Math.min(d, Math.abs(start.x - g.x) + Math.abs(start.y - g.y)); // Use Manhattan distance for line hits
-              if (!bestGroundHit || dist < bestGroundHit.dist) {
-                bestGroundHit = { id: g.id, dist };
+        if (showGroundLayer) {
+          if (tiny) {
+            // Click selection: find nearest ground node
+            let bestGroundHit: { id: string; dist: number } | null = null;
+            for (const g of grounds) {
+              const radius = Math.max(6, (g.size || 18) / 2);
+              const lineExtension = radius * 0.8;
+              const hitRadius = radius + lineExtension;
+              const d = Math.hypot(g.x - start.x, g.y - start.y);
+              // Check if click is within circle or on extended lines
+              const onVerticalLine = Math.abs(start.x - g.x) <= hitTolerance && Math.abs(start.y - g.y) <= hitRadius;
+              const onHorizontalLine = Math.abs(start.y - g.y) <= hitTolerance && Math.abs(start.x - g.x) <= hitRadius;
+              const inCircle = d <= Math.max(radius, hitTolerance);
+              if (inCircle || onVerticalLine || onHorizontalLine) {
+                const dist = Math.min(d, Math.abs(start.x - g.x) + Math.abs(start.y - g.y)); // Use Manhattan distance for line hits
+                if (!bestGroundHit || dist < bestGroundHit.dist) {
+                  bestGroundHit = { id: g.id, dist };
+                }
               }
             }
+            if (bestGroundHit) {
+              nextGrounds.add(bestGroundHit.id);
+            }
+          } else {
+            // Rectangle selection: find all ground nodes in rect
+            grounds.forEach(g => { if (groundInRect(g)) nextGrounds.add(g.id); });
           }
-          if (bestGroundHit) {
-            nextGrounds.add(bestGroundHit.id);
-          }
-        } else {
-          // Rectangle selection: find all ground nodes in rect
-          grounds.forEach(g => { if (groundInRect(g)) nextGrounds.add(g.id); });
         }
         // Always update selections - if Shift wasn't pressed and nothing was found,
         // the selections should already be empty (cleared in mouseDown)
@@ -2503,7 +2538,7 @@ function App() {
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
 
   // Allow panning to continue even when the pointer leaves the canvas while the button is held
   React.useEffect(() => {
