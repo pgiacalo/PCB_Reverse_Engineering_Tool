@@ -14,10 +14,9 @@ import {
   COMPONENT_ICON
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
-import { generateKiCadNetlist, generateProtelNetlist } from './utils/netlist';
 import { generateSimpleSchematic } from './utils/schematic';
 import { formatTimestamp } from './utils/fileOperations';
-import type { ComponentType, PCBComponent } from './types';
+import type { ComponentType, PCBComponent, DrawingStroke as ImportedDrawingStroke } from './types';
 import './App.css';
 
 interface PCBImage {
@@ -5982,70 +5981,19 @@ function App() {
   }, [buildProjectData]);
 
   // Export netlist function
-  const exportNetlist = useCallback(async (format: 'kicad' | 'protel' = 'kicad') => {
-    // Generate netlist
-    const allComponents = [...componentsTop, ...componentsBottom];
-    const netlistContent = format === 'protel'
-      ? generateProtelNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses
-        )
-      : generateKiCadNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses
-        );
-
-    // Create blob
-    const blob = new Blob([netlistContent], { type: 'text/plain' });
-
-    // Determine filename
-    const baseName = projectName || 'pcb_project';
-    const filename = format === 'protel' ? `${baseName}.Net` : `${baseName}.net`;
-
-    // Try to use File System Access API
-    const w = window as any;
-    if (typeof w.showSaveFilePicker === 'function') {
-      try {
-        const handle = await w.showSaveFilePicker({
-          suggestedName: filename,
-          types: [{ description: format === 'protel' ? 'Protel Netlist' : 'KiCad Netlist', accept: { 'text/plain': [format === 'protel' ? '.Net' : '.net'] } }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        console.log(`Netlist exported (${format}): ${handle.name}`);
-        return;
-      } catch (e) {
-        if ((e as any)?.name === 'AbortError') return;
-        console.warn('showSaveFilePicker failed, falling back to download', e);
-      }
-    }
-
-    // Fallback: regular download
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href);
-      document.body.removeChild(a);
-    }, 0);
-  }, [componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName]);
+  // exportNetlist function removed - menu item was commented out and function is unused
+  // If needed in the future, uncomment the menu item and restore this function
 
   // Export simple schematic function
   const exportSimpleSchematic = useCallback(async () => {
     // Generate schematic
     const allComponents = [...componentsTop, ...componentsBottom];
+    // Type assertion: The local DrawingStroke type has optional point.id, but the imported
+    // type requires it. The generateSimpleSchematic function handles undefined IDs safely
+    // by checking point.id !== undefined before using it.
     const schematicContent = generateSimpleSchematic(
       allComponents,
-      drawingStrokes,
+      drawingStrokes as ImportedDrawingStroke[],
       powers,
       grounds,
       powerBuses
