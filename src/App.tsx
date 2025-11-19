@@ -17,6 +17,10 @@ import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } 
 import { generateSimpleSchematic } from './utils/schematic';
 import { formatTimestamp } from './utils/fileOperations';
 import type { ComponentType, PCBComponent, DrawingStroke as ImportedDrawingStroke } from './types';
+import { MenuBar } from './components/MenuBar';
+import { WelcomeDialog } from './components/WelcomeDialog';
+import { ErrorDialog } from './components/ErrorDialog';
+import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import './App.css';
 
 interface PCBImage {
@@ -7262,6 +7266,56 @@ function App() {
   // Determine if we're in read-only mode (viewing file history, not the most recent file)
   const isReadOnlyMode = currentFileIndex > 0;
 
+  // Handler for opening a project file
+  const handleOpenProject = useCallback(async () => {
+    const w = window as any;
+    if (typeof w.showOpenFilePicker === 'function') {
+      try {
+        const [handle] = await w.showOpenFilePicker({
+          multiple: false,
+        });
+        const file = await handle.getFile();
+        if (!file.name.toLowerCase().endsWith('.json')) {
+          alert('Please select a .json project file.');
+          return;
+        }
+        setCurrentProjectFilePath(file.name);
+        const text = await file.text();
+        const project = JSON.parse(text);
+        
+        await loadProject(project);
+        
+        let projectNameToUse: string;
+        if (project.projectInfo?.name) {
+          projectNameToUse = project.projectInfo.name;
+        } else {
+          const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+          projectNameToUse = projectNameFromFile || 'pcb_project';
+          setProjectName(projectNameToUse);
+          localStorage.setItem('pcb_project_name', projectNameToUse);
+        }
+        
+        if (!projectName) {
+          setProjectName(projectNameToUse);
+          localStorage.setItem('pcb_project_name', projectNameToUse);
+        }
+        
+        setTimeout(() => {
+          const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
+          if (!wasAutoSaveEnabledInFile) {
+            setAutoSavePromptDialog({ visible: true, source: 'open' });
+          }
+        }, 100);
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        console.warn('showOpenFilePicker failed, falling back to input', e);
+        openProjectRef.current?.click();
+      }
+    } else {
+      openProjectRef.current?.click();
+    }
+  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setAutoSavePromptDialog]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -7269,660 +7323,72 @@ function App() {
       </header>
 
       {/* Application menu bar */}
-      <div ref={menuBarRef} style={{ position: 'relative', background: 'rgba(250,250,255,0.9)', borderBottom: '1px solid #e6e6ef', padding: '6px 12px', display: 'flex', gap: 16, alignItems: 'center', zIndex: 3 }}>
-        {/* File menu */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'file' ? null : 'file'); }} 
-            style={{ 
-              padding: '6px 10px', 
-              borderRadius: 6, 
-              border: '1px solid #ddd', 
-              background: openMenu === 'file' ? '#eef3ff' : '#fff', 
-              fontWeight: 600, 
-              color: '#222'
-            }}
-          >
-            File ▾
-          </button>
-          {openMenu === 'file' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <button 
-                onClick={() => {
-                  if (!isReadOnlyMode) {
-                    setOpenMenu(null);
-                    if (hasUnsavedChanges()) {
-                      setNewProjectDialog({ visible: true });
-                    } else {
-                      newProject();
-                    }
-                  }
-                }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                New Project
-              </button>
-              <button onClick={async () => {
-                const w = window as any;
-                if (typeof w.showOpenFilePicker === 'function') {
-                  try {
-                    // Don't use restrictive types filter - accept all files and let user filter
-                    const [handle] = await w.showOpenFilePicker({
-                      multiple: false,
-                      // Remove types filter to allow all .json files regardless of MIME type
-                    });
-                    const file = await handle.getFile();
-                    // Only accept .json files
-                    if (!file.name.toLowerCase().endsWith('.json')) {
-                      alert('Please select a .json project file.');
-                      setOpenMenu(null);
-                      return;
-                    }
-                    // Update current project file path
-                    setCurrentProjectFilePath(file.name);
-                    const text = await file.text();
-                    const project = JSON.parse(text);
-                    
-                    // Try to get the directory handle from the file handle
-                    // Note: FileSystemFileHandle doesn't expose parent directly, but we can try to get it
-                    // For now, we'll store the file handle and try to get directory when saving
-                    // The directory handle will be restored when user saves next time
-                    
-                    await loadProject(project);
-                    
-                    // Extract project name from project data or filename
-                    let projectNameToUse: string;
-                    if (project.projectInfo?.name) {
-                      // Project name is already restored from project data in loadProject
-                      projectNameToUse = project.projectInfo.name;
-                    } else {
-                      // Extract from filename (remove .json extension)
-                      const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-                      projectNameToUse = projectNameFromFile || 'pcb_project';
-                      setProjectName(projectNameToUse);
-                      localStorage.setItem('pcb_project_name', projectNameToUse);
-                    }
-                    
-                    // Ensure project name is set (loadProject may have set it, but verify)
-                    if (!projectName) {
-                      setProjectName(projectNameToUse);
-                      localStorage.setItem('pcb_project_name', projectNameToUse);
-                    }
-                    
-                    // Auto save settings are restored from project file if present
-                    // Check if auto-save is enabled in the project file
-                    // Use setTimeout to allow React state updates from loadProject to complete
-                    setTimeout(() => {
-                      // Check both the original project data and current state
-                      // If project file doesn't have autoSave enabled, or if it was disabled by loadProject
-                      // (e.g., due to missing directory handle), show the prompt
-                      const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
-                      if (!wasAutoSaveEnabledInFile) {
-                        setAutoSavePromptDialog({ visible: true, source: 'open' });
-                      }
-                    }, 100);
-                    
-                    setOpenMenu(null);
-                    return;
-                  } catch (e) {
-                    if ((e as any)?.name === 'AbortError') { setOpenMenu(null); return; }
-                    console.warn('showOpenFilePicker failed, falling back to input', e);
-                  }
-                }
-                openProjectRef.current?.click();
-                setOpenMenu(null);
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Open Project…</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button 
-                onClick={() => { if (!isReadOnlyMode) { void saveProject(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Save Project…
-              </button>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) { openSaveAsDialog(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Save As…
-              </button>
-              <button 
-                onClick={() => { 
-                  if (!isReadOnlyMode) { 
-                    // Show dialog with 5 minutes as default
-                    setAutoSaveDialog({ visible: true, interval: 5 });
-                    setOpenMenu(null);
-                  }
-                }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Auto Save…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button
-                onClick={() => {
-                  if (!isReadOnlyMode) {
-                    void exportSimpleSchematic(); 
-                    setOpenMenu(null); 
-                  }
-                }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Export Simple Schematic…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
-              <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
-            </div>
-          )}
-        </div>
-
-        {/* Images menu */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'transform' ? null : 'transform'); } }} 
-            disabled={isReadOnlyMode}
-            style={{ 
-              padding: '6px 10px', 
-              borderRadius: 6, 
-              border: '1px solid #ddd', 
-              background: openMenu === 'transform' ? '#eef3ff' : '#fff', 
-              fontWeight: 600, 
-              color: isReadOnlyMode ? '#999' : '#222',
-              cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-              opacity: isReadOnlyMode ? 0.5 : 1
-            }}
-          >
-            Images ▾
-          </button>
-          {openMenu === 'transform' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Load Images</div>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Load Top PCB…
-              </button>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Load Bottom PCB…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
-              <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
-              <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
-              <button disabled={!topImage || !bottomImage} onClick={() => { setSelectedImageForTransform('both'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (topImage && bottomImage) ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'both' ? '✓ ' : ''}Both Images</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { 
-                if (selectedImageForTransform) {
-                  if (selectedImageForTransform === 'both') {
-                    // For both, toggle based on top image state
-                    const newFlipX = !(topImage?.flipX || false);
-                    updateImageTransform('both', { flipX: newFlipX });
-                  } else {
-                    const currentFlipX = selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
-                    updateImageTransform(selectedImageForTransform, { flipX: !currentFlipX });
-                  }
-                }
-                setOpenMenu(null);
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Horizontal Flip</button>
-              <button onClick={() => { 
-                if (selectedImageForTransform) {
-                  if (selectedImageForTransform === 'both') {
-                    // For both, toggle based on top image state
-                    const newFlipY = !(topImage?.flipY || false);
-                    updateImageTransform('both', { flipY: newFlipY });
-                  } else {
-                    const currentFlipY = selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
-                    updateImageTransform(selectedImageForTransform, { flipY: !currentFlipY });
-                  }
-                }
-                setOpenMenu(null);
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Vertical Flip</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setTransformMode('nudge'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'nudge' ? '✓ ' : ''}Mode: Nudge</button>
-              <button onClick={() => { setTransformMode('scale'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'scale' ? '✓ ' : ''}Mode: Scale</button>
-              <button onClick={() => { setTransformMode('rotate'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'rotate' ? '✓ ' : ''}Mode: Rotate</button>
-              <button onClick={() => { setTransformMode('slant'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'slant' ? '✓ ' : ''}Mode: Slant</button>
-              <button onClick={() => { setTransformMode('keystone'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'keystone' ? '✓ ' : ''}Mode: Keystone</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => {
-                setCurrentTool('transform');
-                if (isGrayscale || isBlackAndWhiteEdges) {
-                  setIsGrayscale(false);
-                  setIsBlackAndWhiteEdges(false);
-                  setIsBlackAndWhiteInverted(false);
-                } else {
-                  setIsGrayscale(true);
-                }
-                setOpenMenu(null);
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                {(isGrayscale || isBlackAndWhiteEdges) ? 'Color Mode' : 'Grayscale Mode'}
-              </button>
-              <button onClick={() => {
-                setCurrentTool('transform');
-                if (!isBlackAndWhiteEdges) {
-                  setIsBlackAndWhiteEdges(true);
-                  setIsBlackAndWhiteInverted(false);
-                } else {
-                  setIsBlackAndWhiteInverted(prev => !prev);
-                }
-                setOpenMenu(null);
-              }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
-              </button>
-              <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Images {areImagesLocked ? '✓' : ''}
-              </button>
-            </div>
-          )}
-        </div>
-        {/* Tools menu */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); } }} 
-            disabled={isReadOnlyMode}
-            style={{ 
-              padding: '6px 10px', 
-              borderRadius: 6, 
-              border: '1px solid #ddd', 
-              background: openMenu === 'tools' ? '#eef3ff' : '#fff', 
-              fontWeight: 600, 
-              color: isReadOnlyMode ? '#999' : '#222',
-              cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-              opacity: isReadOnlyMode ? 0.5 : 1
-            }}
-          >
-            Tools ▾
-          </button>
-          {openMenu === 'tools' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-              <button
-                onClick={() => {
-                  increaseSize();
-                  setOpenMenu(null);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Increase Size (+)
-              </button>
-              <button
-                onClick={() => {
-                  decreaseSize();
-                  setOpenMenu(null);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Decrease Size (-)
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button 
-                onClick={() => {
-                  // Determine current size to show in dialog
-                  let currentSize = brushSize;
-                  if (selectedIds.size > 0) {
-                    const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-                    if (selectedStrokes.length > 0) {
-                      currentSize = selectedStrokes[0].size;
-                    }
-                  } else if (selectedComponentIds.size > 0) {
-                    const selectedComp = [...componentsTop, ...componentsBottom].find(c => selectedComponentIds.has(c.id));
-                    if (selectedComp) {
-                      currentSize = selectedComp.size || 18;
-                    }
-                  } else if (selectedPowerIds.size > 0) {
-                    const selectedPower = powers.find(p => selectedPowerIds.has(p.id));
-                    if (selectedPower) {
-                      currentSize = selectedPower.size;
-                    }
-                  } else if (selectedGroundIds.size > 0) {
-                    const selectedGround = grounds.find(g => selectedGroundIds.has(g.id));
-                    if (selectedGround) {
-                      currentSize = selectedGround.size || 18;
-                    }
-                  }
-                  setSetSizeDialog({ visible: true, size: currentSize });
-                  setOpenMenu(null);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Set Size…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Vias {areViasLocked ? '✓' : ''}
-              </button>
-              <button onClick={() => { setArePadsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Pads {arePadsLocked ? '✓' : ''}
-              </button>
-              <button onClick={() => { setAreTracesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Traces {areTracesLocked ? '✓' : ''}
-              </button>
-              <button onClick={() => { setAreComponentsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Components {areComponentsLocked ? '✓' : ''}
-              </button>
-              <button onClick={() => { setAreGroundNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Ground Node {areGroundNodesLocked ? '✓' : ''}
-              </button>
-              <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-                Manage Power Buses…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button 
-                onClick={() => {
-                  // Select all vias
-                  const viaIds = drawingStrokes.filter(s => s.type === 'via').map(s => s.id);
-                  setSelectedIds(new Set(viaIds));
-                  setSelectedComponentIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all vias
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all pads (top)
-                  const padIds = drawingStrokes.filter(s => s.type === 'pad' && s.layer === 'top').map(s => s.id);
-                  setSelectedIds(new Set(padIds));
-                  setSelectedComponentIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Pads (Top)
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all pads (bottom)
-                  const padIds = drawingStrokes.filter(s => s.type === 'pad' && s.layer === 'bottom').map(s => s.id);
-                  setSelectedIds(new Set(padIds));
-                  setSelectedComponentIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Pads (Bottom)
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all traces (top)
-                  const traceIds = drawingStrokes.filter(s => s.type === 'trace' && s.layer === 'top').map(s => s.id);
-                  setSelectedIds(new Set(traceIds));
-                  setSelectedComponentIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Traces (top)
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all traces (bottom)
-                  const traceIds = drawingStrokes.filter(s => s.type === 'trace' && s.layer === 'bottom').map(s => s.id);
-                  setSelectedIds(new Set(traceIds));
-                  setSelectedComponentIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Traces (bottom)
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all components (top)
-                  const compIds = componentsTop.map(c => c.id);
-                  setSelectedComponentIds(new Set(compIds));
-                  setSelectedIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Components (top)
-              </button>
-              <button 
-                onClick={() => {
-                  // Select all components (bottom)
-                  const compIds = componentsBottom.map(c => c.id);
-                  setSelectedComponentIds(new Set(compIds));
-                  setSelectedIds(new Set());
-                  setSelectedPowerIds(new Set());
-                  setSelectedGroundIds(new Set());
-                  setCurrentTool('select');
-                  // Close menu after a brief delay to ensure state updates are processed
-                  setTimeout(() => setOpenMenu(null), 0);
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
-              >
-                Select all Components (bottom)
-              </button>
-            </div>
-          )}
-        </div>
-        {/* About menu */}
-        <div style={{ position: 'relative' }}>
-          <button 
-            onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'about' ? null : 'about'); }} 
-            style={{ 
-              padding: '6px 10px', 
-              borderRadius: 6, 
-              border: '1px solid #ddd', 
-              background: openMenu === 'about' ? '#eef3ff' : '#fff', 
-              fontWeight: 600, 
-              color: '#222'
-            }}
-          >
-            About ▾
-          </button>
-          {openMenu === 'about' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 400, maxWidth: 600, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 16, overflowY: 'auto', zIndex: 100 }}>
-              <div style={{ marginBottom: 16 }}>
-                <h2 style={{ margin: '0 0 12px 0', color: '#000', fontSize: '18px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
-                <p style={{ margin: '0 0 16px 0', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Purpose</h3>
-                <p style={{ margin: 0, color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                  This tool helps engineers and hobbyists document PCB layouts by allowing you to overlay traces, vias, pads, components, and power/ground connections on top of PCB images. The tool generates netlists and schematics that can be exported to KiCad and other EDA tools.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Features</h3>
-                <ul style={{ margin: 0, paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
-                  <li>Support for <strong style={{ color: '#fff' }}>Typical 4-Layer PCBs</strong> (Top, Bottom, Ground Plane, Power Plane)</li>
-                  <li>Layer-specific drawing tools (Traces, Pads, Components) for Top and Bottom layers</li>
-                  <li>Via placement with automatic type detection (Signal, Power, Ground)</li>
-                  <li>Component placement with 24+ component types and pin connection management</li>
-                  <li>Power and Ground node placement with bus management</li>
-                  <li>Netlist generation and export (KiCad, Protel formats)</li>
-                  <li>Simple schematic export</li>
-                  <li>Project save/load with auto-save functionality</li>
-                  <li>Layer visibility controls and locking mechanisms</li>
-                </ul>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Limitations</h3>
-                <ul style={{ margin: 0, paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
-                  <li>Currently supports <strong style={{ color: '#fff' }}>through-hole vias only</strong> (blind and buried vias not yet supported)</li>
-                  <li>Designed for 4-layer PCBs (can be adapted for 2-layer with some limitations)</li>
-                  <li>Manual tracing required (no automatic trace detection from images)</li>
-                  <li>Component library limited to standard through-hole and SMD types</li>
-                </ul>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>4-Layer PCB Support</h3>
-                <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                  The tool is optimized for the most common 4-layer PCB stackup:
-                </p>
-                <ul style={{ margin: '0 0 8px 0', paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
-                  <li><strong style={{ color: '#fff' }}>Layer 1 (Top):</strong> Signal layer</li>
-                  <li><strong style={{ color: '#fff' }}>Layer 2 (Inner):</strong> Ground plane</li>
-                  <li><strong style={{ color: '#fff' }}>Layer 3 (Inner):</strong> Power plane</li>
-                  <li><strong style={{ color: '#fff' }}>Layer 4 (Bottom):</strong> Signal layer</li>
-                </ul>
-                <p style={{ margin: 0, color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                  Vias automatically connect Top and Bottom layers. See the <strong style={{ color: '#fff' }}>ABOUT_VIAS.md</strong> file in the project for detailed information about via types and usage in 4-layer PCBs.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 0 }}>
-                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Keyboard Shortcuts</h3>
-                <div style={{ color: '#ddd', fontSize: '13px', lineHeight: '1.8', fontFamily: 'monospace' }}>
-                  <div><strong style={{ color: '#fff' }}>S</strong> - Select tool</div>
-                  <div><strong style={{ color: '#fff' }}>V</strong> - Via tool</div>
-                  <div><strong style={{ color: '#fff' }}>D</strong> - Pad tool</div>
-                  <div><strong style={{ color: '#fff' }}>T</strong> - Trace tool</div>
-                  <div><strong style={{ color: '#fff' }}>C</strong> - Component tool</div>
-                  <div><strong style={{ color: '#fff' }}>P</strong> - Power tool</div>
-                  <div><strong style={{ color: '#fff' }}>G</strong> - Ground tool</div>
-                  <div><strong style={{ color: '#fff' }}>E</strong> - Erase tool</div>
-                  <div><strong style={{ color: '#fff' }}>H</strong> - Pan/Move tool</div>
-                  <div><strong style={{ color: '#fff' }}>Z</strong> - Zoom tool</div>
-                  <div><strong style={{ color: '#fff' }}>Esc</strong> - Return to Select tool</div>
-                  <div><strong style={{ color: '#fff' }}>Option/Alt</strong> - Disable snap-to while drawing</div>
-                  <div><strong style={{ color: '#fff' }}>+/-</strong> - Increase/Decrease size</div>
-                  <div><strong style={{ color: '#fff' }}>Cmd/Ctrl+I</strong> - Detailed Information</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        {/* File path display - right justified */}
-        {currentProjectFilePath && (
-          <div style={{ 
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            paddingLeft: '16px'
-          }}>
-            {/* File path */}
-            <div style={{ 
-              fontSize: '12px',
-              color: '#333',
-              fontFamily: 'monospace',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '40vw'
-            }} title={currentProjectFilePath}>
-              {currentProjectFilePath}
-            </div>
-          </div>
-        )}
-        {/* COMMENTED OUT: File navigation buttons and project review functionality
-        {currentProjectFilePath && (
-          <div style={{ 
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            paddingLeft: '16px'
-          }}>
-            {currentFileIndex > 0 && (
-              <span style={{ 
-                fontSize: '12px',
-                color: '#666',
-                fontStyle: 'italic',
-                marginRight: '8px'
-              }}>
-                Project Review: Read Only
-              </span>
-            )}
-            <button
-              onClick={navigateToPreviousFile}
-              disabled={currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1}
-              title="Navigate to older file"
-              style={{
-                padding: '4px 8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                background: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? '#f5f5f5' : '#fff',
-                color: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? '#999' : '#333',
-                cursor: (currentFileIndex < 0 || currentFileIndex >= autoSaveFileHistory.length - 1) ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}
-            >
-              ←
-            </button>
-            <button
-              onClick={(e) => {
-                const isDisabled = currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0;
-                if (isDisabled) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return;
-                }
-                navigateToNextFile();
-              }}
-              disabled={currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0}
-              title="Navigate to newer file"
-              style={{
-                padding: '4px 8px',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                background: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? '#f5f5f5' : '#fff',
-                color: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? '#999' : '#333',
-                cursor: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? 'not-allowed' : 'pointer',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                pointerEvents: (currentFileIndex <= 0 || currentFileIndex >= autoSaveFileHistory.length || autoSaveFileHistory.length === 0) ? 'none' : 'auto'
-              }}
-            >
-              →
-            </button>
-          </div>
-        )}
-        */}
-      </div>
-
-      
+      <MenuBar
+        openMenu={openMenu}
+        setOpenMenu={setOpenMenu}
+        isReadOnlyMode={isReadOnlyMode}
+        currentProjectFilePath={currentProjectFilePath}
+        onNewProject={newProject}
+        onOpenProject={handleOpenProject}
+        onSaveProject={saveProject}
+        onSaveAs={openSaveAsDialog}
+        onExportSchematic={exportSimpleSchematic}
+        onPrint={handlePrint}
+        hasUnsavedChanges={hasUnsavedChanges}
+        setNewProjectDialog={setNewProjectDialog}
+        setAutoSaveDialog={setAutoSaveDialog}
+        topImage={topImage}
+        bottomImage={bottomImage}
+        selectedImageForTransform={selectedImageForTransform}
+        setSelectedImageForTransform={setSelectedImageForTransform}
+        setCurrentTool={setCurrentTool}
+        transformMode={transformMode}
+        setTransformMode={setTransformMode}
+        updateImageTransform={updateImageTransform}
+        resetImageTransform={resetImageTransform}
+        isGrayscale={isGrayscale}
+        setIsGrayscale={setIsGrayscale}
+        isBlackAndWhiteEdges={isBlackAndWhiteEdges}
+        setIsBlackAndWhiteEdges={setIsBlackAndWhiteEdges}
+        isBlackAndWhiteInverted={isBlackAndWhiteInverted}
+        setIsBlackAndWhiteInverted={setIsBlackAndWhiteInverted}
+        areImagesLocked={areImagesLocked}
+        setAreImagesLocked={setAreImagesLocked}
+        fileInputTopRef={fileInputTopRef}
+        fileInputBottomRef={fileInputBottomRef}
+        openProjectRef={openProjectRef}
+        increaseSize={increaseSize}
+        decreaseSize={decreaseSize}
+        brushSize={brushSize}
+        drawingStrokes={drawingStrokes}
+        selectedIds={selectedIds}
+        selectedComponentIds={selectedComponentIds}
+        selectedPowerIds={selectedPowerIds}
+        selectedGroundIds={selectedGroundIds}
+        componentsTop={componentsTop}
+        componentsBottom={componentsBottom}
+        powers={powers}
+        grounds={grounds}
+        setSetSizeDialog={setSetSizeDialog}
+        areViasLocked={areViasLocked}
+        setAreViasLocked={setAreViasLocked}
+        arePadsLocked={arePadsLocked}
+        setArePadsLocked={setArePadsLocked}
+        areTracesLocked={areTracesLocked}
+        setAreTracesLocked={setAreTracesLocked}
+        areComponentsLocked={areComponentsLocked}
+        setAreComponentsLocked={setAreComponentsLocked}
+        areGroundNodesLocked={areGroundNodesLocked}
+        setAreGroundNodesLocked={setAreGroundNodesLocked}
+        arePowerNodesLocked={arePowerNodesLocked}
+        setArePowerNodesLocked={setArePowerNodesLocked}
+        setSelectedIds={setSelectedIds}
+        setSelectedComponentIds={setSelectedComponentIds}
+        setSelectedPowerIds={setSelectedPowerIds}
+        setSelectedGroundIds={setSelectedGroundIds}
+        setShowPowerBusManager={setShowPowerBusManager}
+        menuBarRef={menuBarRef}
+      />
 
       <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
         {/* Control Panel removed - functionality moved to top menus and left toolstrip */}
@@ -7936,7 +7402,7 @@ function App() {
               onMouseDown={(e) => e.currentTarget.blur()}
               disabled={isReadOnlyMode}
               title="Select (S)" 
-              style={{ 
+              style={{
                 width: 32, 
                 height: 32, 
                 display: 'grid', 
@@ -8722,35 +8188,7 @@ function App() {
           </div>
 
           {/* Canvas welcome note - shown when no project is loaded */}
-          {!topImage && !bottomImage && (
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              textAlign: 'center',
-              padding: '24px 32px',
-              background: 'rgba(255, 255, 255, 0.95)',
-              borderRadius: 8,
-              border: '2px solid #4CAF50',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              zIndex: 1,
-              maxWidth: '500px'
-            }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-                PCB Reverse Engineering Tool
-              </div>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-                Supports Typical 4-Layer PCBs
-              </div>
-              <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5' }}>
-                Use the <strong>File</strong> menu to start a new project.
-              </div>
-              <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5' }}>
-                Use the <strong>Images</strong> menu to load PCB photos.
-              </div>
-            </div>
-          )}
+          <WelcomeDialog visible={!topImage && !bottomImage} />
 
           <canvas
             ref={canvasRef}
@@ -9665,455 +9103,24 @@ function App() {
       />
       
       {/* Detailed Information Dialog */}
-      {debugDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            paddingRight: '20px',
-            zIndex: 10000,
-            pointerEvents: 'none',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: 8,
-              padding: '20px',
-              minWidth: '150px',
-              maxWidth: '400px',
-              width: 'fit-content',
-              maxHeight: '80%',
-              overflow: 'auto',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-              position: 'relative',
-              pointerEvents: 'auto',
-              border: '1px solid #ddd',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Detailed Information</h2>
-              <button
-                onClick={() => setDebugDialog({ visible: false, text: '' })}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '24px',
-                  cursor: 'pointer',
-                  color: '#666',
-                  padding: 0,
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div
-              style={{
-                margin: 0,
-                padding: 0,
-                backgroundColor: '#f5f5f5',
-                borderRadius: 4,
-                fontSize: '12px',
-                fontFamily: 'monospace',
-                maxHeight: 'calc(80vh - 100px)',
-                overflow: 'auto',
-                color: '#000',
-              }}
-            >
-              {/* Object Count - Display at top */}
-              {(() => {
-                const strokeCount = drawingStrokes.filter(s => selectedIds.has(s.id)).length;
-                const componentCount = [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).length;
-                const powerCount = powers.filter(p => selectedPowerIds.has(p.id)).length;
-                const groundCount = grounds.filter(g => selectedGroundIds.has(g.id)).length;
-                const totalCount = strokeCount + componentCount + powerCount + groundCount;
-                return totalCount > 0 ? (
-                  <div style={{ 
-                    padding: '12px 16px', 
-                    backgroundColor: '#e8e8e8', 
-                    borderBottom: '2px solid #ccc',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#333',
-                    marginBottom: '8px'
-                  }}>
-                    {totalCount} Object{totalCount !== 1 ? 's' : ''} Selected
-                  </div>
-                ) : null;
-              })()}
-              
-              {/* Components - Formatted UI */}
-              {selectedComponentIds.size > 0 && (() => {
-                // Check if there are any vias or pads in the selected items
-                const hasViasOrPads = drawingStrokes.some(s => selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad'));
-                return [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
-                  <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                      <div style={{ 
-                        color: '#fff', 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        fontWeight: 500
-                      }}>
-                        {comp.componentType}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      <div>Layer: {comp.layer}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span>Designator: {comp.designator || '(empty)'}</span>
-                        {hasViasOrPads && (
-                          <button
-                            onClick={() => {
-                              // Get all selected components of the same type
-                              const allSelectedComponents = [...componentsTop, ...componentsBottom]
-                                .filter(c => selectedComponentIds.has(c.id) && c.componentType === comp.componentType);
-                              
-                              const componentCount = allSelectedComponents.length;
-                              
-                              // Get all selected pads with their Node IDs (prioritize pads over vias)
-                              const selectedPads = drawingStrokes
-                                .filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0 && s.points[0].id !== undefined)
-                                .map(s => ({
-                                  stroke: s,
-                                  nodeId: s.points[0].id!
-                                }))
-                                .sort((a, b) => a.nodeId - b.nodeId); // Sort by Node ID ascending
-                              
-                              // If no pads, get vias instead
-                              const selectedItems = selectedPads.length > 0 
-                                ? selectedPads 
-                                : drawingStrokes
-                                    .filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0 && s.points[0].id !== undefined)
-                                    .map(s => ({
-                                      stroke: s,
-                                      nodeId: s.points[0].id!
-                                    }))
-                                    .sort((a, b) => a.nodeId - b.nodeId); // Sort by Node ID ascending
-                              
-                              const totalItemCount = selectedItems.length;
-                              if (totalItemCount === 0) {
-                                console.warn('No vias or pads with Node IDs found in selection');
-                                return;
-                              }
-                              
-                              // Calculate pins per component
-                              const pinsPerComponent = Math.floor(totalItemCount / componentCount);
-                              if (pinsPerComponent === 0) {
-                                console.warn(`Not enough ${selectedPads.length > 0 ? 'pads' : 'vias'} (${totalItemCount}) for ${componentCount} components`);
-                                return;
-                              }
-                              
-                              // Sort components by ID for consistent assignment
-                              const sortedComponents = [...allSelectedComponents].sort((a, b) => a.id.localeCompare(b.id));
-                              
-                              // Assign pins to each component sequentially
-                              sortedComponents.forEach((component, compIndex) => {
-                                const startIndex = compIndex * pinsPerComponent;
-                                const endIndex = startIndex + pinsPerComponent;
-                                const componentNodeIds = selectedItems.slice(startIndex, endIndex);
-                                
-                                // Create pin connections array for this component
-                                const newPinConnections = componentNodeIds.map(item => item.nodeId.toString());
-                                
-                                // Update component based on layer
-                                if (component.layer === 'top') {
-                                  setComponentsTop(prev => prev.map(c => {
-                                    if (c.id === component.id) {
-                                      return {
-                                        ...c,
-                                        pinCount: pinsPerComponent,
-                                        pinConnections: newPinConnections
-                                      };
-                                    }
-                                    return c;
-                                  }));
-                                } else {
-                                  setComponentsBottom(prev => prev.map(c => {
-                                    if (c.id === component.id) {
-                                      return {
-                                        ...c,
-                                        pinCount: pinsPerComponent,
-                                        pinConnections: newPinConnections
-                                      };
-                                    }
-                                    return c;
-                                  }));
-                                }
-                              });
-                              
-                              const itemType = selectedPads.length > 0 ? 'pads' : 'vias';
-                              console.log(`Connected ${componentCount} components of type ${comp.componentType} to ${totalItemCount} ${itemType} (${pinsPerComponent} pins each)`);
-                            }}
-                            style={{
-                              padding: '2px 8px',
-                              fontSize: '10px',
-                              backgroundColor: '#4CAF50',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontWeight: 500,
-                              whiteSpace: 'nowrap',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#45a049';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = '#4CAF50';
-                            }}
-                          >
-                            Connect
-                          </button>
-                        )}
-                      </div>
-                    <div>Abbreviation: {(comp as any).abbreviation || '(empty)'}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Color:</span>
-                      <div style={{ width: '16px', height: '16px', backgroundColor: comp.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                      <span>{comp.color}</span>
-                    </div>
-                    <div>Size: {comp.size}</div>
-                    <div>Pin Count: {comp.pinCount}</div>
-                    {comp.pinConnections && comp.pinConnections.length > 0 && (
-                      <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-                        <div style={{ marginBottom: '4px', fontWeight: 600 }}>Pin Connections:</div>
-                        <table style={{ 
-                          width: '100%', 
-                          borderCollapse: 'collapse', 
-                          fontSize: '10px',
-                          border: '1px solid #ddd'
-                        }}>
-                          <thead>
-                            <tr style={{ backgroundColor: '#f0f0f0' }}>
-                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
-                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {comp.pinConnections.map((conn, idx) => (
-                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                                <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>
-                                <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{conn || '(not connected)'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                    {'manufacturer' in comp && (comp as any).manufacturer && (
-                      <div>Manufacturer: {(comp as any).manufacturer}</div>
-                    )}
-                    {'partNumber' in comp && (comp as any).partNumber && (
-                      <div>Part Number: {(comp as any).partNumber}</div>
-                    )}
-                    <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
-                  </div>
-                </div>
-              ));
-              })()}
-              
-              {/* Vias - Formatted UI */}
-              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0).map((stroke) => {
-                const point = stroke.points[0];
-                // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
-                // Vias always have an id, so this is safe
-                const viaType = stroke.viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
-                return (
-                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                      <div style={{ 
-                        color: '#fff', 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        fontWeight: 500
-                      }}>
-                        {viaType}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      {point.id && <div>Node ID: {point.id}</div>}
-                      <div>Layer: Top and Bottom</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Color:</span>
-                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                        <span>{stroke.color}</span>
-                      </div>
-                      <div>Size: {stroke.size}</div>
-                      <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Pads - Formatted UI */}
-              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0).map((stroke) => {
-                const point = stroke.points[0];
-                // Determine pad type - pads belong to only one layer (top or bottom)
-                // Pads always have an id, so this is safe
-                const padType = stroke.padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
-                return (
-                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                      <div style={{ 
-                        color: '#fff', 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        fontWeight: 500
-                      }}>
-                        {padType}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      {point.id && <div>Node ID: {point.id}</div>}
-                      <div>Layer: {stroke.layer}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Color:</span>
-                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                        <span>{stroke.color}</span>
-                      </div>
-                      <div>Size: {stroke.size}</div>
-                      <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Traces - Formatted UI */}
-              {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'trace').map((stroke) => {
-                return (
-                  <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                      <div style={{ 
-                        color: '#fff', 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        fontWeight: 500
-                      }}>
-                        {stroke.type || 'unknown'}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      {stroke.points.length > 0 && (
-                        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-                          <div style={{ marginBottom: '4px', fontWeight: 600 }}>Points: {stroke.points.length}</div>
-                          <table style={{ 
-                            width: '100%', 
-                            borderCollapse: 'collapse', 
-                            fontSize: '10px',
-                            border: '1px solid #ddd'
-                          }}>
-                            <thead>
-                              <tr style={{ backgroundColor: '#f0f0f0' }}>
-                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Point #</th>
-                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>x</th>
-                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>y</th>
-                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {stroke.points.map((p, idx) => (
-                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx}</td>
-                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.x.toFixed(2)}</td>
-                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.y.toFixed(2)}</td>
-                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{p.id || '(none)'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                      <div style={{ marginTop: '4px' }}>Layer: {stroke.layer}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Color:</span>
-                        <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                        <span>{stroke.color}</span>
-                      </div>
-                      <div>Size: {stroke.size}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Power Symbol Properties */}
-              {selectedPowerIds.size > 0 && powers.filter(p => selectedPowerIds.has(p.id)).map((power) => {
-                const bus = powerBuses.find(b => b.id === power.powerBusId);
-                return (
-                  <div key={power.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                    <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                      <div style={{ 
-                        color: '#fff', 
-                        padding: '4px 8px', 
-                        fontSize: '12px',
-                        fontWeight: 500
-                      }}>
-                        {power.type || (bus ? `${bus.name} Power Node` : 'Power Node')}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                      <div>Node ID: {power.pointId || '(not assigned)'}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>Color:</span>
-                        <div style={{ width: '16px', height: '16px', backgroundColor: power.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                        <span>{power.color}</span>
-                      </div>
-                      <div>Size: {power.size}</div>
-                      <div>Layer: {power.layer}</div>
-                      <div>Power Bus: {bus?.name || power.powerBusId || '(unknown)'}</div>
-                      <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              {/* Ground Symbol Properties */}
-              {selectedGroundIds.size > 0 && grounds.filter(g => selectedGroundIds.has(g.id)).map((ground) => (
-                <div key={ground.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                  <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                    <div style={{ 
-                      color: '#fff', 
-                      padding: '4px 8px', 
-                      fontSize: '12px',
-                      fontWeight: 500
-                    }}>
-                      {ground.type || 'Ground Node'}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
-                    <div>Node ID: {ground.pointId || '(not assigned)'}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>Color:</span>
-                      <div style={{ width: '16px', height: '16px', backgroundColor: ground.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
-                      <span>{ground.color}</span>
-                    </div>
-                    <div>Size: {ground.size}</div>
-                    <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <DetailedInfoDialog
+        visible={debugDialog.visible}
+        selectedIds={selectedIds}
+        selectedComponentIds={selectedComponentIds}
+        selectedPowerIds={selectedPowerIds}
+        selectedGroundIds={selectedGroundIds}
+        drawingStrokes={drawingStrokes}
+        componentsTop={componentsTop}
+        componentsBottom={componentsBottom}
+        powers={powers}
+        grounds={grounds}
+        powerBuses={powerBuses}
+        onClose={() => setDebugDialog({ visible: false, text: '' })}
+        setComponentsTop={setComponentsTop}
+        setComponentsBottom={setComponentsBottom}
+        determineViaType={determineViaType}
+        determinePadType={determinePadType}
+      />
 
       {/* New Project Confirmation Dialog */}
       {newProjectDialog.visible && (
@@ -10569,68 +9576,12 @@ function App() {
       )}
 
       {/* Error Dialog */}
-      {errorDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10004,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              setErrorDialog({ visible: false, title: '', message: '' });
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '300px',
-              maxWidth: '500px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '2px solid #ff4444',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ fontSize: '24px', color: '#ff4444' }}>⚠️</div>
-              <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-                {errorDialog.title}
-              </h3>
-            </div>
-            <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.5' }}>
-              {errorDialog.message}
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button
-                onClick={() => setErrorDialog({ visible: false, title: '', message: '' })}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ErrorDialog
+        visible={errorDialog.visible}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        onClose={() => setErrorDialog({ visible: false, title: '', message: '' })}
+      />
 
       {/* Set Size Dialog */}
       {setSizeDialog.visible && (
