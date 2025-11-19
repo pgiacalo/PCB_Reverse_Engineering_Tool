@@ -489,30 +489,66 @@ export function buildConnectivityGraph(
   const nodes = new Map<number, NetlistNode>();
   
   // Add nodes from drawing strokes (traces, vias, and pads)
+  // CRITICAL: If a via and a trace point share the same Node ID, they're the same node
+  // The map key is the Node ID, so nodes with the same ID automatically merge
+  let viaCount = 0;
+  let padCount = 0;
+  let tracePointCount = 0;
+  let sharedNodeIds = 0; // Track when vias/pads share Node IDs with trace points
+  
   for (const stroke of drawingStrokes) {
     if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
       const point = stroke.points[0];
-      if (point.id !== undefined && !nodes.has(point.id)) {
-        nodes.set(point.id, {
-          id: point.id,
-          type: stroke.type === 'via' ? 'via' : 'pad',
-          x: point.x,
-          y: point.y,
-        });
+      if (point.id !== undefined) {
+        if (!nodes.has(point.id)) {
+          // New node - create it
+          nodes.set(point.id, {
+            id: point.id,
+            type: stroke.type === 'via' ? 'via' : 'pad',
+            x: point.x,
+            y: point.y,
+          });
+          if (stroke.type === 'via') viaCount++;
+          else padCount++;
+        } else {
+          // Node already exists (likely from a trace point) - mark that it's also a via/pad
+          const existingNode = nodes.get(point.id)!;
+          // If it was a trace_point, it's now also a via/pad (they share the same Node ID)
+          if (existingNode.type === 'trace_point') {
+            sharedNodeIds++;
+            // Keep the type as via/pad since that's more specific
+            existingNode.type = stroke.type === 'via' ? 'via' : 'pad';
+          }
+        }
       }
     } else if (stroke.type === 'trace') {
       // Add all points in the trace
       for (const point of stroke.points) {
-        if (point.id !== undefined && !nodes.has(point.id)) {
-          nodes.set(point.id, {
-            id: point.id,
-            type: 'trace_point',
-            x: point.x,
-            y: point.y,
-          });
+        if (point.id !== undefined) {
+          if (!nodes.has(point.id)) {
+            // New node - create it as trace_point
+            nodes.set(point.id, {
+              id: point.id,
+              type: 'trace_point',
+              x: point.x,
+              y: point.y,
+            });
+            tracePointCount++;
+          } else {
+            // Node already exists (likely from a via/pad) - it's now also a trace point
+            const existingNode = nodes.get(point.id)!;
+            if (existingNode.type === 'via' || existingNode.type === 'pad') {
+              sharedNodeIds++;
+              // Keep the type as via/pad since that's more specific
+            }
+          }
         }
       }
     }
+  }
+  console.log(`[Connectivity] Added ${viaCount} vias, ${padCount} pads, ${tracePointCount} trace points to graph`);
+  if (sharedNodeIds > 0) {
+    console.log(`[Connectivity] Found ${sharedNodeIds} nodes where vias/pads share Node IDs with trace points (automatic connection)`);
   }
   
   // Add power nodes
@@ -548,6 +584,9 @@ export function buildConnectivityGraph(
   // IMPORTANT: Component pins reference point IDs that may already exist as vias, trace points, etc.
   // When a component pin references a point ID, we need to ensure that node is marked as a component pin
   // but preserve its connection to other nodes through traces
+  let componentPinCount = 0;
+  let componentPinConnectedToExisting = 0;
+  let componentPinIsolated = 0;
   for (const comp of components) {
     // Get the actual designator (abbreviation takes precedence)
     const actualDesignator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
@@ -558,6 +597,7 @@ export function buildConnectivityGraph(
       if (nodeIdStr && nodeIdStr.trim() !== '') {
         const nodeId = parseInt(nodeIdStr.trim(), 10);
         if (!isNaN(nodeId) && nodeId > 0) {
+          componentPinCount++;
           // If node doesn't exist yet, create it as a component pin
           if (!nodes.has(nodeId)) {
             nodes.set(nodeId, {
@@ -568,10 +608,13 @@ export function buildConnectivityGraph(
               componentId: comp.id,
               pinIndex: pinIndex,
             });
+            componentPinIsolated++;
+            console.warn(`[Connectivity] Component ${actualDesignator} pin ${pinIndex + 1}: Node ID ${nodeId} does NOT exist in vias/pads/traces - creating isolated component pin node`);
           } else {
             // Update existing node to mark it as a component pin
             // This handles the case where a component pin is connected to a via or trace point
             const node = nodes.get(nodeId)!;
+            const originalType = node.type;
             // Preserve the original type if it's important, but mark as component pin
             // Actually, for netlist output, we need to know it's a component pin
             node.componentId = comp.id;
@@ -579,11 +622,14 @@ export function buildConnectivityGraph(
             // Keep the type as component_pin for output purposes
             // But the node is still connected to other nodes through its point ID
             node.type = 'component_pin';
+            componentPinConnectedToExisting++;
+            console.log(`[Connectivity] Component ${actualDesignator} pin ${pinIndex + 1}: Connected to existing Node ID ${nodeId} (was ${originalType})`);
           }
         }
       }
     }
   }
+  console.log(`[Connectivity] Component pins: ${componentPinCount} total, ${componentPinConnectedToExisting} connected to existing nodes, ${componentPinIsolated} isolated (no matching via/pad/trace)`);
   
   return nodes;
 }
@@ -591,6 +637,8 @@ export function buildConnectivityGraph(
 /**
  * Build connections from drawing strokes (traces connect points, vias are single points)
  * Also includes connections from component pins, power, and ground nodes that share point IDs
+ * CRITICAL: Nodes with the same Node ID are already the same node in the map (no connection needed)
+ * We only need to connect nodes with different Node IDs through trace paths
  */
 // @ts-ignore - Reserved for future use
 function buildConnections(
@@ -599,28 +647,30 @@ function buildConnections(
 ): Array<[number, number]> {
   const connections: Array<[number, number]> = [];
   
-  // Build connections from traces (connect consecutive points)
+  // Build connections from traces (connect consecutive points with different Node IDs)
   for (const stroke of drawingStrokes) {
     if (stroke.type === 'trace' && stroke.points.length >= 2) {
       // Connect consecutive points in the trace
       for (let i = 0; i < stroke.points.length - 1; i++) {
         const point1 = stroke.points[i];
         const point2 = stroke.points[i + 1];
-        if (point1 && point2) {
-          connections.push([point1.id, point2.id]);
+        if (point1 && point2 && point1.id !== undefined && point2.id !== undefined) {
+          // Only connect if they have different Node IDs
+          // If point1.id === point2.id, they're already the same node (no connection needed)
+          if (point1.id !== point2.id) {
+            connections.push([point1.id, point2.id]);
+          }
         }
       }
     }
-    // Vias are single points - they connect to traces through shared point IDs
-    // If a trace point has the same ID as a via, they're automatically the same node
   }
   
-  // All nodes with the same point ID are automatically connected
+  // All nodes with the same Node ID are automatically the same node (same key in the map)
   // This handles:
-  // - Component pins connected to vias (same point ID)
-  // - Component pins connected to trace points (same point ID)
-  // - Power/ground nodes connected to vias/traces (same point ID)
-  // The union-find algorithm will group all nodes with the same ID together
+  // - Vias and trace points that share Node IDs (automatic connection)
+  // - Component pins connected to vias/trace points (same Node ID)
+  // - Power/ground nodes connected to vias/traces (same Node ID)
+  // The union-find algorithm will group nodes connected through traces
   
   return connections;
 }
@@ -641,11 +691,18 @@ export function groupNodesIntoNets(
   // Union nodes connected by traces
   // Note: If a component pin, via, power, or ground node shares the same point ID,
   // they're already the same node in the map (same key), so no need to union them
+  let connectionCount = 0;
+  let missingNodeCount = 0;
   for (const [nodeId1, nodeId2] of connections) {
     if (nodes.has(nodeId1) && nodes.has(nodeId2)) {
       uf.union(nodeId1, nodeId2);
+      connectionCount++;
+    } else {
+      if (!nodes.has(nodeId1)) missingNodeCount++;
+      if (!nodes.has(nodeId2)) missingNodeCount++;
     }
   }
+  console.log(`[Connectivity] Union-find: Processed ${connections.length} connections, ${connectionCount} valid, ${missingNodeCount} missing nodes`);
   
   // CRITICAL: Union all ground nodes together (all ground points are connected by definition)
   const groundNodeIds: number[] = [];
@@ -695,6 +752,16 @@ export function groupNodesIntoNets(
   // Get groups
   const groups = uf.getGroups();
   const netGroups = new Map<number, NetlistNode[]>();
+  
+  console.log(`[Connectivity] Union-find created ${groups.size} net groups`);
+  
+  // Debug: Show distribution of net sizes
+  const netSizeDistribution = new Map<number, number>(); // size -> count
+  for (const [, nodeIds] of groups) {
+    const size = nodeIds.length;
+    netSizeDistribution.set(size, (netSizeDistribution.get(size) || 0) + 1);
+  }
+  console.log(`[Connectivity] Net size distribution:`, Array.from(netSizeDistribution.entries()).sort((a, b) => b[0] - a[0]).slice(0, 10));
   
   for (const [root, nodeIds] of groups) {
     const netNodes = nodeIds

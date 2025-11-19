@@ -1669,6 +1669,7 @@ function App() {
       }
       return;
     } else if (currentTool === 'ground') {
+      // Ground tool: place ground symbol at click location
       // Snap to nearest via, pad, or trace point unless Option/Alt key is held
       // Returns both coordinates and the Node ID of the snapped object (if any)
       const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
@@ -7753,9 +7754,9 @@ function App() {
             About ▾
           </button>
           {openMenu === 'about' && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 400, maxWidth: 600, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 16, overflowY: 'auto', zIndex: 100 }}>
+            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 400, maxWidth: 600, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 16, overflowY: 'auto', zIndex: 100 }}>
               <div style={{ marginBottom: 16 }}>
-                <h2 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '18px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
+                <h2 style={{ margin: '0 0 12px 0', color: '#000', fontSize: '18px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
                 <p style={{ margin: '0 0 16px 0', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
                   A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images.
                 </p>
@@ -8736,11 +8737,11 @@ function App() {
               zIndex: 1,
               maxWidth: '500px'
             }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '12px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
                 PCB Reverse Engineering Tool
               </div>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
-                Supports <strong style={{ color: '#4CAF50' }}>Typical 4-Layer PCBs</strong>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
+                Supports Typical 4-Layer PCBs
               </div>
               <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5' }}>
                 Use the <strong>File</strong> menu to start a new project.
