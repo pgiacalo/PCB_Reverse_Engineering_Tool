@@ -54,6 +54,8 @@ interface DrawingStroke {
   size: number;
   layer: 'top' | 'bottom';
   type?: 'trace' | 'via' | 'pad';
+  viaType?: string; // For vias: "Via (Signal)", "Via (Ground)", "Via (+5VDC Power Node)", etc.
+  padType?: string; // For pads: "Pad (Signal)", "Pad (Ground)", "Pad (+5VDC Power Node)", etc.
 }
 
 // Independent stacks for saved/managed drawing objects
@@ -789,7 +791,7 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
-  const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | 'about' | null>(null);
   // Removed unused showSetSizeSubmenu state
   // Set Size dialog state
   const [setSizeDialog, setSetSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 6 });
@@ -798,6 +800,7 @@ function App() {
   const [autoSaveDialog, setAutoSaveDialog] = useState<{ visible: boolean; interval: number | null }>({ visible: false, interval: 5 });
   const [autoSavePromptDialog, setAutoSavePromptDialog] = useState<{ visible: boolean; source: 'new' | 'open' | null }>({ visible: false, source: null });
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
+  const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
   const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
   // New project setup dialog (for project name and directory selection)
@@ -872,6 +875,57 @@ function App() {
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
+  
+  // Helper function to determine via type based on Node ID connections
+  // Rules:
+  // 1. If via has no POWER or GROUND node at same Node ID → "Via (Signal)"
+  // 2. If via has POWER node at same Node ID → "Via (+5VDC Power Node)" etc.
+  // 3. If via has GROUND node at same Node ID → "Via (Ground)"
+  const determineViaType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
+    // Check for power node at this Node ID
+    const powerNode = powers.find(p => p.pointId === nodeId);
+    if (powerNode) {
+      const bus = powerBuses.find(b => b.id === powerNode.powerBusId);
+      const powerType = bus ? bus.voltage : (powerNode.type || 'Power Node');
+      return `Via (${powerType})`;
+    }
+    
+    // Check for ground node at this Node ID
+    const groundNode = grounds.find(g => g.pointId === nodeId);
+    if (groundNode) {
+      const groundType = groundNode.type || 'Ground';
+      return `Via (${groundType})`;
+    }
+    
+    // No power or ground connection → Via (Signal)
+    return 'Via (Signal)';
+  }, [powers, grounds]);
+
+  // Helper function to determine pad type based on Node ID connections (same logic as vias)
+  // Rules:
+  // 1. If pad has no POWER or GROUND node at same Node ID → "Pad (Signal)"
+  // 2. If pad has POWER node at same Node ID → "Pad (+5VDC Power Node)" etc.
+  // 3. If pad has GROUND node at same Node ID → "Pad (Ground)"
+  const determinePadType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
+    // Check for power node at this Node ID
+    const powerNode = powers.find(p => p.pointId === nodeId);
+    if (powerNode) {
+      const bus = powerBuses.find(b => b.id === powerNode.powerBusId);
+      const powerType = bus ? bus.voltage : (powerNode.type || 'Power Node');
+      return `Pad (${powerType})`;
+    }
+    
+    // Check for ground node at this Node ID
+    const groundNode = grounds.find(g => g.pointId === nodeId);
+    if (groundNode) {
+      const groundType = groundNode.type || 'Ground';
+      return `Pad (${groundType})`;
+    }
+    
+    // No power or ground connection → Pad (Signal)
+    return 'Pad (Signal)';
+  }, [powers, grounds]);
+  
   // Tool-specific layer defaults (persist until tool re-selected)
   const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
   // Show chooser popovers only when tool is (re)selected
@@ -1322,13 +1376,13 @@ function App() {
       setIsPanning(true);
       return;
     } else if (currentTool === 'draw') {
-      // Helper: snap to nearest VIA or PAD center when drawing traces
-      // Constraint: Traces can only snap to pads on the same layer, but can snap to vias on any layer
+      // Helper: snap to nearest VIA, PAD, POWER, or GROUND node when drawing traces
+      // All node types can be snapped to from any layer (blind vias not supported yet)
       // Returns both coordinates and the Node ID of the snapped object (if any)
-      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number; nodeId?: number } => {
+      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number; id?: number } | null = null;
-        // search all vias and pads (with layer constraint for pads)
+        // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
         const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
@@ -1340,17 +1394,31 @@ function App() {
               bestCenter = c; 
             }
           } else if (s.type === 'pad') {
-            // Pads can only be snapped to if they're on the same layer as the trace
-            // Ensure pad has a layer property and it matches the trace layer
-            const padLayer = s.layer || 'top'; // Default to 'top' if layer is undefined
-            // Debug: log when checking pads (can be removed later)
-            if (padLayer === traceLayer) {
-              const c = s.points[0];
-              const d = Math.hypot(c.x - wx, c.y - wy);
-              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
-                bestDist = d;
-                bestCenter = c;
-              }
+            // Pads can be snapped to from any layer (blind vias not supported yet)
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = c;
+            }
+          }
+        }
+        // Also check power and ground nodes (they can be snapped to from any layer)
+        for (const p of powers) {
+          if (p.pointId !== undefined) {
+            const d = Math.hypot(p.x - wx, p.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = { x: p.x, y: p.y, id: p.pointId };
+            }
+          }
+        }
+        for (const g of grounds) {
+          if (g.pointId !== undefined) {
+            const d = Math.hypot(g.x - wx, g.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = { x: g.x, y: g.y, id: g.pointId };
             }
           }
         }
@@ -1383,6 +1451,7 @@ function App() {
           size: viaSize,
           layer: selectedDrawingLayer,
           type: 'via',
+          viaType: 'Via (Signal)', // Default: Via (Signal) (no power/ground connection)
         };
         setDrawingStrokes(prev => [...prev, viaStroke]);
         if (selectedDrawingLayer === 'top') {
@@ -1413,15 +1482,14 @@ function App() {
           size: padSize,
           layer: padToolLayer, // Use padToolLayer instead of selectedDrawingLayer
           type: 'pad',
+          padType: 'Pad (Signal)', // Default: Pad (Signal) (no power/ground connection)
         };
         setDrawingStrokes(prev => [...prev, padStroke]);
         return;
       }
 
       // Traces mode: connected segments by clicks, snapping to via centers unless Option/Alt key is held
-      // Pass the trace layer to the snap function so it can enforce layer constraints for pads
-      // Use traceToolLayer which is specifically for traces and is set by the layer chooser
-      const traceLayer = drawingMode === 'trace' ? (traceToolLayer || 'top') : selectedDrawingLayer;
+      // All vias, pads, power nodes, and ground nodes can be snapped to from any layer (blind vias not supported yet)
       
       // Check if this is the second click of a double-click (ignore it)
       if (isDoubleClickingTraceRef.current) {
@@ -1429,7 +1497,7 @@ function App() {
         return;
       }
       
-      const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y, traceLayer) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
       // If we snapped to an existing object, use its Node ID; otherwise generate a new one
       const pt = { id: snapped.nodeId ?? generatePointId(), x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
@@ -1529,8 +1597,21 @@ function App() {
       // Find the selected power bus
       const bus = powerBuses.find(b => b.id === selectedPowerBusId);
       if (bus) {
+        const nodeId = snapped.nodeId ?? generatePointId();
+        const powerType = `${bus.voltage} Power Node`;
+        
+        // Check for conflict: if there's already a ground node at this Node ID, show error
+        const existingGround = grounds.find(g => g.pointId === nodeId);
+        if (existingGround) {
+          setErrorDialog({
+            visible: true,
+            title: 'Node ID Conflict',
+            message: `Cannot place power node: A ground node already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
+          });
+          return;
+        }
+        
         // Place power node immediately
-        // If we snapped to an existing object, use its Node ID; otherwise generate a new one
         const p: PowerSymbol = {
           id: `power-${Date.now()}-${Math.random()}`,
           x: snapped.x,
@@ -1539,10 +1620,24 @@ function App() {
           size: brushSize,
           powerBusId: bus.id,
           layer: selectedDrawingLayer,
-          type: `${bus.voltage} Power Node`, // Auto-populate type with voltage
-          pointId: snapped.nodeId ?? generatePointId(), // Use existing Node ID if snapped, otherwise generate new one
+          type: powerType, // Auto-populate type with voltage
+          pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
         };
         setPowers(prev => [...prev, p]);
+        
+        // Update via and pad types if we snapped to an existing via or pad
+        if (snapped.nodeId !== undefined) {
+          const newViaType = determineViaType(snapped.nodeId, powerBuses);
+          const newPadType = determinePadType(snapped.nodeId, powerBuses);
+          setDrawingStrokes(prev => prev.map(s => {
+            if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+              return { ...s, viaType: newViaType };
+            } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+              return { ...s, padType: newPadType };
+            }
+            return s;
+          }));
+        }
       }
       return;
     } else if (currentTool === 'ground') {
@@ -1582,6 +1677,20 @@ function App() {
         };
       };
       const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      const nodeId = snapped.nodeId ?? generatePointId();
+      const groundType = 'Ground';
+      
+      // Check for conflict: if there's already a power node at this Node ID, show error
+      const existingPower = powers.find(p => p.pointId === nodeId);
+      if (existingPower) {
+        setErrorDialog({
+          visible: true,
+          title: 'Node ID Conflict',
+          message: `Cannot place ground node: A power node (${existingPower.type || 'Power Node'}) already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
+        });
+        return;
+      }
+      
       // If we snapped to an existing object, use its Node ID; otherwise generate a new one
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1589,13 +1698,27 @@ function App() {
         y: snapped.y,
         color: '#000000', // Ground symbols are always black
         size: toolRegistry.get('ground')?.settings.size || 18,
-        type: 'Ground Node', // Auto-populate type
-        pointId: snapped.nodeId ?? generatePointId(), // Use existing Node ID if snapped, otherwise generate new one
+        type: groundType, // Auto-populate type
+        pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
       };
       setGrounds(prev => [...prev, g]);
+      
+      // Update via and pad types if we snapped to an existing via or pad
+      if (snapped.nodeId !== undefined) {
+        const newViaType = determineViaType(snapped.nodeId, powerBuses);
+        const newPadType = determinePadType(snapped.nodeId, powerBuses);
+        setDrawingStrokes(prev => prev.map(s => {
+          if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+            return { ...s, viaType: newViaType };
+          } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+            return { ...s, padType: newPadType };
+          }
+          return s;
+        }));
+      }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -1876,13 +1999,15 @@ function App() {
 
     // Track mouse position for trace preview line
     if (currentTool === 'draw' && drawingMode === 'trace' && currentStroke.length > 0) {
-      // Helper function to snap to nearest via/pad (same as in handleCanvasMouseDown)
-      const snapToNearestViaCenter = (wx: number, wy: number, traceLayer: 'top' | 'bottom'): { x: number; y: number; nodeId?: number } => {
+      // Helper function to snap to nearest via/pad/power/ground (same as in handleCanvasMouseDown)
+      const snapToNearestViaCenter = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number; id?: number } | null = null;
+        // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
         const SNAP_THRESHOLD_WORLD = 15;
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
+            // Vias can be snapped to from any layer (they go through both layers)
             const c = s.points[0];
             const d = Math.hypot(c.x - wx, c.y - wy);
             if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) { 
@@ -1890,14 +2015,31 @@ function App() {
               bestCenter = c; 
             }
           } else if (s.type === 'pad') {
-            const padLayer = s.layer || 'top';
-            if (padLayer === traceLayer) {
-              const c = s.points[0];
-              const d = Math.hypot(c.x - wx, c.y - wy);
-              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
-                bestDist = d;
-                bestCenter = c;
-              }
+            // Pads can be snapped to from any layer (blind vias not supported yet)
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = c;
+            }
+          }
+        }
+        // Also check power and ground nodes (they can be snapped to from any layer)
+        for (const p of powers) {
+          if (p.pointId !== undefined) {
+            const d = Math.hypot(p.x - wx, p.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = { x: p.x, y: p.y, id: p.pointId };
+            }
+          }
+        }
+        for (const g of grounds) {
+          if (g.pointId !== undefined) {
+            const d = Math.hypot(g.x - wx, g.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestCenter = { x: g.x, y: g.y, id: g.pointId };
             }
           }
         }
@@ -1909,8 +2051,7 @@ function App() {
           nodeId: bestCenter?.id 
         };
       };
-      const traceLayer = traceToolLayer || 'top';
-      const snapped = !isSnapDisabled ? snapToNearestViaCenter(x, y, traceLayer) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      const snapped = !isSnapDisabled ? snapToNearestViaCenter(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
       setTracePreviewMousePos({ x: snapped.x, y: snapped.y });
     } else {
       setTracePreviewMousePos(null);
@@ -5078,6 +5219,29 @@ function App() {
 
   // Selection size slider removed; size can be set via Tools menu
 
+  // Update via and pad types when power/ground nodes change
+  // This ensures via and pad types are always correct based on Node ID connections
+  React.useEffect(() => {
+    setDrawingStrokes(prev => prev.map(stroke => {
+      if (stroke.type === 'via' && stroke.points.length > 0) {
+        const nodeId = stroke.points[0].id;
+        const newViaType = determineViaType(nodeId, powerBuses);
+        // Only update if type changed to avoid unnecessary re-renders
+        if (stroke.viaType !== newViaType) {
+          return { ...stroke, viaType: newViaType };
+        }
+      } else if (stroke.type === 'pad' && stroke.points.length > 0) {
+        const nodeId = stroke.points[0].id;
+        const newPadType = determinePadType(nodeId, powerBuses);
+        // Only update if type changed to avoid unnecessary re-renders
+        if (stroke.padType !== newPadType) {
+          return { ...stroke, padType: newPadType };
+        }
+      }
+      return stroke;
+    }));
+  }, [powers, grounds, powerBuses, determineViaType, determinePadType]);
+
   // Print function - prints only the canvas area
   const handlePrint = useCallback(() => {
     const canvas = canvasRef.current;
@@ -7527,6 +7691,100 @@ function App() {
             </div>
           )}
         </div>
+        {/* About menu */}
+        <div style={{ position: 'relative' }}>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'about' ? null : 'about'); }} 
+            style={{ 
+              padding: '6px 10px', 
+              borderRadius: 6, 
+              border: '1px solid #ddd', 
+              background: openMenu === 'about' ? '#eef3ff' : '#fff', 
+              fontWeight: 600, 
+              color: '#222'
+            }}
+          >
+            About ▾
+          </button>
+          {openMenu === 'about' && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 400, maxWidth: 600, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 16, overflowY: 'auto', zIndex: 100 }}>
+              <div style={{ marginBottom: 16 }}>
+                <h2 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '18px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
+                <p style={{ margin: '0 0 16px 0', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Purpose</h3>
+                <p style={{ margin: 0, color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+                  This tool helps engineers and hobbyists document PCB layouts by allowing you to overlay traces, vias, pads, components, and power/ground connections on top of PCB images. The tool generates netlists and schematics that can be exported to KiCad and other EDA tools.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Features</h3>
+                <ul style={{ margin: 0, paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
+                  <li>Support for <strong style={{ color: '#fff' }}>Typical 4-Layer PCBs</strong> (Top, Bottom, Ground Plane, Power Plane)</li>
+                  <li>Layer-specific drawing tools (Traces, Pads, Components) for Top and Bottom layers</li>
+                  <li>Via placement with automatic type detection (Signal, Power, Ground)</li>
+                  <li>Component placement with 24+ component types and pin connection management</li>
+                  <li>Power and Ground node placement with bus management</li>
+                  <li>Netlist generation and export (KiCad, Protel formats)</li>
+                  <li>Simple schematic export</li>
+                  <li>Project save/load with auto-save functionality</li>
+                  <li>Layer visibility controls and locking mechanisms</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Limitations</h3>
+                <ul style={{ margin: 0, paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
+                  <li>Currently supports <strong style={{ color: '#fff' }}>through-hole vias only</strong> (blind and buried vias not yet supported)</li>
+                  <li>Designed for 4-layer PCBs (can be adapted for 2-layer with some limitations)</li>
+                  <li>Manual tracing required (no automatic trace detection from images)</li>
+                  <li>Component library limited to standard through-hole and SMD types</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>4-Layer PCB Support</h3>
+                <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+                  The tool is optimized for the most common 4-layer PCB stackup:
+                </p>
+                <ul style={{ margin: '0 0 8px 0', paddingLeft: 20, color: '#ddd', fontSize: '14px', lineHeight: '1.8' }}>
+                  <li><strong style={{ color: '#fff' }}>Layer 1 (Top):</strong> Signal layer</li>
+                  <li><strong style={{ color: '#fff' }}>Layer 2 (Inner):</strong> Ground plane</li>
+                  <li><strong style={{ color: '#fff' }}>Layer 3 (Inner):</strong> Power plane</li>
+                  <li><strong style={{ color: '#fff' }}>Layer 4 (Bottom):</strong> Signal layer</li>
+                </ul>
+                <p style={{ margin: 0, color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+                  Vias automatically connect Top and Bottom layers. See the <strong style={{ color: '#fff' }}>ABOUT_VIAS.md</strong> file in the project for detailed information about via types and usage in 4-layer PCBs.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 0 }}>
+                <h3 style={{ margin: '0 0 8px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>Keyboard Shortcuts</h3>
+                <div style={{ color: '#ddd', fontSize: '13px', lineHeight: '1.8', fontFamily: 'monospace' }}>
+                  <div><strong style={{ color: '#fff' }}>S</strong> - Select tool</div>
+                  <div><strong style={{ color: '#fff' }}>V</strong> - Via tool</div>
+                  <div><strong style={{ color: '#fff' }}>D</strong> - Pad tool</div>
+                  <div><strong style={{ color: '#fff' }}>T</strong> - Trace tool</div>
+                  <div><strong style={{ color: '#fff' }}>C</strong> - Component tool</div>
+                  <div><strong style={{ color: '#fff' }}>P</strong> - Power tool</div>
+                  <div><strong style={{ color: '#fff' }}>G</strong> - Ground tool</div>
+                  <div><strong style={{ color: '#fff' }}>E</strong> - Erase tool</div>
+                  <div><strong style={{ color: '#fff' }}>H</strong> - Pan/Move tool</div>
+                  <div><strong style={{ color: '#fff' }}>Z</strong> - Zoom tool</div>
+                  <div><strong style={{ color: '#fff' }}>Esc</strong> - Return to Select tool</div>
+                  <div><strong style={{ color: '#fff' }}>Option/Alt</strong> - Disable snap-to while drawing</div>
+                  <div><strong style={{ color: '#fff' }}>+/-</strong> - Increase/Decrease size</div>
+                  <div><strong style={{ color: '#fff' }}>Cmd/Ctrl+I</strong> - Detailed Information</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         {/* File path display - right justified */}
         {currentProjectFilePath && (
           <div style={{ 
@@ -8415,6 +8673,34 @@ function App() {
               />
             </div>
           </div>
+
+          {/* Canvas welcome note - shown when no project is loaded */}
+          {!topImage && !bottomImage && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              textAlign: 'center',
+              padding: '24px 32px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              borderRadius: 8,
+              border: '2px solid #4CAF50',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              zIndex: 1,
+              maxWidth: '500px'
+            }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>
+                PCB Reverse Engineering Tool
+              </div>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '12px', lineHeight: '1.5' }}>
+                Supports <strong style={{ color: '#4CAF50' }}>Typical 4-Layer PCBs</strong>
+              </div>
+              <div style={{ fontSize: '12px', color: '#888', lineHeight: '1.4' }}>
+                See <strong style={{ color: '#0b5fff', cursor: 'pointer' }} onClick={() => setOpenMenu('about')}>About</strong> menu for more details
+              </div>
+            </div>
+          )}
 
           <canvas
             ref={canvasRef}
@@ -9414,6 +9700,8 @@ function App() {
               {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id)).map((stroke) => {
                 if (stroke.type === 'via' && stroke.points.length > 0) {
                   const point = stroke.points[0];
+                  // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
+                  const viaType = stroke.viaType || determineViaType(point.id, powerBuses);
                   return (
                     <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
@@ -9424,13 +9712,13 @@ function App() {
                           fontSize: '12px',
                           fontWeight: 500
                         }}>
-                          {stroke.type || 'unknown'}
+                          {viaType}
                         </div>
                       </div>
                       <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                         <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
                         {point.id && <div>Node ID: {point.id}</div>}
-                        <div>Layer: {stroke.layer}</div>
+                        <div>Layer: Top and Bottom</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span>Color:</span>
                           <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
@@ -9442,6 +9730,8 @@ function App() {
                   );
                 } else if (stroke.type === 'pad' && stroke.points.length > 0) {
                   const point = stroke.points[0];
+                  // Determine pad type - pads belong to only one layer (top or bottom)
+                  const padType = stroke.padType || determinePadType(point.id, powerBuses);
                   return (
                     <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
@@ -9452,7 +9742,7 @@ function App() {
                           fontSize: '12px',
                           fontWeight: 500
                         }}>
-                          {stroke.type || 'unknown'}
+                          {padType}
                         </div>
                       </div>
                       <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
@@ -10061,6 +10351,70 @@ function App() {
                 }}
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Dialog */}
+      {errorDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10004,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              setErrorDialog({ visible: false, title: '', message: '' });
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '300px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '2px solid #ff4444',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ fontSize: '24px', color: '#ff4444' }}>⚠️</div>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+                {errorDialog.title}
+              </h3>
+            </div>
+            <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.5' }}>
+              {errorDialog.message}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => setErrorDialog({ visible: false, title: '', message: '' })}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                OK
               </button>
             </div>
           </div>
