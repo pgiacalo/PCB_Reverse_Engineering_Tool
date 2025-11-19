@@ -9965,11 +9965,29 @@ function App() {
                     <div>Size: {comp.size}</div>
                     <div>Pin Count: {comp.pinCount}</div>
                     {comp.pinConnections && comp.pinConnections.length > 0 && (
-                      <div style={{ marginTop: '4px' }}>
-                        <div>Pin Connections:</div>
-                        {comp.pinConnections.map((conn, idx) => (
-                          <div key={idx} style={{ marginLeft: '12px' }}>Pin {idx + 1}: {conn ? `Node ${conn}` : '(not connected)'}</div>
-                        ))}
+                      <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 600 }}>Pin Connections:</div>
+                        <table style={{ 
+                          width: '100%', 
+                          borderCollapse: 'collapse', 
+                          fontSize: '10px',
+                          border: '1px solid #ddd'
+                        }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f0f0f0' }}>
+                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
+                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {comp.pinConnections.map((conn, idx) => (
+                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>
+                                <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{conn || '(not connected)'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                     {'manufacturer' in comp && (comp as any).manufacturer && (
