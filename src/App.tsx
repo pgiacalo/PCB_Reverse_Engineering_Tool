@@ -42,7 +42,7 @@ interface PCBImage {
 }
 
 interface DrawingPoint {
-  id: number; // globally unique point ID (used for netlist connections)
+  id?: number; // globally unique point ID (used for netlist connections) - only assigned when point connects to a via or pad
   x: number;
   y: number;
 }
@@ -1050,7 +1050,7 @@ function App() {
             if (d <= hitDistance && d < bestDist) {
               bestDist = d;
               // Use the globally unique point ID directly
-              bestPointId = c.id;
+              bestPointId = c.id ?? null;
               bestStroke = s;
             }
           }
@@ -1498,8 +1498,13 @@ function App() {
       }
       
       const snapped = (drawingMode === 'trace' && !isSnapDisabled) ? snapToNearestViaCenter(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
-      // If we snapped to an existing object, use its Node ID; otherwise generate a new one
-      const pt = { id: snapped.nodeId ?? generatePointId(), x: snapped.x, y: snapped.y };
+      // IMPORTANT: Only assign Node ID if we snapped to a via or pad (or power/ground node).
+      // Other trace points are just x,y coordinates without Node IDs.
+      // From a reverse engineering perspective, only nodes (vias/pads/power/ground) have value
+      // in creating a schematic, as they define the network of parts, connections, voltages, etc.
+      const pt: DrawingPoint = snapped.nodeId !== undefined 
+        ? { id: snapped.nodeId, x: snapped.x, y: snapped.y }
+        : { x: snapped.x, y: snapped.y };
       setCurrentStroke(prev => (prev.length === 0 ? [pt] : [...prev, pt]));
       lastTraceClickTimeRef.current = Date.now();
       // Clear preview mouse position when adding a point
@@ -4768,7 +4773,7 @@ function App() {
           const hitDistance = Math.max(radius, hitTolerance);
           if (d <= hitDistance && d < bestDist) {
             bestDist = d;
-            bestPointId = c.id;
+            bestPointId = c.id ?? null;
             bestStroke = s;
           }
         }
@@ -5223,14 +5228,14 @@ function App() {
   // This ensures via and pad types are always correct based on Node ID connections
   React.useEffect(() => {
     setDrawingStrokes(prev => prev.map(stroke => {
-      if (stroke.type === 'via' && stroke.points.length > 0) {
+      if (stroke.type === 'via' && stroke.points.length > 0 && stroke.points[0].id !== undefined) {
         const nodeId = stroke.points[0].id;
         const newViaType = determineViaType(nodeId, powerBuses);
         // Only update if type changed to avoid unnecessary re-renders
         if (stroke.viaType !== newViaType) {
           return { ...stroke, viaType: newViaType };
         }
-      } else if (stroke.type === 'pad' && stroke.points.length > 0) {
+      } else if (stroke.type === 'pad' && stroke.points.length > 0 && stroke.points[0].id !== undefined) {
         const nodeId = stroke.points[0].id;
         const newPadType = determinePadType(nodeId, powerBuses);
         // Only update if type changed to avoid unnecessary re-renders
@@ -7305,21 +7310,6 @@ function App() {
               }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Open Project…</button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button 
-                onClick={() => { if (!isReadOnlyMode) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Load Top PCB…
-              </button>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Load Bottom PCB…
-              </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button 
                 onClick={() => { if (!isReadOnlyMode) { void saveProject(); setOpenMenu(null); } }} 
                 disabled={isReadOnlyMode}
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
@@ -7346,7 +7336,8 @@ function App() {
               >
                 Auto Save…
               </button>
-              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+              {/* Export options hidden for now - not yet working correctly */}
+              {/* <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button
                 onClick={() => {
                   if (!isReadOnlyMode) {
@@ -7382,7 +7373,7 @@ function App() {
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
               >
                 Export Simple Schematic…
-              </button>
+              </button> */}
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
               <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
@@ -7410,6 +7401,22 @@ function App() {
           </button>
           {openMenu === 'transform' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
+              <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Load Images</div>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Load Top PCB…
+              </button>
+              <button 
+                onClick={() => { if (!isReadOnlyMode) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
+                disabled={isReadOnlyMode}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              >
+                Load Bottom PCB…
+              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
               <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
               <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
@@ -8690,14 +8697,17 @@ function App() {
               zIndex: 1,
               maxWidth: '500px'
             }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '8px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, color: '#333', marginBottom: '12px' }}>
                 PCB Reverse Engineering Tool
               </div>
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '12px', lineHeight: '1.5' }}>
+              <div style={{ fontSize: '14px', color: '#666', marginBottom: '16px', lineHeight: '1.5' }}>
                 Supports <strong style={{ color: '#4CAF50' }}>Typical 4-Layer PCBs</strong>
               </div>
-              <div style={{ fontSize: '12px', color: '#888', lineHeight: '1.4' }}>
-                See <strong style={{ color: '#0b5fff', cursor: 'pointer' }} onClick={() => setOpenMenu('about')}>About</strong> menu for more details
+              <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5' }}>
+                Use the <strong>File</strong> menu to start a new project.
+              </div>
+              <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5' }}>
+                Use the <strong>Images</strong> menu to load PCB photos.
               </div>
             </div>
           )}
@@ -9379,7 +9389,6 @@ function App() {
           
           {!topImage && !bottomImage && (
             <div className="placeholder">
-              <p>Use the File menu to load your PCB images or to open an existing project file.</p>
             </div>
           )}
 
@@ -9701,7 +9710,8 @@ function App() {
                 if (stroke.type === 'via' && stroke.points.length > 0) {
                   const point = stroke.points[0];
                   // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
-                  const viaType = stroke.viaType || determineViaType(point.id, powerBuses);
+                  // Vias always have an id, so this is safe
+                  const viaType = stroke.viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
                   return (
                     <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
@@ -9731,7 +9741,8 @@ function App() {
                 } else if (stroke.type === 'pad' && stroke.points.length > 0) {
                   const point = stroke.points[0];
                   // Determine pad type - pads belong to only one layer (top or bottom)
-                  const padType = stroke.padType || determinePadType(point.id, powerBuses);
+                  // Pads always have an id, so this is safe
+                  const padType = stroke.padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
                   return (
                     <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
@@ -10651,7 +10662,7 @@ function App() {
               }}
               autoFocus
             >
-              <option value="0.5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 seconds</option>
+              <option value="1" style={{ background: '#1f1f24', color: '#f2f2f2' }}>1 minute</option>
               <option value="5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>5 minutes</option>
               <option value="10" style={{ background: '#1f1f24', color: '#f2f2f2' }}>10 minutes</option>
               <option value="20" style={{ background: '#1f1f24', color: '#f2f2f2' }}>20 minutes</option>
