@@ -21,46 +21,31 @@ import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
+import {
+  useDrawing,
+  useSelection,
+  useTransform,
+  useImage,
+  useView,
+  useComponents,
+  usePowerGround,
+  useLayerSettings,
+  useToolRegistry,
+  useLocks,
+  useDialogs,
+  useFileOperations,
+  type DrawingPoint,
+  type DrawingStroke,
+  type PCBImage,
+  type PowerBus,
+  type PowerSymbol,
+  type GroundSymbol,
+  type Tool,
+  type Layer,
+  type ToolSettings,
+  type ToolDefinition,
+} from './hooks';
 import './App.css';
-
-interface PCBImage {
-  url: string;
-  name: string;
-  width: number;
-  height: number;
-  // Persistable image content for Save/Load (data URL)
-  dataUrl?: string;
-  x: number;
-  y: number;
-  scale: number;
-  rotation: number;
-  flipX: boolean;
-  flipY: boolean;
-  // Skew (keystone) angles in radians; applied as affine shear
-  skewX?: number;
-  skewY?: number;
-  // Keystone (perspective-like taper) in radians for vertical and horizontal
-  keystoneV?: number;
-  keystoneH?: number;
-  bitmap?: ImageBitmap | null;
-}
-
-interface DrawingPoint {
-  id?: number; // globally unique point ID (used for netlist connections) - only assigned when point connects to a via or pad
-  x: number;
-  y: number;
-}
-
-interface DrawingStroke {
-  id: string;
-  points: DrawingPoint[];
-  color: string;
-  size: number;
-  layer: 'top' | 'bottom';
-  type?: 'trace' | 'via' | 'pad';
-  viaType?: string; // For vias: "Via (Signal)", "Via (Ground)", "Via (+5VDC Power Node)", etc.
-  padType?: string; // For pads: "Pad (Signal)", "Pad (Ground)", "Pad (+5VDC Power Node)", etc.
-}
 
 // Independent stacks for saved/managed drawing objects
 interface Via {
@@ -95,35 +80,7 @@ interface TraceSegment {
 }
 
 // PCBComponent is now imported from './types'
-interface GroundSymbol {
-  id: string;
-  x: number;
-  y: number;
-  color: string;
-  size: number;
-  type?: string; // Type of ground symbol (e.g., "GND", "AGND", "DGND", etc.)
-  pointId?: number; // globally unique point ID (for netlist connections)
-}
-interface PowerBus {
-  id: string;
-  name: string; // e.g., "3.3VDC", "+5V", "+12V", "AC_120V"
-  voltage: string; // e.g., "3.3VDC", "+5V", "+12V", "AC_120V"
-  color: string; // Display color for this power bus
-}
-
-interface PowerSymbol {
-  id: string;
-  x: number;
-  y: number;
-  color: string;
-  size: number;
-  powerBusId: string; // Reference to which power bus this node belongs to
-  layer: 'top' | 'bottom'; // Layer on which the power node is placed
-  type?: string; // Type of power symbol (e.g., "VCC", "VDD", "VSS", etc.)
-  pointId?: number; // globally unique point ID (for netlist connections)
-}
-type ViewMode = 'top' | 'bottom' | 'overlay';
-type Tool = 'none' | 'select' | 'draw' | 'erase' | 'transform' | 'magnify' | 'pan' | 'component' | 'ground' | 'power';
+// GroundSymbol, PowerBus, PowerSymbol, ViewMode, and Tool types are now imported from hooks
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: ComponentType): string => {
@@ -136,29 +93,7 @@ const getDefaultAbbreviation = (componentType: ComponentType): string => {
   return firstPrefix.substring(0, 1).toUpperCase();
 };
 
-// Tool settings interface
-interface ToolSettings {
-  color: string;
-  size: number;
-}
-
-// Layer type
-type Layer = 'top' | 'bottom';
-
-// Tool definition interface - each tool has its own attributes including settings
-interface ToolDefinition {
-  id: string; // Unique identifier: 'select', 'trace', 'via', 'component', 'ground', etc.
-  name: string; // Display name
-  toolType: Tool; // The underlying tool type
-  drawingMode?: 'trace' | 'via' | 'pad'; // For draw tools, which mode
-  icon?: string; // Icon/symbol for the tool
-  shortcut?: string; // Keyboard shortcut
-  tooltip?: string; // Tooltip text
-  colorReflective?: boolean; // Whether icon color reflects brush color
-  settings: ToolSettings; // Legacy: current/default settings (for backward compatibility)
-  layerSettings: Map<Layer, ToolSettings>; // Layer-specific settings: Map<Layer, {color, size}>
-  defaultLayer?: 'top' | 'bottom'; // Default layer preference
-}
+// ToolSettings, Layer, ToolDefinition types are now imported from hooks
 
 // Helper functions to load/save per-tool settings from localStorage
 const loadToolSettings = (toolId: string, defaultColor: string, defaultSize: number): ToolSettings => {
@@ -342,7 +277,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     name: 'Power',
     toolType: 'power',
     icon: '⊕',
-    shortcut: 'W',
+    shortcut: 'B',
     tooltip: 'Place power node',
     colorReflective: true,
     settings: loadToolSettings('power', DEFAULT_POWER_COLOR, 26),
@@ -419,151 +354,148 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
 
 function App() {
   const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
-  const [topImage, setTopImage] = useState<PCBImage | null>(null);
-  const [bottomImage, setBottomImage] = useState<PCBImage | null>(null);
-  const [currentView, setCurrentView] = useState<ViewMode>('overlay');
-  const [transparency, setTransparency] = useState(50);
-  const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
+  
+  // Initialize hooks
+  const image = useImage();
+  const {
+    topImage,
+    setTopImage,
+    bottomImage,
+    setBottomImage,
+    currentView,
+    setCurrentView,
+    transparency,
+    setTransparency,
+    isTransparencyCycling,
+    setIsTransparencyCycling,
+    isGrayscale,
+    setIsGrayscale,
+    isBlackAndWhiteEdges,
+    setIsBlackAndWhiteEdges,
+    isBlackAndWhiteInverted,
+    setIsBlackAndWhiteInverted,
+  } = image;
+  
   const [currentTool, setCurrentTool] = useState<Tool>('none');
-  // Load persisted defaults from localStorage
-  const loadPersistedDefaults = useCallback(() => {
-    const defaults = {
-      brushColor: localStorage.getItem('defaultBrushColor') || '#008080',
-      brushSize: parseInt(localStorage.getItem('defaultBrushSize') || '6', 10),
-      topTraceColor: localStorage.getItem('defaultTopTraceColor') || '#AA4499',
-      bottomTraceColor: localStorage.getItem('defaultBottomTraceColor') || '#F781BF',
-      topTraceSize: parseInt(localStorage.getItem('defaultTopTraceSize') || '6', 10),
-      bottomTraceSize: parseInt(localStorage.getItem('defaultBottomTraceSize') || '6', 10),
-      viaSize: parseInt(localStorage.getItem('defaultViaSize') || '26', 10),
-      viaColor: localStorage.getItem('defaultViaColor') || '#ff0000',
-      topPadColor: localStorage.getItem('defaultTopPadColor') || '#0072B2',
-      bottomPadColor: localStorage.getItem('defaultBottomPadColor') || '#56B4E9',
-      topPadSize: parseInt(localStorage.getItem('defaultTopPadSize') || '26', 10),
-      bottomPadSize: parseInt(localStorage.getItem('defaultBottomPadSize') || '26', 10),
-      topComponentColor: localStorage.getItem('defaultTopComponentColor') || '#8C564B',
-      bottomComponentColor: localStorage.getItem('defaultBottomComponentColor') || '#9C755F',
-      topComponentSize: parseInt(localStorage.getItem('defaultTopComponentSize') || '18', 10),
-      bottomComponentSize: parseInt(localStorage.getItem('defaultBottomComponentSize') || '18', 10),
-      powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
-      groundSize: parseInt(localStorage.getItem('defaultGroundSize') || '18', 10),
-    };
-    return defaults;
-  }, []);
-
-  // Save defaults to localStorage
-  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
-    if (type === 'trace' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopTraceSize', String(size));
-      } else {
-        localStorage.setItem('defaultBottomTraceSize', String(size));
-      }
-    } else if (type === 'pad' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopPadSize', String(size));
-      } else {
-        localStorage.setItem('defaultBottomPadSize', String(size));
-      }
-    } else if (type === 'component' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopComponentSize', String(size));
-      } else {
-        localStorage.setItem('defaultBottomComponentSize', String(size));
-      }
-    } else if (type === 'via') {
-      localStorage.setItem('defaultViaSize', String(size));
-    } else if (type === 'power') {
-      localStorage.setItem('defaultPowerSize', String(size));
-    } else if (type === 'ground') {
-      localStorage.setItem('defaultGroundSize', String(size));
-    } else if (type === 'brush') {
-      localStorage.setItem('defaultBrushSize', String(size));
-    }
-  }, []);
-
-  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => {
-    if (type === 'trace' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopTraceColor', color);
-      } else {
-        localStorage.setItem('defaultBottomTraceColor', color);
-      }
-    } else if (type === 'pad' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopPadColor', color);
-      } else {
-        localStorage.setItem('defaultBottomPadColor', color);
-      }
-    } else if (type === 'component' && layer) {
-      if (layer === 'top') {
-        localStorage.setItem('defaultTopComponentColor', color);
-      } else {
-        localStorage.setItem('defaultBottomComponentColor', color);
-      }
-    } else if (type === 'via') {
-      localStorage.setItem('defaultViaColor', color);
-    } else if (type === 'brush') {
-      localStorage.setItem('defaultBrushColor', color);
-    }
-  }, []);
-
-  const persistedDefaults = loadPersistedDefaults();
-  const [brushColor, setBrushColor] = useState(persistedDefaults.brushColor);
-  const [brushSize, setBrushSize] = useState(persistedDefaults.brushSize);
-  // Trace colors per layer
-  const [topTraceColor, setTopTraceColor] = useState(persistedDefaults.topTraceColor);
-  const [bottomTraceColor, setBottomTraceColor] = useState(persistedDefaults.bottomTraceColor);
-  // Trace sizes per layer
-  const [topTraceSize, setTopTraceSize] = useState(persistedDefaults.topTraceSize);
-  const [bottomTraceSize, setBottomTraceSize] = useState(persistedDefaults.bottomTraceSize);
-  // Pad colors and sizes per layer
-  const [topPadColor, setTopPadColor] = useState(persistedDefaults.topPadColor);
-  const [bottomPadColor, setBottomPadColor] = useState(persistedDefaults.bottomPadColor);
-  const [topPadSize, setTopPadSize] = useState(persistedDefaults.topPadSize);
-  const [bottomPadSize, setBottomPadSize] = useState(persistedDefaults.bottomPadSize);
-  // Component colors and sizes per layer
-  const [topComponentColor, setTopComponentColor] = useState(persistedDefaults.topComponentColor);
-  const [bottomComponentColor, setBottomComponentColor] = useState(persistedDefaults.bottomComponentColor);
-  const [topComponentSize, setTopComponentSize] = useState(persistedDefaults.topComponentSize);
-  const [bottomComponentSize, setBottomComponentSize] = useState(persistedDefaults.bottomComponentSize);
-  const [showColorPicker, setShowColorPicker] = useState(false);
+  // Layer settings hook
+  const layerSettings = useLayerSettings();
+  const {
+    brushColor,
+    setBrushColor,
+    brushSize,
+    setBrushSize,
+    topTraceColor,
+    setTopTraceColor,
+    bottomTraceColor,
+    setBottomTraceColor,
+    topTraceSize,
+    setTopTraceSize,
+    bottomTraceSize,
+    setBottomTraceSize,
+    topPadColor,
+    setTopPadColor,
+    bottomPadColor,
+    setBottomPadColor,
+    topPadSize,
+    setTopPadSize,
+    bottomPadSize,
+    setBottomPadSize,
+    topComponentColor,
+    setTopComponentColor,
+    bottomComponentColor,
+    setBottomComponentColor,
+    topComponentSize,
+    setTopComponentSize,
+    bottomComponentSize,
+    setBottomComponentSize,
+    saveDefaultSize,
+    saveDefaultColor,
+  } = layerSettings;
   
-  // Tool registry - centralized tool definitions with settings as attributes
-  const [toolRegistry, setToolRegistry] = useState<Map<string, ToolDefinition>>(() => createToolRegistry());
+  // Drawing hook
+  const drawing = useDrawing();
+  const {
+    drawingStrokes,
+    setDrawingStrokes,
+    isDrawing,
+    setIsDrawing,
+    currentStroke,
+    setCurrentStroke,
+    tracePreviewMousePos,
+    setTracePreviewMousePos,
+    drawingMode,
+    setDrawingMode,
+    selectedDrawingLayer,
+    setSelectedDrawingLayer,
+    currentStrokeRef,
+    lastTraceClickTimeRef,
+    isDoubleClickingTraceRef,
+  } = drawing;
   
-  const [drawingStrokes, setDrawingStrokes] = useState<DrawingStroke[]>([]);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
-  const [tracePreviewMousePos, setTracePreviewMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [selectedImageForTransform, setSelectedImageForTransform] = useState<'top' | 'bottom' | 'both' | null>(null);
-  const [isTransforming, setIsTransforming] = useState(false);
-  const [transformStartPos, setTransformStartPos] = useState<{ x: number; y: number } | null>(null);
-  const [transformMode, setTransformMode] = useState<'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone'>('nudge');
-  const [isGrayscale, setIsGrayscale] = useState(false);
-  const [isBlackAndWhiteEdges, setIsBlackAndWhiteEdges] = useState(false);
-  const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
-  const [selectedDrawingLayer, setSelectedDrawingLayer] = useState<'top' | 'bottom'>('top');
-  const [showBothLayers, setShowBothLayers] = useState(false);
-  const [isShiftConstrained, setIsShiftConstrained] = useState(false);
-  const [viewScale, setViewScale] = useState(1);
-  const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [drawingMode, setDrawingMode] = useState<'trace' | 'via' | 'pad'>('trace');
+  // Transform hook
+  const transform = useTransform();
+  const {
+    selectedImageForTransform,
+    setSelectedImageForTransform,
+    isTransforming,
+    setIsTransforming,
+    transformStartPos,
+    setTransformStartPos,
+    transformMode,
+    setTransformMode,
+  } = transform;
   
-  // Save current settings when switching away from a tool and restore new tool's settings
+  // View hook
+  const view = useView();
+  const {
+    viewScale,
+    setViewScale,
+    viewPan,
+    setViewPan,
+    isShiftConstrained,
+    setIsShiftConstrained,
+    showBothLayers,
+    setShowBothLayers,
+  } = view;
+  
+  // Tool-specific layer defaults (persist until tool re-selected)
+  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
+  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
+  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
+  
+  // Tool registry hook
+  const toolRegistryHook = useToolRegistry(
+    createToolRegistry,
+    currentTool,
+    drawingMode,
+    brushColor,
+    brushSize,
+    topTraceColor,
+    bottomTraceColor,
+    topTraceSize,
+    bottomTraceSize,
+    topPadColor,
+    bottomPadColor,
+    topPadSize,
+    bottomPadSize,
+    topComponentColor,
+    bottomComponentColor,
+    topComponentSize,
+    bottomComponentSize,
+    traceToolLayer,
+    padToolLayer,
+    componentToolLayer
+  );
+  const {
+    toolRegistry,
+    setToolRegistry,
+    getCurrentToolDef,
+  } = toolRegistryHook;
+  
+  // Refs for tracking previous tool state (since hook doesn't export them)
   const prevToolIdRef = React.useRef<string | null>(null);
   const prevBrushColorRef = React.useRef<string>(brushColor);
   const prevBrushSizeRef = React.useRef<number>(brushSize);
-  
-  // Helper to get current tool definition
-  const getCurrentToolDef = useCallback((registry: Map<string, ToolDefinition>) => {
-    if (currentTool === 'draw' && drawingMode === 'trace') return registry.get('trace');
-    if (currentTool === 'draw' && drawingMode === 'via') return registry.get('via');
-    if (currentTool === 'draw' && drawingMode === 'pad') return registry.get('pad');
-    if (currentTool === 'component') return registry.get('component');
-    if (currentTool === 'power') return registry.get('power');
-    if (currentTool === 'ground') return registry.get('ground');
-    return null;
-  }, [currentTool, drawingMode]);
   
   React.useEffect(() => {
     // Use functional update to avoid dependency on toolRegistry
@@ -720,14 +652,7 @@ function App() {
   const [, setViaOrderTop] = useState<string[]>([]);
   const [, setViaOrderBottom] = useState<string[]>([]);
   
-  // Lock states
-  const [areImagesLocked, setAreImagesLocked] = useState(false);
-  const [areViasLocked, setAreViasLocked] = useState(false);
-  const [arePadsLocked, setArePadsLocked] = useState(false);
-  const [areTracesLocked, setAreTracesLocked] = useState(false);
-  const [areComponentsLocked, setAreComponentsLocked] = useState(false);
-  const [areGroundNodesLocked, setAreGroundNodesLocked] = useState(false);
-  const [arePowerNodesLocked, setArePowerNodesLocked] = useState(false);
+  // Lock states are now managed by useLocks hook (see above)
   const [, setTraceOrderTop] = useState<string[]>([]);
   const [, setTraceOrderBottom] = useState<string[]>([]);
   // Independent lists (stacks) derived from drawingStrokes
@@ -738,45 +663,131 @@ function App() {
   const [tracesBottom, setTracesBottom] = useState<TraceSegment[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const currentStrokeRef = useRef<DrawingPoint[]>([]);
-  const lastTraceClickTimeRef = useRef<number>(0);
-  const isDoubleClickingTraceRef = useRef<boolean>(false);
   // Note: Point IDs are now generated globally via generatePointId() from coordinates.ts
   // This ensures globally unique IDs across all vias, traces, and connection points
-  const [componentsTop, setComponentsTop] = useState<PCBComponent[]>([]);
-  const [componentsBottom, setComponentsBottom] = useState<PCBComponent[]>([]);
-  const [selectedComponentIds, setSelectedComponentIds] = useState<Set<string>>(new Set());
-  const [selectedPowerIds, setSelectedPowerIds] = useState<Set<string>>(new Set());
-  const [selectedGroundIds, setSelectedGroundIds] = useState<Set<string>>(new Set());
-  const [componentEditor, setComponentEditor] = useState<{
-    visible: boolean;
-    layer: 'top' | 'bottom';
-    id: string;
-    designator: string;
-    abbreviation: string;
-    manufacturer: string;
-    partNumber: string;
-    pinCount: number;
-    x: number;
-    y: number;
-  } | null>(null);
-  // Pin connection mode: when a pin is clicked in the editor, track which component and pin
-  const [connectingPin, setConnectingPin] = useState<{ componentId: string; pinIndex: number } | null>(null);
-  // Component dialog drag state
-  const [componentDialogPosition, setComponentDialogPosition] = useState<{ x: number; y: number } | null>(null);
-  const [isDraggingDialog, setIsDraggingDialog] = useState(false);
-  const [dialogDragOffset, setDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
-  // Power properties editor
-  const [powerEditor, setPowerEditor] = useState<{
-    visible: boolean;
-    id: string;
-    layer: 'top' | 'bottom';
-    x: number;
-    y: number;
-    size: number;
-    color: string;
-    powerBusId: string;
-  } | null>(null);
+  
+  // Selection hook
+  const selection = useSelection();
+  const {
+    selectedIds,
+    setSelectedIds,
+    isSelecting,
+    setIsSelecting,
+    selectedComponentIds,
+    setSelectedComponentIds,
+    selectedPowerIds,
+    setSelectedPowerIds,
+    selectedGroundIds,
+    setSelectedGroundIds,
+  } = selection;
+  
+  // Components hook
+  const components = useComponents();
+  const {
+    componentsTop,
+    setComponentsTop,
+    componentsBottom,
+    setComponentsBottom,
+    componentEditor,
+    setComponentEditor,
+    connectingPin,
+    setConnectingPin,
+    componentDialogPosition,
+    setComponentDialogPosition,
+    isDraggingDialog,
+    setIsDraggingDialog,
+    dialogDragOffset,
+    setDialogDragOffset,
+  } = components;
+  
+  // Power/Ground hook
+  const powerGround = usePowerGround();
+  const {
+    powerBuses,
+    setPowerBuses,
+    powerSymbols,
+    setPowerSymbols,
+    groundSymbols,
+    setGroundSymbols,
+    powerEditor,
+    setPowerEditor,
+    // groundEditor and setGroundEditor are available but not currently used
+    // groundEditor,
+    // setGroundEditor,
+  } = powerGround;
+  
+  // Locks hook
+  const locks = useLocks();
+  const {
+    areImagesLocked,
+    setAreImagesLocked,
+    areViasLocked,
+    setAreViasLocked,
+    arePadsLocked,
+    setArePadsLocked,
+    areTracesLocked,
+    setAreTracesLocked,
+    areComponentsLocked,
+    setAreComponentsLocked,
+    areGroundNodesLocked,
+    setAreGroundNodesLocked,
+    arePowerNodesLocked,
+    setArePowerNodesLocked,
+  } = locks;
+  
+  // Dialogs hook
+  const dialogs = useDialogs();
+  const {
+    openMenu,
+    setOpenMenu,
+    setSizeDialog,
+    setSetSizeDialog,
+    autoSaveDialog,
+    setAutoSaveDialog,
+    autoSavePromptDialog,
+    setAutoSavePromptDialog,
+    debugDialog,
+    setDebugDialog,
+    errorDialog,
+    setErrorDialog,
+    newProjectDialog,
+    setNewProjectDialog,
+    newProjectSetupDialog,
+    setNewProjectSetupDialog,
+    saveAsDialog,
+    setSaveAsDialog,
+    showColorPicker,
+    setShowColorPicker,
+    // showWelcomeDialog and setShowWelcomeDialog are available but not currently used
+    // showWelcomeDialog,
+    // setShowWelcomeDialog,
+  } = dialogs;
+  
+  // File operations hook
+  const fileOperations = useFileOperations();
+  const {
+    autoSaveEnabled,
+    setAutoSaveEnabled,
+    autoSaveInterval,
+    setAutoSaveInterval,
+    autoSaveDirHandle,
+    setAutoSaveDirHandle,
+    autoSaveBaseName,
+    setAutoSaveBaseName,
+    currentProjectFilePath,
+    setCurrentProjectFilePath,
+    projectDirHandle,
+    setProjectDirHandle,
+    projectName,
+    setProjectName,
+    autoSaveFileHistory,
+    setAutoSaveFileHistory,
+    currentFileIndex,
+    setCurrentFileIndex,
+    autoSaveIntervalRef,
+    hasChangesSinceLastAutoSaveRef,
+    prevAutoSaveEnabledRef,
+  } = fileOperations;
   const hScrollRef = useRef<HTMLDivElement>(null);
   const vScrollRef = useRef<HTMLDivElement>(null);
   const hScrollContentRef = useRef<HTMLDivElement>(null);
@@ -795,62 +806,11 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
-  const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | 'about' | null>(null);
-  // Removed unused showSetSizeSubmenu state
-  // Set Size dialog state
-  const [setSizeDialog, setSetSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 6 });
+  // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const setSizeInputRef = useRef<HTMLInputElement>(null);
-  // Auto Save dialog state
-  const [autoSaveDialog, setAutoSaveDialog] = useState<{ visible: boolean; interval: number | null }>({ visible: false, interval: 5 });
-  const [autoSavePromptDialog, setAutoSavePromptDialog] = useState<{ visible: boolean; source: 'new' | 'open' | null }>({ visible: false, source: null });
-  const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
-  const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
-  const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
-  // New project setup dialog (for project name and directory selection)
-  const [newProjectSetupDialog, setNewProjectSetupDialog] = useState<{ 
-    visible: boolean; 
-    projectName: string; 
-    locationPath: string; 
-    locationHandle: FileSystemDirectoryHandle | null;
-  }>({ 
-    visible: false, 
-    projectName: '', 
-    locationPath: '',
-    locationHandle: null,
-  });
   const newProjectNameInputRef = useRef<HTMLInputElement>(null);
-  // Save As dialog (for file name and directory selection)
-  const [saveAsDialog, setSaveAsDialog] = useState<{ 
-    visible: boolean; 
-    filename: string; 
-    locationPath: string; 
-    locationHandle: FileSystemDirectoryHandle | null;
-  }>({ 
-    visible: false, 
-    filename: '', 
-    locationPath: '',
-    locationHandle: null,
-  });
   const saveAsFilenameInputRef = useRef<HTMLInputElement>(null);
-  // Auto Save state - default to disabled, user must enable it
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
-  const [autoSaveInterval, setAutoSaveInterval] = useState<number | null>(1); // Interval in minutes, default 1 minute
-  const [autoSaveDirHandle, setAutoSaveDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [autoSaveBaseName, setAutoSaveBaseName] = useState<string>('');
-  const autoSaveIntervalRef = useRef<number | null>(null);
-  // Track if there have been changes since the last auto save
-  const hasChangesSinceLastAutoSaveRef = useRef<boolean>(false);
-  // Track previous autoSaveEnabled state to detect when it transitions from disabled to enabled
-  const prevAutoSaveEnabledRef = useRef<boolean>(false);
-  // Track current project file path/name
-  const [currentProjectFilePath, setCurrentProjectFilePath] = useState<string>('');
-  // Project directory and name for new projects
-  const [projectDirHandle, setProjectDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [projectName, setProjectName] = useState<string>('pcb_project');
-  // Track auto-saved file history for navigation
-  const [autoSaveFileHistory, setAutoSaveFileHistory] = useState<string[]>([]);
-  const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const topThumbRef = useRef<HTMLCanvasElement>(null);
   const bottomThumbRef = useRef<HTMLCanvasElement>(null);
@@ -867,18 +827,25 @@ function App() {
   const [showBottomComponents, setShowBottomComponents] = useState(true);
   // Power layer
   const [showPowerLayer, setShowPowerLayer] = useState(true);
-  const [powers, setPowers] = useState<PowerSymbol[]>([]);
-  // Power bus definitions
-  const [powerBuses, setPowerBuses] = useState<PowerBus[]>([
-    { id: 'default-3v3', name: '+3.3V', voltage: '+3.3VDC', color: '#ff6600' },
-    { id: 'default-5v', name: '+5V', voltage: '+5VDC', color: '#ff0000' },
-  ]);
+  // Power and ground symbols are now managed by usePowerGround hook (see above)
+  // Use powerSymbols, groundSymbols, and powerBuses from the hook
+  const powers = powerSymbols;
+  const grounds = groundSymbols;
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
-  const [grounds, setGrounds] = useState<GroundSymbol[]>([]);
+  
+  // Initialize power buses with defaults if empty
+  React.useEffect(() => {
+    if (powerBuses.length === 0) {
+      setPowerBuses([
+        { id: 'default-3v3', name: '+3.3V', voltage: '+3.3VDC', color: '#ff6600' },
+        { id: 'default-5v', name: '+5V', voltage: '+5VDC', color: '#ff0000' },
+      ]);
+    }
+  }, [powerBuses.length, setPowerBuses]);
   
   // Helper function to determine via type based on Node ID connections
   // Rules:
@@ -930,13 +897,11 @@ function App() {
     return 'Pad (Signal)';
   }, [powers, grounds]);
   
-  // Tool-specific layer defaults (persist until tool re-selected)
-  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
+  // Tool-specific layer defaults are now declared above (before useToolRegistry hook)
   // Show chooser popovers only when tool is (re)selected
   const [showTraceLayerChooser, setShowTraceLayerChooser] = useState(false);
   const traceChooserRef = useRef<HTMLDivElement>(null);
   // Pad layer chooser (like trace layer chooser)
-  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
   const [showPadLayerChooser, setShowPadLayerChooser] = useState(false);
   const padChooserRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
@@ -945,15 +910,11 @@ function App() {
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
   const componentTypeChooserRef = useRef<HTMLDivElement>(null);
   const componentLayerChooserRef = useRef<HTMLDivElement>(null);
-  // Component layer chooser (like pad/trace layer chooser)
-  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   
   const [isSnapDisabled, setIsSnapDisabled] = useState(false); // Control key disables snap-to
-  // Selection state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isSelecting, setIsSelecting] = useState(false);
+  // Selection state (selectedIds, isSelecting are now provided by useSelection hook - see above)
   const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null);
   const [selectRect, setSelectRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   // (Open Project uses native picker or hidden input; no overlay)
@@ -1655,7 +1616,7 @@ function App() {
           type: powerType, // Auto-populate type with voltage
           pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
         };
-        setPowers(prev => [...prev, p]);
+        setPowerSymbols(prev => [...prev, p]);
         
         // Update via and pad types if we snapped to an existing via or pad
         if (snapped.nodeId !== undefined) {
@@ -1734,7 +1695,7 @@ function App() {
         type: groundType, // Auto-populate type
         pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
       };
-      setGrounds(prev => [...prev, g]);
+      setGroundSymbols(prev => [...prev, g]);
       
       // Update via and pad types if we snapped to an existing via or pad
       if (snapped.nodeId !== undefined) {
@@ -2205,7 +2166,7 @@ function App() {
         // Also erase power symbols intersecting the eraser square
         // Don't erase power nodes if locked
         if (!arePowerNodesLocked) {
-          setPowers(prev => {
+          setPowerSymbols(prev => {
             const half = brushSize / 2;
             const minX = x - half;
             const maxX = x + half;
@@ -2226,7 +2187,7 @@ function App() {
         // Also erase ground symbols intersecting the eraser square
         // Don't erase ground if locked
         if (!areGroundNodesLocked) {
-          setGrounds(prev => {
+          setGroundSymbols(prev => {
             const half = brushSize / 2;
             const minX = x - half;
             const maxX = x + half;
@@ -3546,12 +3507,12 @@ function App() {
       if (selectedPowerIds.size > 0) {
         const newSize = (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) + 1;
         saveDefaultSize('power', newSize);
-        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
+        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
       }
       if (selectedGroundIds.size > 0) {
         const newSize = (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) + 1;
         saveDefaultSize('ground', newSize);
-        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
+        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
       }
     } else {
       setBrushSize(b => {
@@ -3622,12 +3583,12 @@ function App() {
       if (selectedPowerIds.size > 0) {
         const newSize = Math.max(1, (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) - 1);
         saveDefaultSize('power', newSize);
-        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
+        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
       }
       if (selectedGroundIds.size > 0) {
         const newSize = Math.max(1, (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) - 1);
         saveDefaultSize('ground', newSize);
-        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
+        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
       }
     } else {
       setBrushSize(b => {
@@ -3713,11 +3674,11 @@ function App() {
       }
       if (selectedPowerIds.size > 0) {
         saveDefaultSize('power', sz);
-        setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: sz } : p));
+        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: sz } : p));
       }
       if (selectedGroundIds.size > 0) {
         saveDefaultSize('ground', sz);
-        setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: sz } : g));
+        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: sz } : g));
       }
     } else {
       setBrushSize(sz);
@@ -4080,7 +4041,7 @@ function App() {
         if (arePowerNodesLocked) {
           alert('Cannot delete: Power nodes are locked. Unlock power nodes to delete them.');
         } else {
-          setPowers(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
+          setPowerSymbols(prev => prev.filter(p => !selectedPowerIds.has(p.id)));
           setSelectedPowerIds(new Set());
         }
       }
@@ -4089,7 +4050,7 @@ function App() {
         if (areGroundNodesLocked) {
           alert('Cannot delete: Ground nodes are locked. Unlock ground nodes to delete them.');
         } else {
-          setGrounds(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
+          setGroundSymbols(prev => prev.filter(g => !selectedGroundIds.has(g.id)));
           setSelectedGroundIds(new Set());
         }
       }
@@ -4107,7 +4068,7 @@ function App() {
       
       // Power tool undo: remove last power symbol in reverse order
       if (currentTool === 'power') {
-        setPowers(prev => {
+        setPowerSymbols(prev => {
           if (prev.length === 0) return prev;
           return prev.slice(0, -1); // Remove last power symbol
         });
@@ -4116,7 +4077,7 @@ function App() {
       
       // Ground tool undo: remove last ground symbol in reverse order
       if (currentTool === 'ground') {
-        setGrounds(prev => {
+        setGroundSymbols(prev => {
           if (prev.length === 0) return prev;
           return prev.slice(0, -1); // Remove last ground symbol
         });
@@ -4213,8 +4174,8 @@ function App() {
             e.preventDefault();
             setCurrentTool('select');
             return;
-          case 'w':
-          case 'W':
+          case 'b':
+          case 'B':
             e.preventDefault();
             setCurrentTool('power');
             return;
@@ -5106,7 +5067,7 @@ function App() {
       
       // Use via color from toolRegistry
       const viaDef = toolRegistry.get('via');
-      const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
+      const viaColor = viaDef?.settings.color || localStorage.getItem('defaultViaColor') || '#ff0000' || brushColor;
       
       // Draw annulus using even-odd fill rule
       ctx.fillStyle = viaColor;
@@ -5311,7 +5272,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, persistedDefaults, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -6291,8 +6252,8 @@ function App() {
     setDrawingStrokes([]);
     setComponentsTop([]);
     setComponentsBottom([]);
-    setPowers([]);
-    setGrounds([]);
+    setPowerSymbols([]);
+    setGroundSymbols([]);
     setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
@@ -6913,7 +6874,7 @@ function App() {
             }
             return isValid;
           });
-        setGrounds(validGrounds);
+        setGroundSymbols(validGrounds);
       }
       // Load power buses first (needed for legacy power node migration)
       let busesToUse = powerBuses; // Default buses
@@ -6950,7 +6911,7 @@ function App() {
             }
             return isValid;
           });
-        setPowers(powersWithBusId);
+        setPowerSymbols(powersWithBusId);
       }
       // Reset change tracking for auto save after loading project
       hasChangesSinceLastAutoSaveRef.current = false;
@@ -7438,7 +7399,7 @@ function App() {
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                 {(() => {
                   const viaDef = toolRegistry.get('via');
-                  const viaColor = viaDef?.settings.color || persistedDefaults.viaColor || brushColor;
+                  const viaColor = viaDef?.settings.color || localStorage.getItem('defaultViaColor') || '#ff0000' || brushColor;
                   return (
                     <>
                       <circle cx="12" cy="12" r="8" fill="none" stroke={viaColor} strokeWidth="3" />
@@ -7814,10 +7775,10 @@ function App() {
                           setComponentsBottom(prev => prev.map(cm => selectedComponentIds.has(cm.id) ? { ...cm, color: c } : cm));
                         }
                         if (selectedPowerIds.size > 0) {
-                          setPowers(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, color: c } : p));
+                          setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, color: c } : p));
                         }
                         if (selectedGroundIds.size > 0) {
-                          setGrounds(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, color: c } : g));
+                          setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, color: c } : g));
                         }
                       }}
                         title={c}
@@ -8588,8 +8549,87 @@ function App() {
                     </div>
                   </div>
                   
-                  {/* Type-specific properties would go here - for now, just show basic ones */}
-                  {/* TODO: Add type-specific property fields based on componentType */}
+                  {/* Orientation - on one line */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
+                    <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Orientation:
+                    </label>
+                    <select
+                      id={`component-orientation-${comp.id}`}
+                      name={`component-orientation-${comp.id}`}
+                      value={componentEditor.orientation ?? 0}
+                      onChange={(e) => setComponentEditor({ ...componentEditor, orientation: parseInt(e.target.value) || 0 })}
+                      disabled={areComponentsLocked}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    >
+                      <option value="0">0°</option>
+                      <option value="90">90°</option>
+                      <option value="180">180°</option>
+                      <option value="270">270°</option>
+                    </select>
+                  </div>
+                  
+                  {/* Type-specific properties */}
+                  {comp.componentType === 'Resistor' && (
+                    <>
+                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>Resistor Properties:</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Resistance:</label>
+                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10kΩ" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
+                        <input id={`component-power-${comp.id}`} type="text" value={componentEditor.power || ''} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1/4W" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±5%" />
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Capacitor' && (
+                    <>
+                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>Capacitor Properties:</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
+                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100nF" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50V" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-dielectric-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Dielectric:</label>
+                        <input id={`component-dielectric-${comp.id}`} type="text" value={componentEditor.dielectric || ''} onChange={(e) => setComponentEditor({ ...componentEditor, dielectric: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Ceramic" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±10%" />
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'IntegratedCircuit' && (
+                    <>
+                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>IC Properties:</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Description:</label>
+                        <input id={`component-description-${comp.id}`} type="text" value={componentEditor.description || ''} onChange={(e) => setComponentEditor({ ...componentEditor, description: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Dual Op-Amp" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>IC Type:</label>
+                        <input id={`component-ictype-${comp.id}`} type="text" value={componentEditor.icType || ''} onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Op-Amp" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
+                        <input id={`component-datasheet-${comp.id}`} type="text" value={componentEditor.datasheet || ''} onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="URL" />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Add more component types as needed - for now showing the most common ones */}
+                  {/* TODO: Add fields for other component types (Diode, Transistor, etc.) */}
                 </div>
                 
                 {/* Fixed footer - does not scroll */}
@@ -8632,6 +8672,7 @@ function App() {
                         updated.x = componentEditor.x;
                         updated.y = componentEditor.y;
                         updated.layer = componentEditor.layer; // Update layer property
+                        updated.orientation = componentEditor.orientation ?? 0;
                         // Store abbreviation as a dynamic property (no padding needed, just use as-is)
                         (updated as any).abbreviation = componentEditor.abbreviation.trim() || getDefaultAbbreviation(comp.componentType);
                         if ('manufacturer' in updated) {
@@ -8652,6 +8693,101 @@ function App() {
                           // Preserve existing pinConnections even if pin count didn't change
                           updated.pinConnections = comp.pinConnections || [];
                         }
+                        
+                        // Update type-specific fields based on component type
+                        if (comp.componentType === 'Resistor') {
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).tolerance = componentEditor.tolerance || undefined;
+                        } else if (comp.componentType === 'Capacitor') {
+                          (updated as any).capacitance = componentEditor.capacitance || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).tolerance = componentEditor.tolerance || undefined;
+                          (updated as any).dielectric = componentEditor.dielectric || undefined;
+                        } else if (comp.componentType === 'Diode') {
+                          (updated as any).diodeType = componentEditor.diodeType || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).ledColor = componentEditor.ledColor || undefined;
+                        } else if (comp.componentType === 'Battery') {
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).capacity = componentEditor.capacity || undefined;
+                          (updated as any).chemistry = componentEditor.chemistry || undefined;
+                        } else if (comp.componentType === 'Fuse') {
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).fuseType = componentEditor.fuseType || undefined;
+                        } else if (comp.componentType === 'FerriteBead') {
+                          (updated as any).impedance = componentEditor.impedance || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                        } else if (comp.componentType === 'Connector') {
+                          (updated as any).connectorType = componentEditor.connectorType || undefined;
+                          (updated as any).gender = componentEditor.gender || undefined;
+                        } else if (comp.componentType === 'Jumper') {
+                          (updated as any).positions = componentEditor.positions || undefined;
+                        } else if (comp.componentType === 'Relay') {
+                          (updated as any).coilVoltage = componentEditor.coilVoltage || undefined;
+                          (updated as any).contactType = componentEditor.contactType || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                        } else if (comp.componentType === 'Inductor') {
+                          (updated as any).inductance = componentEditor.inductance || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                        } else if (comp.componentType === 'Speaker') {
+                          (updated as any).impedance = componentEditor.impedance || undefined;
+                          (updated as any).power = componentEditor.power || undefined;
+                        } else if (comp.componentType === 'Motor') {
+                          (updated as any).motorType = componentEditor.motorType || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                        } else if (comp.componentType === 'PowerSupply') {
+                          (updated as any).inputVoltage = componentEditor.inputVoltage || undefined;
+                          (updated as any).outputVoltage = componentEditor.outputVoltage || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                        } else if (comp.componentType === 'Transistor') {
+                          (updated as any).transistorType = componentEditor.transistorType || undefined;
+                          (updated as any).polarity = componentEditor.polarity || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                        } else if (comp.componentType === 'ResistorNetwork') {
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).configuration = componentEditor.configuration || undefined;
+                        } else if (comp.componentType === 'Thermistor') {
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).thermistorType = componentEditor.thermistorType || undefined;
+                          (updated as any).beta = componentEditor.beta || undefined;
+                        } else if (comp.componentType === 'Switch') {
+                          (updated as any).switchType = componentEditor.switchType || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                        } else if (comp.componentType === 'Transformer') {
+                          (updated as any).primaryVoltage = componentEditor.primaryVoltage || undefined;
+                          (updated as any).secondaryVoltage = componentEditor.secondaryVoltage || undefined;
+                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).turns = componentEditor.turns || undefined;
+                        } else if (comp.componentType === 'TestPoint') {
+                          (updated as any).signal = componentEditor.signal || undefined;
+                        } else if (comp.componentType === 'IntegratedCircuit') {
+                          (updated as any).description = componentEditor.description || undefined;
+                          (updated as any).datasheet = componentEditor.datasheet || undefined;
+                          (updated as any).icType = componentEditor.icType || undefined;
+                        } else if (comp.componentType === 'VacuumTube') {
+                          (updated as any).tubeType = componentEditor.tubeType || undefined;
+                        } else if (comp.componentType === 'VariableResistor') {
+                          (updated as any).vrType = componentEditor.vrType || undefined;
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).taper = componentEditor.taper || undefined;
+                        } else if (comp.componentType === 'Crystal') {
+                          (updated as any).frequency = componentEditor.frequency || undefined;
+                          (updated as any).loadCapacitance = componentEditor.loadCapacitance || undefined;
+                          (updated as any).tolerance = componentEditor.tolerance || undefined;
+                        } else if (comp.componentType === 'ZenerDiode') {
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).tolerance = componentEditor.tolerance || undefined;
+                        }
+                        
                         return updated;
                       };
                       
@@ -8849,7 +8985,7 @@ function App() {
                   <button
                     onClick={() => {
                       if (arePowerNodesLocked) return;
-                      setPowers(prev => prev.map(p => 
+                      setPowerSymbols(prev => prev.map(p => 
                         p.id === powerEditor.id 
                           ? { ...p, layer: powerEditor.layer }
                           : p

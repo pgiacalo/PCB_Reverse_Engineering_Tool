@@ -353,6 +353,198 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   {'partNumber' in comp && (comp as any).partNumber && (
                     <div>Part Number: {(comp as any).partNumber}</div>
                   )}
+                  {comp.orientation !== undefined && comp.orientation !== null && (
+                    <div>Orientation: {comp.orientation}°</div>
+                  )}
+                  
+                  {/* Type-specific properties */}
+                  {comp.componentType === 'Resistor' && (
+                    <>
+                      {(comp as any).resistance && <div>Resistance: {(comp as any).resistance}</div>}
+                      {(comp as any).power && <div>Power: {(comp as any).power}</div>}
+                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Capacitor' && (
+                    <>
+                      {(comp as any).capacitance && <div>Capacitance: {(comp as any).capacitance}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                      {(comp as any).dielectric && <div>Dielectric: {(comp as any).dielectric}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Diode' && (
+                    <>
+                      {(comp as any).diodeType && <div>Type: {(comp as any).diodeType}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                      {(comp as any).ledColor && <div>LED Color: {(comp as any).ledColor}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Battery' && (
+                    <>
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).capacity && <div>Capacity: {(comp as any).capacity}</div>}
+                      {(comp as any).chemistry && <div>Chemistry: {(comp as any).chemistry}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Fuse' && (
+                    <>
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).fuseType && <div>Type: {(comp as any).fuseType}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'FerriteBead' && (
+                    <>
+                      {(comp as any).impedance && <div>Impedance: {(comp as any).impedance}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Connector' && (
+                    <>
+                      {(comp as any).connectorType && <div>Type: {(comp as any).connectorType}</div>}
+                      {(comp as any).gender && <div>Gender: {(comp as any).gender}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Jumper' && (
+                    <>
+                      {(comp as any).positions && <div>Positions: {(comp as any).positions}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Relay' && (
+                    <>
+                      {(comp as any).coilVoltage && <div>Coil Voltage: {(comp as any).coilVoltage}</div>}
+                      {(comp as any).contactType && <div>Contact Type: {(comp as any).contactType}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Inductor' && (
+                    <>
+                      {(comp as any).inductance && <div>Inductance: {(comp as any).inductance}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                      {(comp as any).resistance && <div>DC Resistance: {(comp as any).resistance}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Speaker' && (
+                    <>
+                      {(comp as any).impedance && <div>Impedance: {(comp as any).impedance}</div>}
+                      {(comp as any).power && <div>Power: {(comp as any).power}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Motor' && (
+                    <>
+                      {(comp as any).motorType && <div>Type: {(comp as any).motorType}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'PowerSupply' && (
+                    <>
+                      {(comp as any).inputVoltage && <div>Input Voltage: {(comp as any).inputVoltage}</div>}
+                      {(comp as any).outputVoltage && <div>Output Voltage: {(comp as any).outputVoltage}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Transistor' && (
+                    <>
+                      {(comp as any).transistorType && <div>Type: {(comp as any).transistorType}</div>}
+                      {(comp as any).polarity && <div>Polarity: {(comp as any).polarity}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'ResistorNetwork' && (
+                    <>
+                      {(comp as any).resistance && <div>Resistance: {(comp as any).resistance}</div>}
+                      {(comp as any).configuration && <div>Configuration: {(comp as any).configuration}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Thermistor' && (
+                    <>
+                      {(comp as any).resistance && <div>Resistance: {(comp as any).resistance}</div>}
+                      {(comp as any).thermistorType && <div>Type: {(comp as any).thermistorType}</div>}
+                      {(comp as any).beta && <div>Beta: {(comp as any).beta}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Switch' && (
+                    <>
+                      {(comp as any).switchType && <div>Type: {(comp as any).switchType}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Transformer' && (
+                    <>
+                      {(comp as any).primaryVoltage && <div>Primary Voltage: {(comp as any).primaryVoltage}</div>}
+                      {(comp as any).secondaryVoltage && <div>Secondary Voltage: {(comp as any).secondaryVoltage}</div>}
+                      {(comp as any).power && <div>Power: {(comp as any).power}</div>}
+                      {(comp as any).turns && <div>Turns Ratio: {(comp as any).turns}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'TestPoint' && (
+                    <>
+                      {(comp as any).signal && <div>Signal: {(comp as any).signal}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'IntegratedCircuit' && (
+                    <>
+                      {(comp as any).description && <div>Description: {(comp as any).description}</div>}
+                      {(comp as any).icType && <div>IC Type: {(comp as any).icType}</div>}
+                      {(comp as any).datasheet && <div>Datasheet: <a href={(comp as any).datasheet} target="_blank" rel="noopener noreferrer">{(comp as any).datasheet}</a></div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'VacuumTube' && (
+                    <>
+                      {(comp as any).tubeType && <div>Type: {(comp as any).tubeType}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'VariableResistor' && (
+                    <>
+                      {(comp as any).vrType && <div>Type: {(comp as any).vrType}</div>}
+                      {(comp as any).resistance && <div>Resistance: {(comp as any).resistance}</div>}
+                      {(comp as any).power && <div>Power: {(comp as any).power}</div>}
+                      {(comp as any).taper && <div>Taper: {(comp as any).taper}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Crystal' && (
+                    <>
+                      {(comp as any).frequency && <div>Frequency: {(comp as any).frequency}</div>}
+                      {(comp as any).loadCapacitance && <div>Load Capacitance: {(comp as any).loadCapacitance}</div>}
+                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'ZenerDiode' && (
+                    <>
+                      {(comp as any).voltage && <div>Zener Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).power && <div>Power: {(comp as any).power}</div>}
+                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                    </>
+                  )}
+                  
                   <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
                 </div>
               </div>

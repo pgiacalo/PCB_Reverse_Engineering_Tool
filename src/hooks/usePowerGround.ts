@@ -43,6 +43,8 @@ export function usePowerGround() {
     powerBusId: string;
     x: number;
     y: number;
+    size: number;
+    color: string;
   } | null>(null);
   const [groundEditor, setGroundEditor] = useState<{
     visible: boolean;

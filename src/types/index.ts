@@ -90,6 +90,7 @@ export interface PCBComponentBase {
   pinCount: number;
   pinConnections: string[]; // Array of node IDs (size = pinCount)
   notes?: string;
+  orientation?: number; // Rotation in degrees: 0, 90, 180, 270 (for components with required orientation like electrolytic caps, ICs with PIN #1)
 }
 
 /**
