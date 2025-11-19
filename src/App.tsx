@@ -5056,22 +5056,25 @@ function App() {
     drawCanvas();
   }, [canvasSize.width, canvasSize.height]);
 
-  // If selection exists, changing brush size updates selected items' size
+  // Save trace size to layer-specific state when brushSize changes (only for trace tool, no selection)
+  // NOTE: We do NOT automatically update selected strokes when brushSize changes.
+  // Selected strokes should only be updated when the user explicitly changes their size (via +/- keys or Set Size dialog).
   React.useEffect(() => {
-    if (selectedIds.size === 0) {
-      // If no selection and trace tool is active, save size to the appropriate layer
-      // Only save if the size is valid (>= 1) to avoid saving invalid values
-      if (currentTool === 'draw' && drawingMode === 'trace' && brushSize >= 1) {
-        if (selectedDrawingLayer === 'top') {
-          setTopTraceSize(brushSize);
-        } else {
-          setBottomTraceSize(brushSize);
-        }
+    // IMPORTANT: Only update layer-specific trace size when there's NO selection
+    // If no selection and trace tool is active, save size to the appropriate layer
+    // Only save if the size is valid (>= 1) to avoid saving invalid values
+    if (selectedIds.size === 0 && currentTool === 'draw' && drawingMode === 'trace' && brushSize >= 1) {
+      if (selectedDrawingLayer === 'top') {
+        setTopTraceSize(brushSize);
+      } else {
+        setBottomTraceSize(brushSize);
       }
-      return;
     }
-    setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: brushSize } : s));
-  }, [brushSize, currentTool, drawingMode, selectedDrawingLayer]); // Only run when brushSize changes, not when selection changes
+    // REMOVED: Automatic update of selected strokes when brushSize changes
+    // This was causing selected objects to change size when switching tools
+    // The buggy line was: setDrawingStrokes(prev => prev.map(s => selectedIds.has(s.id) ? { ...s, size: brushSize } : s));
+    // Selected strokes should only be updated via explicit user actions (increaseSize/decreaseSize functions)
+  }, [brushSize, currentTool, drawingMode, selectedDrawingLayer, selectedIds]);
 
   // Selection size slider removed; size can be set via Tools menu
 
