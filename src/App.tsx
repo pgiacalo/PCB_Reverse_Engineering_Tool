@@ -16,6 +16,7 @@ import {
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
 import { generateKiCadNetlist, generateProtelNetlist } from './utils/netlist';
 import { generateSimpleSchematic } from './utils/schematic';
+import { formatTimestamp } from './utils/fileOperations';
 import type { ComponentType, PCBComponent } from './types';
 import './App.css';
 
@@ -5535,9 +5536,8 @@ function App() {
     const now = new Date();
     // Use ISO 8601 format for standard datetime (e.g., "2025-11-16T01:27:14.123Z")
     const savedAt = now.toISOString();
-    // Also generate timestamp for filename (keep the old format for filename compatibility)
-    const pad2 = (n: number) => String(n).padStart(2, '0');
-    const ts = `${now.getFullYear()}_${pad2(now.getMonth() + 1)}_${pad2(now.getDate())}_${pad2(now.getHours())}_${pad2(now.getMinutes())}_${pad2(now.getSeconds())}`;
+    // Generate timestamp for filename using the new format: YYYY_MM_DD-HH-mm-ss
+    const ts = formatTimestamp();
     const project = {
       version: 1,
       fileType: 'PCB_REVERSE_ENGINEERING_AUTOSAVE', // Identifier for auto-saved files
@@ -7452,32 +7452,7 @@ function App() {
               >
                 Auto Save…
               </button>
-              {/* Export options hidden for now - not yet working correctly */}
-              {/* <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-              <button
-                onClick={() => {
-                  if (!isReadOnlyMode) {
-                    void exportNetlist('kicad'); 
-                    setOpenMenu(null); 
-                  }
-                }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Export Netlist (KiCad)…
-              </button>
-              <button
-                onClick={() => {
-                  if (!isReadOnlyMode) {
-                    void exportNetlist('protel'); 
-                    setOpenMenu(null); 
-                  }
-                }} 
-                disabled={isReadOnlyMode}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-              >
-                Export Netlist (Protel/nl2sch)…
-              </button>
+              <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button
                 onClick={() => {
                   if (!isReadOnlyMode) {
@@ -7489,7 +7464,7 @@ function App() {
                 style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
               >
                 Export Simple Schematic…
-              </button> */}
+              </button>
               <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
               <button onClick={() => { handlePrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>

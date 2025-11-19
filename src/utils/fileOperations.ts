@@ -14,7 +14,7 @@ import type {
 import { APP_VERSION } from '../constants';
 
 /**
- * Format current date/time as YYYY_MM_DD_HH:mm:ss
+ * Format current date/time as YYYY_MM_DD-HH-mm-ss
  */
 export function formatTimestamp(): string {
   const now = new Date();
@@ -24,7 +24,7 @@ export function formatTimestamp(): string {
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
-  return `${year}_${month}_${day}_${hours}:${minutes}:${seconds}`;
+  return `${year}_${month}_${day}-${hours}-${minutes}-${seconds}`;
 }
 
 /**

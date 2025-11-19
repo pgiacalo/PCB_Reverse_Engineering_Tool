@@ -30,7 +30,7 @@ interface PowerBus {
  */
 export interface NetlistNode {
   id: number; // Point ID
-  type: 'via' | 'power' | 'ground' | 'component_pin' | 'trace_point';
+  type: 'via' | 'pad' | 'power' | 'ground' | 'component_pin' | 'trace_point';
   x: number;
   y: number;
   
@@ -488,14 +488,14 @@ export function buildConnectivityGraph(
 ): Map<number, NetlistNode> {
   const nodes = new Map<number, NetlistNode>();
   
-  // Add nodes from drawing strokes (traces and vias)
+  // Add nodes from drawing strokes (traces, vias, and pads)
   for (const stroke of drawingStrokes) {
-    if (stroke.type === 'via' && stroke.points.length > 0) {
+    if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
       const point = stroke.points[0];
-      if (!nodes.has(point.id)) {
+      if (point.id !== undefined && !nodes.has(point.id)) {
         nodes.set(point.id, {
           id: point.id,
-          type: 'via',
+          type: stroke.type === 'via' ? 'via' : 'pad',
           x: point.x,
           y: point.y,
         });
@@ -503,7 +503,7 @@ export function buildConnectivityGraph(
     } else if (stroke.type === 'trace') {
       // Add all points in the trace
       for (const point of stroke.points) {
-        if (!nodes.has(point.id)) {
+        if (point.id !== undefined && !nodes.has(point.id)) {
           nodes.set(point.id, {
             id: point.id,
             type: 'trace_point',

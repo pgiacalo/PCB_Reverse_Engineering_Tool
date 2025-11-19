@@ -6,9 +6,9 @@
 
 import type { PCBComponent, DrawingStroke, GroundSymbol } from '../types';
 import { 
-  buildConnectivityGraphCoordinateBased, 
-  groupNodesIntoNetsCoordinateBased, 
-  generateNetNamesCoordinateBased, 
+  buildConnectivityGraph, 
+  groupNodesIntoNets, 
+  generateNetNames, 
   type NetlistNode 
 } from './netlist';
 
@@ -49,8 +49,8 @@ export function generateSimpleSchematic(
   groundSymbols: GroundSymbol[],
   powerBuses: PowerBus[]
 ): string {
-  // Build connectivity using coordinate-based matching
-  const coordinateToNode = buildConnectivityGraphCoordinateBased(
+  // Build connectivity using Node ID-based matching
+  const nodes = buildConnectivityGraph(
     drawingStrokes,
     components,
     powerSymbols,
@@ -59,27 +59,26 @@ export function generateSimpleSchematic(
   );
 
   // Debug: Check component pin nodes
-  const componentPinNodes = Array.from(coordinateToNode.values()).filter(n => n.type === 'component_pin');
+  const componentPinNodes = Array.from(nodes.values()).filter(n => n.type === 'component_pin');
   console.log(`[Schematic] Component pin nodes in graph: ${componentPinNodes.length}`);
   if (componentPinNodes.length > 0) {
     console.log(`[Schematic] Sample component pin nodes:`, componentPinNodes.slice(0, 5).map(n =>
-      `coord(${n.x},${n.y}) (compId: ${n.componentId}, pinIndex: ${n.pinIndex})`
+      `Node ID ${n.id} (compId: ${n.componentId}, pinIndex: ${n.pinIndex})`
     ));
   }
 
-  // Build connections from traces (coordinate-based)
-  const connections: Array<[string, string]> = [];
+  // Build connections from traces (Node ID-based)
+  const connections: Array<[number, number]> = [];
 
   for (const stroke of drawingStrokes) {
     if (stroke.type === 'trace' && stroke.points.length >= 2) {
       for (let i = 0; i < stroke.points.length - 1; i++) {
         const point1 = stroke.points[i];
         const point2 = stroke.points[i + 1];
-        if (point1 && point2) {
-          const coordKey1 = `${Math.round(point1.x)},${Math.round(point1.y)}`;
-          const coordKey2 = `${Math.round(point2.x)},${Math.round(point2.y)}`;
-          if (coordKey1 !== coordKey2) {
-            connections.push([coordKey1, coordKey2]);
+        if (point1 && point2 && point1.id !== undefined && point2.id !== undefined) {
+          // Connect consecutive points by their Node IDs
+          if (point1.id !== point2.id) {
+            connections.push([point1.id, point2.id]);
           }
         }
       }
@@ -88,24 +87,23 @@ export function generateSimpleSchematic(
 
   console.log(`[Schematic] Trace connections: ${connections.length}`);
 
-  // Note: Points with the same x,y coordinates are already the same node in coordinateToNode.
+  // Note: Points with the same Node ID are already the same node in the nodes map.
   // The union-find algorithm will group connected nodes together.
 
-  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections);
-  const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
+  const netGroups = groupNodesIntoNets(nodes, connections);
+  const netNames = generateNetNames(netGroups, nodes);
   
   console.log(`[Schematic] Net groups created: ${netGroups.size}`);
   
   // Check which component pins are in nets vs isolated (after netGroups is created)
   if (componentPinNodes.length > 0) {
-    const isolatedPins: Array<{ compId: string; designator: string; pinIndex: number; x: number; y: number; coordKey: string }> = [];
+    const isolatedPins: Array<{ compId: string; designator: string; pinIndex: number; nodeId: number }> = [];
     
     for (const node of componentPinNodes) {
-      const coordKey = `${node.x},${node.y}`;
-      // Check if this coordinate appears in any net group
+      // Check if this node ID appears in any net group
       let foundInNet = false;
       for (const [, netNodes] of netGroups) {
-        if (netNodes.some(n => n.x === node.x && n.y === node.y)) {
+        if (netNodes.some(n => n.id === node.id)) {
           foundInNet = true;
           break;
         }
@@ -117,9 +115,7 @@ export function generateSimpleSchematic(
           compId: node.componentId || 'unknown',
           designator,
           pinIndex: node.pinIndex || 0,
-          x: node.x,
-          y: node.y,
-          coordKey
+          nodeId: node.id
         });
       }
     }
@@ -127,7 +123,7 @@ export function generateSimpleSchematic(
     if (isolatedPins.length > 0) {
       console.warn(`[Schematic] Found ${isolatedPins.length} isolated component pins (not in any net):`);
       for (const pin of isolatedPins.slice(0, 10)) { // Show first 10
-        console.warn(`  - ${pin.designator} pin ${pin.pinIndex + 1} at coord(${pin.x},${pin.y})`);
+        console.warn(`  - ${pin.designator} pin ${pin.pinIndex + 1} at Node ID ${pin.nodeId}`);
       }
     } else {
       console.log(`[Schematic] All component pins are in nets`);
@@ -147,10 +143,10 @@ export function generateSimpleSchematic(
   const nets: Net[] = [];
   let totalNetGroups = 0;
   let totalComponentPinsFound = 0;
-  const componentPinNodesByNet = new Map<string, NetlistNode[]>();
+  const componentPinNodesByNet = new Map<number, NetlistNode[]>();
   
   // First pass: collect all component pin nodes by their net root
-  for (const [rootCoordKey, netNodes] of netGroups) {
+  for (const [rootNodeId, netNodes] of netGroups) {
     totalNetGroups++;
     const componentPinsInNet: NetlistNode[] = [];
 
@@ -162,13 +158,13 @@ export function generateSimpleSchematic(
     }
 
     if (componentPinsInNet.length > 0) {
-      componentPinNodesByNet.set(rootCoordKey, componentPinsInNet);
+      componentPinNodesByNet.set(rootNodeId, componentPinsInNet);
     }
   }
 
   // Second pass: build nets from component pins
-  for (const [rootCoordKey, componentPinNodes] of componentPinNodesByNet) {
-    const netName = netNames.get(rootCoordKey) || `N$${rootCoordKey}`;
+  for (const [rootNodeId, componentPinNodes] of componentPinNodesByNet) {
+    const netName = netNames.get(rootNodeId) || `N$${rootNodeId}`;
     const componentPins: Array<{ designator: string; pin: number }> = [];
     
     for (const node of componentPinNodes) {
@@ -197,14 +193,14 @@ export function generateSimpleSchematic(
   if (componentPinNodesByNet.size > 0) {
     console.log(`[Schematic] Sample nets with component pins:`);
     let count = 0;
-    for (const [rootCoordKey, componentPinNodes] of componentPinNodesByNet) {
+    for (const [rootNodeId, componentPinNodes] of componentPinNodesByNet) {
       if (count++ >= 5) break; // Show first 5
-      const netName = netNames.get(rootCoordKey) || `N$${rootCoordKey}`;
+      const netName = netNames.get(rootNodeId) || `N$${rootNodeId}`;
       const pinDetails = componentPinNodes.map(n => {
         const designator = componentIdToDesignator.get(n.componentId!);
-        return `${designator || 'unknown'}:pin${(n.pinIndex || 0) + 1}@coord(${n.x},${n.y})`;
+        return `${designator || 'unknown'}:pin${(n.pinIndex || 0) + 1}@NodeID${n.id}`;
       });
-      console.log(`  Net ${netName} (root ${rootCoordKey}): ${componentPinNodes.length} pins - ${pinDetails.join(', ')}`);
+      console.log(`  Net ${netName} (root Node ID ${rootNodeId}): ${componentPinNodes.length} pins - ${pinDetails.join(', ')}`);
     }
   }
   
