@@ -7390,7 +7390,7 @@ function App() {
           )}
         </div>
 
-        {/* Transform menu */}
+        {/* Images menu */}
         <div style={{ position: 'relative' }}>
           <button 
             onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'transform' ? null : 'transform'); } }} 
@@ -7406,7 +7406,7 @@ function App() {
               opacity: isReadOnlyMode ? 0.5 : 1
             }}
           >
-            Transform ▾
+            Images ▾
           </button>
           {openMenu === 'transform' && (
             <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
