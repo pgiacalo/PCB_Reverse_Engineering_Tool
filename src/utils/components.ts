@@ -8,6 +8,7 @@ import type {
   ComponentType,
   Battery,
   Capacitor,
+  CapacitorElectrolytic,
   Diode,
   Fuse,
   FerriteBead,
@@ -76,6 +77,15 @@ export function createComponent(
 
   // Initialize pinConnections array with empty strings
   baseComponent.pinConnections = new Array(baseComponent.pinCount).fill('');
+  
+  // Initialize pinPolarities for components that have polarity
+  const hasPolarity = componentType === 'CapacitorElectrolytic' || 
+                     componentType === 'Diode' || 
+                     componentType === 'Battery' || 
+                     componentType === 'ZenerDiode';
+  if (hasPolarity) {
+    baseComponent.pinPolarities = new Array(baseComponent.pinCount).fill('');
+  }
 
   // Create specific component type with default values
   switch (componentType) {
@@ -84,6 +94,9 @@ export function createComponent(
     
     case 'Capacitor':
       return { ...baseComponent, componentType: 'Capacitor' } as Capacitor;
+    
+    case 'CapacitorElectrolytic':
+      return { ...baseComponent, componentType: 'CapacitorElectrolytic', polarity: 'Positive' } as CapacitorElectrolytic;
     
     case 'Diode':
       return { ...baseComponent, componentType: 'Diode', diodeType: 'Standard' } as Diode;
@@ -147,6 +160,9 @@ export function createComponent(
     
     case 'Crystal':
       return { ...baseComponent, componentType: 'Crystal' } as Crystal;
+    
+    case 'CapacitorElectrolytic':
+      return { ...baseComponent, componentType: 'CapacitorElectrolytic', polarity: 'Positive' } as CapacitorElectrolytic;
     
     case 'ZenerDiode':
       return { ...baseComponent, componentType: 'ZenerDiode' } as ZenerDiode;

@@ -89,6 +89,7 @@ export interface PCBComponentBase {
   partMarkings?: string; // markings on the component
   pinCount: number;
   pinConnections: string[]; // Array of node IDs (size = pinCount)
+  pinPolarities?: ('+' | '-' | '')[]; // Array of pin polarities (size = pinCount), only for components with polarity (electrolytic caps, diodes, batteries, etc.)
   notes?: string;
   orientation?: number; // Rotation in degrees: 0, 90, 180, 270 (for components with required orientation like electrolytic caps, ICs with PIN #1)
 }
@@ -98,7 +99,8 @@ export interface PCBComponentBase {
  */
 export type ComponentType =
   | 'Battery'           // B, BT
-  | 'Capacitor'         // C
+  | 'Capacitor'         // C (general)
+  | 'CapacitorElectrolytic' // C (electrolytic - has polarity)
   | 'Diode'             // D, CR (including Zener and LEDs)
   | 'Fuse'              // F
   | 'FerriteBead'       // FB
@@ -133,14 +135,27 @@ export interface Battery extends PCBComponentBase {
 }
 
 /**
- * Capacitor (C)
+ * Capacitor (C) - General purpose (ceramic, film, etc.)
  */
 export interface Capacitor extends PCBComponentBase {
   componentType: 'Capacitor';
   capacitance?: string; // e.g., "100nF", "10uF"
   voltage?: string; // voltage rating, e.g., "50V"
   tolerance?: string; // e.g., "±10%"
-  dielectric?: string; // e.g., "Ceramic", "Electrolytic"
+  dielectric?: string; // e.g., "Ceramic", "Film", "Tantalum"
+}
+
+/**
+ * Electrolytic Capacitor (C) - Has polarity, requires orientation
+ */
+export interface CapacitorElectrolytic extends PCBComponentBase {
+  componentType: 'CapacitorElectrolytic';
+  capacitance?: string; // e.g., "100uF", "1000uF"
+  voltage?: string; // voltage rating, e.g., "25V", "50V"
+  tolerance?: string; // e.g., "±20%"
+  polarity?: 'Positive' | 'Negative'; // which pin is positive (important for orientation)
+  esr?: string; // Equivalent Series Resistance, e.g., "50mΩ"
+  temperature?: string; // operating temperature range, e.g., "-40°C to +85°C"
 }
 
 /**
@@ -368,6 +383,7 @@ export interface ZenerDiode extends PCBComponentBase {
 export type PCBComponent =
   | Battery
   | Capacitor
+  | CapacitorElectrolytic
   | Diode
   | Fuse
   | FerriteBead

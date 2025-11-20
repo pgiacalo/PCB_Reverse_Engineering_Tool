@@ -3,7 +3,8 @@ import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometr
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent } from './utils/components';
 import { 
-  COMPONENT_TYPE_INFO, 
+  COMPONENT_TYPE_INFO,
+  COMPONENT_CATEGORIES,
   DEFAULT_VIA_COLOR, 
   DEFAULT_TRACE_COLOR, 
   DEFAULT_COMPONENT_COLOR, 
@@ -908,8 +909,12 @@ function App() {
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const componentTypeChooserRef = useRef<HTMLDivElement>(null);
   const componentLayerChooserRef = useRef<HTMLDivElement>(null);
+  const traceButtonRef = useRef<HTMLButtonElement>(null);
+  const padButtonRef = useRef<HTMLButtonElement>(null);
+  const componentButtonRef = useRef<HTMLButtonElement>(null);
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   
@@ -2926,6 +2931,54 @@ function App() {
         ctx.stroke();
       }
       
+      // Draw polarity indicator for components with polarity
+      // Includes: diodes (including LEDs), electrolytic/tantalum capacitors, transistors, ICs, batteries
+      const hasPolarity = c.componentType === 'CapacitorElectrolytic' || 
+                         c.componentType === 'Diode' || // Includes LEDs (diodeType: 'LED')
+                         c.componentType === 'Battery' || 
+                         c.componentType === 'ZenerDiode' ||
+                         c.componentType === 'Transistor' || // Has polarity (NPN/PNP, N-Channel/P-Channel)
+                         c.componentType === 'IntegratedCircuit'; // Has pin 1 orientation
+      
+      // Also check for tantalum capacitors (regular Capacitor with Tantalum dielectric)
+      const isTantalumCap = c.componentType === 'Capacitor' && 
+                           'dielectric' in c && 
+                           (c as any).dielectric === 'Tantalum';
+      
+      if (hasPolarity || isTantalumCap) {
+        const orientation = c.orientation || 0; // Default to 0 degrees
+        const plusSize = size * 0.25; // Size of the '+' sign
+        const plusLineWidth = Math.max(1.5, 2.5 / Math.max(viewScale, 0.001));
+        const offsetDistance = half + plusSize * 0.6; // Distance from edge of square - moved further out for clarity
+        
+        // Calculate position based on orientation (0° = right, 90° = bottom, 180° = left, 270° = top)
+        const angleRad = (orientation * Math.PI) / 180;
+        const plusX = c.x + Math.cos(angleRad) * offsetDistance;
+        const plusY = c.y + Math.sin(angleRad) * offsetDistance;
+        
+        ctx.save();
+        ctx.translate(plusX, plusY);
+        // Don't rotate the '+' symbol itself, just position it
+        
+        ctx.strokeStyle = '#d32f2f'; // Red color for positive indicator
+        ctx.fillStyle = '#d32f2f';
+        ctx.lineWidth = plusLineWidth;
+        ctx.lineCap = 'round';
+        
+        // Draw '+' sign (always upright, not rotated)
+        const plusHalf = plusSize / 2;
+        ctx.beginPath();
+        // Horizontal line
+        ctx.moveTo(-plusHalf, 0);
+        ctx.lineTo(plusHalf, 0);
+        // Vertical line
+        ctx.moveTo(0, -plusHalf);
+        ctx.lineTo(0, plusHalf);
+        ctx.stroke();
+        
+        ctx.restore();
+      }
+      
       // selection highlight
       const isSelected = selectedComponentIds.has(c.id);
       if (isSelected) {
@@ -4786,6 +4839,45 @@ function App() {
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
   }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showComponentLayerChooser, showComponentTypeChooser, showColorPicker]);
+
+  // Helper function to get button position and calculate dialog position
+  // Positions dialog to the right of the button, aligned with button's top
+  const getDialogPosition = (buttonRef: React.RefObject<HTMLButtonElement | null>) => {
+    if (!buttonRef.current) return { top: 0, left: 0 };
+    const rect = buttonRef.current.getBoundingClientRect();
+    const containerRect = canvasContainerRef.current?.getBoundingClientRect();
+    if (!containerRect) return { top: 0, left: 0 };
+    // Position dialog to the right of the button, aligned with button's top
+    return {
+      top: rect.top - containerRect.top,
+      left: rect.left - containerRect.left + rect.width + 4,
+    };
+  };
+
+  // Update dialog positions when they are shown
+  React.useEffect(() => {
+    if (showTraceLayerChooser && traceChooserRef.current && traceButtonRef.current) {
+      const pos = getDialogPosition(traceButtonRef as React.RefObject<HTMLButtonElement | null>);
+      traceChooserRef.current.style.top = `${pos.top}px`;
+      traceChooserRef.current.style.left = `${pos.left}px`;
+    }
+  }, [showTraceLayerChooser]);
+
+  React.useEffect(() => {
+    if (showPadLayerChooser && padChooserRef.current && padButtonRef.current) {
+      const pos = getDialogPosition(padButtonRef as React.RefObject<HTMLButtonElement | null>);
+      padChooserRef.current.style.top = `${pos.top}px`;
+      padChooserRef.current.style.left = `${pos.left}px`;
+    }
+  }, [showPadLayerChooser]);
+
+  React.useEffect(() => {
+    if (showComponentLayerChooser && componentLayerChooserRef.current && componentButtonRef.current) {
+      const pos = getDialogPosition(componentButtonRef as React.RefObject<HTMLButtonElement | null>);
+      componentLayerChooserRef.current.style.top = `${pos.top}px`;
+      componentLayerChooserRef.current.style.left = `${pos.left}px`;
+    }
+  }, [showComponentLayerChooser]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -7410,6 +7502,7 @@ function App() {
               </svg>
             </button>
             <button 
+              ref={padButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   setDrawingMode('pad'); 
@@ -7450,6 +7543,7 @@ function App() {
               </svg>
             </button>
             <button 
+              ref={traceButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   setDrawingMode('trace'); 
@@ -7479,6 +7573,7 @@ function App() {
               <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
             </button>
             <button 
+              ref={componentButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   setCurrentTool('component');
@@ -7792,7 +7887,7 @@ function App() {
           </div>
           {/* Active tool layer chooser for Trace */}
           {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
-            <div ref={traceChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+            <div ref={traceChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'top'} onChange={() => { 
                   setTraceToolLayer('top'); 
@@ -7839,7 +7934,7 @@ function App() {
           )}
           {/* Active tool layer chooser for Pad */}
           {(currentTool === 'draw' && drawingMode === 'pad' && showPadLayerChooser) && (
-            <div ref={padChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+            <div ref={padChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="padToolLayer" checked={padToolLayer === 'top'} onChange={() => { 
                   setPadToolLayer('top'); 
@@ -7962,7 +8057,7 @@ function App() {
           )}
           {/* Active tool layer chooser for Component */}
           {(currentTool === 'component' && showComponentLayerChooser) && (
-            <div ref={componentLayerChooserRef} style={{ position: 'absolute', top: 92, left: 56, padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+            <div ref={componentLayerChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'top'} onClick={() => { 
                   setComponentToolLayer('top'); 
@@ -8011,37 +8106,90 @@ function App() {
               </label>
             </div>
           )}
-          {/* Component Type Chooser - appears after layer is selected */}
+          {/* Component Type Chooser - hierarchical menu */}
           {currentTool === 'component' && showComponentTypeChooser && (
-            <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '400px', overflowY: 'auto', minWidth: '200px' }}>
-              <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Component Type:</div>
-              {Object.entries(COMPONENT_TYPE_INFO).map(([type, info]) => (
-                <button
-                  key={type}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    // Set the selected component type and close the chooser (like power bus selector)
-                    setSelectedComponentType(type as ComponentType);
-                    setShowComponentTypeChooser(false);
-                  }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '4px 8px',
-                    marginBottom: '2px',
-                    background: selectedComponentType === type ? '#e6f0ff' : '#fff',
-                    border: '1px solid #ddd',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    color: '#333',
-                  }}
-                >
-                  {info.prefix.join(', ')} - {type} ({info.defaultPins} pins)
-                </button>
-              ))}
+            <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '500px', overflowY: 'auto', minWidth: '250px', maxWidth: '350px' }}>
+              <div style={{ marginBottom: '8px', fontWeight: 600, fontSize: '13px', color: '#333', borderBottom: '1px solid #eee', paddingBottom: '6px' }}>Select Component Type:</div>
+              {Object.entries(COMPONENT_CATEGORIES).map(([category, subcategories]) => {
+                const isExpanded = expandedCategories.has(category);
+                return (
+                  <div key={category} style={{ marginBottom: '4px' }}>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setExpandedCategories(prev => {
+                          const next = new Set(prev);
+                          if (next.has(category)) {
+                            next.delete(category);
+                          } else {
+                            next.add(category);
+                          }
+                          return next;
+                        });
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '6px 8px',
+                        background: isExpanded ? '#f0f0f0' : '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#333',
+                      }}
+                    >
+                      <span style={{ marginRight: '6px', fontSize: '10px' }}>{isExpanded ? '▼' : '▶'}</span>
+                      {category}
+                    </button>
+                    {isExpanded && (
+                      <div style={{ marginLeft: '12px', marginTop: '2px', marginBottom: '4px' }}>
+                        {Object.entries(subcategories).map(([subcategory, types]: [string, readonly string[]]) => (
+                          <div key={subcategory} style={{ marginBottom: '2px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', padding: '2px 4px', marginBottom: '2px' }}>{subcategory}:</div>
+                            {types.map((type: string) => {
+                              const info = COMPONENT_TYPE_INFO[type as keyof typeof COMPONENT_TYPE_INFO];
+                              if (!info) return null;
+                              return (
+                                <button
+                                  key={type}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    // For special cases (LED, Schottky, Tantalum), we need to handle them differently
+                                    // For now, just set the base type - user can modify in properties dialog
+                                    setSelectedComponentType(type as ComponentType);
+                                    setShowComponentTypeChooser(false);
+                                  }}
+                                  style={{
+                                    display: 'block',
+                                    width: '100%',
+                                    textAlign: 'left',
+                                    padding: '4px 8px 4px 16px',
+                                    marginBottom: '2px',
+                                    background: selectedComponentType === type ? '#e6f0ff' : '#fff',
+                                    border: '1px solid #ddd',
+                                    borderRadius: 4,
+                                    cursor: 'pointer',
+                                    fontSize: '11px',
+                                    color: '#333',
+                                  }}
+                                >
+                                  {info.prefix.join(', ')} - {type} ({info.defaultPins} pins)
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <button
                 onClick={(e) => {
                   e.preventDefault();
@@ -8293,7 +8441,7 @@ function App() {
                     </div>
                   </div>
                   
-                  {/* Layer (editable) - moved under Component Type, on one line */}
+                  {/* Layer (editable) - on one line */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
                       Layer:
@@ -8311,25 +8459,129 @@ function App() {
                     </select>
                   </div>
                   
-                  {/* Part Name - on one line */}
+                  {/* Orientation - moved near top for easy access */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
-                      Part Name:
+                    <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Orientation:
                     </label>
-                    <input
-                      id={`component-designator-${comp.id}`}
-                      name={`component-designator-${comp.id}`}
-                      type="text"
-                      value={componentEditor.designator}
-                      onChange={(e) => setComponentEditor({ ...componentEditor, designator: e.target.value })}
+                    <select
+                      id={`component-orientation-${comp.id}`}
+                      name={`component-orientation-${comp.id}`}
+                      value={componentEditor.orientation ?? 0}
+                      onChange={(e) => {
+                        const newOrientation = parseInt(e.target.value) || 0;
+                        // Update editor state
+                        setComponentEditor({ ...componentEditor, orientation: newOrientation });
+                        // Immediately update the component in the array for real-time visual feedback
+                        if (!areComponentsLocked) {
+                          const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                          const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                          if (currentComp) {
+                            const updatedComp = { ...currentComp, orientation: newOrientation };
+                            if (componentEditor.layer === 'top') {
+                              setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                            } else {
+                              setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                            }
+                          }
+                        }
+                      }}
                       disabled={areComponentsLocked}
                       style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
-                      placeholder="e.g., Op Amp OP07"
-                    />
+                    >
+                      <option value="0">0°</option>
+                      <option value="90">90°</option>
+                      <option value="180">180°</option>
+                      <option value="270">270°</option>
+                    </select>
                   </div>
                   
+                  {/* Type-specific value fields - moved near top for easy access */}
+                  {comp.componentType === 'Resistor' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Resistance:</label>
+                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10kΩ" />
+                      </div>
+                      {/* Essential resistor properties - right after Resistance */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
+                        <input id={`component-power-${comp.id}`} type="text" value={componentEditor.power || ''} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1/4W" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±5%" />
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Capacitor' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
+                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100nF" />
+                      </div>
+                      {/* Essential capacitor properties - right after Capacitance */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50V" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-dielectric-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Dielectric:</label>
+                        <input id={`component-dielectric-${comp.id}`} type="text" value={componentEditor.dielectric || ''} onChange={(e) => setComponentEditor({ ...componentEditor, dielectric: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Ceramic" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±10%" />
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'CapacitorElectrolytic' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
+                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100uF" />
+                      </div>
+                      {/* Essential electrolytic capacitor properties - right after Capacitance */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 25V" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±20%" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-polarity-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Polarity:</label>
+                        <select id={`component-polarity-${comp.id}`} value={componentEditor.polarityCapacitor || (comp as any).polarity || 'Positive'} onChange={(e) => setComponentEditor({ ...componentEditor, polarityCapacitor: e.target.value as 'Positive' | 'Negative' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}>
+                          <option value="Positive">Positive</option>
+                          <option value="Negative">Negative</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Inductor' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-inductance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Inductance:</label>
+                        <input id={`component-inductance-${comp.id}`} type="text" value={componentEditor.inductance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, inductance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10uH" />
+                      </div>
+                      {/* Essential inductor properties - right after Inductance */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1A" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>DC Resistance:</label>
+                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50mΩ" />
+                      </div>
+                    </>
+                  )}
+                  
                   {/* Designator - on one line */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
                     <label htmlFor={`component-abbreviation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
                       Designator:
                     </label>
@@ -8350,6 +8602,31 @@ function App() {
                       disabled={areComponentsLocked}
                       style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
                       placeholder="e.g., U2, R7, C1"
+                    />
+                  </div>
+                  
+                  {/* Description/Part Name - for all components (replaces redundant "Part Name" field) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+                      Description:
+                    </label>
+                    <input
+                      id={`component-description-${comp.id}`}
+                      name={`component-description-${comp.id}`}
+                      type="text"
+                      value={comp.componentType === 'IntegratedCircuit' ? (componentEditor.description || componentEditor.designator || '') : (componentEditor.designator || '')}
+                      onChange={(e) => {
+                        if (comp.componentType === 'IntegratedCircuit') {
+                          // For ICs, update both description and designator
+                          setComponentEditor({ ...componentEditor, description: e.target.value, designator: e.target.value });
+                        } else {
+                          // For other components, update designator
+                          setComponentEditor({ ...componentEditor, designator: e.target.value });
+                        }
+                      }}
+                      disabled={areComponentsLocked}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      placeholder={comp.componentType === 'IntegratedCircuit' ? "e.g., Dual Op-Amp" : "e.g., Op Amp OP07"}
                     />
                   </div>
                   
@@ -8454,11 +8731,17 @@ function App() {
                           const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
                             i < currentConnections.length ? currentConnections[i] : ''
                           );
+                          // Resize pinPolarities array if it exists, preserving existing polarities
+                          const currentPolarities = currentComp.pinPolarities || [];
+                          const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
+                            i < currentPolarities.length ? currentPolarities[i] : ''
+                          ) : undefined;
                           // Update the component
                           const updatedComp = {
                             ...currentComp,
                             pinCount: newPinCount,
                             pinConnections: newPinConnections,
+                            ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
                           };
                           // Update in the appropriate layer array
                           if (componentEditor.layer === 'top') {
@@ -8475,148 +8758,180 @@ function App() {
                     />
                   </div>
                   
-                  {/* Pin Connections */}
-                  <div>
+                  {/* Pin Connections - tabular format with polarity column for components with polarity */}
+                  <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
                     <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
                       Pin Connections:
                     </label>
                     {connectingPin && connectingPin.componentId === comp.id && (
-                      <div style={{ padding: '2px 3px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 2, marginBottom: '2px', fontSize: '9px', color: '#856404' }}>
+                      <div style={{ padding: '2px 3px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 2, marginBottom: '2px', fontSize: '8px', color: '#856404' }}>
                         Pin {connectingPin.pinIndex + 1} selected. Click on a via or pad to connect.
                       </div>
                     )}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '1px' }}>
-                      {Array.from({ length: componentEditor.pinCount }, (_, i) => {
-                        // Read pin connection from the current component state (should update reactively)
-                        // Re-find the component to ensure we have the latest state
-                        const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                        const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-                        const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
-                        const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
-                        // Debug: log pin connection state for all pins when in connection mode
-                        if (connectingPin && connectingPin.componentId === comp.id) {
-                          console.log(`Component Editor Pin ${i + 1}: pinConnection="${pinConnection}", comp.pinConnections=`, currentComp?.pinConnections);
-                        }
-                        return (
-                          <label
-                            key={i}
-                            htmlFor={`pin-radio-${comp.id}-${i}`}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '2px 4px',
-                              cursor: 'pointer',
-                              fontSize: '9px',
-                              border: isSelected ? '1px solid #0b5fff' : pinConnection ? '1px solid #28a745' : '1px solid #ddd',
-                              borderRadius: 2,
-                              background: isSelected ? '#e6f0ff' : pinConnection ? '#d4edda' : '#fff',
-                            }}
-                            title={pinConnection ? `Connected to: ${pinConnection}` : 'Select this pin, then click on a via or pad to connect'}
-                          >
-                            <input
-                              id={`pin-radio-${comp.id}-${i}`}
-                              name={`pin-radio-${comp.id}`}
-                              type="radio"
-                              checked={!!isSelected}
-                              onChange={() => {
-                                if (areComponentsLocked) {
-                                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
-                                  return;
-                                }
-                                if (isSelected) {
-                                  // Deselect if already selected
-                                  setConnectingPin(null);
-                                } else {
-                                  // Select this pin for connection
-                                  setConnectingPin({ componentId: comp.id, pinIndex: i });
-                                }
-                              }}
-                              disabled={areComponentsLocked}
-                              style={{ margin: 0, cursor: areComponentsLocked ? 'not-allowed' : 'pointer', opacity: areComponentsLocked ? 0.6 : 1 }}
-                            />
-                            <span style={{ color: '#333', fontWeight: isSelected ? 600 : 400 }}>
-                              Pin {i + 1}
-                            </span>
-                            {pinConnection && (
-                              <span style={{ fontSize: '8px', color: '#28a745', fontWeight: 600, marginLeft: 'auto' }}>
-                                {pinConnection}
-                              </span>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
+                    {(() => {
+                      // Determine if this component type has polarity
+                      // Determine if this component type has polarity
+                      const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
+                                         comp.componentType === 'Diode' || // Includes LEDs
+                                         comp.componentType === 'Battery' || 
+                                         comp.componentType === 'ZenerDiode' ||
+                                         comp.componentType === 'Transistor' ||
+                                         comp.componentType === 'IntegratedCircuit';
+                      // Also check for tantalum capacitors
+                      const isTantalumCap = comp.componentType === 'Capacitor' && 
+                                           'dielectric' in comp && 
+                                           (comp as any).dielectric === 'Tantalum';
+                      const showPolarityColumn = hasPolarity || isTantalumCap;
+                      
+                      return (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
+                              <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>
+                              <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '40px' }}>Pin</th>
+                              {showPolarityColumn && (
+                                <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '50px' }}>Polarity</th>
+                              )}
+                              <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333' }}>Node ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Array.from({ length: componentEditor.pinCount }, (_, i) => {
+                              // Read pin connection from the current component state (should update reactively)
+                              // Re-find the component to ensure we have the latest state
+                              const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                              const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                              const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
+                              const pinPolarity = (currentComp?.pinPolarities && currentComp.pinPolarities.length > i) ? (currentComp.pinPolarities[i] || '') : '';
+                              const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
+                              // Debug: log pin connection state for all pins when in connection mode
+                              if (connectingPin && connectingPin.componentId === comp.id) {
+                                console.log(`Component Editor Pin ${i + 1}: pinConnection="${pinConnection}", comp.pinConnections=`, currentComp?.pinConnections);
+                              }
+                              return (
+                                <tr
+                                  key={i}
+                                  style={{
+                                    cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                                    background: isSelected ? '#e6f0ff' : pinConnection ? '#d4edda' : '#fff',
+                                    borderBottom: '1px solid #eee',
+                                  }}
+                                  onClick={(e) => {
+                                    // Don't trigger row selection when clicking on polarity dropdown
+                                    if ((e.target as HTMLElement).tagName === 'SELECT') {
+                                      return;
+                                    }
+                                    if (areComponentsLocked) {
+                                      alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                      return;
+                                    }
+                                    if (isSelected) {
+                                      // Deselect if already selected
+                                      setConnectingPin(null);
+                                    } else {
+                                      // Select this pin for connection
+                                      setConnectingPin({ componentId: comp.id, pinIndex: i });
+                                    }
+                                  }}
+                                  title={pinConnection ? `Connected to: ${pinConnection}` : 'Select this pin, then click on a via or pad to connect'}
+                                >
+                                  <td style={{ padding: '2px 4px', textAlign: 'center' }}>
+                                    <input
+                                      id={`pin-radio-${comp.id}-${i}`}
+                                      name={`pin-radio-${comp.id}`}
+                                      type="radio"
+                                      checked={!!isSelected}
+                                      onChange={() => {
+                                        if (areComponentsLocked) {
+                                          alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                          return;
+                                        }
+                                        if (isSelected) {
+                                          // Deselect if already selected
+                                          setConnectingPin(null);
+                                        } else {
+                                          // Select this pin for connection
+                                          setConnectingPin({ componentId: comp.id, pinIndex: i });
+                                        }
+                                      }}
+                                      disabled={areComponentsLocked}
+                                      style={{ margin: 0, cursor: areComponentsLocked ? 'not-allowed' : 'pointer', opacity: areComponentsLocked ? 0.6 : 1, width: '10px', height: '10px' }}
+                                    />
+                                  </td>
+                                  <td style={{ padding: '2px 4px', color: '#333', fontWeight: isSelected ? 600 : 400, fontFamily: 'monospace' }}>
+                                    {i + 1}
+                                  </td>
+                                  {showPolarityColumn && (
+                                    <td style={{ padding: '2px 4px', textAlign: 'center' }}>
+                                      <select
+                                        key={`polarity-${comp.id}-${i}-${pinPolarity}`}
+                                        value={pinPolarity ?? ''}
+                                        onChange={(e) => {
+                                          if (areComponentsLocked) {
+                                            alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                            return;
+                                          }
+                                          const newPolarity = e.target.value as '+' | '-' | '';
+                                          const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                                          const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                                          if (currentComp) {
+                                            // Ensure pinPolarities array exists and is the right size
+                                            const existingPolarities = currentComp.pinPolarities || new Array(currentComp.pinCount).fill('');
+                                            const newPolarities = [...existingPolarities];
+                                            // Ensure array is long enough
+                                            while (newPolarities.length < currentComp.pinCount) {
+                                              newPolarities.push('');
+                                            }
+                                            newPolarities[i] = newPolarity;
+                                            const updatedComp = { ...currentComp, pinPolarities: newPolarities };
+                                            if (componentEditor.layer === 'top') {
+                                              setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                            } else {
+                                              setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                            }
+                                          }
+                                        }}
+                                        disabled={areComponentsLocked}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onFocus={(e) => e.stopPropagation()}
+                                        style={{ 
+                                          padding: '1px 2px', 
+                                          fontSize: '8px', 
+                                          border: '1px solid #ddd', 
+                                          borderRadius: 2, 
+                                          background: '#fff',
+                                          cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                                          opacity: areComponentsLocked ? 0.6 : 1,
+                                          width: '100%',
+                                          fontFamily: 'monospace',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        <option value="">-</option>
+                                        <option value="+">+</option>
+                                        <option value="-">-</option>
+                                      </select>
+                                    </td>
+                                  )}
+                                  <td style={{ padding: '2px 4px', color: pinConnection ? '#28a745' : '#999', fontWeight: pinConnection ? 600 : 400, fontFamily: 'monospace' }}>
+                                    {pinConnection || '-'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      );
+                    })()}
                   </div>
                   
-                  {/* Orientation - on one line */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-                    <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
-                      Orientation:
-                    </label>
-                    <select
-                      id={`component-orientation-${comp.id}`}
-                      name={`component-orientation-${comp.id}`}
-                      value={componentEditor.orientation ?? 0}
-                      onChange={(e) => setComponentEditor({ ...componentEditor, orientation: parseInt(e.target.value) || 0 })}
-                      disabled={areComponentsLocked}
-                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    >
-                      <option value="0">0°</option>
-                      <option value="90">90°</option>
-                      <option value="180">180°</option>
-                      <option value="270">270°</option>
-                    </select>
-                  </div>
+                  {/* Additional type-specific properties - shown after main fields (non-essential properties) */}
                   
-                  {/* Type-specific properties */}
-                  {comp.componentType === 'Resistor' && (
-                    <>
-                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>Resistor Properties:</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Resistance:</label>
-                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10kΩ" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
-                        <input id={`component-power-${comp.id}`} type="text" value={componentEditor.power || ''} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1/4W" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±5%" />
-                      </div>
-                    </>
-                  )}
-                  
-                  {comp.componentType === 'Capacitor' && (
-                    <>
-                      <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>Capacitor Properties:</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
-                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100nF" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
-                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50V" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-dielectric-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Dielectric:</label>
-                        <input id={`component-dielectric-${comp.id}`} type="text" value={componentEditor.dielectric || ''} onChange={(e) => setComponentEditor({ ...componentEditor, dielectric: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Ceramic" />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±10%" />
-                      </div>
-                    </>
-                  )}
-                  
+                  {/* IC Properties - commented out per user request */}
+                  {/* 
                   {comp.componentType === 'IntegratedCircuit' && (
                     <>
                       <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>IC Properties:</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Description:</label>
-                        <input id={`component-description-${comp.id}`} type="text" value={componentEditor.description || ''} onChange={(e) => setComponentEditor({ ...componentEditor, description: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Dual Op-Amp" />
-                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>IC Type:</label>
                         <input id={`component-ictype-${comp.id}`} type="text" value={componentEditor.icType || ''} onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Op-Amp" />
@@ -8627,6 +8942,7 @@ function App() {
                       </div>
                     </>
                   )}
+                  */}
                   
                   {/* Add more component types as needed - for now showing the most common ones */}
                   {/* TODO: Add fields for other component types (Diode, Transistor, etc.) */}
@@ -8689,9 +9005,20 @@ function App() {
                           updated.pinConnections = new Array(componentEditor.pinCount).fill('').map((_, i) => 
                             i < currentConnections.length ? currentConnections[i] : ''
                           );
+                          // Resize pinPolarities array if it exists, preserving existing polarities
+                          if (comp.pinPolarities) {
+                            const currentPolarities = comp.pinPolarities || [];
+                            updated.pinPolarities = new Array(componentEditor.pinCount).fill('').map((_, i) => 
+                              i < currentPolarities.length ? currentPolarities[i] : ''
+                            );
+                          }
                         } else {
                           // Preserve existing pinConnections even if pin count didn't change
                           updated.pinConnections = comp.pinConnections || [];
+                          // Preserve existing pinPolarities if they exist
+                          if (comp.pinPolarities) {
+                            updated.pinPolarities = comp.pinPolarities;
+                          }
                         }
                         
                         // Update type-specific fields based on component type
@@ -8704,6 +9031,13 @@ function App() {
                           (updated as any).voltage = componentEditor.voltage || undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                           (updated as any).dielectric = componentEditor.dielectric || undefined;
+                        } else if (comp.componentType === 'CapacitorElectrolytic') {
+                          (updated as any).capacitance = componentEditor.capacitance || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).tolerance = componentEditor.tolerance || undefined;
+                          (updated as any).polarity = componentEditor.polarityCapacitor || undefined;
+                          (updated as any).esr = componentEditor.esr || undefined;
+                          (updated as any).temperature = componentEditor.temperature || undefined;
                         } else if (comp.componentType === 'Diode') {
                           (updated as any).diodeType = componentEditor.diodeType || undefined;
                           (updated as any).voltage = componentEditor.voltage || undefined;
@@ -8768,9 +9102,14 @@ function App() {
                         } else if (comp.componentType === 'TestPoint') {
                           (updated as any).signal = componentEditor.signal || undefined;
                         } else if (comp.componentType === 'IntegratedCircuit') {
-                          (updated as any).description = componentEditor.description || undefined;
+                          // For ICs, description and designator should be the same
+                          (updated as any).description = componentEditor.description || componentEditor.designator || undefined;
                           (updated as any).datasheet = componentEditor.datasheet || undefined;
                           (updated as any).icType = componentEditor.icType || undefined;
+                          // Ensure designator is also set from description for ICs
+                          if (componentEditor.description) {
+                            updated.designator = componentEditor.description;
+                          }
                         } else if (comp.componentType === 'VacuumTube') {
                           (updated as any).tubeType = componentEditor.tubeType || undefined;
                         } else if (comp.componentType === 'VariableResistor') {

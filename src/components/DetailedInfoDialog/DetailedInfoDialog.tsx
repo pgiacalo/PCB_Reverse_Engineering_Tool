@@ -321,46 +321,12 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   </div>
                   <div>Size: {comp.size}</div>
                   <div>Pin Count: {comp.pinCount}</div>
-                  {comp.pinConnections && comp.pinConnections.length > 0 && (
-                    <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-                      <div style={{ marginBottom: '4px', fontWeight: 600 }}>Pin Connections:</div>
-                      <table style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        fontSize: '10px',
-                        border: '1px solid #ddd'
-                      }}>
-                        <thead>
-                          <tr style={{ backgroundColor: '#f0f0f0' }}>
-                            <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
-                            <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {comp.pinConnections.map((conn, idx) => (
-                            <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                              <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>
-                              <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{conn || '(not connected)'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {'manufacturer' in comp && (comp as any).manufacturer && (
-                    <div>Manufacturer: {(comp as any).manufacturer}</div>
-                  )}
-                  {'partNumber' in comp && (comp as any).partNumber && (
-                    <div>Part Number: {(comp as any).partNumber}</div>
-                  )}
-                  {comp.orientation !== undefined && comp.orientation !== null && (
-                    <div>Orientation: {comp.orientation}°</div>
-                  )}
                   
-                  {/* Type-specific properties */}
+                  {/* Type-specific properties - essential properties shown first, right after main value */}
                   {comp.componentType === 'Resistor' && (
                     <>
                       {(comp as any).resistance && <div>Resistance: {(comp as any).resistance}</div>}
+                      {/* Essential resistor properties - right after Resistance */}
                       {(comp as any).power && <div>Power: {(comp as any).power}</div>}
                       {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
                     </>
@@ -369,10 +335,87 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   {comp.componentType === 'Capacitor' && (
                     <>
                       {(comp as any).capacitance && <div>Capacitance: {(comp as any).capacitance}</div>}
+                      {/* Essential capacitor properties - right after Capacitance */}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).dielectric && <div>Dielectric: {(comp as any).dielectric}</div>}
+                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'CapacitorElectrolytic' && (
+                    <>
+                      {(comp as any).capacitance && <div>Capacitance: {(comp as any).capacitance}</div>}
+                      {/* Essential electrolytic capacitor properties - right after Capacitance */}
                       {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
                       {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
-                      {(comp as any).dielectric && <div>Dielectric: {(comp as any).dielectric}</div>}
+                      {(comp as any).polarity && <div>Polarity: {(comp as any).polarity}</div>}
+                      {(comp as any).esr && <div>ESR: {(comp as any).esr}</div>}
+                      {(comp as any).temperature && <div>Temperature: {(comp as any).temperature}</div>}
                     </>
+                  )}
+                  
+                  {comp.orientation !== undefined && comp.orientation !== null && (
+                    <div>Orientation: {comp.orientation}°</div>
+                  )}
+                  
+                  {comp.pinConnections && comp.pinConnections.length > 0 && (() => {
+                    // Determine if this component type has polarity
+                    // Determine if this component type has polarity
+                    const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
+                                       comp.componentType === 'Diode' || // Includes LEDs
+                                       comp.componentType === 'Battery' || 
+                                       comp.componentType === 'ZenerDiode' ||
+                                       comp.componentType === 'Transistor' ||
+                                       comp.componentType === 'IntegratedCircuit';
+                    // Also check for tantalum capacitors
+                    const isTantalumCap = comp.componentType === 'Capacitor' && 
+                                         'dielectric' in comp && 
+                                         (comp as any).dielectric === 'Tantalum';
+                    const showPolarityColumn = hasPolarity || isTantalumCap;
+                    
+                    return (
+                      <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                        <div style={{ marginBottom: '4px', fontWeight: 600 }}>Pin Connections:</div>
+                        <table style={{
+                          width: '100%',
+                          borderCollapse: 'collapse',
+                          fontSize: '10px',
+                          border: '1px solid #ddd'
+                        }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f0f0f0' }}>
+                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
+                              {showPolarityColumn && (
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Polarity</th>
+                              )}
+                              <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Node ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {comp.pinConnections.map((conn, idx) => {
+                              const polarity = comp.pinPolarities && comp.pinPolarities.length > idx ? comp.pinPolarities[idx] : '';
+                              return (
+                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>
+                                  {showPolarityColumn && (
+                                    <td style={{ padding: '4px 8px', border: '1px solid #ddd', textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, color: polarity === '+' ? '#d32f2f' : polarity === '-' ? '#1976d2' : '#999' }}>
+                                      {polarity || '-'}
+                                    </td>
+                                  )}
+                                  <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{conn || '(not connected)'}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                  {'manufacturer' in comp && (comp as any).manufacturer && (
+                    <div>Manufacturer: {(comp as any).manufacturer}</div>
+                  )}
+                  {'partNumber' in comp && (comp as any).partNumber && (
+                    <div>Part Number: {(comp as any).partNumber}</div>
                   )}
                   
                   {comp.componentType === 'Diode' && (
@@ -545,7 +588,10 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     </>
                   )}
                   
-                  <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
+                  {/* Less important details shown at the end */}
+                  <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee', fontSize: '10px', color: '#999' }}>
+                    <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
+                  </div>
                 </div>
               </div>
             ));

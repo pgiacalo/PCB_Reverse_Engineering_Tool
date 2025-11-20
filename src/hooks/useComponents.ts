@@ -28,6 +28,10 @@ export function useComponents() {
     capacitance?: string;
     voltage?: string;
     dielectric?: string;
+    // CapacitorElectrolytic
+    polarityCapacitor?: 'Positive' | 'Negative'; // renamed to avoid conflict with Transistor polarity
+    esr?: string;
+    temperature?: string;
     // Diode
     diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other';
     current?: string;
@@ -143,6 +147,14 @@ export function useComponents() {
       editor.voltage = c.voltage || '';
       editor.tolerance = c.tolerance || '';
       editor.dielectric = c.dielectric || '';
+    } else if (component.componentType === 'CapacitorElectrolytic') {
+      const c = component as any;
+      editor.capacitance = c.capacitance || '';
+      editor.voltage = c.voltage || '';
+      editor.tolerance = c.tolerance || '';
+      editor.polarityCapacitor = c.polarity || 'Positive';
+      editor.esr = c.esr || '';
+      editor.temperature = c.temperature || '';
     } else if (component.componentType === 'Diode') {
       const d = component as any;
       editor.diodeType = d.diodeType || 'Standard';

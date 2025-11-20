@@ -137,6 +137,7 @@ export const COMPONENT_ICON = {
 export const COMPONENT_TYPE_INFO = {
   Battery: { prefix: ['B', 'BT'], defaultPins: 2 },
   Capacitor: { prefix: ['C'], defaultPins: 2 },
+  CapacitorElectrolytic: { prefix: ['C', 'CE'], defaultPins: 2 },
   Diode: { prefix: ['D', 'CR'], defaultPins: 2 },
   Fuse: { prefix: ['F'], defaultPins: 2 },
   FerriteBead: { prefix: ['FB'], defaultPins: 2 },
@@ -159,6 +160,54 @@ export const COMPONENT_TYPE_INFO = {
   VariableResistor: { prefix: ['VR'], defaultPins: 3 },
   Crystal: { prefix: ['X', 'XTAL', 'Y'], defaultPins: 2 },
   ZenerDiode: { prefix: ['Z'], defaultPins: 2 },
+} as const;
+
+// Hierarchical component categories for the component type chooser
+export const COMPONENT_CATEGORIES = {
+  'Capacitors': {
+    'General': ['Capacitor'],
+    'Electrolytic': ['CapacitorElectrolytic'],
+    'Tantalum': ['Capacitor'], // Special handling: check dielectric property
+  },
+  'Diodes': {
+    'Standard': ['Diode'],
+    'Zener': ['ZenerDiode'],
+    'LED': ['Diode'], // Special handling: check diodeType property
+    'Schottky': ['Diode'], // Special handling: check diodeType property
+  },
+  'Resistors': {
+    'Standard': ['Resistor'],
+    'Network': ['ResistorNetwork'],
+    'Thermistor': ['Thermistor'],
+    'Variable': ['VariableResistor'],
+  },
+  'Semiconductors': {
+    'Transistor': ['Transistor'],
+    'Integrated Circuit': ['IntegratedCircuit'],
+  },
+  'Passive Components': {
+    'Inductor': ['Inductor'],
+    'Ferrite Bead': ['FerriteBead'],
+    'Crystal': ['Crystal'],
+  },
+  'Power & Energy': {
+    'Battery': ['Battery'],
+    'Power Supply': ['PowerSupply'],
+    'Fuse': ['Fuse'],
+  },
+  'Connectors & Switches': {
+    'Connector': ['Connector'],
+    'Jumper': ['Jumper'],
+    'Switch': ['Switch'],
+    'Relay': ['Relay'],
+  },
+  'Other': {
+    'Transformer': ['Transformer'],
+    'Speaker': ['Speaker'],
+    'Motor': ['Motor'],
+    'Test Point': ['TestPoint'],
+    'Vacuum Tube': ['VacuumTube'],
+  },
 } as const;
 
 // ============================================================================
