@@ -960,6 +960,8 @@ function App() {
   // Pad layer chooser (like trace layer chooser)
   const [showPadLayerChooser, setShowPadLayerChooser] = useState(false);
   const padChooserRef = useRef<HTMLDivElement>(null);
+  // Power Bus selector
+  const powerBusSelectorRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
@@ -970,6 +972,7 @@ function App() {
   const traceButtonRef = useRef<HTMLButtonElement>(null);
   const padButtonRef = useRef<HTMLButtonElement>(null);
   const componentButtonRef = useRef<HTMLButtonElement>(null);
+  const powerButtonRef = useRef<HTMLButtonElement>(null);
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   
@@ -4932,6 +4935,14 @@ function App() {
     }
   }, [showComponentLayerChooser]);
 
+  React.useEffect(() => {
+    if (showPowerBusSelector && powerBusSelectorRef.current && powerButtonRef.current) {
+      const pos = getDialogPosition(powerButtonRef as React.RefObject<HTMLButtonElement | null>);
+      powerBusSelectorRef.current.style.top = `${pos.top}px`;
+      powerBusSelectorRef.current.style.left = `${pos.left}px`;
+    }
+  }, [showPowerBusSelector]);
+
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
     const handlePinConnectionClick = (e: MouseEvent) => {
@@ -7718,9 +7729,10 @@ function App() {
             </button>
             {/* Power tool */}
             <button 
+              ref={powerButtonRef}
               onClick={() => { if (!isReadOnlyMode) setCurrentTool('power'); }} 
               disabled={isReadOnlyMode}
-              title="Draw Power (P)" 
+              title="Draw Power (B)" 
               style={{ 
                 width: 32, 
                 height: 32, 
@@ -8072,8 +8084,8 @@ function App() {
           )}
           {/* Power Bus Selector */}
           {showPowerBusSelector && currentTool === 'power' && (
-            <div style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, minWidth: '200px' }}>
-              <div style={{ marginBottom: '6px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Power Bus:</div>
+            <div ref={powerBusSelectorRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25, minWidth: '200px' }}>
+              <div style={{ marginBottom: '4px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Power Bus:</div>
               {powerBuses.length === 0 ? (
                 <div style={{ padding: '8px', color: '#666', fontSize: '12px' }}>No power buses defined. Use Tools → Manage Power Buses to add one.</div>
               ) : (
@@ -8119,7 +8131,7 @@ function App() {
                       setSelectedPowerBusId(bus.id);
                       setShowPowerBusSelector(false);
                     }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', marginBottom: '4px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
@@ -8140,11 +8152,11 @@ function App() {
                   // Switch back to select tool if user cancels
                   setCurrentTool('select');
                 }}
-                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '6px 10px', marginTop: '8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '4px 6px', marginTop: '4px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#666', fontSize: '11px' }}
               >
                 Cancel
               </button>
-      </div>
+            </div>
           )}
           {/* Active tool layer chooser for Component */}
           {(currentTool === 'component' && showComponentLayerChooser) && (
