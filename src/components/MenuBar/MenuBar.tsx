@@ -85,6 +85,14 @@ export interface MenuBarProps {
   setSelectedPowerIds: (ids: Set<string>) => void;
   setSelectedGroundIds: (ids: Set<string>) => void;
   
+  // Select All functions
+  selectAllVias: () => void;
+  selectAllTraces: () => void;
+  selectAllPads: () => void;
+  selectAllComponents: () => void;
+  selectAllPowerNodes: () => void;
+  selectAllGroundNodes: () => void;
+  
   // Power bus
   setShowPowerBusManager: (show: boolean) => void;
   
@@ -155,6 +163,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setSelectedComponentIds: _setSelectedComponentIds,
   setSelectedPowerIds: _setSelectedPowerIds,
   setSelectedGroundIds: _setSelectedGroundIds,
+  selectAllVias,
+  selectAllTraces,
+  selectAllPads,
+  selectAllComponents,
+  selectAllPowerNodes,
+  selectAllGroundNodes,
   setShowPowerBusManager,
   menuBarRef,
 }) => {
@@ -381,7 +395,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         )}
       </div>
 
-      {/* Tools menu - simplified, full implementation would include all select all options */}
+      {/* Tools menu */}
       <div style={{ position: 'relative' }}>
         <button 
           onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); } }} 
@@ -447,6 +461,26 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select All</div>
+            <button onClick={() => { selectAllVias(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Vias
+            </button>
+            <button onClick={() => { selectAllTraces(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Traces
+            </button>
+            <button onClick={() => { selectAllPads(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Pads
+            </button>
+            <button onClick={() => { selectAllComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Components
+            </button>
+            <button onClick={() => { selectAllPowerNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Power Nodes
+            </button>
+            <button onClick={() => { selectAllGroundNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select All Ground Nodes
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>

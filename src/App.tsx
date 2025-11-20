@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { PenLine, MousePointer } from 'lucide-react';
-import { createComponent } from './utils/components';
+import { createComponent, autoAssignPolarity } from './utils/components';
 import { 
   COMPONENT_TYPE_INFO,
   COMPONENT_CATEGORIES,
@@ -897,6 +897,61 @@ function App() {
     // No power or ground connection → Pad (Signal)
     return 'Pad (Signal)';
   }, [powers, grounds]);
+
+  // Selection functions for "Select All" menu items
+  const selectAllVias = useCallback(() => {
+    const viaIds = drawingStrokes
+      .filter(s => s.type === 'via')
+      .map(s => s.id);
+    setSelectedIds(new Set(viaIds));
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const selectAllTraces = useCallback(() => {
+    const traceIds = drawingStrokes
+      .filter(s => s.type === 'trace')
+      .map(s => s.id);
+    setSelectedIds(new Set(traceIds));
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const selectAllPads = useCallback(() => {
+    const padIds = drawingStrokes
+      .filter(s => s.type === 'pad')
+      .map(s => s.id);
+    setSelectedIds(new Set(padIds));
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const selectAllComponents = useCallback(() => {
+    const componentIds = [...componentsTop, ...componentsBottom].map(c => c.id);
+    setSelectedComponentIds(new Set(componentIds));
+    setSelectedIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const selectAllPowerNodes = useCallback(() => {
+    const powerIds = powers.map(p => p.id);
+    setSelectedPowerIds(new Set(powerIds));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [powers, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
+
+  const selectAllGroundNodes = useCallback(() => {
+    const groundIds = grounds.map(g => g.id);
+    setSelectedGroundIds(new Set(groundIds));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+  }, [grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
   
   // Tool-specific layer defaults are now declared above (before useToolRegistry hook)
   // Show chooser popovers only when tool is (re)selected
@@ -2932,13 +2987,11 @@ function App() {
       }
       
       // Draw polarity indicator for components with polarity
-      // Includes: diodes (including LEDs), electrolytic/tantalum capacitors, transistors, ICs, batteries
+      // Includes: diodes (including LEDs), electrolytic/tantalum capacitors, batteries (2-pin components only)
       const hasPolarity = c.componentType === 'CapacitorElectrolytic' || 
                          c.componentType === 'Diode' || // Includes LEDs (diodeType: 'LED')
                          c.componentType === 'Battery' || 
-                         c.componentType === 'ZenerDiode' ||
-                         c.componentType === 'Transistor' || // Has polarity (NPN/PNP, N-Channel/P-Channel)
-                         c.componentType === 'IntegratedCircuit'; // Has pin 1 orientation
+                         c.componentType === 'ZenerDiode';
       
       // Also check for tantalum capacitors (regular Capacitor with Tantalum dielectric)
       const isTantalumCap = c.componentType === 'Capacitor' && 
@@ -4967,6 +5020,9 @@ function App() {
         const compBottom = componentsBottom.find(c => c.id === componentId);
         
         if (compTop) {
+          // Capture drawingStrokes for use in closure
+          const currentDrawingStrokes = drawingStrokes;
+          
           setComponentsTop(prev => {
             const comp = prev.find(c => c.id === componentId);
             if (!comp) return prev;
@@ -4995,9 +5051,25 @@ function App() {
             console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
             console.log(`New pinConnections:`, newPinConnections);
             
-            return prev.map(c => c.id === componentId ? { ...c, pinConnections: newPinConnections } : c);
+            // Auto-assign polarity for 2-pin components with polarity
+            const updatedComp = prev.find(c => c.id === componentId);
+            const newPolarities = updatedComp ? autoAssignPolarity(updatedComp, newPinConnections, currentDrawingStrokes) : null;
+            
+            return prev.map(c => {
+              if (c.id === componentId) {
+                const updated = { ...c, pinConnections: newPinConnections };
+                if (newPolarities) {
+                  (updated as any).pinPolarities = newPolarities;
+                }
+                return updated;
+              }
+              return c;
+            });
           });
         } else if (compBottom) {
+          // Capture drawingStrokes for use in closure
+          const currentDrawingStrokes = drawingStrokes;
+          
           setComponentsBottom(prev => {
             const comp = prev.find(c => c.id === componentId);
             if (!comp) return prev;
@@ -5026,7 +5098,20 @@ function App() {
             console.log(`Updated pin ${pinIndex} with value: ${pointIdString}`);
             console.log(`New pinConnections:`, newPinConnections);
             
-            return prev.map(c => c.id === componentId ? { ...c, pinConnections: newPinConnections } : c);
+            // Auto-assign polarity for 2-pin components with polarity
+            const updatedComp = prev.find(c => c.id === componentId);
+            const newPolarities = updatedComp ? autoAssignPolarity(updatedComp, newPinConnections, currentDrawingStrokes) : null;
+            
+            return prev.map(c => {
+              if (c.id === componentId) {
+                const updated = { ...c, pinConnections: newPinConnections };
+                if (newPolarities) {
+                  (updated as any).pinPolarities = newPolarities;
+                }
+                return updated;
+              }
+              return c;
+            });
           });
         }
         
@@ -7439,6 +7524,12 @@ function App() {
         setSelectedComponentIds={setSelectedComponentIds}
         setSelectedPowerIds={setSelectedPowerIds}
         setSelectedGroundIds={setSelectedGroundIds}
+        selectAllVias={selectAllVias}
+        selectAllTraces={selectAllTraces}
+        selectAllPads={selectAllPads}
+        selectAllComponents={selectAllComponents}
+        selectAllPowerNodes={selectAllPowerNodes}
+        selectAllGroundNodes={selectAllGroundNodes}
         setShowPowerBusManager={setShowPowerBusManager}
         menuBarRef={menuBarRef}
       />
@@ -8774,9 +8865,7 @@ function App() {
                       const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
                                          comp.componentType === 'Diode' || // Includes LEDs
                                          comp.componentType === 'Battery' || 
-                                         comp.componentType === 'ZenerDiode' ||
-                                         comp.componentType === 'Transistor' ||
-                                         comp.componentType === 'IntegratedCircuit';
+                                         comp.componentType === 'ZenerDiode';
                       // Also check for tantalum capacitors
                       const isTantalumCap = comp.componentType === 'Capacitor' && 
                                            'dielectric' in comp && 

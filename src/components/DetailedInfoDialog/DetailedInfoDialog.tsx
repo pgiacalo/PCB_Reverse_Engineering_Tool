@@ -22,6 +22,7 @@
 import React from 'react';
 import type { PCBComponent } from '../../types';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
+import { autoAssignPolarity } from '../../utils/components';
 
 // DrawingStroke type matches App.tsx's local interface
 interface DrawingStroke {
@@ -262,26 +263,37 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             // Create pin connections array for this component
                             const newPinConnections = componentNodeIds.map(item => item.nodeId.toString());
 
+                            // Auto-assign polarity for 2-pin components with polarity
+                            const newPolarities = autoAssignPolarity(component, newPinConnections, drawingStrokes as any);
+
                             // Update component based on layer
                             if (component.layer === 'top') {
                               setComponentsTop(prev => prev.map(c => {
                                 if (c.id === component.id) {
-                                  return {
+                                  const updated = {
                                     ...c,
                                     pinCount: pinsPerComponent,
                                     pinConnections: newPinConnections
                                   };
+                                  if (newPolarities) {
+                                    (updated as any).pinPolarities = newPolarities;
+                                  }
+                                  return updated;
                                 }
                                 return c;
                               }));
                             } else {
                               setComponentsBottom(prev => prev.map(c => {
                                 if (c.id === component.id) {
-                                  return {
+                                  const updated = {
                                     ...c,
                                     pinCount: pinsPerComponent,
                                     pinConnections: newPinConnections
                                   };
+                                  if (newPolarities) {
+                                    (updated as any).pinPolarities = newPolarities;
+                                  }
+                                  return updated;
                                 }
                                 return c;
                               }));
@@ -364,9 +376,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
                                        comp.componentType === 'Diode' || // Includes LEDs
                                        comp.componentType === 'Battery' || 
-                                       comp.componentType === 'ZenerDiode' ||
-                                       comp.componentType === 'Transistor' ||
-                                       comp.componentType === 'IntegratedCircuit';
+                                       comp.componentType === 'ZenerDiode';
                     // Also check for tantalum capacitors
                     const isTantalumCap = comp.componentType === 'Capacitor' && 
                                          'dielectric' in comp && 

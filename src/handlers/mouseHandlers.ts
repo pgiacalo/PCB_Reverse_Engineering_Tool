@@ -28,6 +28,7 @@ import type { PCBComponent } from '../types';
 import type { DrawingStroke, DrawingPoint } from '../hooks/useDrawing';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../hooks/usePowerGround';
 import type { Layer, Tool } from '../hooks';
+import { autoAssignPolarity } from '../utils/components';
 
 export interface MouseHandlersProps {
   // Canvas and view
@@ -418,9 +419,15 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
               console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
               console.log(`New pinConnections array:`, newPinConnections);
               
+              // Auto-assign polarity for 2-pin components with polarity
+              const newPolarities = comp ? autoAssignPolarity(comp, newPinConnections, drawingStrokes as any) : null;
+              
               const updated = prev.map(c => {
                 if (c.id === componentId) {
                   const updatedComp = { ...c, pinConnections: newPinConnections };
+                  if (newPolarities) {
+                    (updatedComp as any).pinPolarities = newPolarities;
+                  }
                   return updatedComp;
                 }
                 return c;
@@ -467,9 +474,15 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
               console.log(`Updating pin ${pinIndex} with value: ${pointIdString}`);
               console.log(`New pinConnections array:`, newPinConnections);
               
+              // Auto-assign polarity for 2-pin components with polarity
+              const newPolarities = comp ? autoAssignPolarity(comp, newPinConnections, drawingStrokes as any) : null;
+              
               const updated = prev.map(c => {
                 if (c.id === componentId) {
                   const updatedComp = { ...c, pinConnections: newPinConnections };
+                  if (newPolarities) {
+                    (updatedComp as any).pinPolarities = newPolarities;
+                  }
                   return updatedComp;
                 }
                 return c;

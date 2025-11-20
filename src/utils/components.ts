@@ -241,6 +241,88 @@ export function hasConnections(component: PCBComponent): boolean {
 }
 
 /**
+ * Auto-assign pin polarity for 2-pin components with polarity
+ * Returns the new pinPolarities array if assignment was successful, null otherwise
+ */
+export function autoAssignPolarity(
+  component: PCBComponent,
+  pinConnections: string[],
+  drawingStrokes: Array<{ type?: 'trace' | 'via' | 'pad'; points: Array<{ x: number; y: number; id?: number }> }>
+): ('+' | '-' | '')[] | null {
+  // Check if component has polarity
+  const hasPolarity = component.componentType === 'CapacitorElectrolytic' || 
+                     component.componentType === 'Diode' || 
+                     component.componentType === 'Battery' || 
+                     component.componentType === 'ZenerDiode';
+  const isTantalumCap = component.componentType === 'Capacitor' && 
+                       'dielectric' in component && 
+                       (component as any).dielectric === 'Tantalum';
+  
+  if (!(hasPolarity || isTantalumCap) || component.pinCount !== 2) {
+    return null;
+  }
+  
+  // Check if both pins are connected
+  const bothConnected = pinConnections.length === 2 && 
+                       pinConnections[0] && pinConnections[0].trim() !== '' &&
+                       pinConnections[1] && pinConnections[1].trim() !== '';
+  
+  if (!bothConnected) {
+    return null;
+  }
+  
+  // Calculate + symbol position
+  const orientation = component.orientation || 0;
+  const size = component.size || 18;
+  const half = size / 2;
+  const plusSize = size * 0.25;
+  const offsetDistance = half + plusSize * 0.6;
+  const angleRad = (orientation * Math.PI) / 180;
+  const plusX = component.x + Math.cos(angleRad) * offsetDistance;
+  const plusY = component.y + Math.sin(angleRad) * offsetDistance;
+  
+  // Find coordinates of connected vias/pads
+  const findViaPadCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
+    const pointId = parseInt(pointIdStr, 10);
+    if (isNaN(pointId)) return null;
+    
+    // Search in drawingStrokes for via/pad with matching pointId
+    for (const stroke of drawingStrokes) {
+      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+        const point = stroke.points[0];
+        if (point.id === pointId) {
+          return { x: point.x, y: point.y };
+        }
+      }
+    }
+    return null;
+  };
+  
+  const pin0Coords = findViaPadCoordinates(pinConnections[0]);
+  const pin1Coords = findViaPadCoordinates(pinConnections[1]);
+  
+  if (!pin0Coords || !pin1Coords) {
+    return null;
+  }
+  
+  // Calculate distances from + symbol to each pin's via/pad
+  const dist0 = Math.hypot(plusX - pin0Coords.x, plusY - pin0Coords.y);
+  const dist1 = Math.hypot(plusX - pin1Coords.x, plusY - pin1Coords.y);
+  
+  // Set polarity: pin closer to + symbol gets '+', other gets '-'
+  const newPolarities: ('+' | '-' | '')[] = ['', ''];
+  if (dist0 < dist1) {
+    newPolarities[0] = '+';
+    newPolarities[1] = '-';
+  } else {
+    newPolarities[0] = '-';
+    newPolarities[1] = '+';
+  }
+  
+  return newPolarities;
+}
+
+/**
  * Get component display name (designator or type)
  */
 export function getComponentDisplayName(component: PCBComponent): string {
