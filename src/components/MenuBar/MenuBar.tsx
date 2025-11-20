@@ -45,6 +45,9 @@ export interface MenuBarProps {
   areImagesLocked: boolean;
   setAreImagesLocked: React.Dispatch<React.SetStateAction<boolean>>;
   
+  // Board dimensions
+  onEnterBoardDimensions: () => void;
+  
   // File input refs
   fileInputTopRef: React.RefObject<HTMLInputElement | null>;
   fileInputBottomRef: React.RefObject<HTMLInputElement | null>;
@@ -90,6 +93,7 @@ export interface MenuBarProps {
   selectAllTraces: () => void;
   selectAllPads: () => void;
   selectAllComponents: () => void;
+  selectDisconnectedComponents: () => void;
   selectAllPowerNodes: () => void;
   selectAllGroundNodes: () => void;
   
@@ -131,6 +135,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setIsBlackAndWhiteInverted,
   areImagesLocked,
   setAreImagesLocked,
+  onEnterBoardDimensions,
   fileInputTopRef,
   fileInputBottomRef,
   openProjectRef: _openProjectRef,
@@ -167,6 +172,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectAllTraces,
   selectAllPads,
   selectAllComponents,
+  selectDisconnectedComponents,
   selectAllPowerNodes,
   selectAllGroundNodes,
   setShowPowerBusManager,
@@ -388,6 +394,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button onClick={() => { onEnterBoardDimensions(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Enter Dimensions…</button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Lock Images {areImagesLocked ? '✓' : ''}
             </button>
@@ -475,6 +483,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <button onClick={() => { selectAllComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Components
+            </button>
+            <button onClick={() => { selectDisconnectedComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select Disconnected
             </button>
             <button onClick={() => { selectAllPowerNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Power Nodes

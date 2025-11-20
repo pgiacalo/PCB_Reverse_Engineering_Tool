@@ -22,6 +22,7 @@ import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
+import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import {
   useDrawing,
   useSelection,
@@ -837,6 +838,19 @@ function App() {
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
+  // Board dimensions for coordinate scaling
+  const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
+    const saved = localStorage.getItem('boardDimensions');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [showBoardDimensionsDialog, setShowBoardDimensionsDialog] = useState(false);
   
   // Initialize power buses with defaults if empty
   React.useEffect(() => {
@@ -936,6 +950,48 @@ function App() {
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
   }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const selectDisconnectedComponents = useCallback(() => {
+    const disconnectedIds = [...componentsTop, ...componentsBottom]
+      .filter(c => {
+        const pinConnections = c.pinConnections || [];
+        // Component is disconnected if not all pins are connected
+        const allPinsConnected = pinConnections.length > 0 && 
+          pinConnections.length === c.pinCount && 
+          pinConnections.every(conn => conn && conn.trim() !== '');
+        return !allPinsConnected;
+      })
+      .map(c => c.id);
+    setSelectedComponentIds(new Set(disconnectedIds));
+    setSelectedIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Calculate visible center in canvas content coordinates
+    const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+    const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+    const visibleCenterX = contentWidth / 2;
+    const visibleCenterY = contentHeight / 2;
+
+    // Calculate viewPan to center the component at the visible center
+    // Formula: viewPan = visibleCenter - world * scale
+    const newPanX = visibleCenterX - worldX * viewScale;
+    const newPanY = visibleCenterY - worldY * viewScale;
+
+    // Update view pan to center on component
+    setViewPan({ x: newPanX, y: newPanY });
+
+    // Select the component and clear other selections
+    setSelectedComponentIds(new Set([componentId]));
+    setSelectedIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [viewScale, setViewPan, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const selectAllPowerNodes = useCallback(() => {
     const powerIds = powers.map(p => p.id);
@@ -2271,6 +2327,27 @@ function App() {
             return kept;
           });
         }
+        // Also erase components intersecting the eraser square
+        // Don't erase components if locked
+        if (!areComponentsLocked) {
+          const half = brushSize / 2;
+          const minX = x - half;
+          const maxX = x + half;
+          const minY = y - half;
+          const maxY = y + half;
+          const intersects = (c: PCBComponent): boolean => {
+            const size = c.size || 18;
+            const radius = size / 2;
+            const bbMinX = c.x - radius;
+            const bbMaxX = c.x + radius;
+            const bbMinY = c.y - radius;
+            const bbMaxY = c.y + radius;
+            const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
+            return !disjoint;
+          };
+          setComponentsTop(prev => prev.filter(c => !intersects(c)));
+          setComponentsBottom(prev => prev.filter(c => !intersects(c)));
+        }
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
       // Don't allow transforms if images are locked
@@ -2953,11 +3030,20 @@ function App() {
       ctx.save();
       ctx.strokeStyle = c.color || '#111';
       ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      
+      // Check if all pins are connected - if so, use green background
+      const pinConnections = c.pinConnections || [];
+      const allPinsConnected = pinConnections.length > 0 && 
+        pinConnections.length === c.pinCount && 
+        pinConnections.every(conn => conn && conn.trim() !== '');
+      
+      // Fill background: green if all pins connected, white otherwise
+      ctx.fillStyle = allPinsConnected ? 'rgba(76, 175, 80, 0.85)' : 'rgba(255,255,255,0.85)';
       ctx.beginPath();
       ctx.rect(c.x - half, c.y - half, size, size);
       ctx.fill();
       ctx.stroke();
+      
       // Draw abbreviation text (default based on component type prefix)
       let abbreviation = ('abbreviation' in c && (c as any).abbreviation) ? 
         String((c as any).abbreviation).trim() : '';
@@ -2968,72 +3054,103 @@ function App() {
       ctx.font = `bold ${Math.max(8, size * 0.35)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(abbreviation, c.x, c.y);
       
-      // Check if all pins are connected - if so, underline the abbreviation
-      const pinConnections = c.pinConnections || [];
-      const allPinsConnected = pinConnections.length > 0 && 
-        pinConnections.length === c.pinCount && 
-        pinConnections.every(conn => conn && conn.trim() !== '');
+      // Helper function to find via/pad coordinates from point ID
+      const findViaPadCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
+        const pointId = parseInt(pointIdStr, 10);
+        if (isNaN(pointId)) return null;
+        
+        for (const stroke of drawingStrokes) {
+          if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+            const point = stroke.points[0];
+            if (point.id === pointId) {
+              return { x: point.x, y: point.y };
+            }
+          }
+        }
+        return null;
+      };
       
-      if (allPinsConnected) {
-        // Measure text width to draw underline
-        const textMetrics = ctx.measureText(abbreviation);
-        const textWidth = textMetrics.width;
-        const underlineY = c.y + (size * 0.35) / 2 + 2; // Position below text
+      // Determine negative side indicator for components with polarity
+      const hasPolarity = c.componentType === 'CapacitorElectrolytic' || 
+                         c.componentType === 'Diode' || 
+                         c.componentType === 'Battery' || 
+                         c.componentType === 'ZenerDiode';
+      const isTantalumCap = c.componentType === 'Capacitor' && 
+                           'dielectric' in c && 
+                           (c as any).dielectric === 'Tantalum';
+      
+      let negativeIndicator: 'none' | 'underscore' | 'macron' | 'pipeBefore' | 'pipeAfter' = 'none';
+      
+      if ((hasPolarity || isTantalumCap) && c.pinPolarities && c.pinPolarities.length === 2) {
+        // Find which pin has negative polarity
+        const negativePinIndex = c.pinPolarities.findIndex(p => p === '-');
+        if (negativePinIndex >= 0 && pinConnections[negativePinIndex]) {
+          const negativeViaPad = findViaPadCoordinates(pinConnections[negativePinIndex]);
+          if (negativeViaPad) {
+            // Calculate direction from component center to negative via/pad
+            const dx = negativeViaPad.x - c.x;
+            const dy = negativeViaPad.y - c.y;
+            
+            // Determine primary direction (use larger absolute value)
+            if (Math.abs(dy) > Math.abs(dx)) {
+              // Vertical direction dominates
+              negativeIndicator = dy > 0 ? 'underscore' : 'macron'; // Below = underscore, Above = macron
+            } else {
+              // Horizontal direction dominates
+              negativeIndicator = dx > 0 ? 'pipeAfter' : 'pipeBefore'; // Right = pipe after, Left = pipe before
+            }
+          }
+        }
+      }
+      
+      // Draw designator with negative indicator
+      const textMetrics = ctx.measureText(abbreviation);
+      const textWidth = textMetrics.width;
+      const fontSize = Math.max(8, size * 0.35);
+      const textY = c.y;
+      
+      // Draw negative indicator based on direction
+      if (negativeIndicator === 'underscore') {
+        // Draw underscore below designator
+        const underlineY = textY + fontSize / 2 + 2;
         ctx.strokeStyle = c.color || '#111';
         ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
         ctx.beginPath();
         ctx.moveTo(c.x - textWidth / 2, underlineY);
         ctx.lineTo(c.x + textWidth / 2, underlineY);
         ctx.stroke();
-      }
-      
-      // Draw polarity indicator for components with polarity
-      // Includes: diodes (including LEDs), electrolytic/tantalum capacitors, batteries (2-pin components only)
-      const hasPolarity = c.componentType === 'CapacitorElectrolytic' || 
-                         c.componentType === 'Diode' || // Includes LEDs (diodeType: 'LED')
-                         c.componentType === 'Battery' || 
-                         c.componentType === 'ZenerDiode';
-      
-      // Also check for tantalum capacitors (regular Capacitor with Tantalum dielectric)
-      const isTantalumCap = c.componentType === 'Capacitor' && 
-                           'dielectric' in c && 
-                           (c as any).dielectric === 'Tantalum';
-      
-      if (hasPolarity || isTantalumCap) {
-        const orientation = c.orientation || 0; // Default to 0 degrees
-        const plusSize = size * 0.25; // Size of the '+' sign
-        const plusLineWidth = Math.max(1.5, 2.5 / Math.max(viewScale, 0.001));
-        const offsetDistance = half + plusSize * 0.6; // Distance from edge of square - moved further out for clarity
-        
-        // Calculate position based on orientation (0° = right, 90° = bottom, 180° = left, 270° = top)
-        const angleRad = (orientation * Math.PI) / 180;
-        const plusX = c.x + Math.cos(angleRad) * offsetDistance;
-        const plusY = c.y + Math.sin(angleRad) * offsetDistance;
-        
-        ctx.save();
-        ctx.translate(plusX, plusY);
-        // Don't rotate the '+' symbol itself, just position it
-        
-        ctx.strokeStyle = '#d32f2f'; // Red color for positive indicator
-        ctx.fillStyle = '#d32f2f';
-        ctx.lineWidth = plusLineWidth;
-        ctx.lineCap = 'round';
-        
-        // Draw '+' sign (always upright, not rotated)
-        const plusHalf = plusSize / 2;
+      } else if (negativeIndicator === 'macron') {
+        // Draw macron above designator
+        const macronY = textY - fontSize / 2 - 2;
+        ctx.strokeStyle = c.color || '#111';
+        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
         ctx.beginPath();
-        // Horizontal line
-        ctx.moveTo(-plusHalf, 0);
-        ctx.lineTo(plusHalf, 0);
-        // Vertical line
-        ctx.moveTo(0, -plusHalf);
-        ctx.lineTo(0, plusHalf);
+        ctx.moveTo(c.x - textWidth / 2, macronY);
+        ctx.lineTo(c.x + textWidth / 2, macronY);
         ctx.stroke();
-        
-        ctx.restore();
+      } else if (negativeIndicator === 'pipeBefore') {
+        // Draw pipe before designator
+        const pipeX = c.x - textWidth / 2 - fontSize * 0.3;
+        ctx.strokeStyle = c.color || '#111';
+        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+        ctx.beginPath();
+        ctx.moveTo(pipeX, textY - fontSize / 2);
+        ctx.lineTo(pipeX, textY + fontSize / 2);
+        ctx.stroke();
+      } else if (negativeIndicator === 'pipeAfter') {
+        // Draw pipe after designator
+        const pipeX = c.x + textWidth / 2 + fontSize * 0.3;
+        ctx.strokeStyle = c.color || '#111';
+        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
+        ctx.beginPath();
+        ctx.moveTo(pipeX, textY - fontSize / 2);
+        ctx.lineTo(pipeX, textY + fontSize / 2);
+        ctx.stroke();
       }
+      
+      // Draw the designator text
+      ctx.fillText(abbreviation, c.x, c.y);
       
       // selection highlight
       const isSelected = selectedComponentIds.has(c.id);
@@ -7503,6 +7620,7 @@ function App() {
         setIsBlackAndWhiteInverted={setIsBlackAndWhiteInverted}
         areImagesLocked={areImagesLocked}
         setAreImagesLocked={setAreImagesLocked}
+        onEnterBoardDimensions={() => setShowBoardDimensionsDialog(true)}
         fileInputTopRef={fileInputTopRef}
         fileInputBottomRef={fileInputBottomRef}
         openProjectRef={openProjectRef}
@@ -7539,6 +7657,7 @@ function App() {
         selectAllTraces={selectAllTraces}
         selectAllPads={selectAllPads}
         selectAllComponents={selectAllComponents}
+        selectDisconnectedComponents={selectDisconnectedComponents}
         selectAllPowerNodes={selectAllPowerNodes}
         selectAllGroundNodes={selectAllGroundNodes}
         setShowPowerBusManager={setShowPowerBusManager}
@@ -8143,6 +8262,18 @@ function App() {
         </button>
                 ))
               )}
+              <div style={{ height: 1, background: '#ddd', margin: '4px 0' }} />
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowPowerBusSelector(false);
+                  setShowPowerBusManager(true);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#333', fontSize: '11px' }}
+              >
+                Manage Power Buses…
+              </button>
               <button
                 onClick={(e) => {
                   e.preventDefault();
@@ -8152,7 +8283,7 @@ function App() {
                   // Switch back to select tool if user cancels
                   setCurrentTool('select');
                 }}
-                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '4px 6px', marginTop: '4px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#666', fontSize: '11px' }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '4px 6px', marginTop: '2px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#666', fontSize: '11px' }}
               >
                 Cancel
               </button>
@@ -9488,10 +9619,10 @@ function App() {
 
       {/* Power Bus Manager Dialog */}
       {showPowerBusManager && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '2px solid #333', borderRadius: 8, padding: '20px', zIndex: 1000, minWidth: '500px', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
-            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666' }}>×</button>
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '12px', zIndex: 1000, minWidth: '400px', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
+            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666', padding: 0, width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
           <div style={{ marginBottom: '16px' }}>
             {[...powerBuses].sort((a, b) => {
@@ -9524,8 +9655,8 @@ function App() {
               // Find the original index for state updates
               const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
               return (
-              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', marginBottom: '8px', background: '#f5f5f5', borderRadius: 6, border: '1px solid #ddd' }}>
-                <div style={{ width: 24, height: 24, borderRadius: '50%', background: bus.color, border: '2px solid #333' }} />
+              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px', marginBottom: '6px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
                 <div style={{ flex: 1 }}>
                   <input
                     type="text"
@@ -9536,7 +9667,7 @@ function App() {
                       setPowerBuses(updated);
                     }}
                     placeholder="Name"
-                    style={{ width: '100%', padding: '4px 8px', marginBottom: '4px', border: '1px solid #ccc', borderRadius: 4, fontSize: '13px' }}
+                    style={{ width: '100%', padding: '3px 6px', marginBottom: '3px', border: '1px solid #ccc', borderRadius: 3, fontSize: '12px' }}
                   />
                   <input
                     type="text"
@@ -9547,7 +9678,7 @@ function App() {
                       setPowerBuses(updated);
                     }}
                     placeholder="Voltage (e.g., +5VDC, +3.3VDC, -5VDC)"
-                    style={{ width: '100%', padding: '4px 8px', border: '1px solid #ccc', borderRadius: 4, fontSize: '13px' }}
+                    style={{ width: '100%', padding: '3px 6px', border: '1px solid #ccc', borderRadius: 3, fontSize: '12px' }}
                   />
                 </div>
                 <input
@@ -9558,7 +9689,7 @@ function App() {
                     updated[originalIndex] = { ...bus, color: e.target.value };
                     setPowerBuses(updated);
                   }}
-                  style={{ width: '40px', height: '40px', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer' }}
+                  style={{ width: '32px', height: '32px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}
                 />
                 <button
                   onClick={() => {
@@ -9570,7 +9701,7 @@ function App() {
                     }
                     setPowerBuses(prev => prev.filter(b => b.id !== bus.id));
                   }}
-                  style={{ padding: '6px 12px', background: '#ff4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
+                  style={{ padding: '4px 8px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '11px' }}
                 >
                   Delete
                 </button>
@@ -9588,13 +9719,13 @@ function App() {
               };
               setPowerBuses(prev => [...prev, newBus]);
             }}
-            style={{ width: '100%', padding: '10px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}
+            style={{ width: '100%', padding: '6px 10px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px', marginBottom: '8px' }}
           >
             + Add Power Bus
           </button>
           <button
             onClick={() => setShowPowerBusManager(false)}
-            style={{ width: '100%', padding: '10px', background: '#666', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: '14px', fontWeight: 600 }}
+            style={{ width: '100%', padding: '6px 10px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
           >
             Close
           </button>
@@ -9696,6 +9827,7 @@ function App() {
         setComponentsBottom={setComponentsBottom}
         determineViaType={determineViaType}
         determinePadType={determinePadType}
+        onFindComponent={findAndCenterComponent}
       />
 
       {/* New Project Confirmation Dialog */}
@@ -10157,6 +10289,16 @@ function App() {
         title={errorDialog.title}
         message={errorDialog.message}
         onClose={() => setErrorDialog({ visible: false, title: '', message: '' })}
+      />
+
+      <BoardDimensionsDialog
+        visible={showBoardDimensionsDialog}
+        dimensions={boardDimensions}
+        onSave={(dimensions) => {
+          setBoardDimensions(dimensions);
+          localStorage.setItem('boardDimensions', JSON.stringify(dimensions));
+        }}
+        onClose={() => setShowBoardDimensionsDialog(false)}
       />
 
       {/* Set Size Dialog */}

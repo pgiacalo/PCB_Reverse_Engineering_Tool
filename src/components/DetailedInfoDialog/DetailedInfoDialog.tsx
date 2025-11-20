@@ -69,6 +69,8 @@ export interface DetailedInfoDialogProps {
   determineViaType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Utility function to determine pad type */
   determinePadType: (nodeId: number, powerBuses: PowerBus[]) => string;
+  /** Callback to find and center on a component */
+  onFindComponent?: (componentId: string, x: number, y: number) => void;
 }
 
 export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
@@ -88,6 +90,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   setComponentsBottom,
   determineViaType,
   determinePadType,
+  onFindComponent,
 }) => {
   if (!visible) return null;
 
@@ -186,16 +189,45 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const hasViasOrPads = drawingStrokes.some(s => selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad'));
             return [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
               <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {comp.componentType}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {comp.componentType}
+                    </div>
                   </div>
+                  {onFindComponent && (
+                    <button
+                      onClick={() => {
+                        onFindComponent(comp.id, comp.x, comp.y);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   <div>Layer: {comp.layer}</div>

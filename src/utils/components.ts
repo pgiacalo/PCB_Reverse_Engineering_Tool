@@ -161,9 +161,6 @@ export function createComponent(
     case 'Crystal':
       return { ...baseComponent, componentType: 'Crystal' } as Crystal;
     
-    case 'CapacitorElectrolytic':
-      return { ...baseComponent, componentType: 'CapacitorElectrolytic', polarity: 'Positive' } as CapacitorElectrolytic;
-    
     case 'ZenerDiode':
       return { ...baseComponent, componentType: 'ZenerDiode' } as ZenerDiode;
     
@@ -305,18 +302,18 @@ export function autoAssignPolarity(
     return null;
   }
   
-  // Calculate distances from + symbol to each pin's via/pad
-  const dist0 = Math.hypot(plusX - pin0Coords.x, plusY - pin0Coords.y);
-  const dist1 = Math.hypot(plusX - pin1Coords.x, plusY - pin1Coords.y);
+  // Calculate distances from component center to each pin's via/pad
+  const dist0 = Math.hypot(component.x - pin0Coords.x, component.y - pin0Coords.y);
+  const dist1 = Math.hypot(component.x - pin1Coords.x, component.y - pin1Coords.y);
   
-  // Set polarity: pin closer to + symbol gets '+', other gets '-'
+  // Set polarity: pin closer to via/pad (shorter distance) gets '-', other gets '+'
   const newPolarities: ('+' | '-' | '')[] = ['', ''];
   if (dist0 < dist1) {
-    newPolarities[0] = '+';
-    newPolarities[1] = '-';
-  } else {
     newPolarities[0] = '-';
     newPolarities[1] = '+';
+  } else {
+    newPolarities[0] = '+';
+    newPolarities[1] = '-';
   }
   
   return newPolarities;
