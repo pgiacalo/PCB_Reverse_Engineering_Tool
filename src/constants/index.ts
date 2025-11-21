@@ -234,3 +234,110 @@ export const VIA = {
   INNER_CIRCLE_RATIO: 0.5, // inner circle is 50% of outer diameter
 };
 
+// ============================================================================
+// Component Property Units Lookup Table
+// ============================================================================
+
+/**
+ * Global lookup table for all component property units.
+ * This eliminates the need to parse/combine value+unit strings.
+ * Each property that has units is defined here with:
+ * - validUnits: array of valid unit strings
+ * - defaultUnit: the default unit to use if none specified
+ */
+export const COMPONENT_PROPERTY_UNITS = {
+  // Resistance (Resistor, ResistorNetwork, Thermistor, VariableResistor, Inductor DC resistance)
+  resistance: {
+    validUnits: ['Ω', 'mΩ', 'kΩ', 'MΩ'],
+    defaultUnit: 'Ω',
+  },
+  // Capacitance (Capacitor, Electrolytic Capacitor)
+  capacitance: {
+    validUnits: ['pF', 'nF', 'µF', 'mF', 'F'],
+    defaultUnit: 'µF',
+  },
+  // Voltage (Capacitor, Electrolytic Capacitor, Diode, Battery, Fuse, Motor, PowerSupply, Transistor, Switch, ZenerDiode, Relay coilVoltage)
+  voltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // Current (Diode, Fuse, FerriteBead, Relay, Inductor, Motor, PowerSupply, Transistor, Switch)
+  current: {
+    validUnits: ['µA', 'mA', 'A'],
+    defaultUnit: 'A',
+  },
+  // Power (Resistor, Speaker, Transformer, ZenerDiode, VariableResistor)
+  power: {
+    validUnits: ['W', 'mW', 'kW'],
+    defaultUnit: 'W',
+  },
+  // Inductance (Inductor)
+  inductance: {
+    validUnits: ['nH', 'µH', 'mH', 'H'],
+    defaultUnit: 'µH',
+  },
+  // Impedance (FerriteBead, Speaker)
+  impedance: {
+    validUnits: ['Ω', 'mΩ', 'kΩ'],
+    defaultUnit: 'Ω',
+  },
+  // Capacity (Battery)
+  capacity: {
+    validUnits: ['mAh', 'Ah'],
+    defaultUnit: 'mAh',
+  },
+  // Input Voltage (PowerSupply)
+  inputVoltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // Output Voltage (PowerSupply)
+  outputVoltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // Coil Voltage (Relay)
+  coilVoltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // Primary Voltage (Transformer)
+  primaryVoltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // Secondary Voltage (Transformer)
+  secondaryVoltage: {
+    validUnits: ['mV', 'V', 'kV'],
+    defaultUnit: 'V',
+  },
+  // ESR (Electrolytic Capacitor) - Equivalent Series Resistance
+  esr: {
+    validUnits: ['mΩ', 'Ω'],
+    defaultUnit: 'Ω',
+  },
+} as const;
+
+/**
+ * Get valid units for a property
+ */
+export function getPropertyUnits(propertyName: keyof typeof COMPONENT_PROPERTY_UNITS): readonly string[] {
+  return COMPONENT_PROPERTY_UNITS[propertyName]?.validUnits || [];
+}
+
+/**
+ * Get default unit for a property
+ */
+export function getDefaultUnit(propertyName: keyof typeof COMPONENT_PROPERTY_UNITS): string {
+  return COMPONENT_PROPERTY_UNITS[propertyName]?.defaultUnit || '';
+}
+
+/**
+ * Check if a unit is valid for a property
+ */
+export function isValidUnit(propertyName: keyof typeof COMPONENT_PROPERTY_UNITS, unit: string): boolean {
+  const property = COMPONENT_PROPERTY_UNITS[propertyName];
+  if (!property) return false;
+  return (property.validUnits as readonly string[]).includes(unit);
+}
+

@@ -129,8 +129,10 @@ export type ComponentType =
  */
 export interface Battery extends PCBComponentBase {
   componentType: 'Battery';
-  voltage?: string; // e.g., "3.7V", "9V"
-  capacity?: string; // e.g., "2000mAh"
+  voltage?: string; // value only, e.g., "3.7", "9"
+  voltageUnit?: string; // unit, e.g., "V"
+  capacity?: string; // value only, e.g., "2000"
+  capacityUnit?: string; // unit, e.g., "mAh"
   chemistry?: string; // e.g., "Li-ion", "Alkaline"
 }
 
@@ -139,8 +141,10 @@ export interface Battery extends PCBComponentBase {
  */
 export interface Capacitor extends PCBComponentBase {
   componentType: 'Capacitor';
-  capacitance?: string; // e.g., "100nF", "10uF"
-  voltage?: string; // voltage rating, e.g., "50V"
+  capacitance?: string; // value only, e.g., "100"
+  capacitanceUnit?: string; // unit, e.g., "nF"
+  voltage?: string; // value only, e.g., "50"
+  voltageUnit?: string; // unit, e.g., "V"
   tolerance?: string; // e.g., "±10%"
   dielectric?: string; // e.g., "Ceramic", "Film", "Tantalum"
 }
@@ -150,11 +154,14 @@ export interface Capacitor extends PCBComponentBase {
  */
 export interface ElectrolyticCapacitor extends PCBComponentBase {
   componentType: 'Electrolytic Capacitor';
-  capacitance?: string; // e.g., "100uF", "1000uF"
-  voltage?: string; // voltage rating, e.g., "25V", "50V"
+  capacitance?: string; // value only, e.g., "100"
+  capacitanceUnit?: string; // unit, e.g., "µF"
+  voltage?: string; // value only, e.g., "25"
+  voltageUnit?: string; // unit, e.g., "V"
   tolerance?: string; // e.g., "±20%"
   polarity?: 'Positive' | 'Negative'; // which pin is positive (important for orientation)
-  esr?: string; // Equivalent Series Resistance, e.g., "50mΩ"
+  esr?: string; // value only, e.g., "50"
+  esrUnit?: string; // unit, e.g., "mΩ"
   temperature?: string; // operating temperature range, e.g., "-40°C to +85°C"
 }
 
@@ -165,8 +172,10 @@ export interface Diode extends PCBComponentBase {
   componentType: 'Diode';
   diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other';
   partNumber?: string;
-  voltage?: string; // forward voltage or Zener voltage
-  current?: string; // max current rating
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
   ledColor?: string; // for LEDs (wavelength/color like "red", "blue", "650nm")
 }
 
@@ -175,8 +184,10 @@ export interface Diode extends PCBComponentBase {
  */
 export interface Fuse extends PCBComponentBase {
   componentType: 'Fuse';
-  current?: string; // e.g., "1A", "500mA"
-  voltage?: string; // voltage rating
+  current?: string; // value only, e.g., "1"
+  currentUnit?: string; // unit, e.g., "A"
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
   fuseType?: string; // e.g., "Fast-blow", "Slow-blow"
 }
 
@@ -185,8 +196,10 @@ export interface Fuse extends PCBComponentBase {
  */
 export interface FerriteBead extends PCBComponentBase {
   componentType: 'FerriteBead';
-  impedance?: string; // e.g., "100Ω @ 100MHz"
-  current?: string; // max current rating
+  impedance?: string; // value only, e.g., "100"
+  impedanceUnit?: string; // unit, e.g., "Ω"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
 }
 
 /**
@@ -211,9 +224,11 @@ export interface Jumper extends PCBComponentBase {
  */
 export interface Relay extends PCBComponentBase {
   componentType: 'Relay';
-  coilVoltage?: string; // e.g., "5V", "12V"
+  coilVoltage?: string; // value only, e.g., "5"
+  coilVoltageUnit?: string; // unit, e.g., "V"
   contactType?: string; // e.g., "SPDT", "DPDT"
-  current?: string; // contact current rating
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
 }
 
 /**
@@ -221,9 +236,12 @@ export interface Relay extends PCBComponentBase {
  */
 export interface Inductor extends PCBComponentBase {
   componentType: 'Inductor';
-  inductance?: string; // e.g., "10uH", "100mH"
-  current?: string; // saturation current
-  resistance?: string; // DC resistance
+  inductance?: string; // value only, e.g., "10"
+  inductanceUnit?: string; // unit, e.g., "µH"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
+  resistance?: string; // value only
+  resistanceUnit?: string; // unit, e.g., "Ω"
 }
 
 /**
@@ -231,8 +249,10 @@ export interface Inductor extends PCBComponentBase {
  */
 export interface Speaker extends PCBComponentBase {
   componentType: 'Speaker';
-  impedance?: string; // e.g., "8Ω"
-  power?: string; // power rating
+  impedance?: string; // value only, e.g., "8"
+  impedanceUnit?: string; // unit, e.g., "Ω"
+  power?: string; // value only
+  powerUnit?: string; // unit, e.g., "W"
 }
 
 /**
@@ -241,8 +261,10 @@ export interface Speaker extends PCBComponentBase {
 export interface Motor extends PCBComponentBase {
   componentType: 'Motor';
   motorType?: string; // e.g., "DC", "Stepper", "Servo"
-  voltage?: string;
-  current?: string;
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
 }
 
 /**
@@ -250,9 +272,12 @@ export interface Motor extends PCBComponentBase {
  */
 export interface PowerSupply extends PCBComponentBase {
   componentType: 'PowerSupply';
-  inputVoltage?: string;
-  outputVoltage?: string;
-  current?: string;
+  inputVoltage?: string; // value only
+  inputVoltageUnit?: string; // unit, e.g., "V"
+  outputVoltage?: string; // value only
+  outputVoltageUnit?: string; // unit, e.g., "V"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
 }
 
 /**
@@ -263,8 +288,10 @@ export interface Transistor extends PCBComponentBase {
   transistorType?: 'BJT' | 'FET' | 'MOSFET' | 'JFET' | 'Other';
   polarity?: 'NPN' | 'PNP' | 'N-Channel' | 'P-Channel';
   partNumber?: string;
-  voltage?: string; // max voltage rating
-  current?: string; // max current rating
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
 }
 
 /**
@@ -272,8 +299,10 @@ export interface Transistor extends PCBComponentBase {
  */
 export interface Resistor extends PCBComponentBase {
   componentType: 'Resistor';
-  resistance?: string; // e.g., "10kΩ", "100Ω"
-  power?: string; // power rating, e.g., "1/4W"
+  resistance?: string; // value only, e.g., "10"
+  resistanceUnit?: string; // unit, e.g., "kΩ"
+  power?: string; // value only (can be fractional like "1/4")
+  powerUnit?: string; // unit, e.g., "W"
   tolerance?: string; // e.g., "±5%"
 }
 
@@ -282,7 +311,8 @@ export interface Resistor extends PCBComponentBase {
  */
 export interface ResistorNetwork extends PCBComponentBase {
   componentType: 'ResistorNetwork';
-  resistance?: string;
+  resistance?: string; // value only
+  resistanceUnit?: string; // unit, e.g., "Ω"
   configuration?: string; // e.g., "Isolated", "Bussed"
 }
 
@@ -291,9 +321,10 @@ export interface ResistorNetwork extends PCBComponentBase {
  */
 export interface Thermistor extends PCBComponentBase {
   componentType: 'Thermistor';
-  resistance?: string; // resistance at 25°C
+  resistance?: string; // value only
+  resistanceUnit?: string; // unit, e.g., "Ω"
   thermistorType?: 'NTC' | 'PTC';
-  beta?: string; // beta value
+  beta?: string; // beta value (no unit)
 }
 
 /**
@@ -302,8 +333,10 @@ export interface Thermistor extends PCBComponentBase {
 export interface Switch extends PCBComponentBase {
   componentType: 'Switch';
   switchType?: string; // e.g., "SPST", "DPDT", "Momentary"
-  current?: string;
-  voltage?: string;
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
 }
 
 /**
@@ -311,10 +344,13 @@ export interface Switch extends PCBComponentBase {
  */
 export interface Transformer extends PCBComponentBase {
   componentType: 'Transformer';
-  primaryVoltage?: string;
-  secondaryVoltage?: string;
-  power?: string;
-  turns?: string; // turns ratio
+  primaryVoltage?: string; // value only
+  primaryVoltageUnit?: string; // unit, e.g., "V"
+  secondaryVoltage?: string; // value only
+  secondaryVoltageUnit?: string; // unit, e.g., "V"
+  power?: string; // value only
+  powerUnit?: string; // unit, e.g., "W"
+  turns?: string; // turns ratio (no unit)
 }
 
 /**
@@ -352,8 +388,10 @@ export interface VacuumTube extends PCBComponentBase {
 export interface VariableResistor extends PCBComponentBase {
   componentType: 'VariableResistor';
   vrType?: 'Potentiometer' | 'Varistor' | 'VoltageRegulator';
-  resistance?: string;
-  power?: string;
+  resistance?: string; // value only
+  resistanceUnit?: string; // unit, e.g., "Ω"
+  power?: string; // value only (can be fractional like "1/4")
+  powerUnit?: string; // unit, e.g., "W"
   taper?: string; // for potentiometers: "Linear", "Logarithmic"
 }
 
@@ -372,8 +410,10 @@ export interface Crystal extends PCBComponentBase {
  */
 export interface ZenerDiode extends PCBComponentBase {
   componentType: 'ZenerDiode';
-  voltage?: string; // Zener voltage
-  power?: string; // power rating
+  voltage?: string; // value only
+  voltageUnit?: string; // unit, e.g., "V"
+  power?: string; // value only (can be fractional like "1/4")
+  powerUnit?: string; // unit, e.g., "W"
   tolerance?: string;
 }
 

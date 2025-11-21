@@ -701,6 +701,7 @@ function App() {
     setIsDraggingDialog,
     dialogDragOffset,
     setDialogDragOffset,
+    openComponentEditor,
   } = components;
   
   // Power/Ground hook
@@ -2030,24 +2031,8 @@ function App() {
       if (hitComponent) {
         const { layer, comp } = hitComponent;
         setSelectedComponentIds(new Set([comp.id]));
-        // Get abbreviation, defaulting to component type prefix if not set or is empty
-        let abbreviation = ('abbreviation' in comp && (comp as any).abbreviation) ? String((comp as any).abbreviation) : '';
-        if (!abbreviation || abbreviation.trim() === '' || abbreviation === '****' || abbreviation === '*') {
-          abbreviation = getDefaultAbbreviation(comp.componentType);
-        }
-        
-        setComponentEditor({
-          visible: true,
-          layer,
-          id: comp.id,
-          designator: comp.designator || comp.componentType || '',
-          abbreviation: abbreviation,
-          manufacturer: 'manufacturer' in comp ? (comp as any).manufacturer || '' : '',
-          partNumber: 'partNumber' in comp ? (comp as any).partNumber || '' : '',
-          pinCount: comp.pinCount,
-          x: comp.x,
-          y: comp.y,
-        });
+        // Use openComponentEditor to properly load all type-specific fields (resistance, capacitance, etc.)
+        openComponentEditor(comp, layer);
       }
     }
   }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
@@ -9131,7 +9116,6 @@ function App() {
                           <option value="pF">pF</option>
                           <option value="nF">nF</option>
                           <option value="µF">µF</option>
-                          <option value="uF">uF</option>
                           <option value="mF">mF</option>
                           <option value="F">F</option>
                         </select>
@@ -9182,7 +9166,6 @@ function App() {
                           <option value="pF">pF</option>
                           <option value="nF">nF</option>
                           <option value="µF">µF</option>
-                          <option value="uF">uF</option>
                           <option value="mF">mF</option>
                           <option value="F">F</option>
                         </select>
@@ -9226,7 +9209,6 @@ function App() {
                         <select value={componentEditor.inductanceUnit || 'µH'} onChange={(e) => setComponentEditor({ ...componentEditor, inductanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
                           <option value="nH">nH</option>
                           <option value="µH">µH</option>
-                          <option value="uH">uH</option>
                           <option value="mH">mH</option>
                           <option value="H">H</option>
                         </select>
@@ -9237,7 +9219,6 @@ function App() {
                         <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
                         <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
                           <option value="µA">µA</option>
-                          <option value="uA">uA</option>
                           <option value="mA">mA</option>
                           <option value="A">A</option>
                         </select>
@@ -9298,7 +9279,6 @@ function App() {
                         <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
                         <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
                           <option value="µA">µA</option>
-                          <option value="uA">uA</option>
                           <option value="mA">mA</option>
                           <option value="A">A</option>
                         </select>
@@ -9921,7 +9901,9 @@ function App() {
                         // Update type-specific fields based on component type
                         // Combine value and unit when saving
                         if (comp.componentType === 'Resistor') {
-                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          const combinedResistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).resistance = combinedResistance;
+                          console.log(`[Component Save] Resistor resistance: "${componentEditor.resistance}" + "${componentEditor.resistanceUnit}" = "${combinedResistance}"`);
                           (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         } else if (comp.componentType === 'Capacitor') {
@@ -10036,7 +10018,10 @@ function App() {
                       
                       if (currentComp) {
                         // Component exists - update it
+                        console.log(`[Component Save] Saving component ${currentComp.id}, type: ${currentComp.componentType}`);
+                        console.log(`[Component Save] Editor resistance value: "${componentEditor.resistance}", unit: "${componentEditor.resistanceUnit}"`);
                         const updatedComp = updateComponent(currentComp);
+                        console.log(`[Component Save] Updated component resistance: "${(updatedComp as any).resistance}"`);
                         
                         // Check if layer changed
                         const oldLayer = currentComp.layer;

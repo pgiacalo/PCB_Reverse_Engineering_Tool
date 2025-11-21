@@ -361,20 +361,21 @@ export function generateSimpleSchematic(
     }
     
     // Calculate scale factor to fit components in reasonable schematic space
-    // Target: fit in approximately 200mm x 200mm area (A4 paper is ~210mm x 297mm)
+    // Target: fit in approximately 400mm x 400mm area (larger to reduce crowding)
+    // A4 paper is ~210mm x 297mm, but we'll use a larger virtual canvas
     const pcbWidth = maxX - minX;
     const pcbHeight = maxY - minY;
-    const targetSchematicWidth = 200; // mm
-    const targetSchematicHeight = 200; // mm
+    const targetSchematicWidth = 400; // mm (increased from 200mm)
+    const targetSchematicHeight = 400; // mm (increased from 200mm)
     
     // Use the smaller scale factor to ensure everything fits
-    const scaleX = pcbWidth > 0 ? targetSchematicWidth / pcbWidth : 0.1;
-    const scaleY = pcbHeight > 0 ? targetSchematicHeight / pcbHeight : 0.1;
-    const scale = Math.min(scaleX, scaleY, 0.1); // Cap at 0.1 (1 pixel = 0.1mm max) to avoid too large schematics
+    const scaleX = pcbWidth > 0 ? targetSchematicWidth / pcbWidth : 0.2;
+    const scaleY = pcbHeight > 0 ? targetSchematicHeight / pcbHeight : 0.2;
+    const scale = Math.min(scaleX, scaleY, 0.2); // Cap at 0.2 (1 pixel = 0.2mm max) to allow more spacing
     
-    // Offset to start at reasonable position (25.4mm = 1 inch margin)
-    const offsetX = 25.4;
-    const offsetY = 25.4;
+    // Offset to start at reasonable position (50mm margin for better spacing)
+    const offsetX = 50;
+    const offsetY = 50;
     
     // Map components using PCB coordinates
     for (const comp of componentsWithDesignators) {
@@ -480,6 +481,125 @@ export function generateSimpleSchematic(
   schematic += '      )\n';
   schematic += '    )\n';
   
+  // Diode symbol (2 pins - triangle with line)
+  schematic += '    (symbol "simple:Diode" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
+  schematic += '      (property "Reference" "D" (id 0) (at 0 3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (property "Value" "VAL" (id 1) (at 0 -3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (symbol "Diode_0_1"\n';
+  schematic += '        (polyline (pts (xy -2.54 0) (xy 0 -2.54) (xy 0 2.54) (xy -2.54 0)) (stroke (width 0.254) (type default)) (fill (type background)))\n';
+  schematic += '        (polyline (pts (xy 0 -2.54) (xy 0 2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (pin passive line (at -5.08 0 0) (length 2.54)\n';
+  schematic += '          (name "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at 5.08 0 180) (length 2.54)\n';
+  schematic += '          (name "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '      )\n';
+  schematic += '    )\n';
+  
+  // Switch symbol (SPST - single pole single throw)
+  schematic += '    (symbol "simple:Switch" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
+  schematic += '      (property "Reference" "SW" (id 0) (at 0 3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (property "Value" "VAL" (id 1) (at 0 -3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (symbol "Switch_0_1"\n';
+  schematic += '        (polyline (pts (xy -3.81 0) (xy -1.27 0)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy 1.27 0) (xy 3.81 0)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -1.27 -1.27) (xy 1.27 1.27)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (pin passive line (at -5.08 0 0) (length 2.54)\n';
+  schematic += '          (name "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at 5.08 0 180) (length 2.54)\n';
+  schematic += '          (name "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '      )\n';
+  schematic += '    )\n';
+  
+  // Transistor symbol (NPN BJT)
+  schematic += '    (symbol "simple:Transistor" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
+  schematic += '      (property "Reference" "Q" (id 0) (at 0 3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (property "Value" "VAL" (id 1) (at 0 -3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (symbol "Transistor_0_1"\n';
+  schematic += '        (polyline (pts (xy 0 -2.54) (xy 0 0)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -2.54 0) (xy 0 0) (xy 2.54 0)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy 0 0) (xy 0 2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -1.27 -1.27) (xy 0 -2.54) (xy 1.27 -1.27)) (stroke (width 0.254) (type default)) (fill (type background)))\n';
+  schematic += '        (pin passive line (at 0 -5.08 90) (length 2.54)\n';
+  schematic += '          (name "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at -3.81 0 0) (length 2.54)\n';
+  schematic += '          (name "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at 3.81 0 180) (length 2.54)\n';
+  schematic += '          (name "3" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "3" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '      )\n';
+  schematic += '    )\n';
+  
+  // Inductor symbol (coil)
+  schematic += '    (symbol "simple:Inductor" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
+  schematic += '      (property "Reference" "L" (id 0) (at 0 3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (property "Value" "VAL" (id 1) (at 0 -3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (symbol "Inductor_0_1"\n';
+  schematic += '        (arc (start -2.54 0) (mid -1.27 0) (end 0 0) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (arc (start 0 0) (mid 1.27 0) (end 2.54 0) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (pin passive line (at -5.08 0 0) (length 2.54)\n';
+  schematic += '          (name "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at 5.08 0 180) (length 2.54)\n';
+  schematic += '          (name "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '      )\n';
+  schematic += '    )\n';
+  
+  // Battery symbol
+  schematic += '    (symbol "simple:Battery" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
+  schematic += '      (property "Reference" "B" (id 0) (at 0 3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (property "Value" "VAL" (id 1) (at 0 -3.81 0)\n';
+  schematic += '        (effects (font (size 1.27 1.27)))\n';
+  schematic += '      )\n';
+  schematic += '      (symbol "Battery_0_1"\n';
+  schematic += '        (polyline (pts (xy -3.81 -1.27) (xy -3.81 1.27)) (stroke (width 0.508) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -1.27 -1.27) (xy -1.27 1.27)) (stroke (width 0.508) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy 1.27 -1.27) (xy 1.27 1.27)) (stroke (width 0.508) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy 3.81 -1.27) (xy 3.81 1.27)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (pin passive line (at -5.08 0 0) (length 2.54)\n';
+  schematic += '          (name "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "1" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '        (pin passive line (at 5.08 0 180) (length 2.54)\n';
+  schematic += '          (name "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '          (number "2" (effects (font (size 1.27 1.27))))\n';
+  schematic += '        )\n';
+  schematic += '      )\n';
+  schematic += '    )\n';
+  
   // Integrated Circuit symbol (rectangular with configurable pins)
   schematic += '    (symbol "simple:IC" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
   schematic += '      (property "Reference" "U" (id 0) (at 0 2.54 0)\n';
@@ -565,9 +685,24 @@ export function generateSimpleSchematic(
   const getSymbolLibId = (componentType: string): string => {
     switch (componentType) {
       case 'Resistor':
+      case 'ResistorNetwork':
+      case 'VariableResistor':
+      case 'Thermistor':
         return 'simple:Resistor';
       case 'Capacitor':
+      case 'Electrolytic Capacitor':
         return 'simple:Capacitor';
+      case 'Diode':
+      case 'ZenerDiode':
+        return 'simple:Diode';
+      case 'Switch':
+        return 'simple:Switch';
+      case 'Transistor':
+        return 'simple:Transistor';
+      case 'Inductor':
+        return 'simple:Inductor';
+      case 'Battery':
+        return 'simple:Battery';
       case 'IntegratedCircuit':
         return 'simple:IC';
       default:
@@ -678,19 +813,9 @@ export function generateSimpleSchematic(
     const comp = info.comp;
     const symbolLibId = getSymbolLibId(comp.componentType);
     
-    // Check if component has polarity (for potential future use with symbol variants)
-    // Note: We preserve the PCB layout orientation - no rotation adjustment for conventions
-    const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
-                       comp.componentType === 'Diode' || 
-                       comp.componentType === 'Battery' || 
-                       comp.componentType === 'ZenerDiode';
-    const isTantalumCap = comp.componentType === 'Capacitor' && 
-                         'dielectric' in comp && 
-                         (comp as any).dielectric === 'Tantalum';
-    const isPolarized = (hasPolarity || isTantalumCap) && 
-                        comp.pinPolarities && 
-                        comp.pinPolarities.length === 2 &&
-                        comp.pinPolarities.some(p => p === '+' || p === '-');
+    // Note: Polarity information could be used for future symbol variants (e.g., polarized capacitor symbol)
+    // Components with polarity: Electrolytic Capacitor, Diode, Battery, ZenerDiode
+    // Tantalum capacitors also have polarity
     
     // Calculate rotation from connected pad/via positions to preserve PCB layout
     // If component has explicit rotation property, use it; otherwise calculate from pad positions
@@ -800,7 +925,7 @@ export function generateSimpleSchematic(
       let pinX: number;
       let pinY: number;
       
-      // For 2-pin components (resistors, capacitors, etc.), use left/right layout
+      // For 2-pin components (resistors, capacitors, diodes, etc.), use left/right layout
       // Pin positions must match the actual pin positions in the symbol definitions
       if (pinCount === 2) {
         const symbolLibId = getSymbolLibId(comp.componentType);
@@ -822,6 +947,16 @@ export function generateSimpleSchematic(
             pinX = compInfo.x + 5.08; // Right pin position (pin start)
             pinY = compInfo.y;
           }
+        } else if (symbolLibId === 'simple:Diode' || symbolLibId === 'simple:Switch' || 
+                   symbolLibId === 'simple:Inductor' || symbolLibId === 'simple:Battery') {
+          // Diode, Switch, Inductor, Battery: Pin 1 at (-5.08, 0), Pin 2 at (5.08, 0)
+          if (pinInfo.pin === 1) {
+            pinX = compInfo.x - 5.08; // Left pin position (pin start)
+            pinY = compInfo.y;
+          } else {
+            pinX = compInfo.x + 5.08; // Right pin position (pin start)
+            pinY = compInfo.y;
+          }
         } else {
           // Generic 2-pin: use standard positions
           if (pinInfo.pin === 1) {
@@ -831,6 +966,18 @@ export function generateSimpleSchematic(
             pinX = compInfo.x + 5.08; // Right pin
             pinY = compInfo.y;
           }
+        }
+      } else if (pinCount === 3 && getSymbolLibId(comp.componentType) === 'simple:Transistor') {
+        // Transistor: Pin 1 (emitter/base) at top (0, -5.08), Pin 2 (base) at left (-3.81, 0), Pin 3 (collector) at right (3.81, 0)
+        if (pinInfo.pin === 1) {
+          pinX = compInfo.x;
+          pinY = compInfo.y - 5.08; // Top pin
+        } else if (pinInfo.pin === 2) {
+          pinX = compInfo.x - 3.81; // Left pin
+          pinY = compInfo.y;
+        } else {
+          pinX = compInfo.x + 3.81; // Right pin
+          pinY = compInfo.y;
         }
       } else {
         // For multi-pin components (ICs, etc.), use left/right side layout
@@ -910,24 +1057,33 @@ export function generateSimpleSchematic(
         }
       }
       
-      // For multi-pin nets, create a central junction and connect all pins
+      // For multi-pin nets, create connections between all pins
+      // Use a "bus" style: connect pins in a chain with a central junction for clarity
       if (pinPositions.length >= 2) {
-        console.log(`[Schematic] Creating wires for net ${net.name}: ${pinPositions.length} pins to center (${centerX}, ${centerY})`);
-        // First, create a central junction point
-        const centerUuid = generateUuid();
-        schematic += `  (junction (at ${centerX} ${centerY}) (diameter 0) (color 0 0 0 0) (uuid ${centerUuid}))\n`;
+        console.log(`[Schematic] Creating wires for net ${net.name}: ${pinPositions.length} pins`);
         
-        // Connect each pin to the center junction with wires
-        for (const pinPos of pinPositions) {
+        // For 2 pins: direct connection
+        if (pinPositions.length === 2) {
           const wireUuid = generateUuid();
-          console.log(`[Schematic] Wire from ${pinPos.designator}:pin${pinPos.pin} (${pinPos.x}, ${pinPos.y}) to center (${centerX}, ${centerY})`);
-          schematic += `  (wire (pts (xy ${pinPos.x} ${pinPos.y}) (xy ${centerX} ${centerY})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+          schematic += `  (wire (pts (xy ${pinPositions[0].x} ${pinPositions[0].y}) (xy ${pinPositions[1].x} ${pinPositions[1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+        } else {
+          // For 3+ pins: use a bus-style connection with a central junction
+          // Create a central junction point
+          const centerUuid = generateUuid();
+          schematic += `  (junction (at ${centerX} ${centerY}) (diameter 0.508) (color 0 0 0 0) (uuid ${centerUuid}))\n`;
+          
+          // Connect each pin to the center junction with wires
+          for (const pinPos of pinPositions) {
+            const wireUuid = generateUuid();
+            console.log(`[Schematic] Wire from ${pinPos.designator}:pin${pinPos.pin} (${pinPos.x}, ${pinPos.y}) to center (${centerX}, ${centerY})`);
+            schematic += `  (wire (pts (xy ${pinPos.x} ${pinPos.y}) (xy ${centerX} ${centerY})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+          }
         }
       } else if (pinPositions.length === 1) {
-        // Single pin: just create a junction at the pin position
+        // Single pin: create a junction at the pin position (for power/ground connections)
         console.log(`[Schematic] Creating junction for single-pin net ${net.name} at (${pinPositions[0].x}, ${pinPositions[0].y})`);
         const pinJunctionUuid = generateUuid();
-        schematic += `  (junction (at ${pinPositions[0].x} ${pinPositions[0].y}) (diameter 0) (color 0 0 0 0) (uuid ${pinJunctionUuid}))\n`;
+        schematic += `  (junction (at ${pinPositions[0].x} ${pinPositions[0].y}) (diameter 0.508) (color 0 0 0 0) (uuid ${pinJunctionUuid}))\n`;
       } else {
         console.warn(`[Schematic] Net ${net.name} has ${net.componentPins.length} component pins but 0 valid pin positions!`);
       }
