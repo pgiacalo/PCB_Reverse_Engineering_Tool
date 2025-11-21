@@ -1458,7 +1458,14 @@ function App() {
       
       // Check if clicking on empty space - clear selection immediately
       // But first check if we hit a via or pad (for rectangle selection)
-      const hitToleranceSelect = Math.max(6 / viewScale, 4);
+      // Hit tolerance: maintain minimum 6 screen pixels clickable area at all zoom levels
+      // At high zoom, this ensures reliable clicking even with small mouse movements
+      const minScreenPixels = 6; // Minimum clickable area in screen pixels
+      const hitToleranceSelect = Math.max(minScreenPixels / viewScale, 4 / viewScale);
+      // Ensure minimum world-space tolerance for very small objects
+      const minWorldTolerance = 0.5; // Minimum 0.5 world units
+      const finalHitTolerance = Math.max(hitToleranceSelect, minWorldTolerance);
+      
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
         if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
@@ -1468,7 +1475,9 @@ function App() {
           const c = s.points[0];
           const r = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
-          if (d <= Math.max(r, hitToleranceSelect)) {
+          // Use the larger of: object radius, or hit tolerance
+          // This ensures small objects are still clickable at high zoom
+          if (d <= Math.max(r, finalHitTolerance)) {
             hitStroke = s;
             break; // Found a hit, selection will be finalized on mouse up
           }
@@ -1490,6 +1499,17 @@ function App() {
         // We'll pass this through the selectStart state
         setIsSelecting(true);
         setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
+        setSelectRect({ x, y, width: 0, height: 0 });
+      } else if (hitStroke) {
+        // CRITICAL FIX: When a via/pad is hit, we must store the hitStrokeId so mouseUp can use it
+        // This ensures reliable selection at high zoom where tiny mouse movements can create non-tiny rectangles
+        setIsSelecting(true);
+        setSelectStart({ 
+          x, 
+          y, 
+          shiftKey: e.shiftKey,
+          hitStrokeId: hitStroke.id
+        } as any);
         setSelectRect({ x, y, width: 0, height: 0 });
       } else if (componentDragStartRef.current) {
         // Clear component drag start if we clicked on empty space
@@ -2468,7 +2488,12 @@ function App() {
       setSelectStart(null);
       setSelectRect(null);
       if (rectSel && start) {
-        const tiny = rectSel.width < 3 && rectSel.height < 3;
+        // Make "tiny" threshold zoom-aware: use screen pixels instead of world units
+        // At high zoom, 3 world units might be 30+ screen pixels, so we need to be more lenient
+        const tinyThresholdWorld = 3; // World units
+        const tinyThresholdScreen = 5; // Screen pixels - more lenient for high zoom
+        const tinyThreshold = Math.max(tinyThresholdWorld, tinyThresholdScreen / viewScale);
+        const tiny = rectSel.width < tinyThreshold && rectSel.height < tinyThreshold;
         const withinRect = (px: number, py: number) => {
           const minX = rectSel.x;
           const minY = rectSel.y;
@@ -2515,7 +2540,10 @@ function App() {
           }
         };
         const minX = rectSel.x, minY = rectSel.y, maxX = rectSel.x + rectSel.width, maxY = rectSel.y + rectSel.height;
-        const hitTolerance = Math.max(6 / viewScale, 4);
+        // Hit tolerance: maintain minimum 6 screen pixels clickable area at all zoom levels
+        // This ensures reliable clicking even at high zoom
+        const minScreenPixels = 6;
+        const hitTolerance = Math.max(minScreenPixels / viewScale, 4 / viewScale, 0.5);
         const pointToSegDist = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
           const dx = x2 - x1, dy = y2 - y1;
           if (dx === 0 && dy === 0) return Math.hypot(px - x1, py - y1);
@@ -2532,8 +2560,47 @@ function App() {
         const nextPowers = new Set<string>(shiftWasPressed ? Array.from(selectedPowerIds) : []);
         const nextGrounds = new Set<string>(shiftWasPressed ? Array.from(selectedGroundIds) : []);
         
+        // CRITICAL FIX: Check hitStrokeId FIRST, regardless of rectangle size
+        // At high zoom, even tiny mouse movements can create non-tiny rectangles in world space,
+        // but if we detected a hit in mouseDown, we should use it (this is a click, not a drag)
+        const hitStrokeId = (start as any)?.hitStrokeId;
+        if (hitStrokeId) {
+          // We had a hitStroke in mouseDown, use it directly (this was a click, not a drag)
+          const hitStroke = drawingStrokes.find(s => s.id === hitStrokeId);
+          if (hitStroke) {
+            // Check visibility
+            let isVisible = false;
+            if (hitStroke.type === 'via' || hitStroke.type === 'pad') {
+              isVisible = showViasLayer;
+            } else {
+              isVisible = hitStroke.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+            }
+            if (isVisible) {
+              if (shiftWasPressed) {
+                // Toggle selection
+                if (next.has(hitStrokeId)) {
+                  next.delete(hitStrokeId);
+                } else {
+                  next.add(hitStrokeId);
+                }
+              } else {
+                // Replace selection
+                next.clear();
+                next.add(hitStrokeId);
+              }
+              setSelectedIds(next);
+              setSelectedComponentIds(nextComps);
+              setSelectedPowerIds(nextPowers);
+              setSelectedGroundIds(nextGrounds);
+              return; // Early return - we're done
+            }
+          }
+        }
+        
         if (tiny) {
           // Click selection: find the single nearest via, pad, or trace
+          
+          // Fallback: find the single nearest via, pad, or trace
           let bestHit: { id: string; dist: number } | null = null;
           for (const s of drawingStrokes) {
             // Check visibility before considering this stroke
@@ -2551,7 +2618,10 @@ function App() {
               const c = s.points[0];
               const r = Math.max(1, s.size / 2);
               dist = Math.hypot(c.x - start.x, c.y - start.y);
-              if (dist <= Math.max(r, hitTolerance)) {
+              // Use improved hit tolerance: maintain minimum screen-space clickable area
+              const minScreenPixels = 6;
+              const improvedHitTolerance = Math.max(minScreenPixels / viewScale, 4 / viewScale, 0.5);
+              if (dist <= Math.max(r, improvedHitTolerance)) {
                 if (!bestHit || dist < bestHit.dist) {
                   bestHit = { id: s.id, dist };
                 }

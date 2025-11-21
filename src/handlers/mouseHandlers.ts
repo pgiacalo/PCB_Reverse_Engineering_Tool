@@ -634,7 +634,14 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
       
       // Check if clicking on empty space - clear selection immediately
       // But first check if we hit a via or pad (for rectangle selection)
-      const hitToleranceSelect = Math.max(6 / viewScale, 4);
+      // Hit tolerance: maintain minimum 6 screen pixels clickable area at all zoom levels
+      // At high zoom, this ensures reliable clicking even with small mouse movements
+      const minScreenPixels = 6; // Minimum clickable area in screen pixels
+      const hitToleranceSelect = Math.max(minScreenPixels / viewScale, 4 / viewScale);
+      // Ensure minimum world-space tolerance for very small objects
+      const minWorldTolerance = 0.5; // Minimum 0.5 world units
+      const finalHitTolerance = Math.max(hitToleranceSelect, minWorldTolerance);
+      
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
         if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
@@ -644,7 +651,9 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
           const c = s.points[0];
           const r = Math.max(1, s.size / 2);
           const d = Math.hypot(c.x - x, c.y - y);
-          if (d <= Math.max(r, hitToleranceSelect)) {
+          // Use the larger of: object radius, or hit tolerance
+          // This ensures small objects are still clickable at high zoom
+          if (d <= Math.max(r, finalHitTolerance)) {
             hitStroke = s;
             break; // Found a hit, selection will be finalized on mouse up
           }
@@ -662,10 +671,15 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         }
       }
       
-      // Store whether Shift was pressed at mouseDown for use in mouseUp
-      // We'll pass this through the selectStart state
+      // Store whether Shift was pressed at mouseDown and the hitStroke ID for use in mouseUp
+      // This allows mouseUp to directly select the hitStroke if rectangle selection is tiny
       setIsSelecting(true);
-      setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
+      setSelectStart({ 
+        x, 
+        y, 
+        shiftKey: e.shiftKey,
+        hitStrokeId: hitStroke?.id || null
+      } as any);
       setSelectRect({ x, y, width: 0, height: 0 });
       return;
     } else if (currentTool === 'magnify') {

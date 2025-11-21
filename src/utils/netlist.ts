@@ -375,9 +375,46 @@ function buildConnectionsCoordinateBased(
 }
 
 /**
+ * Normalize voltage string for consistent grouping
+ * Handles variations like "+3.3V", "3.3V", "+3.3 VDC", "+3.3VDC" etc.
+ * Preserves the sign (+ or -) and extracts the numeric value
+ */
+function normalizeVoltage(voltage: string): string {
+  if (!voltage) return 'UNKNOWN';
+  
+  // Trim whitespace
+  let normalized = voltage.trim();
+  
+  // Remove common suffixes like "VDC", "VAC", "DC", "AC", or standalone "V" (case insensitive)
+  // Handle these in order: VDC/VAC first, then DC/AC, then standalone V
+  normalized = normalized.replace(/\s*(VDC|VAC)\s*$/i, '');
+  normalized = normalized.replace(/\s*(DC|AC)\s*$/i, '');
+  normalized = normalized.replace(/\s*V\s*$/i, '');
+  
+  // Extract sign (+ or -) and numeric value
+  const signMatch = normalized.match(/^([+-])?/);
+  const sign = signMatch ? signMatch[1] || '+' : '+';
+  
+  // Extract numeric part (allows decimals)
+  const numMatch = normalized.match(/(\d+\.?\d*)/);
+  if (!numMatch) {
+    // If no numeric value found, return original (trimmed) for fallback
+    return voltage.trim();
+  }
+  
+  const numValue = numMatch[1];
+  
+  // Return normalized format: sign + numeric value + "V"
+  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3.3V"
+  return `${sign}${numValue}V`;
+}
+
+/**
  * Group connected nodes into nets using union-find (coordinate-based)
- * CRITICAL: All ground points are connected by definition.
- * CRITICAL: All power points with the same voltage and sign are connected by definition.
+ * CRITICAL: All ground points are connected by definition (single common ground plane).
+ * CRITICAL: All power points with the same voltage are connected by definition (common power bus).
+ *           For example, all nodes at +3.3V are connected, and all nodes at -3.3V are connected
+ *           (these are separate power buses - positive and negative).
  */
 export function groupNodesIntoNetsCoordinateBased(
   coordinateToNode: Map<string, NetlistNode>,
@@ -403,6 +440,7 @@ export function groupNodesIntoNetsCoordinateBased(
   }
   
   // CRITICAL: Union all ground nodes together (all ground points are connected by definition)
+  // This represents connections to a single, common ground plane
   const groundCoordKeys: string[] = [];
   for (const [coordKey, node] of coordinateToNode) {
     if (node.type === 'ground') {
@@ -411,37 +449,47 @@ export function groupNodesIntoNetsCoordinateBased(
     }
   }
   // Union all ground nodes with each other
-  if (groundCoordKeys.length > 1) {
-    const firstGroundId = getIntId(groundCoordKeys[0]);
-    for (let i = 1; i < groundCoordKeys.length; i++) {
-      const otherGroundId = getIntId(groundCoordKeys[i]);
-      uf.union(firstGroundId, otherGroundId);
+  if (groundCoordKeys.length > 0) {
+    if (groundCoordKeys.length > 1) {
+      const firstGroundId = getIntId(groundCoordKeys[0]);
+      for (let i = 1; i < groundCoordKeys.length; i++) {
+        const otherGroundId = getIntId(groundCoordKeys[i]);
+        uf.union(firstGroundId, otherGroundId);
+      }
+      console.log(`[Connectivity] Unified ${groundCoordKeys.length} ground nodes into a single net (common ground plane)`);
+    } else {
+      console.log(`[Connectivity] Found 1 ground node (common ground plane)`);
     }
-    console.log(`[Connectivity] Unified ${groundCoordKeys.length} ground nodes into a single net`);
   }
   
-  // CRITICAL: Union all power nodes with the same voltage and sign together
-  // Group power nodes by voltage (voltage string must match exactly, including sign)
+  // CRITICAL: Union all power nodes with the same voltage together
+  // This represents connections to a common power bus at that voltage
+  // Group power nodes by normalized voltage (handles variations like "+3.3V", "3.3V", "+3.3 VDC")
   const powerNodesByVoltage = new Map<string, string[]>();
   for (const [coordKey, node] of coordinateToNode) {
     if (node.type === 'power' && node.voltage) {
-      const voltage = node.voltage.trim();
-      if (!powerNodesByVoltage.has(voltage)) {
-        powerNodesByVoltage.set(voltage, []);
+      // Normalize voltage to handle format variations
+      const normalizedVoltage = normalizeVoltage(node.voltage);
+      if (!powerNodesByVoltage.has(normalizedVoltage)) {
+        powerNodesByVoltage.set(normalizedVoltage, []);
       }
-      powerNodesByVoltage.get(voltage)!.push(coordKey);
+      powerNodesByVoltage.get(normalizedVoltage)!.push(coordKey);
       getIntId(coordKey); // Ensure it's in the union-find structure
     }
   }
-  // Union all power nodes with the same voltage
+  // Union all power nodes with the same normalized voltage
   for (const [voltage, coordKeys] of powerNodesByVoltage) {
-    if (coordKeys.length > 1) {
-      const firstPowerId = getIntId(coordKeys[0]);
-      for (let i = 1; i < coordKeys.length; i++) {
-        const otherPowerId = getIntId(coordKeys[i]);
-        uf.union(firstPowerId, otherPowerId);
+    if (coordKeys.length > 0) {
+      if (coordKeys.length > 1) {
+        const firstPowerId = getIntId(coordKeys[0]);
+        for (let i = 1; i < coordKeys.length; i++) {
+          const otherPowerId = getIntId(coordKeys[i]);
+          uf.union(firstPowerId, otherPowerId);
+        }
+        console.log(`[Connectivity] Unified ${coordKeys.length} power nodes with voltage "${voltage}" into a single net (common power bus)`);
+      } else {
+        console.log(`[Connectivity] Found 1 power node with voltage "${voltage}" (common power bus)`);
       }
-      console.log(`[Connectivity] Unified ${coordKeys.length} power nodes with voltage "${voltage}" into a single net`);
     }
   }
   
@@ -679,8 +727,10 @@ function buildConnections(
  * Group connected nodes into nets using union-find
  * Note: Nodes with the same point ID are already the same node (same key in the map)
  * This function groups nodes that are connected through traces
- * CRITICAL: All ground points are connected by definition.
- * CRITICAL: All power points with the same voltage and sign are connected by definition.
+ * CRITICAL: All ground points are connected by definition (single common ground plane).
+ * CRITICAL: All power points with the same voltage are connected by definition (common power bus).
+ *           For example, all nodes at +3.3V are connected, and all nodes at -3.3V are connected
+ *           (these are separate power buses - positive and negative).
  */
 export function groupNodesIntoNets(
   nodes: Map<number, NetlistNode>,
@@ -705,6 +755,7 @@ export function groupNodesIntoNets(
   console.log(`[Connectivity] Union-find: Processed ${connections.length} connections, ${connectionCount} valid, ${missingNodeCount} missing nodes`);
   
   // CRITICAL: Union all ground nodes together (all ground points are connected by definition)
+  // This represents connections to a single, common ground plane
   const groundNodeIds: number[] = [];
   for (const [nodeId, node] of nodes) {
     if (node.type === 'ground') {
@@ -712,34 +763,44 @@ export function groupNodesIntoNets(
     }
   }
   // Union all ground nodes with each other
-  if (groundNodeIds.length > 1) {
-    const firstGroundId = groundNodeIds[0];
-    for (let i = 1; i < groundNodeIds.length; i++) {
-      uf.union(firstGroundId, groundNodeIds[i]);
+  if (groundNodeIds.length > 0) {
+    if (groundNodeIds.length > 1) {
+      const firstGroundId = groundNodeIds[0];
+      for (let i = 1; i < groundNodeIds.length; i++) {
+        uf.union(firstGroundId, groundNodeIds[i]);
+      }
+      console.log(`[Connectivity] Unified ${groundNodeIds.length} ground nodes into a single net (common ground plane)`);
+    } else {
+      console.log(`[Connectivity] Found 1 ground node (common ground plane)`);
     }
-    console.log(`[Connectivity] Unified ${groundNodeIds.length} ground nodes into a single net`);
   }
   
-  // CRITICAL: Union all power nodes with the same voltage and sign together
-  // Group power nodes by voltage (voltage string must match exactly, including sign)
+  // CRITICAL: Union all power nodes with the same voltage together
+  // This represents connections to a common power bus at that voltage
+  // Group power nodes by normalized voltage (handles variations like "+3.3V", "3.3V", "+3.3 VDC")
   const powerNodesByVoltage = new Map<string, number[]>();
   for (const [nodeId, node] of nodes) {
     if (node.type === 'power' && node.voltage) {
-      const voltage = node.voltage.trim();
-      if (!powerNodesByVoltage.has(voltage)) {
-        powerNodesByVoltage.set(voltage, []);
+      // Normalize voltage to handle format variations
+      const normalizedVoltage = normalizeVoltage(node.voltage);
+      if (!powerNodesByVoltage.has(normalizedVoltage)) {
+        powerNodesByVoltage.set(normalizedVoltage, []);
       }
-      powerNodesByVoltage.get(voltage)!.push(nodeId);
+      powerNodesByVoltage.get(normalizedVoltage)!.push(nodeId);
     }
   }
-  // Union all power nodes with the same voltage
+  // Union all power nodes with the same normalized voltage
   for (const [voltage, nodeIds] of powerNodesByVoltage) {
-    if (nodeIds.length > 1) {
-      const firstPowerId = nodeIds[0];
-      for (let i = 1; i < nodeIds.length; i++) {
-        uf.union(firstPowerId, nodeIds[i]);
+    if (nodeIds.length > 0) {
+      if (nodeIds.length > 1) {
+        const firstPowerId = nodeIds[0];
+        for (let i = 1; i < nodeIds.length; i++) {
+          uf.union(firstPowerId, nodeIds[i]);
+        }
+        console.log(`[Connectivity] Unified ${nodeIds.length} power nodes with voltage "${voltage}" into a single net (common power bus)`);
+      } else {
+        console.log(`[Connectivity] Found 1 power node with voltage "${voltage}" (common power bus)`);
       }
-      console.log(`[Connectivity] Unified ${nodeIds.length} power nodes with voltage "${voltage}" into a single net`);
     }
   }
   

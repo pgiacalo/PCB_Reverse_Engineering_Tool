@@ -360,22 +360,37 @@ export function generateSimpleSchematic(
       maxY = Math.max(maxY, comp.y);
     }
     
-    // Calculate scale factor to fit components in reasonable schematic space
-    // Target: fit in approximately 400mm x 400mm area (larger to reduce crowding)
-    // A4 paper is ~210mm x 297mm, but we'll use a larger virtual canvas
+    // Calculate scale factor to fit components within A3 paper bounds
+    // A3 paper: 297mm x 420mm
+    // Leave margins for labels and power/ground symbols
     const pcbWidth = maxX - minX;
     const pcbHeight = maxY - minY;
-    const targetSchematicWidth = 400; // mm (increased from 200mm)
-    const targetSchematicHeight = 400; // mm (increased from 200mm)
     
-    // Use the smaller scale factor to ensure everything fits
-    const scaleX = pcbWidth > 0 ? targetSchematicWidth / pcbWidth : 0.2;
-    const scaleY = pcbHeight > 0 ? targetSchematicHeight / pcbHeight : 0.2;
-    const scale = Math.min(scaleX, scaleY, 0.2); // Cap at 0.2 (1 pixel = 0.2mm max) to allow more spacing
+    // Usable area within A3 paper (297mm x 420mm) with margins
+    const margin = 30; // 30mm margin on all sides
+    const usableWidth = 297 - (2 * margin);  // ~237mm usable width
+    const usableHeight = 420 - (2 * margin);  // ~360mm usable height
     
-    // Offset to start at reasonable position (50mm margin for better spacing)
-    const offsetX = 50;
-    const offsetY = 50;
+    // Calculate scale to fit PCB layout within usable area
+    // Use the smaller scale factor to ensure everything fits (preserves aspect ratio)
+    const scaleX = pcbWidth > 0 ? usableWidth / pcbWidth : 0.1;
+    const scaleY = pcbHeight > 0 ? usableHeight / pcbHeight : 0.1;
+    let scale = Math.min(scaleX, scaleY);
+    
+    // Ensure scale is reasonable (not too small or too large)
+    // Minimum: 0.01mm per pixel (prevents components from being too close)
+    // Maximum: 2.0mm per pixel (prevents components from being too far apart)
+    const minScale = 0.01;
+    const maxScale = 2.0;
+    scale = Math.max(minScale, Math.min(scale, maxScale));
+    
+    // Calculate actual bounds after scaling
+    const scaledWidth = pcbWidth * scale;
+    const scaledHeight = pcbHeight * scale;
+    
+    // Center the layout within the usable area
+    const offsetX = margin + (usableWidth - scaledWidth) / 2;
+    const offsetY = margin + (usableHeight - scaledHeight) / 2;
     
     // Map components using PCB coordinates
     for (const comp of componentsWithDesignators) {
@@ -394,11 +409,22 @@ export function generateSimpleSchematic(
         componentMap.set(designator, { comp, designator, x: schematicX, y: schematicY });
       }
     }
+    
+    // Log positioning information for debugging
+    console.log(`[Schematic] Component positioning: ${componentMap.size} components`);
+    console.log(`[Schematic] PCB bounds: ${minX.toFixed(1)}, ${minY.toFixed(1)} to ${maxX.toFixed(1)}, ${maxY.toFixed(1)}`);
+    console.log(`[Schematic] PCB size: ${pcbWidth.toFixed(1)} x ${pcbHeight.toFixed(1)} pixels`);
+    console.log(`[Schematic] Usable area: ${usableWidth.toFixed(1)} x ${usableHeight.toFixed(1)} mm (A3 paper with ${margin}mm margins)`);
+    console.log(`[Schematic] Scale factor: ${scale.toFixed(4)} (${(1/scale).toFixed(2)} pixels per mm)`);
+    console.log(`[Schematic] Scaled size: ${scaledWidth.toFixed(1)} x ${scaledHeight.toFixed(1)} mm`);
+    console.log(`[Schematic] Schematic bounds: ${offsetX.toFixed(1)}mm, ${offsetY.toFixed(1)}mm to ${(offsetX + scaledWidth).toFixed(1)}mm, ${(offsetY + scaledHeight).toFixed(1)}mm`);
   }
 
   // Generate KiCad schematic
   let schematic = '(kicad_sch (version 20201015) (generator simple_schematic)\n';
-  schematic += '  (paper "A4")\n';
+  // Use A3 paper size to accommodate larger layouts that preserve PCB spatial relationships
+  // A3 is 297mm x 420mm, which gives more room than A4 (210mm x 297mm)
+  schematic += '  (paper "A3")\n';
   schematic += '  (title_block\n';
   schematic += '    (title "")\n';
   schematic += '    (date "")\n';
@@ -1008,13 +1034,129 @@ export function generateSimpleSchematic(
       pinPositions.push({ x: pinX, y: pinY, designator: pinInfo.designator, pin: pinInfo.pin });
     }
     
-    // Create connections: connect all pins to a central point with wires and labels
-    // Handle both multi-pin nets and single-pin nets (for power/ground connections)
+    // Build connection graph from PCB traces to preserve layout relationships
+    // Map: pinKey (designator:pin) -> array of connected pinKeys through traces
+    const pinConnectionGraph = new Map<string, Set<string>>();
+    
+    // Initialize graph with all pins
+    for (const pinPos of pinPositions) {
+      const pinKey = `${pinPos.designator}:${pinPos.pin}`;
+      if (!pinConnectionGraph.has(pinKey)) {
+        pinConnectionGraph.set(pinKey, new Set());
+      }
+    }
+    
+    // Build connections from PCB traces: find which component pins are connected through traces
+    // We'll use the net's component pins and trace information to build a connection graph
+    const pinKeyToNodeId = new Map<string, number>();
+    for (const pinInfo of net.componentPins) {
+      const comp = components.find(c => {
+        const d = (c as any).abbreviation?.trim() || c.designator?.trim();
+        return d === pinInfo.designator;
+      });
+      if (comp && comp.pinConnections && comp.pinConnections[pinInfo.pin - 1]) {
+        const nodeIdStr = comp.pinConnections[pinInfo.pin - 1];
+        const nodeId = parseInt(nodeIdStr.trim(), 10);
+        if (!isNaN(nodeId)) {
+          const pinKey = `${pinInfo.designator}:${pinInfo.pin}`;
+          pinKeyToNodeId.set(pinKey, nodeId);
+        }
+      }
+    }
+    
+    // Build connectivity graph from all traces ONCE (handles transitive connections)
+    // This is more efficient than building it for each pair of nodes
+    const nodeConnectivityGraph = new Map<number, Set<number>>();
+    
+    // Initialize graph for all nodes
+    for (const nodeId of nodes.keys()) {
+      if (!nodeConnectivityGraph.has(nodeId)) {
+        nodeConnectivityGraph.set(nodeId, new Set());
+      }
+    }
+    
+    // Add edges from traces: consecutive points in a trace are connected
+    for (const stroke of drawingStrokes) {
+      if (stroke.type === 'trace' && stroke.points.length >= 2) {
+        const nodeIdsInTrace = stroke.points
+          .map(p => p.id)
+          .filter(id => id !== undefined && nodes.has(id!)) as number[];
+        
+        // Connect consecutive nodes in the trace (bidirectional)
+        for (let i = 0; i < nodeIdsInTrace.length - 1; i++) {
+          const nodeA = nodeIdsInTrace[i];
+          const nodeB = nodeIdsInTrace[i + 1];
+          if (nodeA !== undefined && nodeB !== undefined) {
+            if (!nodeConnectivityGraph.has(nodeA)) {
+              nodeConnectivityGraph.set(nodeA, new Set());
+            }
+            if (!nodeConnectivityGraph.has(nodeB)) {
+              nodeConnectivityGraph.set(nodeB, new Set());
+            }
+            nodeConnectivityGraph.get(nodeA)!.add(nodeB);
+            nodeConnectivityGraph.get(nodeB)!.add(nodeA);
+          }
+        }
+      }
+    }
+    
+    // Helper function to check if two nodes are connected (uses pre-built graph with BFS)
+    function areNodesConnected(nodeId1: number, nodeId2: number): boolean {
+      // If nodes are the same, they're trivially connected
+      if (nodeId1 === nodeId2) {
+        return true;
+      }
+      
+      // Use BFS to check connectivity in the pre-built graph
+      if (!nodeConnectivityGraph.has(nodeId1) || !nodeConnectivityGraph.has(nodeId2)) {
+        return false; // One or both nodes not in the graph
+      }
+      
+      const visited = new Set<number>();
+      const queue: number[] = [nodeId1];
+      visited.add(nodeId1);
+      
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        
+        if (current === nodeId2) {
+          return true; // Found path to target node
+        }
+        
+        const neighbors = nodeConnectivityGraph.get(current);
+        if (neighbors) {
+          for (const neighbor of neighbors) {
+            if (!visited.has(neighbor)) {
+              visited.add(neighbor);
+              queue.push(neighbor);
+            }
+          }
+        }
+      }
+      
+      return false; // No path found
+    }
+    
+    // Find connections through traces: if two pins share the same node ID or are connected via trace path
+    for (const [pinKey1, nodeId1] of pinKeyToNodeId) {
+      for (const [pinKey2, nodeId2] of pinKeyToNodeId) {
+        if (pinKey1 !== pinKey2) {
+          // Check if they're connected through traces (same node ID or connected via trace path)
+          if (nodeId1 === nodeId2 || areNodesConnected(nodeId1, nodeId2)) {
+            pinConnectionGraph.get(pinKey1)!.add(pinKey2);
+            pinConnectionGraph.get(pinKey2)!.add(pinKey1);
+          }
+        }
+      }
+    }
+    
+    // Create connections following PCB trace topology (minimum spanning tree approach)
+    // This preserves the spatial relationships from the PCB layout
     if (pinPositions.length >= 1) {
-      // Calculate center point for this net
+      // Calculate center point for labels and power/ground connections
       const centerX = pinPositions.length > 1 
         ? pinPositions.reduce((sum, p) => sum + p.x, 0) / pinPositions.length
-        : pinPositions[0].x + 10; // Offset single pins to the right
+        : pinPositions[0].x + 10;
       const centerY = pinPositions.length > 1
         ? pinPositions.reduce((sum, p) => sum + p.y, 0) / pinPositions.length
         : pinPositions[0].y;
@@ -1024,17 +1166,18 @@ export function generateSimpleSchematic(
         const powerKey = `PWR_${net.powerVoltage}`;
         const powerSymbol = powerGroundSymbols.get(powerKey);
         if (powerSymbol) {
-          // Connect center to power symbol
-          const powerConnectionY = powerSymbol.y - 2.54; // Power symbol connection point
+          const powerConnectionY = powerSymbol.y - 2.54;
           const powerConnectionX = powerSymbol.x;
           
-          // Create junction at power connection point
           const powerJunctionUuid = generateUuid();
           schematic += `  (junction (at ${powerConnectionX} ${powerConnectionY}) (diameter 0) (color 0 0 0 0) (uuid ${powerJunctionUuid}))\n`;
           
-          // Connect center to power symbol
+          // Connect to nearest component pin (or center if multiple pins)
+          const connectionPoint = pinPositions.length === 1 
+            ? pinPositions[0] 
+            : { x: centerX, y: centerY };
           const powerWireUuid = generateUuid();
-          schematic += `  (wire (pts (xy ${centerX} ${centerY}) (xy ${powerConnectionX} ${powerConnectionY})) (stroke (width 0) (type default)) (uuid ${powerWireUuid}))\n`;
+          schematic += `  (wire (pts (xy ${connectionPoint.x} ${connectionPoint.y}) (xy ${powerConnectionX} ${powerConnectionY})) (stroke (width 0) (type default)) (uuid ${powerWireUuid}))\n`;
         }
       }
       
@@ -1043,44 +1186,110 @@ export function generateSimpleSchematic(
         const groundKey = 'GND';
         const groundSymbol = powerGroundSymbols.get(groundKey);
         if (groundSymbol) {
-          // Connect center to ground symbol
-          const groundConnectionY = groundSymbol.y + 2.54; // Ground symbol connection point
+          const groundConnectionY = groundSymbol.y + 2.54;
           const groundConnectionX = groundSymbol.x;
           
-          // Create junction at ground connection point
           const groundJunctionUuid = generateUuid();
           schematic += `  (junction (at ${groundConnectionX} ${groundConnectionY}) (diameter 0) (color 0 0 0 0) (uuid ${groundJunctionUuid}))\n`;
           
-          // Connect center to ground symbol
+          // Connect to nearest component pin (or center if multiple pins)
+          const connectionPoint = pinPositions.length === 1 
+            ? pinPositions[0] 
+            : { x: centerX, y: centerY };
           const groundWireUuid = generateUuid();
-          schematic += `  (wire (pts (xy ${centerX} ${centerY}) (xy ${groundConnectionX} ${groundConnectionY})) (stroke (width 0) (type default)) (uuid ${groundWireUuid}))\n`;
+          schematic += `  (wire (pts (xy ${connectionPoint.x} ${connectionPoint.y}) (xy ${groundConnectionX} ${groundConnectionY})) (stroke (width 0) (type default)) (uuid ${groundWireUuid}))\n`;
         }
       }
       
-      // For multi-pin nets, create connections between all pins
-      // Use a "bus" style: connect pins in a chain with a central junction for clarity
+      // Route wires following PCB trace topology
       if (pinPositions.length >= 2) {
         console.log(`[Schematic] Creating wires for net ${net.name}: ${pinPositions.length} pins`);
         
-        // For 2 pins: direct connection
-        if (pinPositions.length === 2) {
-          const wireUuid = generateUuid();
-          schematic += `  (wire (pts (xy ${pinPositions[0].x} ${pinPositions[0].y}) (xy ${pinPositions[1].x} ${pinPositions[1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
-        } else {
-          // For 3+ pins: use a bus-style connection with a central junction
-          // Create a central junction point
-          const centerUuid = generateUuid();
-          schematic += `  (junction (at ${centerX} ${centerY}) (diameter 0.508) (color 0 0 0 0) (uuid ${centerUuid}))\n`;
+        // Build a map from pinKey to pinPosition
+        const pinKeyToPosition = new Map<string, { x: number; y: number }>();
+        for (const pinPos of pinPositions) {
+          const pinKey = `${pinPos.designator}:${pinPos.pin}`;
+          pinKeyToPosition.set(pinKey, { x: pinPos.x, y: pinPos.y });
+        }
+        
+        // Use minimum spanning tree to connect pins while preserving spatial relationships
+        // Sort pins by distance from each other to create a more natural routing
+        const connectedPins = new Set<string>();
+        const edges: Array<{ from: string; to: string; distance: number }> = [];
+        
+        // Calculate distances between all connected pins
+        for (const [pinKey1, connections] of pinConnectionGraph) {
+          for (const pinKey2 of connections) {
+            if (pinKeyToPosition.has(pinKey1) && pinKeyToPosition.has(pinKey2)) {
+              const pos1 = pinKeyToPosition.get(pinKey1)!;
+              const pos2 = pinKeyToPosition.get(pinKey2)!;
+              const distance = Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
+              edges.push({ from: pinKey1, to: pinKey2, distance });
+            }
+          }
+        }
+        
+        // If we have explicit connections from traces, use them
+        // Otherwise, create a minimum spanning tree based on spatial proximity
+        if (edges.length > 0) {
+          // Sort edges by distance (prefer shorter connections)
+          edges.sort((a, b) => a.distance - b.distance);
           
-          // Connect each pin to the center junction with wires
-          for (const pinPos of pinPositions) {
+          // Use Kruskal's algorithm to build minimum spanning tree
+          const parent = new Map<string, string>();
+          const find = (key: string): string => {
+            if (!parent.has(key)) parent.set(key, key);
+            if (parent.get(key) !== key) {
+              parent.set(key, find(parent.get(key)!));
+            }
+            return parent.get(key)!;
+          };
+          const union = (a: string, b: string) => {
+            const rootA = find(a);
+            const rootB = find(b);
+            if (rootA !== rootB) {
+              parent.set(rootB, rootA);
+              return true;
+            }
+            return false;
+          };
+          
+          // Add edges to form minimum spanning tree
+          for (const edge of edges) {
+            if (union(edge.from, edge.to)) {
+              const pos1 = pinKeyToPosition.get(edge.from)!;
+              const pos2 = pinKeyToPosition.get(edge.to)!;
+              const wireUuid = generateUuid();
+              schematic += `  (wire (pts (xy ${pos1.x} ${pos1.y}) (xy ${pos2.x} ${pos2.y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+              connectedPins.add(edge.from);
+              connectedPins.add(edge.to);
+            }
+          }
+        } else {
+          // Fallback: if no explicit trace connections, use spatial proximity
+          // For 2 pins: direct connection
+          if (pinPositions.length === 2) {
             const wireUuid = generateUuid();
-            console.log(`[Schematic] Wire from ${pinPos.designator}:pin${pinPos.pin} (${pinPos.x}, ${pinPos.y}) to center (${centerX}, ${centerY})`);
-            schematic += `  (wire (pts (xy ${pinPos.x} ${pinPos.y}) (xy ${centerX} ${centerY})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+            schematic += `  (wire (pts (xy ${pinPositions[0].x} ${pinPositions[0].y}) (xy ${pinPositions[1].x} ${pinPositions[1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+          } else {
+            // For 3+ pins: connect in a chain based on spatial proximity
+            // Sort pins by position (left to right, top to bottom)
+            const sortedPins = [...pinPositions].sort((a, b) => {
+              if (Math.abs(a.y - b.y) < 5) { // Same row
+                return a.x - b.x;
+              }
+              return a.y - b.y;
+            });
+            
+            // Connect adjacent pins in the sorted order
+            for (let i = 0; i < sortedPins.length - 1; i++) {
+              const wireUuid = generateUuid();
+              schematic += `  (wire (pts (xy ${sortedPins[i].x} ${sortedPins[i].y}) (xy ${sortedPins[i + 1].x} ${sortedPins[i + 1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+            }
           }
         }
       } else if (pinPositions.length === 1) {
-        // Single pin: create a junction at the pin position (for power/ground connections)
+        // Single pin: create a junction at the pin position
         console.log(`[Schematic] Creating junction for single-pin net ${net.name} at (${pinPositions[0].x}, ${pinPositions[0].y})`);
         const pinJunctionUuid = generateUuid();
         schematic += `  (junction (at ${pinPositions[0].x} ${pinPositions[0].y}) (diameter 0.508) (color 0 0 0 0) (uuid ${pinJunctionUuid}))\n`;
