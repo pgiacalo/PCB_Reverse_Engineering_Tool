@@ -1,8 +1,48 @@
 import { useState, useCallback } from 'react';
 import type { PCBComponent } from '../types';
+import { getDefaultUnit } from '../constants';
 
 /**
- * Parse a value string to extract number and unit
+ * Read value and unit from component, with backward compatibility for old combined format
+ * First tries to read separate value/unit fields, falls back to parsing combined string
+ * Special handling for power: always stored as combined "valueW" (e.g., "1/4W", "1W")
+ */
+function readValueAndUnit(
+  component: any,
+  valueField: string,
+  unitField: string,
+  defaultUnit: string
+): { value: string; unit: string } {
+  // Special case: power is always stored as combined value+unit (e.g., "1/4W", "1W")
+  if (valueField === 'power') {
+    const powerValue = component[valueField] || '';
+    if (typeof powerValue === 'string' && powerValue.trim() !== '') {
+      // Remove trailing "W" if present
+      const value = powerValue.replace(/W$/i, '').trim();
+      return { value, unit: 'W' };
+    }
+    return { value: '', unit: 'W' };
+  }
+  
+  // Try to read separate fields first (new format)
+  if (component[valueField] !== undefined || component[unitField] !== undefined) {
+    return {
+      value: component[valueField] || '',
+      unit: component[unitField] || defaultUnit,
+    };
+  }
+  
+  // Fallback: parse combined string (backward compatibility for old projects)
+  const combined = component[valueField] || '';
+  if (typeof combined === 'string' && combined.trim() !== '') {
+    return parseValueWithUnit(combined);
+  }
+  
+  return { value: '', unit: defaultUnit };
+}
+
+/**
+ * Parse a value string to extract number and unit (for backward compatibility only)
  * Examples: "10kΩ" -> { value: "10", unit: "kΩ" }, "100" -> { value: "100", unit: "" }
  * Also handles fractional values like "1/4W" -> { value: "1/4", unit: "W" }
  */
@@ -56,11 +96,10 @@ export function useComponents() {
     y: number;
     orientation?: number; // 0, 90, 180, 270
     // Type-specific fields (all optional, populated based on component type)
-    // Resistor / ResistorNetwork / Thermistor / VariableResistor
+    // Resistor / ResistorNetwork / Thermistor / VariableResistor / Speaker / Transformer / ZenerDiode
     resistance?: string;
     resistanceUnit?: string; // Ω, kΩ, MΩ
-    power?: string;
-    powerUnit?: string; // W (default)
+    power?: string; // value only (e.g., "1/4", "1") - "W" is appended when saving
     tolerance?: string;
     // Capacitor
     capacitance?: string;
@@ -71,6 +110,7 @@ export function useComponents() {
     // Electrolytic Capacitor
     polarityCapacitor?: 'Positive' | 'Negative'; // renamed to avoid conflict with Transistor polarity
     esr?: string;
+    esrUnit?: string; // unit, e.g., "mΩ"
     temperature?: string;
     // Diode
     diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other';
@@ -79,11 +119,13 @@ export function useComponents() {
     ledColor?: string;
     // Battery
     capacity?: string;
+    capacityUnit?: string; // unit, e.g., "mAh"
     chemistry?: string;
     // Fuse
     fuseType?: string;
     // FerriteBead
     impedance?: string;
+    impedanceUnit?: string; // unit, e.g., "Ω"
     // Connector
     connectorType?: string;
     gender?: 'Male' | 'Female' | 'N/A';
@@ -91,6 +133,7 @@ export function useComponents() {
     positions?: number;
     // Relay
     coilVoltage?: string;
+    coilVoltageUnit?: string; // unit, e.g., "V"
     contactType?: string;
     // Inductor
     inductance?: string;
@@ -101,7 +144,9 @@ export function useComponents() {
     motorType?: string;
     // PowerSupply
     inputVoltage?: string;
+    inputVoltageUnit?: string; // unit, e.g., "V"
     outputVoltage?: string;
+    outputVoltageUnit?: string; // unit, e.g., "V"
     // Transistor
     transistorType?: 'BJT' | 'FET' | 'MOSFET' | 'JFET' | 'Other';
     polarity?: 'NPN' | 'PNP' | 'N-Channel' | 'P-Channel';
@@ -114,7 +159,10 @@ export function useComponents() {
     switchType?: string;
     // Transformer
     primaryVoltage?: string;
+    primaryVoltageUnit?: string; // unit, e.g., "V"
     secondaryVoltage?: string;
+    secondaryVoltageUnit?: string; // unit, e.g., "V"
+    // power and powerUnit already defined above (shared with Resistor, etc.)
     turns?: string;
     // TestPoint
     signal?: string;
@@ -178,70 +226,76 @@ export function useComponents() {
     };
     
     // Extract type-specific fields based on component type
-    // Parse values to separate number and unit
+    // Read separate value/unit fields directly (with backward compatibility)
     if (component.componentType === 'Resistor') {
       const r = component as any;
-      const resistanceParsed = parseValueWithUnit(r.resistance);
-      editor.resistance = resistanceParsed.value;
-      editor.resistanceUnit = resistanceParsed.unit || 'Ω';
-      const powerParsed = parseValueWithUnit(r.power);
-      editor.power = powerParsed.value || '1/4';
-      editor.powerUnit = powerParsed.unit || 'W';
+      const resistance = readValueAndUnit(r, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      editor.resistance = resistance.value;
+      editor.resistanceUnit = resistance.unit;
+      // Power is stored as combined "valueW" (e.g., "1/4W", "1W")
+      const power = readValueAndUnit(r, 'power', 'powerUnit', 'W');
+      editor.power = power.value || '1/4';
       editor.tolerance = r.tolerance || '±5%';
     } else if (component.componentType === 'Capacitor') {
       const c = component as any;
-      const capacitanceParsed = parseValueWithUnit(c.capacitance);
-      editor.capacitance = capacitanceParsed.value;
-      editor.capacitanceUnit = capacitanceParsed.unit || 'nF';
-      const voltageParsed = parseValueWithUnit(c.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
+      const capacitance = readValueAndUnit(c, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      editor.capacitance = capacitance.value;
+      editor.capacitanceUnit = capacitance.unit;
+      const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
       editor.tolerance = c.tolerance || '±10%';
       editor.dielectric = c.dielectric || 'Ceramic';
     } else if (component.componentType === 'Electrolytic Capacitor') {
       const c = component as any;
-      const capacitanceParsed = parseValueWithUnit(c.capacitance);
-      editor.capacitance = capacitanceParsed.value;
-      editor.capacitanceUnit = capacitanceParsed.unit || 'µF';
-      const voltageParsed = parseValueWithUnit(c.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
+      const capacitance = readValueAndUnit(c, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      editor.capacitance = capacitance.value;
+      editor.capacitanceUnit = capacitance.unit;
+      const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
       editor.tolerance = c.tolerance || '±20%';
       editor.polarityCapacitor = c.polarity || 'Positive';
-      editor.esr = c.esr || '';
+      const esr = readValueAndUnit(c, 'esr', 'esrUnit', getDefaultUnit('esr'));
+      editor.esr = esr.value;
+      editor.esrUnit = esr.unit;
       editor.temperature = c.temperature || '';
     } else if (component.componentType === 'Diode') {
       const d = component as any;
       editor.diodeType = d.diodeType || 'Standard';
-      const voltageParsed = parseValueWithUnit(d.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
-      const currentParsed = parseValueWithUnit(d.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const voltage = readValueAndUnit(d, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      const current = readValueAndUnit(d, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
       editor.ledColor = d.ledColor || '';
     } else if (component.componentType === 'Battery') {
       const b = component as any;
-      const voltageParsed = parseValueWithUnit(b.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
-      editor.capacity = b.capacity || '';
+      const voltage = readValueAndUnit(b, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      const capacity = readValueAndUnit(b, 'capacity', 'capacityUnit', getDefaultUnit('capacity'));
+      editor.capacity = capacity.value;
+      editor.capacityUnit = capacity.unit;
       editor.chemistry = b.chemistry || 'Li-ion';
     } else if (component.componentType === 'Fuse') {
       const f = component as any;
-      const currentParsed = parseValueWithUnit(f.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
-      const voltageParsed = parseValueWithUnit(f.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
+      const current = readValueAndUnit(f, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
+      const voltage = readValueAndUnit(f, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
       editor.fuseType = f.fuseType || 'Fast-blow';
     } else if (component.componentType === 'FerriteBead') {
       const fb = component as any;
-      editor.impedance = fb.impedance || '';
-      const currentParsed = parseValueWithUnit(fb.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const impedance = readValueAndUnit(fb, 'impedance', 'impedanceUnit', getDefaultUnit('impedance'));
+      editor.impedance = impedance.value;
+      editor.impedanceUnit = impedance.unit;
+      const current = readValueAndUnit(fb, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
     } else if (component.componentType === 'Connector') {
       const conn = component as any;
       editor.connectorType = conn.connectorType || '';
@@ -251,91 +305,94 @@ export function useComponents() {
       editor.positions = j.positions || 3;
     } else if (component.componentType === 'Relay') {
       const r = component as any;
-      const voltageParsed = parseValueWithUnit(r.coilVoltage);
-      editor.coilVoltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
+      const coilVoltage = readValueAndUnit(r, 'coilVoltage', 'coilVoltageUnit', getDefaultUnit('coilVoltage'));
+      editor.coilVoltage = coilVoltage.value;
+      editor.coilVoltageUnit = coilVoltage.unit;
       editor.contactType = r.contactType || 'SPST';
-      const currentParsed = parseValueWithUnit(r.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const current = readValueAndUnit(r, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
     } else if (component.componentType === 'Inductor') {
       const i = component as any;
-      const inductanceParsed = parseValueWithUnit(i.inductance);
-      editor.inductance = inductanceParsed.value;
-      editor.inductanceUnit = inductanceParsed.unit || 'µH';
-      const currentParsed = parseValueWithUnit(i.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
-      const resistanceParsed = parseValueWithUnit(i.resistance);
-      editor.resistance = resistanceParsed.value;
-      editor.resistanceUnit = resistanceParsed.unit || 'Ω';
+      const inductance = readValueAndUnit(i, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
+      editor.inductance = inductance.value;
+      editor.inductanceUnit = inductance.unit;
+      const current = readValueAndUnit(i, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
+      const resistance = readValueAndUnit(i, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      editor.resistance = resistance.value;
+      editor.resistanceUnit = resistance.unit;
     } else if (component.componentType === 'Speaker') {
       const s = component as any;
-      editor.impedance = s.impedance || '';
-      const powerParsed = parseValueWithUnit(s.power);
-      editor.power = powerParsed.value || '1';
-      editor.powerUnit = powerParsed.unit || 'W';
+      const impedance = readValueAndUnit(s, 'impedance', 'impedanceUnit', getDefaultUnit('impedance'));
+      editor.impedance = impedance.value;
+      editor.impedanceUnit = impedance.unit;
+      // Power is stored as combined "valueW" (e.g., "1/4W", "1W")
+      const power = readValueAndUnit(s, 'power', 'powerUnit', 'W');
+      editor.power = power.value || '1';
     } else if (component.componentType === 'Motor') {
       const m = component as any;
       editor.motorType = m.motorType || 'DC';
-      const voltageParsed = parseValueWithUnit(m.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
-      const currentParsed = parseValueWithUnit(m.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const voltage = readValueAndUnit(m, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      const current = readValueAndUnit(m, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
     } else if (component.componentType === 'PowerSupply') {
       const ps = component as any;
-      const inputVoltageParsed = parseValueWithUnit(ps.inputVoltage);
-      editor.inputVoltage = inputVoltageParsed.value;
-      editor.voltageUnit = inputVoltageParsed.unit || 'V';
-      const outputVoltageParsed = parseValueWithUnit(ps.outputVoltage);
-      editor.outputVoltage = outputVoltageParsed.value;
-      const currentParsed = parseValueWithUnit(ps.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const inputVoltage = readValueAndUnit(ps, 'inputVoltage', 'inputVoltageUnit', getDefaultUnit('inputVoltage'));
+      editor.inputVoltage = inputVoltage.value;
+      editor.inputVoltageUnit = inputVoltage.unit;
+      const outputVoltage = readValueAndUnit(ps, 'outputVoltage', 'outputVoltageUnit', getDefaultUnit('outputVoltage'));
+      editor.outputVoltage = outputVoltage.value;
+      editor.outputVoltageUnit = outputVoltage.unit;
+      const current = readValueAndUnit(ps, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
     } else if (component.componentType === 'Transistor') {
       const t = component as any;
       editor.transistorType = t.transistorType || 'BJT';
       editor.polarity = t.polarity || 'NPN';
-      const voltageParsed = parseValueWithUnit(t.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
-      const currentParsed = parseValueWithUnit(t.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
+      const voltage = readValueAndUnit(t, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      const current = readValueAndUnit(t, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
     } else if (component.componentType === 'ResistorNetwork') {
       const rn = component as any;
-      const resistanceParsed = parseValueWithUnit(rn.resistance);
-      editor.resistance = resistanceParsed.value;
-      editor.resistanceUnit = resistanceParsed.unit || 'Ω';
+      const resistance = readValueAndUnit(rn, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      editor.resistance = resistance.value;
+      editor.resistanceUnit = resistance.unit;
       editor.configuration = rn.configuration || '';
     } else if (component.componentType === 'Thermistor') {
       const t = component as any;
-      const resistanceParsed = parseValueWithUnit(t.resistance);
-      editor.resistance = resistanceParsed.value;
-      editor.resistanceUnit = resistanceParsed.unit || 'Ω';
+      const resistance = readValueAndUnit(t, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      editor.resistance = resistance.value;
+      editor.resistanceUnit = resistance.unit;
       editor.thermistorType = t.thermistorType || 'NTC';
       editor.beta = t.beta || '';
     } else if (component.componentType === 'Switch') {
       const s = component as any;
       editor.switchType = s.switchType || 'Toggle';
-      const currentParsed = parseValueWithUnit(s.current);
-      editor.current = currentParsed.value;
-      editor.currentUnit = currentParsed.unit || 'A';
-      const voltageParsed = parseValueWithUnit(s.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
+      const current = readValueAndUnit(s, 'current', 'currentUnit', getDefaultUnit('current'));
+      editor.current = current.value;
+      editor.currentUnit = current.unit;
+      const voltage = readValueAndUnit(s, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
     } else if (component.componentType === 'Transformer') {
       const t = component as any;
-      const primaryVoltageParsed = parseValueWithUnit(t.primaryVoltage);
-      editor.primaryVoltage = primaryVoltageParsed.value;
-      editor.voltageUnit = primaryVoltageParsed.unit || 'V';
-      const secondaryVoltageParsed = parseValueWithUnit(t.secondaryVoltage);
-      editor.secondaryVoltage = secondaryVoltageParsed.value;
-      const powerParsed = parseValueWithUnit(t.power);
-      editor.power = powerParsed.value || '1';
-      editor.powerUnit = powerParsed.unit || 'W';
+      const primaryVoltage = readValueAndUnit(t, 'primaryVoltage', 'primaryVoltageUnit', getDefaultUnit('primaryVoltage'));
+      editor.primaryVoltage = primaryVoltage.value;
+      editor.primaryVoltageUnit = primaryVoltage.unit;
+      const secondaryVoltage = readValueAndUnit(t, 'secondaryVoltage', 'secondaryVoltageUnit', getDefaultUnit('secondaryVoltage'));
+      editor.secondaryVoltage = secondaryVoltage.value;
+      editor.secondaryVoltageUnit = secondaryVoltage.unit;
+      const power = readValueAndUnit(t, 'power', 'powerUnit', getDefaultUnit('power'));
+      editor.power = power.value || '1';
       editor.turns = t.turns || '';
     } else if (component.componentType === 'TestPoint') {
       const tp = component as any;
@@ -351,12 +408,11 @@ export function useComponents() {
     } else if (component.componentType === 'VariableResistor') {
       const vr = component as any;
       editor.vrType = vr.vrType || 'Potentiometer';
-      const resistanceParsed = parseValueWithUnit(vr.resistance);
-      editor.resistance = resistanceParsed.value;
-      editor.resistanceUnit = resistanceParsed.unit || 'Ω';
-      const powerParsed = parseValueWithUnit(vr.power);
-      editor.power = powerParsed.value || '1/4';
-      editor.powerUnit = powerParsed.unit || 'W';
+      const resistance = readValueAndUnit(vr, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      editor.resistance = resistance.value;
+      editor.resistanceUnit = resistance.unit;
+      const power = readValueAndUnit(vr, 'power', 'powerUnit', getDefaultUnit('power'));
+      editor.power = power.value || '1/4';
       editor.taper = vr.taper || '';
     } else if (component.componentType === 'Crystal') {
       const x = component as any;
@@ -365,12 +421,11 @@ export function useComponents() {
       editor.tolerance = x.tolerance || '';
     } else if (component.componentType === 'ZenerDiode') {
       const z = component as any;
-      const voltageParsed = parseValueWithUnit(z.voltage);
-      editor.voltage = voltageParsed.value;
-      editor.voltageUnit = voltageParsed.unit || 'V';
-      const powerParsed = parseValueWithUnit(z.power);
-      editor.power = powerParsed.value || '1/4';
-      editor.powerUnit = powerParsed.unit || 'W';
+      const voltage = readValueAndUnit(z, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      const power = readValueAndUnit(z, 'power', 'powerUnit', getDefaultUnit('power'));
+      editor.power = power.value || '1/4';
       editor.tolerance = z.tolerance || '±5%';
     }
     

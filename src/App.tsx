@@ -12,7 +12,9 @@ import {
   DEFAULT_PAD_COLOR,
   DEFAULT_POWER_COLOR,
   VIA,
-  COMPONENT_ICON
+  COMPONENT_ICON,
+  getPropertyUnits,
+  getDefaultUnit
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
 import { generateSimpleSchematic } from './utils/schematic';
@@ -30,7 +32,6 @@ import {
   useImage,
   useView,
   useComponents,
-  combineValueAndUnit,
   usePowerGround,
   useLayerSettings,
   useToolRegistry,
@@ -9061,16 +9062,16 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Resistance:</label>
                         <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10" />
-                        <select value={componentEditor.resistanceUnit || 'Ω'} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="Ω">Ω</option>
-                          <option value="kΩ">kΩ</option>
-                          <option value="MΩ">MΩ</option>
+                        <select value={componentEditor.resistanceUnit || getDefaultUnit('resistance')} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('resistance').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       {/* Essential resistor properties - right after Resistance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
-                        <select id={`component-power-${comp.id}`} value={componentEditor.power || '1/4'} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                        <select id={`component-power-${comp.id}`} value={componentEditor.power || '1/4'} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '12px' }}>
                           <option value="1/20">1/20 W</option>
                           <option value="1/16">1/16 W</option>
                           <option value="1/10">1/10 W</option>
@@ -9085,9 +9086,6 @@ function App() {
                           <option value="25">25 W</option>
                           <option value="50">50 W</option>
                           <option value="100">100 W</option>
-                        </select>
-                        <select value={componentEditor.powerUnit || 'W'} onChange={(e) => setComponentEditor({ ...componentEditor, powerUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="W">W</option>
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -9112,22 +9110,20 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
                         <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100" />
-                        <select value={componentEditor.capacitanceUnit || 'nF'} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="pF">pF</option>
-                          <option value="nF">nF</option>
-                          <option value="µF">µF</option>
-                          <option value="mF">mF</option>
-                          <option value="F">F</option>
+                        <select value={componentEditor.capacitanceUnit || getDefaultUnit('capacitance')} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('capacitance').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       {/* Essential capacitor properties - right after Capacitance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
                         <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
-                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="mV">mV</option>
-                          <option value="V">V</option>
-                          <option value="kV">kV</option>
+                        <select value={componentEditor.voltageUnit || getDefaultUnit('voltage')} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('voltage').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -9174,10 +9170,10 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
                         <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 25" />
-                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="mV">mV</option>
-                          <option value="V">V</option>
-                          <option value="kV">kV</option>
+                        <select value={componentEditor.voltageUnit || getDefaultUnit('voltage')} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('voltage').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -9206,21 +9202,20 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-inductance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Inductance:</label>
                         <input id={`component-inductance-${comp.id}`} type="text" value={componentEditor.inductance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, inductance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10" />
-                        <select value={componentEditor.inductanceUnit || 'µH'} onChange={(e) => setComponentEditor({ ...componentEditor, inductanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="nH">nH</option>
-                          <option value="µH">µH</option>
-                          <option value="mH">mH</option>
-                          <option value="H">H</option>
+                        <select value={componentEditor.inductanceUnit || getDefaultUnit('inductance')} onChange={(e) => setComponentEditor({ ...componentEditor, inductanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('inductance').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       {/* Essential inductor properties - right after Inductance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
                         <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
-                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="µA">µA</option>
-                          <option value="mA">mA</option>
-                          <option value="A">A</option>
+                        <select value={componentEditor.currentUnit || getDefaultUnit('current')} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('current').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -9268,19 +9263,19 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
                         <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
-                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="mV">mV</option>
-                          <option value="V">V</option>
-                          <option value="kV">kV</option>
+                        <select value={componentEditor.voltageUnit || getDefaultUnit('voltage')} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('voltage').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
                         <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
-                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
-                          <option value="µA">µA</option>
-                          <option value="mA">mA</option>
-                          <option value="A">A</option>
+                        <select value={componentEditor.currentUnit || getDefaultUnit('current')} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          {getPropertyUnits('current').map(unit => (
+                            <option key={unit} value={unit}>{unit}</option>
+                          ))}
                         </select>
                       </div>
                     </>
@@ -9899,85 +9894,119 @@ function App() {
                         }
                         
                         // Update type-specific fields based on component type
-                        // Combine value and unit when saving
+                        // Save separate value and unit fields
                         if (comp.componentType === 'Resistor') {
-                          const combinedResistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
-                          (updated as any).resistance = combinedResistance;
-                          console.log(`[Component Save] Resistor resistance: "${componentEditor.resistance}" + "${componentEditor.resistanceUnit}" = "${combinedResistance}"`);
-                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+                          // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
+                          (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         } else if (comp.componentType === 'Capacitor') {
-                          (updated as any).capacitance = combineValueAndUnit(componentEditor.capacitance || '', componentEditor.capacitanceUnit || '');
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).capacitance = componentEditor.capacitance || undefined;
+                          (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                           (updated as any).dielectric = componentEditor.dielectric || undefined;
                         } else if (comp.componentType === 'Electrolytic Capacitor') {
-                          (updated as any).capacitance = combineValueAndUnit(componentEditor.capacitance || '', componentEditor.capacitanceUnit || '');
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).capacitance = componentEditor.capacitance || undefined;
+                          (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                           (updated as any).polarity = componentEditor.polarityCapacitor || undefined;
                           (updated as any).esr = componentEditor.esr || undefined;
+                          (updated as any).esrUnit = componentEditor.esrUnit || undefined;
                           (updated as any).temperature = componentEditor.temperature || undefined;
                         } else if (comp.componentType === 'Diode') {
                           (updated as any).diodeType = componentEditor.diodeType || undefined;
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                           (updated as any).ledColor = componentEditor.ledColor || undefined;
                         } else if (comp.componentType === 'Battery') {
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
                           (updated as any).capacity = componentEditor.capacity || undefined;
+                          (updated as any).capacityUnit = componentEditor.capacityUnit || undefined;
                           (updated as any).chemistry = componentEditor.chemistry || undefined;
                         } else if (comp.componentType === 'Fuse') {
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
                           (updated as any).fuseType = componentEditor.fuseType || undefined;
                         } else if (comp.componentType === 'FerriteBead') {
                           (updated as any).impedance = componentEditor.impedance || undefined;
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).impedanceUnit = componentEditor.impedanceUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                         } else if (comp.componentType === 'Connector') {
                           (updated as any).connectorType = componentEditor.connectorType || undefined;
                           (updated as any).gender = componentEditor.gender || undefined;
                         } else if (comp.componentType === 'Jumper') {
                           (updated as any).positions = componentEditor.positions || undefined;
                         } else if (comp.componentType === 'Relay') {
-                          (updated as any).coilVoltage = combineValueAndUnit(componentEditor.coilVoltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).coilVoltage = componentEditor.coilVoltage || undefined;
+                          (updated as any).coilVoltageUnit = componentEditor.coilVoltageUnit || undefined;
                           (updated as any).contactType = componentEditor.contactType || undefined;
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                         } else if (comp.componentType === 'Inductor') {
-                          (updated as any).inductance = combineValueAndUnit(componentEditor.inductance || '', componentEditor.inductanceUnit || '');
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
-                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).inductance = componentEditor.inductance || undefined;
+                          (updated as any).inductanceUnit = componentEditor.inductanceUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
                         } else if (comp.componentType === 'Speaker') {
                           (updated as any).impedance = componentEditor.impedance || undefined;
-                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
+                          (updated as any).impedanceUnit = componentEditor.impedanceUnit || undefined;
+                          // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
+                          (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
                         } else if (comp.componentType === 'Motor') {
                           (updated as any).motorType = componentEditor.motorType || undefined;
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                         } else if (comp.componentType === 'PowerSupply') {
-                          (updated as any).inputVoltage = combineValueAndUnit(componentEditor.inputVoltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).outputVoltage = combineValueAndUnit(componentEditor.outputVoltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).inputVoltage = componentEditor.inputVoltage || undefined;
+                          (updated as any).inputVoltageUnit = componentEditor.inputVoltageUnit || undefined;
+                          (updated as any).outputVoltage = componentEditor.outputVoltage || undefined;
+                          (updated as any).outputVoltageUnit = componentEditor.outputVoltageUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                         } else if (comp.componentType === 'Transistor') {
                           (updated as any).transistorType = componentEditor.transistorType || undefined;
                           (updated as any).polarity = componentEditor.polarity || undefined;
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
                         } else if (comp.componentType === 'ResistorNetwork') {
-                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
                           (updated as any).configuration = componentEditor.configuration || undefined;
                         } else if (comp.componentType === 'Thermistor') {
-                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
                           (updated as any).thermistorType = componentEditor.thermistorType || undefined;
                           (updated as any).beta = componentEditor.beta || undefined;
                         } else if (comp.componentType === 'Switch') {
                           (updated as any).switchType = componentEditor.switchType || undefined;
-                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
                         } else if (comp.componentType === 'Transformer') {
-                          (updated as any).primaryVoltage = combineValueAndUnit(componentEditor.primaryVoltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).secondaryVoltage = combineValueAndUnit(componentEditor.secondaryVoltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
+                          (updated as any).primaryVoltage = componentEditor.primaryVoltage || undefined;
+                          (updated as any).primaryVoltageUnit = componentEditor.primaryVoltageUnit || undefined;
+                          (updated as any).secondaryVoltage = componentEditor.secondaryVoltage || undefined;
+                          (updated as any).secondaryVoltageUnit = componentEditor.secondaryVoltageUnit || undefined;
+                          // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
+                          (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
                           (updated as any).turns = componentEditor.turns || undefined;
                         } else if (comp.componentType === 'TestPoint') {
                           (updated as any).signal = componentEditor.signal || undefined;
@@ -9994,16 +10023,20 @@ function App() {
                           (updated as any).tubeType = componentEditor.tubeType || undefined;
                         } else if (comp.componentType === 'VariableResistor') {
                           (updated as any).vrType = componentEditor.vrType || undefined;
-                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
-                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
+                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+                          // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
+                          (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
                           (updated as any).taper = componentEditor.taper || undefined;
                         } else if (comp.componentType === 'Crystal') {
                           (updated as any).frequency = componentEditor.frequency || undefined;
                           (updated as any).loadCapacitance = componentEditor.loadCapacitance || undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         } else if (comp.componentType === 'ZenerDiode') {
-                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
-                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
+                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+                          // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
+                          (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         }
                         
@@ -10018,10 +10051,7 @@ function App() {
                       
                       if (currentComp) {
                         // Component exists - update it
-                        console.log(`[Component Save] Saving component ${currentComp.id}, type: ${currentComp.componentType}`);
-                        console.log(`[Component Save] Editor resistance value: "${componentEditor.resistance}", unit: "${componentEditor.resistanceUnit}"`);
                         const updatedComp = updateComponent(currentComp);
-                        console.log(`[Component Save] Updated component resistance: "${(updatedComp as any).resistance}"`);
                         
                         // Check if layer changed
                         const oldLayer = currentComp.layer;

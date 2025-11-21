@@ -251,8 +251,7 @@ export interface Speaker extends PCBComponentBase {
   componentType: 'Speaker';
   impedance?: string; // value only, e.g., "8"
   impedanceUnit?: string; // unit, e.g., "Ω"
-  power?: string; // value only
-  powerUnit?: string; // unit, e.g., "W"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
 }
 
 /**
@@ -301,8 +300,7 @@ export interface Resistor extends PCBComponentBase {
   componentType: 'Resistor';
   resistance?: string; // value only, e.g., "10"
   resistanceUnit?: string; // unit, e.g., "kΩ"
-  power?: string; // value only (can be fractional like "1/4")
-  powerUnit?: string; // unit, e.g., "W"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
   tolerance?: string; // e.g., "±5%"
 }
 
@@ -348,8 +346,7 @@ export interface Transformer extends PCBComponentBase {
   primaryVoltageUnit?: string; // unit, e.g., "V"
   secondaryVoltage?: string; // value only
   secondaryVoltageUnit?: string; // unit, e.g., "V"
-  power?: string; // value only
-  powerUnit?: string; // unit, e.g., "W"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
   turns?: string; // turns ratio (no unit)
 }
 
@@ -390,8 +387,7 @@ export interface VariableResistor extends PCBComponentBase {
   vrType?: 'Potentiometer' | 'Varistor' | 'VoltageRegulator';
   resistance?: string; // value only
   resistanceUnit?: string; // unit, e.g., "Ω"
-  power?: string; // value only (can be fractional like "1/4")
-  powerUnit?: string; // unit, e.g., "W"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
   taper?: string; // for potentiometers: "Linear", "Logarithmic"
 }
 
@@ -412,8 +408,7 @@ export interface ZenerDiode extends PCBComponentBase {
   componentType: 'ZenerDiode';
   voltage?: string; // value only
   voltageUnit?: string; // unit, e.g., "V"
-  power?: string; // value only (can be fractional like "1/4")
-  powerUnit?: string; // unit, e.g., "W"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
   tolerance?: string;
 }
 
