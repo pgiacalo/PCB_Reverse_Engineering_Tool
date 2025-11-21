@@ -1340,9 +1340,9 @@ function App() {
           setSelectedGroundIds(new Set());
         }
         
-        // If component is selected (either just now or already was), prepare for dragging
-        // We'll start dragging when the mouse moves
-        if (finalSelectedIds.has(comp.id)) {
+        // Only prepare for dragging if COMMAND (Meta) key is pressed
+        // This improves performance by avoiding drag logic on every click
+        if (e.metaKey && finalSelectedIds.has(comp.id)) {
           // Collect all selected components with their initial positions
           const componentsToDrag: Array<{ id: string; layer: 'top' | 'bottom'; startX: number; startY: number }> = [];
           for (const compId of finalSelectedIds) {
@@ -1363,6 +1363,9 @@ function App() {
             components: componentsToDrag,
           };
           // Don't set isDraggingComponent yet - wait for mouse move to start dragging
+        } else {
+          // Clear any existing drag state if COMMAND is not pressed
+          componentDragStartRef.current = null;
         }
         return;
       }
