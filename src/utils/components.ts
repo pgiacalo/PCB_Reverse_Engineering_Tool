@@ -8,7 +8,7 @@ import type {
   ComponentType,
   Battery,
   Capacitor,
-  CapacitorElectrolytic,
+  ElectrolyticCapacitor,
   Diode,
   Fuse,
   FerriteBead,
@@ -79,7 +79,7 @@ export function createComponent(
   baseComponent.pinConnections = new Array(baseComponent.pinCount).fill('');
   
   // Initialize pinPolarities for components that have polarity
-  const hasPolarity = componentType === 'CapacitorElectrolytic' || 
+  const hasPolarity = componentType === 'Electrolytic Capacitor' || 
                      componentType === 'Diode' || 
                      componentType === 'Battery' || 
                      componentType === 'ZenerDiode';
@@ -95,8 +95,8 @@ export function createComponent(
     case 'Capacitor':
       return { ...baseComponent, componentType: 'Capacitor' } as Capacitor;
     
-    case 'CapacitorElectrolytic':
-      return { ...baseComponent, componentType: 'CapacitorElectrolytic', polarity: 'Positive' } as CapacitorElectrolytic;
+    case 'Electrolytic Capacitor':
+      return { ...baseComponent, componentType: 'Electrolytic Capacitor', polarity: 'Positive' } as ElectrolyticCapacitor;
     
     case 'Diode':
       return { ...baseComponent, componentType: 'Diode', diodeType: 'Standard' } as Diode;
@@ -247,7 +247,7 @@ export function autoAssignPolarity(
   drawingStrokes: Array<{ type?: 'trace' | 'via' | 'pad'; points: Array<{ x: number; y: number; id?: number }> }>
 ): ('+' | '-' | '')[] | null {
   // Check if component has polarity
-  const hasPolarity = component.componentType === 'CapacitorElectrolytic' || 
+  const hasPolarity = component.componentType === 'Electrolytic Capacitor' || 
                      component.componentType === 'Diode' || 
                      component.componentType === 'Battery' || 
                      component.componentType === 'ZenerDiode';

@@ -30,6 +30,7 @@ import {
   useImage,
   useView,
   useComponents,
+  combineValueAndUnit,
   usePowerGround,
   useLayerSettings,
   useToolRegistry,
@@ -796,6 +797,7 @@ function App() {
   const vScrollContentRef = useRef<HTMLDivElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
+  const performAutoSaveRef = useRef<(() => Promise<void>) | null>(null);
   const openProjectRef = useRef<HTMLInputElement>(null);
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const transparencyCycleRafRef = useRef<number | null>(null);
@@ -806,6 +808,12 @@ function App() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
+  const [isDraggingComponent, setIsDraggingComponent] = useState(false);
+  const componentDragStartRef = useRef<{ 
+    mouseX: number; 
+    mouseY: number; 
+    components: Array<{ id: string; layer: 'top' | 'bottom'; startX: number; startY: number }> 
+  } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
@@ -838,6 +846,8 @@ function App() {
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
+  // Connections layer
+  const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
   // Board dimensions for coordinate scaling
   const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
     const saved = localStorage.getItem('boardDimensions');
@@ -966,7 +976,9 @@ function App() {
     setSelectedIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
-  }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+    // Automatically open the Detailed Information dialog
+    setDebugDialog({ visible: true, text: '' });
+  }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds, setDebugDialog]);
 
   const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
     const canvas = canvasRef.current;
@@ -1306,25 +1318,51 @@ function App() {
       })();
       if (hitComponent) {
         const { comp } = hitComponent;
+        // Determine the final selection state after this click
+        let finalSelectedIds: Set<string>;
         if (e.shiftKey) {
           // Shift-click: add to selection (toggle)
-          setSelectedComponentIds(prev => {
-            const next = new Set(prev);
-            if (next.has(comp.id)) {
-              next.delete(comp.id);
-            } else {
-              next.add(comp.id);
-            }
-            return next;
-          });
-          // Keep other selections when Shift-clicking
+          const next = new Set(selectedComponentIds);
+          if (next.has(comp.id)) {
+            next.delete(comp.id);
+          } else {
+            next.add(comp.id);
+          }
+          finalSelectedIds = next;
+          setSelectedComponentIds(finalSelectedIds);
         } else {
           // Regular click: select only this component (replace all selections)
-          setSelectedComponentIds(new Set([comp.id]));
+          finalSelectedIds = new Set([comp.id]);
+          setSelectedComponentIds(finalSelectedIds);
           // Clear other selections
           setSelectedIds(new Set());
           setSelectedPowerIds(new Set());
           setSelectedGroundIds(new Set());
+        }
+        
+        // If component is selected (either just now or already was), prepare for dragging
+        // We'll start dragging when the mouse moves
+        if (finalSelectedIds.has(comp.id)) {
+          // Collect all selected components with their initial positions
+          const componentsToDrag: Array<{ id: string; layer: 'top' | 'bottom'; startX: number; startY: number }> = [];
+          for (const compId of finalSelectedIds) {
+            const topComp = componentsTop.find(c => c.id === compId);
+            if (topComp) {
+              componentsToDrag.push({ id: compId, layer: 'top', startX: topComp.x, startY: topComp.y });
+            } else {
+              const bottomComp = componentsBottom.find(c => c.id === compId);
+              if (bottomComp) {
+                componentsToDrag.push({ id: compId, layer: 'bottom', startX: bottomComp.x, startY: bottomComp.y });
+              }
+            }
+          }
+          
+          componentDragStartRef.current = {
+            mouseX: x,
+            mouseY: y,
+            components: componentsToDrag,
+          };
+          // Don't set isDraggingComponent yet - wait for mouse move to start dragging
         }
         return;
       }
@@ -1430,7 +1468,8 @@ function App() {
       }
       
       // If we didn't hit anything (no via, no component, no power, no ground), clear selection and start rectangle selection
-      if (!hitStroke) {
+      // But don't start selection if we're about to drag a component
+      if (!hitStroke && !componentDragStartRef.current) {
         // Clear selection immediately when clicking on empty space (unless Shift is held for multi-select)
         if (!e.shiftKey) {
           setSelectedIds(new Set());
@@ -1438,13 +1477,16 @@ function App() {
           setSelectedPowerIds(new Set());
           setSelectedGroundIds(new Set());
         }
+        
+        // Store whether Shift was pressed at mouseDown for use in mouseUp
+        // We'll pass this through the selectStart state
+        setIsSelecting(true);
+        setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
+        setSelectRect({ x, y, width: 0, height: 0 });
+      } else if (componentDragStartRef.current) {
+        // Clear component drag start if we clicked on empty space
+        componentDragStartRef.current = null;
       }
-      
-      // Store whether Shift was pressed at mouseDown for use in mouseUp
-      // We'll pass this through the selectStart state
-      setIsSelecting(true);
-      setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
-      setSelectRect({ x, y, width: 0, height: 0 });
       return;
     } else if (currentTool === 'magnify') {
       const factor = e.shiftKey ? 0.5 : 2;
@@ -2170,6 +2212,18 @@ function App() {
       setTracePreviewMousePos(null);
     }
 
+    // Check if we should start dragging a component
+    if (currentTool === 'select' && componentDragStartRef.current && !isDraggingComponent) {
+      const { mouseX, mouseY } = componentDragStartRef.current;
+      // Start dragging if mouse has moved more than a small threshold
+      const dragThreshold = 2 / viewScale; // 2 pixels in world space
+      const dx = x - mouseX;
+      const dy = y - mouseY;
+      if (Math.hypot(dx, dy) > dragThreshold) {
+        setIsDraggingComponent(true);
+      }
+    }
+    
     if (currentTool === 'select' && isSelecting && selectStart) {
       const sx = selectStart.x;
       const sy = selectStart.y;
@@ -2389,8 +2443,29 @@ function App() {
       }
       
       setTransformStartPos({ x, y });
+    } else if (isDraggingComponent && componentDragStartRef.current) {
+      // Handle component dragging
+      const { mouseX, mouseY, components: dragComponents } = componentDragStartRef.current;
+      const deltaX = x - mouseX;
+      const deltaY = y - mouseY;
+      
+      // Update all dragged components
+      for (const dragComp of dragComponents) {
+        const newX = dragComp.startX + deltaX;
+        const newY = dragComp.startY + deltaY;
+        
+        if (dragComp.layer === 'top') {
+          setComponentsTop(prev => prev.map(c => 
+            c.id === dragComp.id ? { ...c, x: newX, y: newY } : c
+          ));
+        } else {
+          setComponentsBottom(prev => prev.map(c => 
+            c.id === dragComp.id ? { ...c, x: newX, y: newY } : c
+          ));
+        }
+      }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, isDraggingComponent, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -2663,11 +2738,15 @@ function App() {
       panStartRef.current = null;
       panClientStartRef.current = null;
     }
+    if (isDraggingComponent) {
+      setIsDraggingComponent(false);
+      componentDragStartRef.current = null;
+    }
     setIsDrawing(false);
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, isDraggingComponent]);
 
   // Allow panning to continue even when the pointer leaves the canvas while the button is held
   React.useEffect(() => {
@@ -3072,7 +3151,7 @@ function App() {
       };
       
       // Determine negative side indicator for components with polarity
-      const hasPolarity = c.componentType === 'CapacitorElectrolytic' || 
+      const hasPolarity = c.componentType === 'Electrolytic Capacitor' || 
                          c.componentType === 'Diode' || 
                          c.componentType === 'Battery' || 
                          c.componentType === 'ZenerDiode';
@@ -3165,6 +3244,90 @@ function App() {
     };
     if (showTopComponents) componentsTop.forEach(drawComponent);
     if (showBottomComponents) componentsBottom.forEach(drawComponent);
+    
+    // Draw connection lines from components to their connected nodes
+    if (showConnectionsLayer) {
+      // Helper function to find node coordinates from Point ID
+      const findNodeCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
+        const pointId = parseInt(pointIdStr, 10);
+        if (isNaN(pointId)) return null;
+        
+        // Check vias and pads
+        for (const stroke of drawingStrokes) {
+          if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+            const point = stroke.points[0];
+            if (point.id === pointId) {
+              return { x: point.x, y: point.y };
+            }
+          }
+        }
+        
+        // Check trace points
+        for (const stroke of drawingStrokes) {
+          if (stroke.type === 'trace') {
+            for (const point of stroke.points) {
+              if (point.id === pointId) {
+                return { x: point.x, y: point.y };
+              }
+            }
+          }
+        }
+        
+        // Check power symbols
+        for (const power of powers) {
+          if (power.pointId === pointId) {
+            return { x: power.x, y: power.y };
+          }
+        }
+        
+        // Check ground symbols
+        for (const ground of grounds) {
+          if (ground.pointId === pointId) {
+            return { x: ground.x, y: ground.y };
+          }
+        }
+        
+        return null;
+      };
+      
+      // Draw connection lines for all components
+      const drawConnections = (comp: PCBComponent) => {
+        const pinConnections = comp.pinConnections || [];
+        // Collect unique node IDs to avoid drawing duplicate lines
+        const connectedNodeIds = new Set<string>();
+        for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
+          const connection = pinConnections[pinIndex];
+          if (connection && connection.trim() !== '') {
+            connectedNodeIds.add(connection.trim());
+          }
+        }
+        
+        // Draw one line per unique connected node, from component center to node center
+        for (const nodeIdStr of connectedNodeIds) {
+          const nodePos = findNodeCoordinates(nodeIdStr);
+          if (nodePos) {
+            // Use component center as starting point
+            const compCenter = { x: comp.x, y: comp.y };
+            
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 150, 255, 0.6)'; // Semi-transparent blue
+            ctx.lineWidth = Math.max(1, 1.5 / Math.max(viewScale, 0.001));
+            ctx.setLineDash([4, 4]); // Dashed line
+            ctx.beginPath();
+            ctx.moveTo(compCenter.x, compCenter.y);
+            ctx.lineTo(nodePos.x, nodePos.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+      };
+      
+      // Draw connections for top and bottom components
+      if (showTopComponents) componentsTop.forEach(drawConnections);
+      if (showBottomComponents) componentsBottom.forEach(drawConnections);
+    }
+    
     // Draw active selection rectangle in view space for perfect alignment
     if (currentTool === 'select' && selectRect) {
       ctx.save();
@@ -3183,7 +3346,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -3938,22 +4101,14 @@ function App() {
   }, [setSizeDialog.size, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize, toolRegistry, setToolRegistry]);
 
   // Handle auto-save prompt dialog - Enable button
-  const handleAutoSavePromptEnable = useCallback(() => {
-    // Close the prompt dialog and open the auto-save interval selection dialog
-    setAutoSavePromptDialog({ visible: false, source: null });
-    setAutoSaveDialog({ visible: true, interval: 5 }); // Default to 5 minutes
-  }, []);
-
   // Handle auto-save prompt dialog - Skip button
   const handleAutoSavePromptSkip = useCallback(() => {
     // Just close the prompt dialog
-    setAutoSavePromptDialog({ visible: false, source: null });
+    setAutoSavePromptDialog({ visible: false, source: null, interval: 5 });
   }, []);
 
-  // Handle applying auto-save interval from dialog
-  const handleAutoSaveApply = useCallback(async () => {
-    const interval = autoSaveDialog.interval;
-    
+  // Handle applying auto-save interval from dialog (used by both prompt dialog and menu dialog)
+  const handleAutoSaveApply = useCallback(async (interval: number | null, closePromptDialog: boolean = false) => {
     // If interval is null, disable auto-save
     if (interval === null) {
       setAutoSaveEnabled(false);
@@ -3963,6 +4118,9 @@ function App() {
         autoSaveIntervalRef.current = null;
       }
       setAutoSaveDialog({ visible: false, interval: 5 });
+      if (closePromptDialog) {
+        setAutoSavePromptDialog({ visible: false, source: null, interval: 5 });
+      }
       console.log('Auto save: Disabled');
       return;
     }
@@ -3973,10 +4131,11 @@ function App() {
       return;
     }
     
-    // If we don't have auto-save directory/base name set up, set them up
+    // Use project directory for auto-save (same directory as project.json)
+    // For both New Project and Open Project, projectDirHandle should be set
     let dirHandleToUse = projectDirHandle;
     if (!dirHandleToUse) {
-      // This only happens when opening a project (can't get directory from file handle)
+      // This should only happen in fallback scenarios (file input without File System Access API)
       // Prompt user once to select the project directory
       const w = window as any;
       if (typeof w.showDirectoryPicker === 'function') {
@@ -3991,7 +4150,7 @@ function App() {
           return; // User cancelled
         }
       } else {
-        alert('Directory picker is not supported in this browser.');
+        alert('Directory picker is not supported in this browser. Auto-save requires a directory handle.');
         return;
       }
     }
@@ -4013,15 +4172,20 @@ function App() {
     // Mark that we have changes so initial save will happen
     hasChangesSinceLastAutoSaveRef.current = true;
     
-    // Close dialog
+    // Close dialogs
     setAutoSaveDialog({ visible: false, interval: 5 });
+    if (closePromptDialog) {
+      setAutoSavePromptDialog({ visible: false, source: null, interval: 5 });
+    }
     
     // Perform initial save immediately after state updates
     setTimeout(() => {
       console.log(`Auto save: Enabled with interval ${interval} minutes`);
-      performAutoSave();
+      if (performAutoSaveRef.current) {
+        performAutoSaveRef.current();
+      }
     }, 200);
-  }, [autoSaveDialog.interval, projectName, projectDirHandle]);
+  }, [projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // FIRST: Handle Escape key for checkboxes/radio buttons before other checks
@@ -4147,10 +4311,10 @@ function App() {
         
         // Toolbar and layers panel positions (absolute within container)
         // Toolbar: left: 6, width: 44
-        // Layers panel: left: 56, width: 168
-        const LAYERS_LEFT = 56;
+        // Layers panel: left: 60, width: 168
+        const LAYERS_LEFT = 60;
         const LAYERS_WIDTH = 168;
-        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (230px)
+        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (234px)
         
         // Calculate the visible area (canvas area not covered by toolbar/layers)
         // The canvas starts at the container's left edge, but the left portion is covered
@@ -4883,10 +5047,10 @@ function App() {
         
         // Toolbar and layers panel positions (absolute within container)
         // Toolbar: left: 6, width: 44
-        // Layers panel: left: 56, width: 168
-        const LAYERS_LEFT = 56;
+        // Layers panel: left: 60, width: 168
+        const LAYERS_LEFT = 60;
         const LAYERS_WIDTH = 168;
-        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (230px)
+        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (234px)
         
         // Calculate the visible area (canvas area not covered by toolbar/layers)
         // The canvas starts at the container's left edge, but the left portion is covered
@@ -5918,6 +6082,7 @@ function App() {
         showBottomComponents,
         showPowerLayer,
         showGroundLayer,
+        showConnectionsLayer,
       },
       autoSave: {
         enabled: autoSaveEnabled,
@@ -5930,7 +6095,7 @@ function App() {
       },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -6116,6 +6281,9 @@ function App() {
       console.error('Auto save failed:', e);
     }
   }, []); // Empty dependencies - function never changes
+  
+  // Update ref so it can be accessed by handleAutoSaveApply
+  performAutoSaveRef.current = performAutoSave;
 
   // Save project state as JSON (including embedded images)
   const saveProject = useCallback(async () => {
@@ -6599,7 +6767,7 @@ function App() {
       console.log(`New project created: ${cleanProjectName}/project.json`);
       
       // Prompt user to enable auto-save
-      setAutoSavePromptDialog({ visible: true, source: 'new' });
+      setAutoSavePromptDialog({ visible: true, source: 'new', interval: 5 });
     } catch (e) {
       console.error('Failed to save new project:', e);
       alert('Failed to save new project file. See console for details.');
@@ -6962,8 +7130,63 @@ function App() {
       setBottomImage(newBottom);
 
       // Restore point ID counter if present (for new projects, start from saved value)
+      // If not present (old project files), calculate the max ID from existing elements
       if (project.pointIdCounter && typeof project.pointIdCounter === 'number') {
         setPointIdCounter(project.pointIdCounter);
+      } else {
+        // For backward compatibility: find the maximum Node ID in the project
+        // and set the counter to max + 1 to ensure uniqueness
+        let maxId = 0;
+        
+        // Check all drawing strokes (vias, pads, traces)
+        if (project.drawing?.drawingStrokes) {
+          for (const stroke of project.drawing.drawingStrokes) {
+            if (stroke.points) {
+              for (const point of stroke.points) {
+                if (point.id && typeof point.id === 'number' && point.id > maxId) {
+                  maxId = point.id;
+                }
+              }
+            }
+          }
+        }
+        
+        // Check component pin connections
+        const allComponents = [
+          ...(project.drawing?.componentsTop || []),
+          ...(project.drawing?.componentsBottom || [])
+        ];
+        for (const comp of allComponents) {
+          if (comp.pinConnections) {
+            for (const conn of comp.pinConnections) {
+              if (conn) {
+                const nodeId = parseInt(conn.trim(), 10);
+                if (!isNaN(nodeId) && nodeId > maxId) {
+                  maxId = nodeId;
+                }
+              }
+            }
+          }
+        }
+        
+        // Check power and ground nodes
+        if (project.drawing?.powers) {
+          for (const power of project.drawing.powers) {
+            if (power.pointId && typeof power.pointId === 'number' && power.pointId > maxId) {
+              maxId = power.pointId;
+            }
+          }
+        }
+        if (project.drawing?.grounds) {
+          for (const ground of project.drawing.grounds) {
+            if (ground.pointId && typeof ground.pointId === 'number' && ground.pointId > maxId) {
+              maxId = ground.pointId;
+            }
+          }
+        }
+        
+        // Set counter to max + 1 to ensure next ID is unique
+        setPointIdCounter(maxId + 1);
       }
       
       // Restore lock states if present
@@ -7000,6 +7223,7 @@ function App() {
         if (typeof project.visibility.showBottomComponents === 'boolean') setShowBottomComponents(project.visibility.showBottomComponents);
         if (typeof project.visibility.showPowerLayer === 'boolean') setShowPowerLayer(project.visibility.showPowerLayer);
         if (typeof project.visibility.showGroundLayer === 'boolean') setShowGroundLayer(project.visibility.showGroundLayer);
+        if (typeof project.visibility.showConnectionsLayer === 'boolean') setShowConnectionsLayer(project.visibility.showConnectionsLayer);
       }
 
       // Restore auto save settings if present
@@ -7549,6 +7773,15 @@ function App() {
         const text = await file.text();
         const project = JSON.parse(text);
         
+        // Get the directory handle from the file handle (parent directory)
+        try {
+          const dirHandle = await handle.getParent();
+          setProjectDirHandle(dirHandle);
+        } catch (e) {
+          console.warn('Could not get directory handle from file handle:', e);
+          // Continue without directory handle (fallback will prompt if needed)
+        }
+        
         await loadProject(project);
         
         let projectNameToUse: string;
@@ -7567,10 +7800,8 @@ function App() {
         }
         
         setTimeout(() => {
-          const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
-          if (!wasAutoSaveEnabledInFile) {
-            setAutoSavePromptDialog({ visible: true, source: 'open' });
-          }
+          // Always show auto-save prompt dialog after opening a project
+          setAutoSavePromptDialog({ visible: true, source: 'open', interval: 5 });
         }, 100);
       } catch (e) {
         if ((e as any)?.name === 'AbortError') return;
@@ -7580,7 +7811,7 @@ function App() {
     } else {
       openProjectRef.current?.click();
     }
-  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setAutoSavePromptDialog]);
+  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog]);
 
   return (
     <div className="app">
@@ -8440,27 +8671,27 @@ function App() {
           )}
 
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
-          <div style={{ position: 'absolute', top: 6, left: 56, bottom: 6, width: 168, padding: 8, display: 'flex', flexDirection: 'column', gap: 4, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#333', marginBottom: 2 }}>Layers</div>
-            <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedImageForTransform === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={{ fontSize: 12, color: '#444', fontWeight: 600 }}>Top Image</div>
+          <div style={{ position: 'absolute', top: 6, left: 60, bottom: 6, width: 168, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#333', marginBottom: 2 }}>Layers</div>
+            <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 2, borderRadius: 4, border: selectedImageForTransform === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: '#444', fontWeight: 600 }}>Top Image</div>
                 <label className="radio-label" style={{ margin: 0 }}>
                   <input type="checkbox" checked={showTopImage} onChange={(e) => setShowTopImage(e.target.checked)} />
                 </label>
               </div>
-              <canvas ref={topThumbRef} width={100} height={64} />
+              <canvas ref={topThumbRef} width={60} height={40} style={{ width: '60px', height: '40px' }} />
             </div>
-            <div onClick={() => setSelectedDrawingLayer('bottom')} title="Bottom layer" style={{ cursor: 'pointer', padding: 4, borderRadius: 6, border: selectedImageForTransform === 'bottom' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <div style={{ fontSize: 12, color: '#444', fontWeight: 600 }}>Bottom Image</div>
+            <div onClick={() => setSelectedDrawingLayer('bottom')} title="Bottom layer" style={{ cursor: 'pointer', padding: 2, borderRadius: 4, border: selectedImageForTransform === 'bottom' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                <div style={{ fontSize: 10, color: '#444', fontWeight: 600 }}>Bottom Image</div>
                 <label className="radio-label" style={{ margin: 0 }}>
                   <input type="checkbox" checked={showBottomImage} onChange={(e) => setShowBottomImage(e.target.checked)} />
                 </label>
               </div>
-              <canvas ref={bottomThumbRef} width={100} height={64} />
+              <canvas ref={bottomThumbRef} width={60} height={40} style={{ width: '60px', height: '40px' }} />
             </div>
-            <div style={{ height: 1, background: '#e9e9ef', margin: '4px 0' }} />
+            <div style={{ height: 1, background: '#e9e9ef', margin: '2px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showViasLayer} onChange={(e) => setShowViasLayer(e.target.checked)} />
               <span>Vias</span>
@@ -8470,20 +8701,20 @@ function App() {
               <span>Pads (Top)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
-              <span>Pads (Bottom)</span>
-            </label>
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopTracesLayer} onChange={(e) => setShowTopTracesLayer(e.target.checked)} />
               <span>Traces (Top)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
-              <span>Traces (Bottom)</span>
-            </label>
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopComponents} onChange={(e) => setShowTopComponents(e.target.checked)} />
               <span>Components (Top)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
+              <span>Pads (Bottom)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
+              <span>Traces (Bottom)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
@@ -8497,9 +8728,34 @@ function App() {
               <input type="checkbox" checked={showGroundLayer} onChange={(e) => setShowGroundLayer(e.target.checked)} />
               <span>Ground</span>
             </label>
-            <div style={{ marginTop: 16 }}>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showConnectionsLayer} onChange={(e) => setShowConnectionsLayer(e.target.checked)} />
+              <span>Connections</span>
+            </label>
+            <div style={{ height: 1, background: '#e9e9ef', margin: '2px 0' }} />
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input 
+                type="checkbox" 
+                checked={showViasLayer && showTopPadsLayer && showBottomPadsLayer && showTopTracesLayer && showBottomTracesLayer && showTopComponents && showBottomComponents && showPowerLayer && showGroundLayer && showConnectionsLayer}
+                onChange={(e) => {
+                  const newValue = e.target.checked;
+                  setShowViasLayer(newValue);
+                  setShowTopPadsLayer(newValue);
+                  setShowBottomPadsLayer(newValue);
+                  setShowTopTracesLayer(newValue);
+                  setShowBottomTracesLayer(newValue);
+                  setShowTopComponents(newValue);
+                  setShowBottomComponents(newValue);
+                  setShowPowerLayer(newValue);
+                  setShowGroundLayer(newValue);
+                  setShowConnectionsLayer(newValue);
+                }}
+              />
+              <span style={{ fontWeight: 600, fontSize: 11 }}>Select All Layers</span>
+            </label>
+            <div style={{ marginTop: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label style={{ fontSize: 12, color: '#333' }}>Transparency: {transparency}%</label>
+                <label style={{ fontSize: 10, color: '#333' }}>Transparency: {transparency}%</label>
                 <label className="radio-label" style={{ margin: 0 }}>
                   <input type="checkbox" checked={isTransparencyCycling} onChange={(e) => {
                     const newValue = e.target.checked;
@@ -8514,7 +8770,7 @@ function App() {
                     }
                     setIsTransparencyCycling(newValue);
                   }} />
-                  <span style={{ marginLeft: 6, fontSize: 12 }}>Cycle</span>
+                  <span style={{ marginLeft: 6, fontSize: 10 }}>Cycle</span>
                 </label>
               </div>
               <input
@@ -8525,7 +8781,7 @@ function App() {
                 onChange={(e) => setTransparency(Number(e.target.value))}
                 onDoubleClick={() => handleSliderDoubleClick('transparency')}
                 className="slider"
-                style={{ width: '100%', marginTop: 6 }}
+                style={{ width: '100%', marginTop: 3 }}
               />
             </div>
           </div>
@@ -8660,7 +8916,7 @@ function App() {
                   display: 'flex', 
                   flexDirection: 'column', 
                   gap: '4px',
-                  padding: '6px',
+                  padding: '6px 20px 6px 6px', // Extra right padding for scrollbar
                   overflowY: 'auto',
                   flex: 1,
                   minHeight: 0,
@@ -8686,7 +8942,7 @@ function App() {
                       value={componentEditor.layer}
                       onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
                       disabled={areComponentsLocked}
-                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
                     >
                       <option value="top">Top</option>
                       <option value="bottom">Bottom</option>
@@ -8721,7 +8977,7 @@ function App() {
                         }
                       }}
                       disabled={areComponentsLocked}
-                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+                      style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
                     >
                       <option value="0">0°</option>
                       <option value="90">90°</option>
@@ -8735,16 +8991,49 @@ function App() {
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Resistance:</label>
-                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10kΩ" />
+                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10" />
+                        <select value={componentEditor.resistanceUnit || 'Ω'} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="Ω">Ω</option>
+                          <option value="kΩ">kΩ</option>
+                          <option value="MΩ">MΩ</option>
+                        </select>
                       </div>
                       {/* Essential resistor properties - right after Resistance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
-                        <input id={`component-power-${comp.id}`} type="text" value={componentEditor.power || ''} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1/4W" />
+                        <select id={`component-power-${comp.id}`} value={componentEditor.power || '1/4'} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="1/20">1/20 W</option>
+                          <option value="1/16">1/16 W</option>
+                          <option value="1/10">1/10 W</option>
+                          <option value="1/8">1/8 W</option>
+                          <option value="1/4">1/4 W</option>
+                          <option value="1/2">1/2 W</option>
+                          <option value="1">1 W</option>
+                          <option value="2">2 W</option>
+                          <option value="3">3 W</option>
+                          <option value="5">5 W</option>
+                          <option value="10">10 W</option>
+                          <option value="25">25 W</option>
+                          <option value="50">50 W</option>
+                          <option value="100">100 W</option>
+                        </select>
+                        <select value={componentEditor.powerUnit || 'W'} onChange={(e) => setComponentEditor({ ...componentEditor, powerUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="W">W</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±5%" />
+                        <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±5%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="±0.05%">±0.05%</option>
+                          <option value="±0.1%">±0.1%</option>
+                          <option value="±0.25%">±0.25%</option>
+                          <option value="±0.5%">±0.5%</option>
+                          <option value="±1%">±1%</option>
+                          <option value="±2%">±2%</option>
+                          <option value="±5%">±5%</option>
+                          <option value="±10%">±10%</option>
+                          <option value="±20%">±20%</option>
+                        </select>
                       </div>
                     </>
                   )}
@@ -8753,42 +9042,91 @@ function App() {
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
-                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100nF" />
+                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100" />
+                        <select value={componentEditor.capacitanceUnit || 'nF'} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="pF">pF</option>
+                          <option value="nF">nF</option>
+                          <option value="µF">µF</option>
+                          <option value="uF">uF</option>
+                          <option value="mF">mF</option>
+                          <option value="F">F</option>
+                        </select>
                       </div>
                       {/* Essential capacitor properties - right after Capacitance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
-                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50V" />
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="mV">mV</option>
+                          <option value="V">V</option>
+                          <option value="kV">kV</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-dielectric-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Dielectric:</label>
-                        <input id={`component-dielectric-${comp.id}`} type="text" value={componentEditor.dielectric || ''} onChange={(e) => setComponentEditor({ ...componentEditor, dielectric: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Ceramic" />
+                        <select id={`component-dielectric-${comp.id}`} value={componentEditor.dielectric || 'Ceramic'} onChange={(e) => setComponentEditor({ ...componentEditor, dielectric: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Ceramic">Ceramic</option>
+                          <option value="Tantalum">Tantalum</option>
+                          <option value="Film">Film</option>
+                          <option value="Polyester">Polyester</option>
+                          <option value="Polypropylene">Polypropylene</option>
+                          <option value="Mica">Mica</option>
+                          <option value="Paper">Paper</option>
+                          <option value="Glass">Glass</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±10%" />
+                        <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="±0.5%">±0.5%</option>
+                          <option value="±1%">±1%</option>
+                          <option value="±2%">±2%</option>
+                          <option value="±5%">±5%</option>
+                          <option value="±10%">±10%</option>
+                          <option value="±20%">±20%</option>
+                        </select>
                       </div>
                     </>
                   )}
                   
-                  {comp.componentType === 'CapacitorElectrolytic' && (
+                  {comp.componentType === 'Electrolytic Capacitor' && (
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
-                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100uF" />
+                        <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100" />
+                        <select value={componentEditor.capacitanceUnit || 'µF'} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="pF">pF</option>
+                          <option value="nF">nF</option>
+                          <option value="µF">µF</option>
+                          <option value="uF">uF</option>
+                          <option value="mF">mF</option>
+                          <option value="F">F</option>
+                        </select>
                       </div>
                       {/* Essential electrolytic capacitor properties - right after Capacitance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
-                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 25V" />
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 25" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="mV">mV</option>
+                          <option value="V">V</option>
+                          <option value="kV">kV</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-                        <input id={`component-tolerance-${comp.id}`} type="text" value={componentEditor.tolerance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., ±20%" />
+                        <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±20%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}>
+                          <option value="±0.5%">±0.5%</option>
+                          <option value="±1%">±1%</option>
+                          <option value="±2%">±2%</option>
+                          <option value="±5%">±5%</option>
+                          <option value="±10%">±10%</option>
+                          <option value="±20%">±20%</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-polarity-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Polarity:</label>
-                        <select id={`component-polarity-${comp.id}`} value={componentEditor.polarityCapacitor || (comp as any).polarity || 'Positive'} onChange={(e) => setComponentEditor({ ...componentEditor, polarityCapacitor: e.target.value as 'Positive' | 'Negative' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}>
+                        <select id={`component-polarity-${comp.id}`} value={componentEditor.polarityCapacitor || (comp as any).polarity || 'Positive'} onChange={(e) => setComponentEditor({ ...componentEditor, polarityCapacitor: e.target.value as 'Positive' | 'Negative' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
                           <option value="Positive">Positive</option>
                           <option value="Negative">Negative</option>
                         </select>
@@ -8800,16 +9138,247 @@ function App() {
                     <>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-inductance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Inductance:</label>
-                        <input id={`component-inductance-${comp.id}`} type="text" value={componentEditor.inductance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, inductance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10uH" />
+                        <input id={`component-inductance-${comp.id}`} type="text" value={componentEditor.inductance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, inductance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10" />
+                        <select value={componentEditor.inductanceUnit || 'µH'} onChange={(e) => setComponentEditor({ ...componentEditor, inductanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="nH">nH</option>
+                          <option value="µH">µH</option>
+                          <option value="uH">uH</option>
+                          <option value="mH">mH</option>
+                          <option value="H">H</option>
+                        </select>
                       </div>
                       {/* Essential inductor properties - right after Inductance */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
-                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1A" />
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="µA">µA</option>
+                          <option value="uA">uA</option>
+                          <option value="mA">mA</option>
+                          <option value="A">A</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>DC Resistance:</label>
-                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50mΩ" />
+                        <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
+                        <select value={componentEditor.resistanceUnit || 'Ω'} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="mΩ">mΩ</option>
+                          <option value="Ω">Ω</option>
+                          <option value="kΩ">kΩ</option>
+                          <option value="MΩ">MΩ</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Diode' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-diodetype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Diode Type:</label>
+                        <select id={`component-diodetype-${comp.id}`} value={componentEditor.diodeType || 'Standard'} onChange={(e) => setComponentEditor({ ...componentEditor, diodeType: e.target.value as 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Standard">Standard</option>
+                          <option value="Zener">Zener</option>
+                          <option value="LED">LED</option>
+                          <option value="Schottky">Schottky</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      {componentEditor.diodeType === 'LED' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <label htmlFor={`component-ledcolor-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>LED Color:</label>
+                          <select id={`component-ledcolor-${comp.id}`} value={componentEditor.ledColor || ''} onChange={(e) => setComponentEditor({ ...componentEditor, ledColor: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                            <option value="">Select...</option>
+                            <option value="Red">Red</option>
+                            <option value="Green">Green</option>
+                            <option value="Blue">Blue</option>
+                            <option value="Yellow">Yellow</option>
+                            <option value="Orange">Orange</option>
+                            <option value="White">White</option>
+                            <option value="RGB">RGB</option>
+                            <option value="IR">IR (Infrared)</option>
+                            <option value="UV">UV (Ultraviolet)</option>
+                          </select>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="mV">mV</option>
+                          <option value="V">V</option>
+                          <option value="kV">kV</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="µA">µA</option>
+                          <option value="uA">uA</option>
+                          <option value="mA">mA</option>
+                          <option value="A">A</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Battery' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 3.7" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="V">V</option>
+                          <option value="mV">mV</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-capacity-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacity:</label>
+                        <input id={`component-capacity-${comp.id}`} type="text" value={componentEditor.capacity || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacity: e.target.value })} disabled={areComponentsLocked} style={{ width: '120px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 2000mAh" />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-chemistry-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Chemistry:</label>
+                        <select id={`component-chemistry-${comp.id}`} value={componentEditor.chemistry || 'Li-ion'} onChange={(e) => setComponentEditor({ ...componentEditor, chemistry: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Li-ion">Li-ion</option>
+                          <option value="LiPo">LiPo</option>
+                          <option value="NiMH">NiMH</option>
+                          <option value="NiCd">NiCd</option>
+                          <option value="Alkaline">Alkaline</option>
+                          <option value="Lead-Acid">Lead-Acid</option>
+                          <option value="Lithium">Lithium</option>
+                          <option value="Zinc-Carbon">Zinc-Carbon</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Fuse' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 5" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="mA">mA</option>
+                          <option value="A">A</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 250" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="V">V</option>
+                          <option value="kV">kV</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-fusetype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Fuse Type:</label>
+                        <select id={`component-fusetype-${comp.id}`} value={componentEditor.fuseType || 'Fast-blow'} onChange={(e) => setComponentEditor({ ...componentEditor, fuseType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Fast-blow">Fast-blow</option>
+                          <option value="Slow-blow">Slow-blow</option>
+                          <option value="Time-delay">Time-delay</option>
+                          <option value="Resettable">Resettable</option>
+                          <option value="Cartridge">Cartridge</option>
+                          <option value="Glass">Glass</option>
+                          <option value="Ceramic">Ceramic</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Relay' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-coilvoltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Coil Voltage:</label>
+                        <input id={`component-coilvoltage-${comp.id}`} type="text" value={componentEditor.coilVoltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, coilVoltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 12" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="V">V</option>
+                          <option value="mV">mV</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-contacttype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Contact Type:</label>
+                        <select id={`component-contacttype-${comp.id}`} value={componentEditor.contactType || 'SPST'} onChange={(e) => setComponentEditor({ ...componentEditor, contactType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="SPST">SPST (Single Pole Single Throw)</option>
+                          <option value="SPDT">SPDT (Single Pole Double Throw)</option>
+                          <option value="DPST">DPST (Double Pole Single Throw)</option>
+                          <option value="DPDT">DPDT (Double Pole Double Throw)</option>
+                          <option value="3PDT">3PDT (3 Pole Double Throw)</option>
+                          <option value="4PDT">4PDT (4 Pole Double Throw)</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 10" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="A">A</option>
+                          <option value="mA">mA</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Motor' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-motortype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Motor Type:</label>
+                        <select id={`component-motortype-${comp.id}`} value={componentEditor.motorType || 'DC'} onChange={(e) => setComponentEditor({ ...componentEditor, motorType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="DC">DC Motor</option>
+                          <option value="Stepper">Stepper Motor</option>
+                          <option value="Servo">Servo Motor</option>
+                          <option value="Brushless">Brushless DC</option>
+                          <option value="AC">AC Motor</option>
+                          <option value="Synchronous">Synchronous</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 12" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="V">V</option>
+                          <option value="mV">mV</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="A">A</option>
+                          <option value="mA">mA</option>
+                        </select>
+                      </div>
+                    </>
+                  )}
+                  
+                  {comp.componentType === 'Switch' && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-switchtype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Switch Type:</label>
+                        <select id={`component-switchtype-${comp.id}`} value={componentEditor.switchType || 'Toggle'} onChange={(e) => setComponentEditor({ ...componentEditor, switchType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Toggle">Toggle</option>
+                          <option value="Push-button">Push-button</option>
+                          <option value="Slide">Slide</option>
+                          <option value="Rotary">Rotary</option>
+                          <option value="DIP">DIP Switch</option>
+                          <option value="Momentary">Momentary</option>
+                          <option value="Latching">Latching</option>
+                          <option value="Reed">Reed Switch</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+                        <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 5" />
+                        <select value={componentEditor.currentUnit || 'A'} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="A">A</option>
+                          <option value="mA">mA</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+                        <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 250" />
+                        <select value={componentEditor.voltageUnit || 'V'} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+                          <option value="V">V</option>
+                          <option value="kV">kV</option>
+                        </select>
                       </div>
                     </>
                   )}
@@ -9005,7 +9574,7 @@ function App() {
                     {(() => {
                       // Determine if this component type has polarity
                       // Determine if this component type has polarity
-                      const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
+                      const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
                                          comp.componentType === 'Diode' || // Includes LEDs
                                          comp.componentType === 'Battery' || 
                                          comp.componentType === 'ZenerDiode';
@@ -9159,14 +9728,27 @@ function App() {
                   
                   {/* Additional type-specific properties - shown after main fields (non-essential properties) */}
                   
-                  {/* IC Properties - commented out per user request */}
-                  {/* 
                   {comp.componentType === 'IntegratedCircuit' && (
                     <>
                       <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#666' }}>IC Properties:</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>IC Type:</label>
-                        <input id={`component-ictype-${comp.id}`} type="text" value={componentEditor.icType || ''} onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., Op-Amp" />
+                        <select id={`component-ictype-${comp.id}`} value={componentEditor.icType || 'Op-Amp'} onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+                          <option value="Op-Amp">Op-Amp</option>
+                          <option value="Microcontroller">Microcontroller</option>
+                          <option value="Microprocessor">Microprocessor</option>
+                          <option value="Logic">Logic</option>
+                          <option value="Memory">Memory</option>
+                          <option value="Voltage Regulator">Voltage Regulator</option>
+                          <option value="Timer">Timer</option>
+                          <option value="ADC">ADC (Analog-to-Digital)</option>
+                          <option value="DAC">DAC (Digital-to-Analog)</option>
+                          <option value="Comparator">Comparator</option>
+                          <option value="Transceiver">Transceiver</option>
+                          <option value="Driver">Driver</option>
+                          <option value="Amplifier">Amplifier</option>
+                          <option value="Other">Other</option>
+                        </select>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
@@ -9174,7 +9756,6 @@ function App() {
                       </div>
                     </>
                   )}
-                  */}
                   
                   {/* Add more component types as needed - for now showing the most common ones */}
                   {/* TODO: Add fields for other component types (Diode, Transistor, etc.) */}
@@ -9254,82 +9835,83 @@ function App() {
                         }
                         
                         // Update type-specific fields based on component type
+                        // Combine value and unit when saving
                         if (comp.componentType === 'Resistor') {
-                          (updated as any).resistance = componentEditor.resistance || undefined;
-                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         } else if (comp.componentType === 'Capacitor') {
-                          (updated as any).capacitance = componentEditor.capacitance || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).capacitance = combineValueAndUnit(componentEditor.capacitance || '', componentEditor.capacitanceUnit || '');
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                           (updated as any).dielectric = componentEditor.dielectric || undefined;
-                        } else if (comp.componentType === 'CapacitorElectrolytic') {
-                          (updated as any).capacitance = componentEditor.capacitance || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
+                        } else if (comp.componentType === 'Electrolytic Capacitor') {
+                          (updated as any).capacitance = combineValueAndUnit(componentEditor.capacitance || '', componentEditor.capacitanceUnit || '');
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                           (updated as any).polarity = componentEditor.polarityCapacitor || undefined;
                           (updated as any).esr = componentEditor.esr || undefined;
                           (updated as any).temperature = componentEditor.temperature || undefined;
                         } else if (comp.componentType === 'Diode') {
                           (updated as any).diodeType = componentEditor.diodeType || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                           (updated as any).ledColor = componentEditor.ledColor || undefined;
                         } else if (comp.componentType === 'Battery') {
-                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
                           (updated as any).capacity = componentEditor.capacity || undefined;
                           (updated as any).chemistry = componentEditor.chemistry || undefined;
                         } else if (comp.componentType === 'Fuse') {
-                          (updated as any).current = componentEditor.current || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
                           (updated as any).fuseType = componentEditor.fuseType || undefined;
                         } else if (comp.componentType === 'FerriteBead') {
                           (updated as any).impedance = componentEditor.impedance || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                         } else if (comp.componentType === 'Connector') {
                           (updated as any).connectorType = componentEditor.connectorType || undefined;
                           (updated as any).gender = componentEditor.gender || undefined;
                         } else if (comp.componentType === 'Jumper') {
                           (updated as any).positions = componentEditor.positions || undefined;
                         } else if (comp.componentType === 'Relay') {
-                          (updated as any).coilVoltage = componentEditor.coilVoltage || undefined;
+                          (updated as any).coilVoltage = combineValueAndUnit(componentEditor.coilVoltage || '', componentEditor.voltageUnit || '');
                           (updated as any).contactType = componentEditor.contactType || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                         } else if (comp.componentType === 'Inductor') {
-                          (updated as any).inductance = componentEditor.inductance || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
-                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).inductance = combineValueAndUnit(componentEditor.inductance || '', componentEditor.inductanceUnit || '');
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
                         } else if (comp.componentType === 'Speaker') {
                           (updated as any).impedance = componentEditor.impedance || undefined;
-                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                         } else if (comp.componentType === 'Motor') {
                           (updated as any).motorType = componentEditor.motorType || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                         } else if (comp.componentType === 'PowerSupply') {
-                          (updated as any).inputVoltage = componentEditor.inputVoltage || undefined;
-                          (updated as any).outputVoltage = componentEditor.outputVoltage || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).inputVoltage = combineValueAndUnit(componentEditor.inputVoltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).outputVoltage = combineValueAndUnit(componentEditor.outputVoltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                         } else if (comp.componentType === 'Transistor') {
                           (updated as any).transistorType = componentEditor.transistorType || undefined;
                           (updated as any).polarity = componentEditor.polarity || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
                         } else if (comp.componentType === 'ResistorNetwork') {
-                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
                           (updated as any).configuration = componentEditor.configuration || undefined;
                         } else if (comp.componentType === 'Thermistor') {
-                          (updated as any).resistance = componentEditor.resistance || undefined;
+                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
                           (updated as any).thermistorType = componentEditor.thermistorType || undefined;
                           (updated as any).beta = componentEditor.beta || undefined;
                         } else if (comp.componentType === 'Switch') {
                           (updated as any).switchType = componentEditor.switchType || undefined;
-                          (updated as any).current = componentEditor.current || undefined;
-                          (updated as any).voltage = componentEditor.voltage || undefined;
+                          (updated as any).current = combineValueAndUnit(componentEditor.current || '', componentEditor.currentUnit || '');
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
                         } else if (comp.componentType === 'Transformer') {
-                          (updated as any).primaryVoltage = componentEditor.primaryVoltage || undefined;
-                          (updated as any).secondaryVoltage = componentEditor.secondaryVoltage || undefined;
-                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).primaryVoltage = combineValueAndUnit(componentEditor.primaryVoltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).secondaryVoltage = combineValueAndUnit(componentEditor.secondaryVoltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                           (updated as any).turns = componentEditor.turns || undefined;
                         } else if (comp.componentType === 'TestPoint') {
                           (updated as any).signal = componentEditor.signal || undefined;
@@ -9346,16 +9928,16 @@ function App() {
                           (updated as any).tubeType = componentEditor.tubeType || undefined;
                         } else if (comp.componentType === 'VariableResistor') {
                           (updated as any).vrType = componentEditor.vrType || undefined;
-                          (updated as any).resistance = componentEditor.resistance || undefined;
-                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).resistance = combineValueAndUnit(componentEditor.resistance || '', componentEditor.resistanceUnit || '');
+                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                           (updated as any).taper = componentEditor.taper || undefined;
                         } else if (comp.componentType === 'Crystal') {
                           (updated as any).frequency = componentEditor.frequency || undefined;
                           (updated as any).loadCapacitance = componentEditor.loadCapacitance || undefined;
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         } else if (comp.componentType === 'ZenerDiode') {
-                          (updated as any).voltage = componentEditor.voltage || undefined;
-                          (updated as any).power = componentEditor.power || undefined;
+                          (updated as any).voltage = combineValueAndUnit(componentEditor.voltage || '', componentEditor.voltageUnit || '');
+                          (updated as any).power = combineValueAndUnit(componentEditor.power || '', componentEditor.powerUnit || '');
                           (updated as any).tolerance = componentEditor.tolerance || undefined;
                         }
                         
@@ -9788,17 +10370,10 @@ function App() {
                 localStorage.setItem('pcb_project_name', projectNameToUse);
               }
               
-              // Auto save settings are restored from project file if present
-              // Check if auto-save is enabled in the project file
+              // Always show auto-save prompt dialog after opening a project
               // Use setTimeout to allow React state updates from loadProject to complete
               setTimeout(() => {
-                // Check both the original project data and current state
-                // If project file doesn't have autoSave enabled, or if it was disabled by loadProject
-                // (e.g., due to missing directory handle), show the prompt
-                const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
-                if (!wasAutoSaveEnabledInFile) {
-                  setAutoSavePromptDialog({ visible: true, source: 'open' });
-                }
+                setAutoSavePromptDialog({ visible: true, source: 'open', interval: 5 });
               }, 100);
             } catch (err) {
               console.error('Failed to open project', err);
@@ -10556,7 +11131,7 @@ function App() {
                 Cancel
               </button>
               <button
-                onClick={handleAutoSaveApply}
+                onClick={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
                 style={{
                   padding: '8px 16px',
                   background: '#4CAF50',
@@ -10575,7 +11150,7 @@ function App() {
         </div>
       )}
 
-      {/* Auto Save Prompt Dialog (shown after New Project or Open Project) */}
+      {/* Auto Save Prompt Dialog (shown after New Project or Open Project) - Combined with interval selector */}
       {autoSavePromptDialog.visible && (
         <div 
           style={{
@@ -10612,10 +11187,46 @@ function App() {
             <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
               Enable Auto Save?
             </h2>
-            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
+            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
               We recommend enabling Auto Save to automatically save your project at regular intervals. 
               This helps protect your work from accidental loss.
             </p>
+            
+            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
+              Select time interval:
+            </label>
+            <select
+              value={autoSavePromptDialog.interval === null ? 'disable' : (autoSavePromptDialog.interval || 5).toString()}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'disable') {
+                  setAutoSavePromptDialog({ ...autoSavePromptDialog, interval: null });
+                } else {
+                  const numValue = parseFloat(value);
+                  if (!isNaN(numValue) && numValue > 0) {
+                    setAutoSavePromptDialog({ ...autoSavePromptDialog, interval: numValue });
+                  }
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                marginBottom: '24px',
+                background: '#1f1f24',
+                border: '1px solid #444',
+                borderRadius: 6,
+                color: '#f2f2f2',
+                fontSize: '14px',
+              }}
+              autoFocus
+            >
+              <option value="1" style={{ background: '#1f1f24', color: '#f2f2f2' }}>1 minute</option>
+              <option value="5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>5 minutes</option>
+              <option value="10" style={{ background: '#1f1f24', color: '#f2f2f2' }}>10 minutes</option>
+              <option value="20" style={{ background: '#1f1f24', color: '#f2f2f2' }}>20 minutes</option>
+              <option value="30" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 minutes</option>
+            </select>
+            
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={handleAutoSavePromptSkip}
@@ -10633,7 +11244,7 @@ function App() {
                 Skip
               </button>
               <button
-                onClick={handleAutoSavePromptEnable}
+                onClick={() => handleAutoSaveApply(autoSavePromptDialog.interval, true)}
                 style={{
                   padding: '8px 16px',
                   background: '#4CAF50',
@@ -10644,7 +11255,6 @@ function App() {
                   fontSize: '14px',
                   fontWeight: 600,
                 }}
-                autoFocus
               >
                 Enable Auto Save
               </button>

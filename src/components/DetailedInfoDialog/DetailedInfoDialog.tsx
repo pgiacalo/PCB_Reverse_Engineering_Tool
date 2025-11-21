@@ -104,9 +104,10 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
         bottom: 0,
         backgroundColor: 'transparent',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'flex-end',
         paddingRight: '20px',
+        paddingTop: '80px',
         zIndex: 10000,
         pointerEvents: 'none',
       }}
@@ -168,19 +169,19 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const powerCount = powers.filter(p => selectedPowerIds.has(p.id)).length;
             const groundCount = grounds.filter(g => selectedGroundIds.has(g.id)).length;
             const totalCount = strokeCount + componentCount + powerCount + groundCount;
-            return totalCount > 0 ? (
+            return (
               <div style={{
                 padding: '12px 16px',
-                backgroundColor: '#e8e8e8',
+                backgroundColor: totalCount > 0 ? '#e8e8e8' : '#fff3cd',
                 borderBottom: '2px solid #ccc',
                 fontSize: '13px',
                 fontWeight: 600,
-                color: '#333',
+                color: totalCount > 0 ? '#333' : '#856404',
                 marginBottom: '8px'
               }}>
-                {totalCount} Object{totalCount !== 1 ? 's' : ''} Selected
+                {totalCount > 0 ? `${totalCount} Object${totalCount !== 1 ? 's' : ''} Selected` : 'Zero Objects Selected'}
               </div>
-            ) : null;
+            );
           })()}
 
           {/* Components - Formatted UI */}
@@ -386,7 +387,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     </>
                   )}
                   
-                  {comp.componentType === 'CapacitorElectrolytic' && (
+                  {comp.componentType === 'Electrolytic Capacitor' && (
                     <>
                       {(comp as any).capacitance && <div>Capacitance: {(comp as any).capacitance}</div>}
                       {/* Essential electrolytic capacitor properties - right after Capacitance */}
@@ -405,7 +406,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   {comp.pinConnections && comp.pinConnections.length > 0 && (() => {
                     // Determine if this component type has polarity
                     // Determine if this component type has polarity
-                    const hasPolarity = comp.componentType === 'CapacitorElectrolytic' || 
+                    const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
                                        comp.componentType === 'Diode' || // Includes LEDs
                                        comp.componentType === 'Battery' || 
                                        comp.componentType === 'ZenerDiode';

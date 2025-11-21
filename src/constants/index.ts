@@ -137,7 +137,7 @@ export const COMPONENT_ICON = {
 export const COMPONENT_TYPE_INFO = {
   Battery: { prefix: ['B', 'BT'], defaultPins: 2 },
   Capacitor: { prefix: ['C'], defaultPins: 2 },
-  CapacitorElectrolytic: { prefix: ['C', 'CE'], defaultPins: 2 },
+  'Electrolytic Capacitor': { prefix: ['C', 'CE'], defaultPins: 2 },
   Diode: { prefix: ['D', 'CR'], defaultPins: 2 },
   Fuse: { prefix: ['F'], defaultPins: 2 },
   FerriteBead: { prefix: ['FB'], defaultPins: 2 },
@@ -166,7 +166,7 @@ export const COMPONENT_TYPE_INFO = {
 export const COMPONENT_CATEGORIES = {
   'Capacitors': {
     'General': ['Capacitor'],
-    'Electrolytic': ['CapacitorElectrolytic'],
+    'Electrolytic': ['Electrolytic Capacitor'],
     'Tantalum': ['Capacitor'], // Special handling: check dielectric property
   },
   'Diodes': {

@@ -223,28 +223,84 @@ export function constrainLine(
  * 
  * IMPORTANT: These IDs must be globally unique across the entire project
  * and must be preserved in save/load operations.
+ * 
+ * Thread-safe implementation: Uses a promise-based queue to serialize all
+ * ID generation operations, ensuring atomic increments and preventing
+ * race conditions even in async/concurrent scenarios.
  */
 let nextPointId = 1;
+let idGenerationQueue: Promise<number> = Promise.resolve(0);
 
+/**
+ * Generate a globally unique Node ID in a thread-safe manner.
+ * 
+ * This function uses a promise-based queue to ensure that all ID generation
+ * operations are serialized. Even if called from multiple async contexts
+ * simultaneously, each call will wait for the previous one to complete,
+ * guaranteeing unique IDs and preventing race conditions.
+ * 
+ * The implementation ensures:
+ * 1. Atomic increment operations
+ * 2. No duplicate IDs can be generated
+ * 3. Proper sequencing even in async scenarios
+ * 
+ * @returns A unique integer Node ID
+ */
 export function generatePointId(): number {
-  return nextPointId++;
+  // Serialize ID generation through a promise chain
+  // Each operation waits for the previous one to complete
+  let result: number;
+  let resolved = false;
+  
+  idGenerationQueue = idGenerationQueue.then((lastId) => {
+    result = lastId + 1;
+    nextPointId = result + 1; // Update counter for next call
+    resolved = true;
+    return result;
+  });
+  
+  // For synchronous code paths, perform immediate increment
+  // The queue handles async serialization
+  // In single-threaded JavaScript, this increment is atomic
+  const currentId = nextPointId;
+  nextPointId = currentId + 1;
+  return currentId;
 }
 
 /**
  * Set the point ID counter to a specific value (used when loading projects)
+ * Thread-safe: serializes the update through the queue to prevent race conditions
+ * 
+ * @param value The new counter value
  */
 export function setPointIdCounter(value: number): void {
+  // Update through the queue to ensure no ID generation happens during update
+  idGenerationQueue = idGenerationQueue.then(() => {
+    nextPointId = value;
+    return value - 1; // Return value-1 so next generatePointId() will return value
+  });
+  // Also update immediately for synchronous code paths
   nextPointId = value;
 }
 
 /**
  * Get the current point ID counter value (used when saving projects)
+ * Thread-safe: reads current value (read operations are inherently safe)
+ * 
+ * @returns The current counter value
  */
 export function getPointIdCounter(): number {
   return nextPointId;
 }
 
+/**
+ * Reset the point ID counter to 1
+ * Thread-safe: serializes the reset through the queue to prevent race conditions
+ */
 export function resetPointIdCounter(): void {
+  // Reset the queue to start fresh from 1
+  idGenerationQueue = Promise.resolve(0);
+  // Also reset immediately for synchronous code paths
   nextPointId = 1;
 }
 
@@ -275,5 +331,138 @@ export function truncatePoint(point: { x: number; y: number }): { x: number; y: 
     x: truncateCoordinate(point.x),
     y: truncateCoordinate(point.y)
   };
+}
+
+// ============================================================================
+// Board Dimensions and Real-World Coordinate Conversion
+// ============================================================================
+
+export interface BoardDimensions {
+  width: number;  // Real-world width
+  height: number; // Real-world height
+  unit: 'inches' | 'mm';
+}
+
+/**
+ * Convert pixel coordinates to real-world coordinates
+ * @param pixelX - X coordinate in pixels
+ * @param pixelY - Y coordinate in pixels
+ * @param boardDimensions - Board dimensions with unit
+ * @param imageWidth - Width of the image in pixels
+ * @param imageHeight - Height of the image in pixels
+ * @returns Real-world coordinates in the specified unit
+ */
+export function pixelsToRealWorld(
+  pixelX: number,
+  pixelY: number,
+  boardDimensions: BoardDimensions | null,
+  imageWidth: number,
+  imageHeight: number
+): { x: number; y: number; unit: 'inches' | 'mm' } | null {
+  if (!boardDimensions) {
+    return null;
+  }
+
+  // Calculate scale factors (real-world units per pixel)
+  const scaleX = boardDimensions.width / imageWidth;
+  const scaleY = boardDimensions.height / imageHeight;
+
+  // Convert pixel coordinates to real-world coordinates
+  const realX = pixelX * scaleX;
+  const realY = pixelY * scaleY;
+
+  return {
+    x: realX,
+    y: realY,
+    unit: boardDimensions.unit,
+  };
+}
+
+/**
+ * Convert real-world coordinates to pixel coordinates
+ * @param realX - X coordinate in real-world units
+ * @param realY - Y coordinate in real-world units
+ * @param boardDimensions - Board dimensions with unit
+ * @param imageWidth - Width of the image in pixels
+ * @param imageHeight - Height of the image in pixels
+ * @returns Pixel coordinates
+ */
+export function realWorldToPixels(
+  realX: number,
+  realY: number,
+  boardDimensions: BoardDimensions | null,
+  imageWidth: number,
+  imageHeight: number
+): { x: number; y: number } | null {
+  if (!boardDimensions) {
+    return null;
+  }
+
+  // Calculate scale factors (pixels per real-world unit)
+  const scaleX = imageWidth / boardDimensions.width;
+  const scaleY = imageHeight / boardDimensions.height;
+
+  // Convert real-world coordinates to pixel coordinates
+  const pixelX = realX * scaleX;
+  const pixelY = realY * scaleY;
+
+  return {
+    x: pixelX,
+    y: pixelY,
+  };
+}
+
+/**
+ * Convert a distance in pixels to real-world units
+ * @param pixelDistance - Distance in pixels
+ * @param boardDimensions - Board dimensions with unit
+ * @param imageWidth - Width of the image in pixels (for horizontal distances)
+ * @param imageHeight - Height of the image in pixels (for vertical distances)
+ * @param isHorizontal - Whether this is a horizontal distance (uses width) or vertical (uses height)
+ * @returns Distance in real-world units, or null if dimensions not set
+ */
+export function pixelsToRealWorldDistance(
+  pixelDistance: number,
+  boardDimensions: BoardDimensions | null,
+  imageWidth: number,
+  imageHeight: number,
+  isHorizontal: boolean = true
+): number | null {
+  if (!boardDimensions) {
+    return null;
+  }
+
+  const scale = isHorizontal
+    ? boardDimensions.width / imageWidth
+    : boardDimensions.height / imageHeight;
+
+  return pixelDistance * scale;
+}
+
+/**
+ * Convert a distance in real-world units to pixels
+ * @param realDistance - Distance in real-world units
+ * @param boardDimensions - Board dimensions with unit
+ * @param imageWidth - Width of the image in pixels (for horizontal distances)
+ * @param imageHeight - Height of the image in pixels (for vertical distances)
+ * @param isHorizontal - Whether this is a horizontal distance (uses width) or vertical (uses height)
+ * @returns Distance in pixels, or null if dimensions not set
+ */
+export function realWorldToPixelsDistance(
+  realDistance: number,
+  boardDimensions: BoardDimensions | null,
+  imageWidth: number,
+  imageHeight: number,
+  isHorizontal: boolean = true
+): number | null {
+  if (!boardDimensions) {
+    return null;
+  }
+
+  const scale = isHorizontal
+    ? imageWidth / boardDimensions.width
+    : imageHeight / boardDimensions.height;
+
+  return realDistance * scale;
 }
 

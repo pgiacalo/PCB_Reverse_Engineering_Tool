@@ -331,6 +331,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Load Bottom PCB…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button onClick={() => { onEnterBoardDimensions(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Enter PCB Dimensions…</button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
             <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
             <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
@@ -393,8 +395,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
             </button>
             <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { onEnterBoardDimensions(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Enter Dimensions…</button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Lock Images {areImagesLocked ? '✓' : ''}
@@ -484,14 +484,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button onClick={() => { selectAllComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Components
             </button>
-            <button onClick={() => { selectDisconnectedComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select Disconnected
-            </button>
             <button onClick={() => { selectAllPowerNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Power Nodes
             </button>
             <button onClick={() => { selectAllGroundNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Ground Nodes
+            </button>
+            <button onClick={() => { selectDisconnectedComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Select Disconnected
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>

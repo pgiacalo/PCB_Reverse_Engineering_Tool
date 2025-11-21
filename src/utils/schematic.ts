@@ -44,6 +44,61 @@ interface Net {
 }
 
 /**
+ * Get component value for schematic generation
+ * Prioritizes actual component values (resistance, capacitance, etc.) over generic types
+ * For passive components: uses resistance/capacitance/inductance
+ * For active components: uses partNumber or partName
+ * Falls back to componentType if no specific value is available
+ */
+function getComponentValueForSchematic(comp: PCBComponent): string {
+  // For Resistor: use resistance
+  if (comp.componentType === 'Resistor' && 'resistance' in comp) {
+    const resistance = (comp as any).resistance?.trim();
+    if (resistance && resistance !== '') {
+      return resistance;
+    }
+  }
+  
+  // For Capacitor: use capacitance
+  if (comp.componentType === 'Capacitor' && 'capacitance' in comp) {
+    const capacitance = (comp as any).capacitance?.trim();
+    if (capacitance && capacitance !== '') {
+      return capacitance;
+    }
+  }
+  
+  // For Electrolytic Capacitor: use capacitance
+  if (comp.componentType === 'Electrolytic Capacitor' && 'capacitance' in comp) {
+    const capacitance = (comp as any).capacitance?.trim();
+    if (capacitance && capacitance !== '') {
+      return capacitance;
+    }
+  }
+  
+  // For Inductor: use inductance
+  if (comp.componentType === 'Inductor' && 'inductance' in comp) {
+    const inductance = (comp as any).inductance?.trim();
+    if (inductance && inductance !== '') {
+      return inductance;
+    }
+  }
+  
+  // For ICs, Transistors, Diodes, and other active components: use partNumber or partName
+  const partName = (comp as any).partName?.trim();
+  if (partName && partName !== '') {
+    return partName;
+  }
+  
+  const partNumber = (comp as any).partNumber?.trim();
+  if (partNumber && partNumber !== '') {
+    return partNumber;
+  }
+  
+  // Fallback to componentType
+  return comp.componentType;
+}
+
+/**
  * Generate a simple KiCad schematic that shows component connections
  * Uses generic symbols and simple wire connections
  */
@@ -289,30 +344,53 @@ export function generateSimpleSchematic(
     return !!d && d.length > 0; // Must have a non-empty designator
   });
 
-  const GRID_SPACING = 50.8; // 2 inches in mm
-  const COMPONENTS_PER_ROW = Math.ceil(Math.sqrt(componentsWithDesignators.length));
-  
-  let x = 25.4; // Start at 1 inch
-  let y = 25.4;
-  let col = 0;
-
-  for (const comp of componentsWithDesignators) {
-    // Prioritize designator (full name like "R1") over abbreviation (just prefix like "R")
-    let designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
-    // Filter out placeholder values
-    if (designator && (designator === '?' || designator === '??' || designator === '***' || designator === '****' || designator === '*')) {
-      designator = ''; // Treat placeholders as empty
+  // Use PCB coordinates to preserve geometric relationships
+  // Scale and translate PCB coordinates (pixels) to schematic coordinates (mm)
+  if (componentsWithDesignators.length > 0) {
+    // Find bounding box of all components
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    
+    for (const comp of componentsWithDesignators) {
+      minX = Math.min(minX, comp.x);
+      minY = Math.min(minY, comp.y);
+      maxX = Math.max(maxX, comp.x);
+      maxY = Math.max(maxY, comp.y);
     }
-    if (designator && designator.length > 0) {
-      componentMap.set(designator, { comp, designator, x, y });
-      
-      col++;
-      if (col >= COMPONENTS_PER_ROW) {
-        col = 0;
-        x = 25.4;
-        y += GRID_SPACING;
-      } else {
-        x += GRID_SPACING;
+    
+    // Calculate scale factor to fit components in reasonable schematic space
+    // Target: fit in approximately 200mm x 200mm area (A4 paper is ~210mm x 297mm)
+    const pcbWidth = maxX - minX;
+    const pcbHeight = maxY - minY;
+    const targetSchematicWidth = 200; // mm
+    const targetSchematicHeight = 200; // mm
+    
+    // Use the smaller scale factor to ensure everything fits
+    const scaleX = pcbWidth > 0 ? targetSchematicWidth / pcbWidth : 0.1;
+    const scaleY = pcbHeight > 0 ? targetSchematicHeight / pcbHeight : 0.1;
+    const scale = Math.min(scaleX, scaleY, 0.1); // Cap at 0.1 (1 pixel = 0.1mm max) to avoid too large schematics
+    
+    // Offset to start at reasonable position (25.4mm = 1 inch margin)
+    const offsetX = 25.4;
+    const offsetY = 25.4;
+    
+    // Map components using PCB coordinates
+    for (const comp of componentsWithDesignators) {
+      // Prioritize designator (full name like "R1") over abbreviation (just prefix like "R")
+      let designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
+      // Filter out placeholder values
+      if (designator && (designator === '?' || designator === '??' || designator === '***' || designator === '****' || designator === '*')) {
+        designator = ''; // Treat placeholders as empty
+      }
+      if (designator && designator.length > 0) {
+        // Convert PCB coordinates to schematic coordinates
+        // Translate to origin, scale, then offset
+        const schematicX = (comp.x - minX) * scale + offsetX;
+        const schematicY = (comp.y - minY) * scale + offsetY;
+        
+        componentMap.set(designator, { comp, designator, x: schematicX, y: schematicY });
       }
     }
   }
@@ -600,7 +678,21 @@ export function generateSimpleSchematic(
     const comp = info.comp;
     const symbolLibId = getSymbolLibId(comp.componentType);
     
-    // Calculate rotation from connected pad/via positions
+    // Check if component has polarity (for potential future use with symbol variants)
+    // Note: We preserve the PCB layout orientation - no rotation adjustment for conventions
+    const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
+                       comp.componentType === 'Diode' || 
+                       comp.componentType === 'Battery' || 
+                       comp.componentType === 'ZenerDiode';
+    const isTantalumCap = comp.componentType === 'Capacitor' && 
+                         'dielectric' in comp && 
+                         (comp as any).dielectric === 'Tantalum';
+    const isPolarized = (hasPolarity || isTantalumCap) && 
+                        comp.pinPolarities && 
+                        comp.pinPolarities.length === 2 &&
+                        comp.pinPolarities.some(p => p === '+' || p === '-');
+    
+    // Calculate rotation from connected pad/via positions to preserve PCB layout
     // If component has explicit rotation property, use it; otherwise calculate from pad positions
     let rotation = (comp as any).rotation !== undefined 
       ? (comp as any).rotation 
@@ -618,7 +710,7 @@ export function generateSimpleSchematic(
     schematic += `    (property "Reference" "${designator}" (id 0) (at ${info.x} ${info.y + 3.81} 0)\n`;
     schematic += '      (effects (font (size 1.27 1.27)))\n';
     schematic += '    )\n';
-    schematic += `    (property "Value" "${comp.componentType}" (id 1) (at ${info.x} ${info.y - 3.81} 0)\n`;
+    schematic += `    (property "Value" "${getComponentValueForSchematic(comp)}" (id 1) (at ${info.x} ${info.y - 3.81} 0)\n`;
     schematic += '      (effects (font (size 1.27 1.27)))\n';
     schematic += '    )\n';
     // Pins are defined in the library symbol - no need to add them here

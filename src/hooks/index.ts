@@ -13,7 +13,7 @@ export type { PCBImage, ViewMode } from './useImage';
 
 export { useView } from './useView';
 
-export { useComponents } from './useComponents';
+export { useComponents, combineValueAndUnit } from './useComponents';
 
 export { usePowerGround } from './usePowerGround';
 export type { PowerBus, PowerSymbol, GroundSymbol } from './usePowerGround';

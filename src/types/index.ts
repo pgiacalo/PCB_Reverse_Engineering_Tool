@@ -100,7 +100,7 @@ export interface PCBComponentBase {
 export type ComponentType =
   | 'Battery'           // B, BT
   | 'Capacitor'         // C (general)
-  | 'CapacitorElectrolytic' // C (electrolytic - has polarity)
+  | 'Electrolytic Capacitor' // C (electrolytic - has polarity)
   | 'Diode'             // D, CR (including Zener and LEDs)
   | 'Fuse'              // F
   | 'FerriteBead'       // FB
@@ -148,8 +148,8 @@ export interface Capacitor extends PCBComponentBase {
 /**
  * Electrolytic Capacitor (C) - Has polarity, requires orientation
  */
-export interface CapacitorElectrolytic extends PCBComponentBase {
-  componentType: 'CapacitorElectrolytic';
+export interface ElectrolyticCapacitor extends PCBComponentBase {
+  componentType: 'Electrolytic Capacitor';
   capacitance?: string; // e.g., "100uF", "1000uF"
   voltage?: string; // voltage rating, e.g., "25V", "50V"
   tolerance?: string; // e.g., "±20%"
@@ -383,7 +383,7 @@ export interface ZenerDiode extends PCBComponentBase {
 export type PCBComponent =
   | Battery
   | Capacitor
-  | CapacitorElectrolytic
+  | ElectrolyticCapacitor
   | Diode
   | Fuse
   | FerriteBead

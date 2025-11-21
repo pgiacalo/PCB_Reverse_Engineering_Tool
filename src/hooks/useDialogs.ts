@@ -7,7 +7,7 @@ export function useDialogs() {
   const [openMenu, setOpenMenu] = useState<'file' | 'transform' | 'tools' | 'about' | null>(null);
   const [setSizeDialog, setSetSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 6 });
   const [autoSaveDialog, setAutoSaveDialog] = useState<{ visible: boolean; interval: number | null }>({ visible: false, interval: 5 });
-  const [autoSavePromptDialog, setAutoSavePromptDialog] = useState<{ visible: boolean; source: 'new' | 'open' | null }>({ visible: false, source: null });
+  const [autoSavePromptDialog, setAutoSavePromptDialog] = useState<{ visible: boolean; source: 'new' | 'open' | null; interval: number | null }>({ visible: false, source: null, interval: 5 });
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
   const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
   const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
