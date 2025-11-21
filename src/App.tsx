@@ -848,6 +848,10 @@ function App() {
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   // Connections layer
   const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
+  // Detailed Info Dialog position and drag state
+  const [detailedInfoDialogPosition, setDetailedInfoDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingDetailedInfoDialog, setIsDraggingDetailedInfoDialog] = useState(false);
+  const [detailedInfoDialogDragOffset, setDetailedInfoDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Board dimensions for coordinate scaling
   const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
     const saved = localStorage.getItem('boardDimensions');
@@ -3119,8 +3123,8 @@ function App() {
         pinConnections.length === c.pinCount && 
         pinConnections.every(conn => conn && conn.trim() !== '');
       
-      // Fill background: green if all pins connected, white otherwise
-      ctx.fillStyle = allPinsConnected ? 'rgba(76, 175, 80, 0.85)' : 'rgba(255,255,255,0.85)';
+      // Fill background: #B2DF8A if all pins connected, white otherwise
+      ctx.fillStyle = allPinsConnected ? 'rgba(178, 223, 138, 0.85)' : 'rgba(255,255,255,0.85)';
       ctx.beginPath();
       ctx.rect(c.x - half, c.y - half, size, size);
       ctx.fill();
@@ -5432,10 +5436,13 @@ function App() {
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!dialogDragOffset) return;
-      setComponentDialogPosition({
+      const newPosition = {
         x: e.clientX - dialogDragOffset.x,
         y: e.clientY - dialogDragOffset.y,
-      });
+      };
+      setComponentDialogPosition(newPosition);
+      // Save position to localStorage
+      localStorage.setItem('componentDialogPosition', JSON.stringify(newPosition));
     };
 
     const handleMouseUp = () => {
@@ -5452,18 +5459,92 @@ function App() {
     };
   }, [isDraggingDialog, dialogDragOffset]);
 
-  // Initialize dialog position when it opens (center of screen)
+  // Handle detailed info dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingDetailedInfoDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!detailedInfoDialogDragOffset) return;
+      const newPosition = {
+        x: e.clientX - detailedInfoDialogDragOffset.x,
+        y: e.clientY - detailedInfoDialogDragOffset.y,
+      };
+      setDetailedInfoDialogPosition(newPosition);
+      // Save position to localStorage
+      localStorage.setItem('detailedInfoDialogPosition', JSON.stringify(newPosition));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingDetailedInfoDialog(false);
+      setDetailedInfoDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingDetailedInfoDialog, detailedInfoDialogDragOffset]);
+
+  // Initialize dialog position when it opens (load from localStorage or center of screen)
   React.useEffect(() => {
     if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
-      setComponentDialogPosition({
-        x: window.innerWidth / 2,
-        y: window.innerHeight / 2,
-      });
+      // Try to load saved position from localStorage
+      const saved = localStorage.getItem('componentDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setComponentDialogPosition(savedPosition);
+        } catch {
+          // If parsing fails, use default center position
+          setComponentDialogPosition({
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+          });
+        }
+      } else {
+        // No saved position, use default center position
+        setComponentDialogPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+      }
     } else if (!componentEditor || !componentEditor.visible) {
-      // Reset position when dialog closes
-      setComponentDialogPosition(null);
+      // Don't reset position when dialog closes - keep it for next time
+      // setComponentDialogPosition(null);
     }
   }, [componentEditor, componentDialogPosition]);
+
+  // Initialize detailed info dialog position when it opens (load from localStorage or default)
+  React.useEffect(() => {
+    if (debugDialog.visible && detailedInfoDialogPosition === null) {
+      // Try to load saved position from localStorage
+      const saved = localStorage.getItem('detailedInfoDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setDetailedInfoDialogPosition(savedPosition);
+        } catch {
+          // If parsing fails, use default right side position
+          setDetailedInfoDialogPosition({
+            x: window.innerWidth - 450, // Right side, similar to current positioning
+            y: 80, // Top padding
+          });
+        }
+      } else {
+        // No saved position, use default right side position
+        setDetailedInfoDialogPosition({
+          x: window.innerWidth - 450, // Right side, similar to current positioning
+          y: 80, // Top padding
+        });
+      }
+    } else if (!debugDialog.visible) {
+      // Don't reset position when dialog closes - keep it for next time
+      // setDetailedInfoDialogPosition(null);
+    }
+  }, [debugDialog.visible, detailedInfoDialogPosition]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -10400,12 +10481,27 @@ function App() {
         powers={powers}
         grounds={grounds}
         powerBuses={powerBuses}
-        onClose={() => setDebugDialog({ visible: false, text: '' })}
+        onClose={() => {
+          setDebugDialog({ visible: false, text: '' });
+          // Don't reset position - keep it for next time
+        }}
         setComponentsTop={setComponentsTop}
         setComponentsBottom={setComponentsBottom}
         determineViaType={determineViaType}
         determinePadType={determinePadType}
         onFindComponent={findAndCenterComponent}
+        position={detailedInfoDialogPosition}
+        isDragging={isDraggingDetailedInfoDialog}
+        onDragStart={(e) => {
+          if (detailedInfoDialogPosition) {
+            setDetailedInfoDialogDragOffset({
+              x: e.clientX - detailedInfoDialogPosition.x,
+              y: e.clientY - detailedInfoDialogPosition.y,
+            });
+            setIsDraggingDetailedInfoDialog(true);
+            e.preventDefault();
+          }
+        }}
       />
 
       {/* New Project Confirmation Dialog */}

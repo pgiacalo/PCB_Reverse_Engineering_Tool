@@ -71,6 +71,12 @@ export interface DetailedInfoDialogProps {
   determinePadType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Callback to find and center on a component */
   onFindComponent?: (componentId: string, x: number, y: number) => void;
+  /** Dialog position for dragging */
+  position: { x: number; y: number } | null;
+  /** Whether the dialog is being dragged */
+  isDragging: boolean;
+  /** Callback when drag starts */
+  onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
@@ -91,12 +97,32 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   determineViaType,
   determinePadType,
   onFindComponent,
+  position,
+  isDragging,
+  onDragStart,
 }) => {
   if (!visible) return null;
 
-  return (
-    <div
-      style={{
+  // Use provided position or default to right side
+  const dialogStyle: React.CSSProperties = position
+    ? {
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        minWidth: '150px',
+        maxWidth: '400px',
+        width: 'fit-content',
+        maxHeight: '80%',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+        border: '1px solid #ddd',
+        zIndex: 10000,
+        display: 'flex',
+        flexDirection: 'column',
+        cursor: isDragging ? 'grabbing' : 'default',
+      }
+    : {
         position: 'fixed',
         top: 0,
         left: 0,
@@ -110,45 +136,61 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
         paddingTop: '80px',
         zIndex: 10000,
         pointerEvents: 'none',
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: '#fff',
-          borderRadius: 8,
-          padding: '20px',
-          minWidth: '150px',
-          maxWidth: '400px',
-          width: 'fit-content',
-          maxHeight: '80%',
-          overflow: 'auto',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
-          position: 'relative',
-          pointerEvents: 'auto',
-          border: '1px solid #ddd',
+      };
+
+  const contentStyle: React.CSSProperties = {
+    padding: '20px',
+    overflow: 'auto',
+    flex: 1,
+  };
+
+  return (
+    <div style={dialogStyle}>
+      {/* Fixed header - does not scroll */}
+      <div 
+        onMouseDown={(e) => {
+          // Only start dragging if clicking on the header (not buttons)
+          const target = e.target as HTMLElement;
+          if (target.tagName === 'BUTTON' || target.closest('button')) {
+            return;
+          }
+          if (position) {
+            onDragStart(e);
+          }
+        }}
+        style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          padding: '6px',
+          borderBottom: '1px solid #e0e0e0',
+          background: '#888', // Medium gray background for grabbable window border
+          cursor: isDragging ? 'grabbing' : (position ? 'grab' : 'default'),
+          userSelect: 'none',
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#222' }}>Detailed Information</h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              fontSize: '24px',
-              cursor: 'pointer',
-              color: '#666',
-              padding: 0,
-              width: '28px',
-              height: '28px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            ×
-          </button>
-        </div>
+        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Detailed Information</h2>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            fontSize: '14px',
+            cursor: 'pointer',
+            color: '#fff',
+            padding: 0,
+            width: '16px',
+            height: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          ×
+        </button>
+      </div>
+      <div style={contentStyle}>
         <div
           style={{
             margin: 0,
@@ -829,4 +871,3 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
     </div>
   );
 };
-
