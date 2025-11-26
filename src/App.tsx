@@ -809,11 +809,17 @@ function App() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
+  // Component drag state (only components are moveable)
   const [isDraggingComponent, setIsDraggingComponent] = useState(false);
   const componentDragStartRef = useRef<{ 
     mouseX: number; 
     mouseY: number; 
-    components: Array<{ id: string; layer: 'top' | 'bottom'; startX: number; startY: number }> 
+    components: Array<{ 
+      id: string;
+      layer: 'top' | 'bottom';
+      startX: number;
+      startY: number;
+    }> 
   } | null>(null);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
@@ -1345,19 +1351,34 @@ function App() {
           setSelectedGroundIds(new Set());
         }
         
-        // Only prepare for dragging if COMMAND (Meta) key is pressed
-        // This improves performance by avoiding drag logic on every click
-        if (e.metaKey && finalSelectedIds.has(comp.id)) {
+        // Prepare for dragging if clicking on an already-selected component
+        // This allows click-to-select, then click-and-drag to move
+        if (finalSelectedIds.has(comp.id)) {
           // Collect all selected components with their initial positions
-          const componentsToDrag: Array<{ id: string; layer: 'top' | 'bottom'; startX: number; startY: number }> = [];
+          const componentsToDrag: Array<{ 
+            id: string;
+            layer: 'top' | 'bottom';
+            startX: number;
+            startY: number;
+          }> = [];
           for (const compId of finalSelectedIds) {
             const topComp = componentsTop.find(c => c.id === compId);
             if (topComp) {
-              componentsToDrag.push({ id: compId, layer: 'top', startX: topComp.x, startY: topComp.y });
+              componentsToDrag.push({ 
+                id: compId, 
+                layer: 'top', 
+                startX: topComp.x, 
+                startY: topComp.y 
+              });
             } else {
               const bottomComp = componentsBottom.find(c => c.id === compId);
               if (bottomComp) {
-                componentsToDrag.push({ id: compId, layer: 'bottom', startX: bottomComp.x, startY: bottomComp.y });
+                componentsToDrag.push({ 
+                  id: compId, 
+                  layer: 'bottom', 
+                  startX: bottomComp.x, 
+                  startY: bottomComp.y 
+                });
               }
             }
           }
@@ -1369,7 +1390,7 @@ function App() {
           };
           // Don't set isDraggingComponent yet - wait for mouse move to start dragging
         } else {
-          // Clear any existing drag state if COMMAND is not pressed
+          // Clear any existing drag state if clicking on unselected component
           componentDragStartRef.current = null;
         }
         return;
@@ -1393,25 +1414,29 @@ function App() {
         }
       }
       if (hitPower) {
+        // Determine the final selection state after this click
+        let finalSelectedPowerIds: Set<string>;
         if (e.shiftKey) {
           // Shift-click: toggle selection
-          setSelectedPowerIds(prev => {
-            const next = new Set(prev);
-            if (next.has(hitPower!.id)) {
-              next.delete(hitPower!.id);
-            } else {
-              next.add(hitPower!.id);
-            }
-            return next;
-          });
+          const next = new Set(selectedPowerIds);
+          if (next.has(hitPower.id)) {
+            next.delete(hitPower.id);
+          } else {
+            next.add(hitPower.id);
+          }
+          finalSelectedPowerIds = next;
+          setSelectedPowerIds(finalSelectedPowerIds);
         } else {
           // Regular click: select only this power node
-          setSelectedPowerIds(new Set([hitPower.id]));
+          finalSelectedPowerIds = new Set([hitPower.id]);
+          setSelectedPowerIds(finalSelectedPowerIds);
         }
         // Clear other selections
         setSelectedIds(new Set());
         setSelectedComponentIds(new Set());
         setSelectedGroundIds(new Set());
+        
+        // Power nodes are not moveable - only selectable
         return;
       }
       
@@ -1432,34 +1457,36 @@ function App() {
         }
       }
       if (hitGround) {
+        // Determine the final selection state after this click
+        let finalSelectedGroundIds: Set<string>;
         if (e.shiftKey) {
           // Shift-click: add to selection (toggle)
-          setSelectedGroundIds(prev => {
-            const next = new Set(prev);
-            if (next.has(hitGround!.id)) {
-              next.delete(hitGround!.id);
-            } else {
-              next.add(hitGround!.id);
-            }
-            return next;
-          });
+          const next = new Set(selectedGroundIds);
+          if (next.has(hitGround.id)) {
+            next.delete(hitGround.id);
+          } else {
+            next.add(hitGround.id);
+          }
+          finalSelectedGroundIds = next;
+          setSelectedGroundIds(finalSelectedGroundIds);
           // Keep other selections when Shift-clicking
         } else {
           // Regular click: select only this ground node (replace all selections)
-          setSelectedGroundIds(new Set([hitGround.id]));
+          finalSelectedGroundIds = new Set([hitGround.id]);
+          setSelectedGroundIds(finalSelectedGroundIds);
           // Clear other selections
           setSelectedIds(new Set());
           setSelectedComponentIds(new Set());
           setSelectedPowerIds(new Set());
         }
+        
+        // Ground nodes are not moveable - only selectable
         // Don't start rectangle selection - we've already selected the ground node
         return;
       }
       
-      // Check if clicking on empty space - clear selection immediately
-      // But first check if we hit a via or pad (for rectangle selection)
+      // Check for via/pad hit - handle like components (direct selection, no rectangle selection)
       // Hit tolerance: maintain minimum 6 screen pixels clickable area at all zoom levels
-      // At high zoom, this ensures reliable clicking even with small mouse movements
       const minScreenPixels = 6; // Minimum clickable area in screen pixels
       const hitToleranceSelect = Math.max(minScreenPixels / viewScale, 4 / viewScale);
       // Ensure minimum world-space tolerance for very small objects
@@ -1479,14 +1506,42 @@ function App() {
           // This ensures small objects are still clickable at high zoom
           if (d <= Math.max(r, finalHitTolerance)) {
             hitStroke = s;
-            break; // Found a hit, selection will be finalized on mouse up
+            break;
           }
         }
       }
       
+      if (hitStroke) {
+        // Handle via/pad selection directly (like components) - no rectangle selection
+        let finalSelectedIds: Set<string>;
+        
+        if (e.shiftKey) {
+          // Shift-click: toggle selection
+          const next = new Set(selectedIds);
+          if (next.has(hitStroke.id)) {
+            next.delete(hitStroke.id);
+          } else {
+            next.add(hitStroke.id);
+          }
+          finalSelectedIds = next;
+          setSelectedIds(finalSelectedIds);
+        } else {
+          // Regular click: select only this via/pad
+          finalSelectedIds = new Set([hitStroke.id]);
+          setSelectedIds(finalSelectedIds);
+          // Clear other selections
+          setSelectedComponentIds(new Set());
+          setSelectedPowerIds(new Set());
+          setSelectedGroundIds(new Set());
+        }
+        
+        // Vias and pads are not moveable - only selectable
+        return;
+      }
+      
       // If we didn't hit anything (no via, no component, no power, no ground), clear selection and start rectangle selection
       // But don't start selection if we're about to drag a component
-      if (!hitStroke && !componentDragStartRef.current) {
+      if (!componentDragStartRef.current) {
         // Clear selection immediately when clicking on empty space (unless Shift is held for multi-select)
         if (!e.shiftKey) {
           setSelectedIds(new Set());
@@ -1500,18 +1555,7 @@ function App() {
         setIsSelecting(true);
         setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
         setSelectRect({ x, y, width: 0, height: 0 });
-      } else if (hitStroke) {
-        // CRITICAL FIX: When a via/pad is hit, we must store the hitStrokeId so mouseUp can use it
-        // This ensures reliable selection at high zoom where tiny mouse movements can create non-tiny rectangles
-        setIsSelecting(true);
-        setSelectStart({ 
-          x, 
-          y, 
-          shiftKey: e.shiftKey,
-          hitStrokeId: hitStroke.id
-        } as any);
-        setSelectRect({ x, y, width: 0, height: 0 });
-      } else if (componentDragStartRef.current) {
+      } else {
         // Clear component drag start if we clicked on empty space
         componentDragStartRef.current = null;
       }
@@ -1540,7 +1584,9 @@ function App() {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number; id?: number } | null = null;
         // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
-        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
             // Vias can be snapped to from any layer (they go through both layers)
@@ -1598,9 +1644,59 @@ function App() {
         const savedSize = localStorage.getItem('tool_via_size');
         const viaColor = savedColor || viaDef?.settings.color || DEFAULT_VIA_COLOR;
         const viaSize = savedSize ? parseInt(savedSize, 10) : (viaDef?.settings.size || VIA.DEFAULT_SIZE);
-        // Truncate coordinates to 3 decimal places for exact matching
-        const truncatedPos = truncatePoint({ x, y });
-        const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
+        
+        // Snap to nearest via, pad, power, or ground node unless Option/Alt key is held
+        const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+          const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+          const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad') {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            }
+          }
+          // Also check power and ground nodes
+          for (const p of powers) {
+            if (p.pointId !== undefined) {
+              const d = Math.hypot(p.x - wx, p.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: p.x, y: p.y, id: p.pointId };
+              }
+            }
+          }
+          for (const g of grounds) {
+            if (g.pointId !== undefined) {
+              const d = Math.hypot(g.x - wx, g.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: g.x, y: g.y, id: g.pointId };
+              }
+            }
+          }
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        
+        const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        
+        // Auto-detect via type based on power/ground connection
+        const viaType = determineViaType(nodeId, powerBuses);
+        
+        const center = { id: nodeId, x: snapped.x, y: snapped.y };
         const viaStroke: DrawingStroke = {
           id: `${Date.now()}-via`,
           points: [center],
@@ -1608,7 +1704,7 @@ function App() {
           size: viaSize,
           layer: selectedDrawingLayer,
           type: 'via',
-          viaType: 'Via (Signal)', // Default: Via (Signal) (no power/ground connection)
+          viaType: viaType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, viaStroke]);
         if (selectedDrawingLayer === 'top') {
@@ -1625,13 +1721,62 @@ function App() {
           return; // Wait for user to select a layer
         }
         
+        // Snap to nearest via, pad, power, or ground node unless Option/Alt key is held
+        const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+          const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+          const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad') {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            }
+          }
+          // Also check power and ground nodes
+          for (const p of powers) {
+            if (p.pointId !== undefined) {
+              const d = Math.hypot(p.x - wx, p.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: p.x, y: p.y, id: p.pointId };
+              }
+            }
+          }
+          for (const g of grounds) {
+            if (g.pointId !== undefined) {
+              const d = Math.hypot(g.x - wx, g.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: g.x, y: g.y, id: g.pointId };
+              }
+            }
+          }
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        
+        const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        
+        // Auto-detect pad type based on power/ground connection
+        const padType = determinePadType(nodeId, powerBuses);
+        
         // Add a square representing a pad at click location
         // Use layer-specific colors and sizes
         const padColor = padToolLayer === 'top' ? topPadColor : bottomPadColor;
         const padSize = padToolLayer === 'top' ? topPadSize : bottomPadSize;
-        // Truncate coordinates to 3 decimal places for exact matching
-        const truncatedPos = truncatePoint({ x, y });
-        const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
+        const center = { id: nodeId, x: snapped.x, y: snapped.y };
         const padStroke: DrawingStroke = {
           id: `${Date.now()}-pad`,
           points: [center],
@@ -1639,7 +1784,7 @@ function App() {
           size: padSize,
           layer: padToolLayer, // Use padToolLayer instead of selectedDrawingLayer
           type: 'pad',
-          padType: 'Pad (Signal)', // Default: Pad (Signal) (no power/ground connection)
+          padType: padType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, padStroke]);
         return;
@@ -1744,7 +1889,9 @@ function App() {
       const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
         let bestPoint: { x: number; y: number; id?: number } | null = null;
-        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
         for (const s of drawingStrokes) {
           if (s.type === 'via' || s.type === 'pad') {
             // Vias and pads can be snapped to from any layer
@@ -1829,7 +1976,9 @@ function App() {
       const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
         let bestDist = Infinity;
         let bestPoint: { x: number; y: number; id?: number } | null = null;
-        const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
         for (const s of drawingStrokes) {
           if (s.type === 'via' || s.type === 'pad') {
             // Vias and pads can be snapped to from any layer
@@ -2050,7 +2199,7 @@ function App() {
       
       if (hitComponent) {
         const { layer, comp } = hitComponent;
-        setSelectedComponentIds(new Set([comp.id]));
+        // Double-click ONLY opens properties dialog - do NOT select or make moveable
         // Use openComponentEditor to properly load all type-specific fields (resistance, capacitance, etc.)
         openComponentEditor(comp, layer);
       }
@@ -2171,7 +2320,9 @@ function App() {
         let bestDist = Infinity;
         let bestCenter: { x: number; y: number; id?: number } | null = null;
         // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
-        const SNAP_THRESHOLD_WORLD = 15;
+        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
             // Vias can be snapped to from any layer (they go through both layers)
@@ -3304,10 +3455,7 @@ function App() {
       }
       ctx.restore();
     };
-    if (showTopComponents) componentsTop.forEach(drawComponent);
-    if (showBottomComponents) componentsBottom.forEach(drawComponent);
-    
-    // Draw connection lines from components to their connected nodes
+    // Draw connection lines from components to their connected nodes (behind components)
     if (showConnectionsLayer) {
       // Helper function to find node coordinates from Point ID
       const findNodeCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
@@ -3389,6 +3537,10 @@ function App() {
       if (showTopComponents) componentsTop.forEach(drawConnections);
       if (showBottomComponents) componentsBottom.forEach(drawConnections);
     }
+    
+    // Draw components (on top of connections)
+    if (showTopComponents) componentsTop.forEach(drawComponent);
+    if (showBottomComponents) componentsBottom.forEach(drawComponent);
     
     // Draw active selection rectangle in view space for perfect alignment
     if (currentTool === 'select' && selectRect) {
@@ -4249,6 +4401,15 @@ function App() {
     }, 200);
   }, [projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle]);
 
+  // Helper function to switch to Select tool and deselect all icons
+  const switchToSelectTool = useCallback(() => {
+    setCurrentTool('select');
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // FIRST: Handle Escape key for checkboxes/radio buttons before other checks
     if (e.key === 'Escape') {
@@ -4437,8 +4598,8 @@ function App() {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      // Switch to Select tool
-      setCurrentTool('select');
+      // Switch to Select tool and deselect all
+      switchToSelectTool();
       // Close any open choosers/dialogs
       setShowTraceLayerChooser(false);
       setShowPadLayerChooser(false);
@@ -4474,6 +4635,7 @@ function App() {
         } else if (hasLockedPads) {
           alert('Cannot delete: Pads are locked. Unlock pads to delete them.');
         } else {
+          // Delete the strokes (cleanup will happen automatically via useEffect)
           setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
           setSelectedIds(new Set());
         }
@@ -4624,7 +4786,7 @@ function App() {
           case 's':
           case 'S':
             e.preventDefault();
-            setCurrentTool('select');
+            switchToSelectTool();
             return;
           case 'b':
           case 'B':
@@ -5002,7 +5164,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -5026,7 +5188,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool]);
 
   // Consolidated initialization function - sets all application defaults
   // This is used on app startup, browser refresh, and when creating a new project
@@ -6002,6 +6164,116 @@ function App() {
       window.removeEventListener('keyup', onUp);
     };
   }, []);
+
+  // Helper function to clean up connections when vias/pads are deleted
+  const cleanupConnectionsForDeletedPointIds = useCallback((deletedPointIds: Set<number>) => {
+    if (deletedPointIds.size === 0) return;
+    
+    const deletedPointIdStrings = Array.from(deletedPointIds).map(id => String(id));
+    
+    // Remove trace points that reference deleted pointIds
+    setDrawingStrokes(prev => {
+      return prev.map(stroke => {
+        if (stroke.type === 'trace') {
+          // Filter out points that match deleted pointIds
+          const filteredPoints = stroke.points.filter(p => {
+            if (p.id === undefined) return true;
+            return !deletedPointIds.has(p.id);
+          });
+          
+          // If trace has less than 2 points, remove the entire trace
+          if (filteredPoints.length < 2) {
+            return null; // Mark for removal
+          }
+          
+          return { ...stroke, points: filteredPoints };
+        }
+        return stroke;
+      }).filter(s => s !== null) as DrawingStroke[];
+    });
+    
+    // Clear component pin connections that reference deleted pointIds
+    setComponentsTop(prev => prev.map(comp => {
+      const pinConnections = comp.pinConnections || [];
+      const hasDeletedConnection = pinConnections.some(conn => 
+        conn && deletedPointIdStrings.includes(conn)
+      );
+      if (hasDeletedConnection) {
+        const updatedConnections = pinConnections.map(conn => 
+          conn && deletedPointIdStrings.includes(conn) ? '' : conn
+        );
+        return { ...comp, pinConnections: updatedConnections };
+      }
+      return comp;
+    }));
+    setComponentsBottom(prev => prev.map(comp => {
+      const pinConnections = comp.pinConnections || [];
+      const hasDeletedConnection = pinConnections.some(conn => 
+        conn && deletedPointIdStrings.includes(conn)
+      );
+      if (hasDeletedConnection) {
+        const updatedConnections = pinConnections.map(conn => 
+          conn && deletedPointIdStrings.includes(conn) ? '' : conn
+        );
+        return { ...comp, pinConnections: updatedConnections };
+      }
+      return comp;
+    }));
+  }, [setDrawingStrokes, setComponentsTop, setComponentsBottom]);
+
+  // Track previous via/pad pointIds to detect deletions
+  const prevViaPadPointIdsRef = useRef<Set<number>>(new Set());
+  
+  // Clean up connections when vias/pads are deleted (works for both delete key and erase tool)
+  React.useEffect(() => {
+    // Collect current via/pad pointIds
+    const currentPointIds = new Set<number>();
+    for (const stroke of drawingStrokes) {
+      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+        const pointId = stroke.points[0].id;
+        if (pointId !== undefined) {
+          currentPointIds.add(pointId);
+        }
+      }
+    }
+    
+    // Find deleted pointIds (in previous but not in current)
+    const deletedPointIds = new Set<number>();
+    for (const pointId of prevViaPadPointIdsRef.current) {
+      if (!currentPointIds.has(pointId)) {
+        deletedPointIds.add(pointId);
+      }
+    }
+    
+    // Clean up connections if any vias/pads were deleted
+    if (deletedPointIds.size > 0) {
+      cleanupConnectionsForDeletedPointIds(deletedPointIds);
+    }
+    
+    // Update ref for next comparison
+    prevViaPadPointIdsRef.current = currentPointIds;
+  }, [drawingStrokes, cleanupConnectionsForDeletedPointIds]);
+
+  // Update via/pad types dynamically when power/ground nodes are added, removed, or moved
+  React.useEffect(() => {
+    // Update all vias and pads to reflect current power/ground connections
+    setDrawingStrokes(prev => prev.map(s => {
+      if (s.type === 'via' && s.points.length > 0 && s.points[0].id !== undefined) {
+        const nodeId = s.points[0].id;
+        const newViaType = determineViaType(nodeId, powerBuses);
+        if (s.viaType !== newViaType) {
+          return { ...s, viaType: newViaType };
+        }
+      } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id !== undefined) {
+        const nodeId = s.points[0].id;
+        const newPadType = determinePadType(nodeId, powerBuses);
+        if (s.padType !== newPadType) {
+          return { ...s, padType: newPadType };
+        }
+      }
+      return s;
+    }));
+  }, [powers, grounds, powerBuses, determineViaType, determinePadType]);
 
   // Close menus when clicking outside
   React.useEffect(() => {
@@ -8042,7 +8314,7 @@ function App() {
           {/* Left toolstrip (icons) */}
           <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('select'); }} 
+              onClick={() => { if (!isReadOnlyMode) switchToSelectTool(); }} 
               onMouseDown={(e) => e.currentTarget.blur()}
               disabled={isReadOnlyMode}
               title="Select (S)" 

@@ -874,18 +874,137 @@ export function generateNetNamesCoordinateBased(
 }
 
 /**
- * Get component value for netlist (prioritizes partNumber, designator, then componentType)
+ * Helper to read value and unit from component
+ */
+function readValueAndUnit(
+  component: any,
+  valueField: string,
+  unitField: string,
+  defaultUnit: string
+): { value: string; unit: string } {
+  // Special case: power is always stored as combined value+unit (e.g., "1/4W", "1W")
+  if (valueField === 'power') {
+    const powerValue = component[valueField] || '';
+    if (typeof powerValue === 'string' && powerValue.trim() !== '') {
+      // Remove trailing "W" if present
+      const value = powerValue.replace(/W$/i, '').trim();
+      return { value, unit: 'W' };
+    }
+    return { value: '', unit: 'W' };
+  }
+  
+  // Try to read separate fields first (new format)
+  if (component[valueField] !== undefined || component[unitField] !== undefined) {
+    return {
+      value: component[valueField] || '',
+      unit: component[unitField] || defaultUnit,
+    };
+  }
+  
+  // Fallback: parse combined string (backward compatibility for old projects)
+  const combined = component[valueField] || '';
+  if (typeof combined === 'string' && combined.trim() !== '') {
+    // Try to match fractional values (e.g., "1/4W", "1/2W") or number followed by unit
+    const fractionalMatch = combined.trim().match(/^([\d]+\/[\d]+)\s*([a-zA-ZΩµμuW]+)?$/);
+    if (fractionalMatch) {
+      return { value: fractionalMatch[1], unit: fractionalMatch[2] || '' };
+    }
+    
+    // Try to match number followed by unit (handles k, M, m, µ, u, etc.)
+    const match = combined.trim().match(/^([\d.]+)\s*([a-zA-ZΩµμuW]+)?$/);
+    if (match) {
+      return { value: match[1], unit: match[2] || '' };
+    }
+    
+    // If no match, return as-is
+    return { value: combined.trim(), unit: '' };
+  }
+  
+  return { value: '', unit: defaultUnit };
+}
+
+/**
+ * Helper to combine value and unit into a single string
+ */
+function combineValueAndUnit(value: string, unit: string): string {
+  if (!value || value.trim() === '') return '';
+  if (!unit || unit.trim() === '') return value.trim();
+  return `${value.trim()}${unit.trim()}`;
+}
+
+/**
+ * Get default unit for a property
+ */
+function getDefaultUnit(property: string): string {
+  const unitMap: Record<string, string> = {
+    resistance: 'Ω',
+    capacitance: 'F',
+    inductance: 'H',
+    voltage: 'V',
+    current: 'A',
+    power: 'W',
+    impedance: 'Ω',
+    capacity: 'mAh',
+    esr: 'Ω',
+    coilVoltage: 'V',
+    inputVoltage: 'V',
+    outputVoltage: 'V',
+  };
+  return unitMap[property] || '';
+}
+
+/**
+ * Get component value for netlist with proper units
+ * Prioritizes actual component values (resistance, capacitance, etc.) with units
+ * For passive components: uses resistance/capacitance/inductance with units
+ * For active components: uses partNumber or partName
+ * Falls back to componentType if no specific value is available
  */
 function getComponentValue(comp: PCBComponent): string {
+  // For Resistor: use resistance with unit
+  if (comp.componentType === 'Resistor' && 'resistance' in comp) {
+    const { value, unit } = readValueAndUnit(comp, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+  
+  // For Capacitor: use capacitance with unit
+  if (comp.componentType === 'Capacitor' && 'capacitance' in comp) {
+    const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+  
+  // For Electrolytic Capacitor: use capacitance with unit
+  if (comp.componentType === 'Electrolytic Capacitor' && 'capacitance' in comp) {
+    const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+  
+  // For Inductor: use inductance with unit
+  if (comp.componentType === 'Inductor' && 'inductance' in comp) {
+    const { value, unit } = readValueAndUnit(comp, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+  
+  // For ICs, Transistors, Diodes, and other active components: use partNumber or partName
   const partName = (comp as any).partName?.trim();
-  if (partName) return partName;
+  if (partName && partName !== '') {
+    return partName;
+  }
   
   const partNumber = (comp as any).partNumber?.trim();
-  if (partNumber) return partNumber;
+  if (partNumber && partNumber !== '') {
+    return partNumber;
+  }
   
-  const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
-  if (designator) return designator;
-  
+  // Fallback to componentType
   return comp.componentType;
 }
 
