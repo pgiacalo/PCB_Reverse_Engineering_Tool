@@ -272,17 +272,62 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
 
   const exportSimpleSchematic = useCallback(async () => {
     const allComponents = [...componentsTop, ...componentsBottom];
-    const schematicContent = generateSimpleSchematic(
+    const { schematic: schematicContent, nodesCsv } = generateSimpleSchematic(
       allComponents,
       drawingStrokes as ImportedDrawingStroke[],
       powers,
       grounds,
       powerBuses
     );
-    const blob = new Blob([schematicContent], { type: 'text/plain' });
-    const filename = `${projectName || 'schematic'}.kicad_sch`;
 
+    // Generate timestamp for CSV filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: 2024-01-15T12-30-45
+    const baseName = projectName || 'pcb_project';
+    const csvFilename = `${timestamp}_nodes.csv`;
+    const csvBlob = new Blob([nodesCsv], { type: 'text/csv' });
+
+    // Save nodes CSV first
     const w = window as any;
+    if (typeof w.showSaveFilePicker === 'function') {
+      try {
+        const csvHandle = await w.showSaveFilePicker({
+          suggestedName: csvFilename,
+          types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
+        });
+        const csvWritable = await csvHandle.createWritable();
+        await csvWritable.write(csvBlob);
+        await csvWritable.close();
+        console.log(`Nodes CSV exported: ${csvHandle.name}`);
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        console.warn('showSaveFilePicker failed for CSV, falling back to download', e);
+        // Fallback: download CSV
+        const csvLink = document.createElement('a');
+        csvLink.href = URL.createObjectURL(csvBlob);
+        csvLink.download = csvFilename;
+        document.body.appendChild(csvLink);
+        csvLink.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(csvLink.href);
+          document.body.removeChild(csvLink);
+        }, 0);
+      }
+    } else {
+      // Fallback: download CSV
+      const csvLink = document.createElement('a');
+      csvLink.href = URL.createObjectURL(csvBlob);
+      csvLink.download = csvFilename;
+      document.body.appendChild(csvLink);
+      csvLink.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(csvLink.href);
+        document.body.removeChild(csvLink);
+      }, 0);
+    }
+
+    const blob = new Blob([schematicContent], { type: 'text/plain' });
+    const filename = `${baseName}.kicad_sch`;
+
     if (typeof w.showSaveFilePicker === 'function') {
       try {
         const handle = await w.showSaveFilePicker({

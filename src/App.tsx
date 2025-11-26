@@ -6836,12 +6836,12 @@ function App() {
 
   // Export simple schematic function
   const exportSimpleSchematic = useCallback(async () => {
-    // Generate schematic
+    // Generate schematic and nodes CSV
     const allComponents = [...componentsTop, ...componentsBottom];
     // Type assertion: The local DrawingStroke type has optional point.id, but the imported
     // type requires it. The generateSimpleSchematic function handles undefined IDs safely
     // by checking point.id !== undefined before using it.
-    const schematicContent = generateSimpleSchematic(
+    const { schematic: schematicContent, nodesCsv } = generateSimpleSchematic(
       allComponents,
       drawingStrokes as ImportedDrawingStroke[],
       powers,
@@ -6849,15 +6849,60 @@ function App() {
       powerBuses
     );
 
-    // Create blob
+    // Generate timestamp for CSV filename
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: 2024-01-15T12-30-45
+    const baseName = projectName || 'pcb_project';
+
+    // Save nodes CSV first
+    const csvBlob = new Blob([nodesCsv], { type: 'text/csv' });
+    const csvFilename = `${timestamp}_nodes.csv`;
+
+    // Try to use File System Access API for CSV
+    const w = window as any;
+    if (typeof w.showSaveFilePicker === 'function') {
+      try {
+        const csvHandle = await w.showSaveFilePicker({
+          suggestedName: csvFilename,
+          types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
+        });
+        const csvWritable = await csvHandle.createWritable();
+        await csvWritable.write(csvBlob);
+        await csvWritable.close();
+        console.log(`Nodes CSV exported: ${csvHandle.name}`);
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        console.warn('showSaveFilePicker failed for CSV, falling back to download', e);
+        // Fallback: download CSV
+        const csvLink = document.createElement('a');
+        csvLink.href = URL.createObjectURL(csvBlob);
+        csvLink.download = csvFilename;
+        document.body.appendChild(csvLink);
+        csvLink.click();
+        setTimeout(() => {
+          URL.revokeObjectURL(csvLink.href);
+          document.body.removeChild(csvLink);
+        }, 0);
+      }
+    } else {
+      // Fallback: download CSV
+      const csvLink = document.createElement('a');
+      csvLink.href = URL.createObjectURL(csvBlob);
+      csvLink.download = csvFilename;
+      document.body.appendChild(csvLink);
+      csvLink.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(csvLink.href);
+        document.body.removeChild(csvLink);
+      }, 0);
+    }
+
+    // Create blob for schematic
     const blob = new Blob([schematicContent], { type: 'text/plain' });
 
     // Determine filename
-    const baseName = projectName || 'pcb_project';
     const filename = `${baseName}.kicad_sch`;
 
-    // Try to use File System Access API
-    const w = window as any;
+    // Try to use File System Access API for schematic
     if (typeof w.showSaveFilePicker === 'function') {
       try {
         const handle = await w.showSaveFilePicker({

@@ -214,6 +214,356 @@ function getComponentValueForSchematic(comp: PCBComponent): string {
 }
 
 /**
+ * Traverse all traces connected to a node, collecting connected nodes and components
+ * Uses depth-first search to follow all trace paths until reaching nodes or components
+ * CRITICAL: Examines each trace's points directly to follow the complete path,
+ * including intermediate points without Node IDs, to find all connected nodes
+ */
+function traverseNodeConnections(
+  startNodeId: number,
+  nodes: Map<number, NetlistNode>,
+  drawingStrokes: DrawingStroke[],
+  componentIdToDesignator: Map<string, string>
+): {
+  connectedNodeIds: number[];
+  connectedComponents: string[];
+  connectedComponentPins: Array<{ designator: string; pin: number }>;
+} {
+  // Build adjacency list by examining each trace's points directly
+  // This ensures we follow the complete trace path, including intermediate points
+  const adjacencyList = new Map<number, Set<number>>();
+  
+  // Initialize adjacency list for all nodes
+  for (const nodeId of nodes.keys()) {
+    if (!adjacencyList.has(nodeId)) {
+      adjacencyList.set(nodeId, new Set());
+    }
+  }
+  
+  // Process each trace to build connections
+  // CRITICAL: Follow the trace path point-by-point, connecting all nodes with Node IDs
+  // even if they're separated by intermediate points without Node IDs
+  for (const stroke of drawingStrokes) {
+    if (stroke.type === 'trace' && stroke.points.length >= 2) {
+      // Extract all points with Node IDs from this trace
+      const nodesInTrace: Array<{ pointIndex: number; nodeId: number }> = [];
+      for (let i = 0; i < stroke.points.length; i++) {
+        const point = stroke.points[i];
+        if (point && point.id !== undefined && point.id !== null) {
+          nodesInTrace.push({ pointIndex: i, nodeId: point.id });
+        }
+      }
+      
+      // Connect all nodes in the trace (they're all connected through the trace path)
+      // Even if separated by intermediate points, they're on the same trace
+      for (let i = 0; i < nodesInTrace.length; i++) {
+        for (let j = i + 1; j < nodesInTrace.length; j++) {
+          const nodeId1 = nodesInTrace[i].nodeId;
+          const nodeId2 = nodesInTrace[j].nodeId;
+          
+          // Ensure both nodes exist in the nodes map
+          if (nodes.has(nodeId1) && nodes.has(nodeId2)) {
+            if (!adjacencyList.has(nodeId1)) {
+              adjacencyList.set(nodeId1, new Set());
+            }
+            if (!adjacencyList.has(nodeId2)) {
+              adjacencyList.set(nodeId2, new Set());
+            }
+            adjacencyList.get(nodeId1)!.add(nodeId2);
+            adjacencyList.get(nodeId2)!.add(nodeId1);
+          }
+        }
+      }
+      
+      // Also connect consecutive points in the trace (for following the path)
+      // This handles intermediate points and ensures we can traverse the full path
+      for (let i = 0; i < stroke.points.length - 1; i++) {
+        const point1 = stroke.points[i];
+        const point2 = stroke.points[i + 1];
+        
+        // If both points have Node IDs, connect them
+        if (point1 && point2 && point1.id !== undefined && point1.id !== null &&
+            point2.id !== undefined && point2.id !== null) {
+          const nodeId1 = point1.id;
+          const nodeId2 = point2.id;
+          
+          if (nodes.has(nodeId1) && nodes.has(nodeId2)) {
+            if (!adjacencyList.has(nodeId1)) {
+              adjacencyList.set(nodeId1, new Set());
+            }
+            if (!adjacencyList.has(nodeId2)) {
+              adjacencyList.set(nodeId2, new Set());
+            }
+            adjacencyList.get(nodeId1)!.add(nodeId2);
+            adjacencyList.get(nodeId2)!.add(nodeId1);
+          }
+        }
+      }
+    }
+  }
+
+  // Perform depth-first search to traverse all connected traces
+  const visited = new Set<number>();
+  const connectedNodeIds = new Set<number>();
+  const connectedComponentPins = new Map<string, Array<{ designator: string; pin: number }>>();
+
+  function dfs(currentNodeId: number) {
+    if (visited.has(currentNodeId)) {
+      return;
+    }
+    visited.add(currentNodeId);
+
+    const currentNode = nodes.get(currentNodeId);
+    if (!currentNode) {
+      return;
+    }
+
+    // If we've reached a non-trace-point node (via, pad, ground, power, component_pin)
+    // and it's not the starting node, record it as a connected node
+    if (currentNodeId !== startNodeId && currentNode.type !== 'trace_point') {
+      connectedNodeIds.add(currentNodeId);
+    }
+
+    // If we've reached a component pin, record it
+    if (currentNode.type === 'component_pin' && currentNode.componentId && currentNode.pinIndex !== undefined) {
+      const designator = componentIdToDesignator.get(currentNode.componentId);
+      if (designator) {
+        const pinKey = `${currentNode.componentId}:${currentNode.pinIndex}`;
+        if (!connectedComponentPins.has(pinKey)) {
+          connectedComponentPins.set(pinKey, [{
+            designator,
+            pin: (currentNode.pinIndex || 0) + 1,
+          }]);
+        }
+      }
+    }
+
+    // Continue traversing through all connected nodes (following traces)
+    const neighbors = adjacencyList.get(currentNodeId);
+    if (neighbors) {
+      for (const neighborId of neighbors) {
+        // Continue traversing even through trace points (they're just connecting wires)
+        // Stop only when we reach the end of a trace or hit a non-trace-point node
+        dfs(neighborId);
+      }
+    }
+  }
+
+  // Start traversal from the selected node
+  dfs(startNodeId);
+
+  // Convert sets to sorted arrays
+  const sortedConnectedNodeIds = Array.from(connectedNodeIds).sort((a, b) => a - b);
+  
+  // Get unique component designators
+  const uniqueComponents = new Set<string>();
+  const componentPinsList: Array<{ designator: string; pin: number }> = [];
+  for (const pins of connectedComponentPins.values()) {
+    for (const pin of pins) {
+      uniqueComponents.add(pin.designator);
+      componentPinsList.push(pin);
+    }
+  }
+
+  // Sort component pins by designator, then pin number
+  componentPinsList.sort((a, b) => {
+    if (a.designator !== b.designator) {
+      return a.designator.localeCompare(b.designator);
+    }
+    return a.pin - b.pin;
+  });
+
+  return {
+    connectedNodeIds: sortedConnectedNodeIds,
+    connectedComponents: Array.from(uniqueComponents).sort(),
+    connectedComponentPins: componentPinsList,
+  };
+}
+
+/**
+ * Generate nodes CSV file with comprehensive connectivity information
+ * Returns CSV content as string
+ */
+export function generateNodesCsv(
+  nodes: Map<number, NetlistNode>,
+  netGroups: Map<number, NetlistNode[]>,
+  _netNames: Map<number, string>,
+  components: PCBComponent[],
+  drawingStrokes: DrawingStroke[]
+): string {
+  // Build component ID to designator map
+  const componentIdToDesignator = new Map<string, string>();
+  for (const comp of components) {
+    let designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
+    if (designator && (designator === '?' || designator === '??' || designator === '***' || designator === '****' || designator === '*')) {
+      designator = '';
+    }
+    if (designator && designator.length > 0) {
+      componentIdToDesignator.set(comp.id, designator);
+    }
+  }
+
+  // Build CSV rows
+  const csvRows: string[] = [];
+  
+  // CSV Header
+  csvRows.push('Node ID,Node Type,Connected Node IDs,Connected Components,Connected Component Pins');
+
+  // Iterate through every node (excluding trace points - they are just connecting wires)
+  // Note: We traverse all traces to find connected nodes via the netGroups (union-find algorithm)
+  // This ensures we find ALL nodes and components connected through any path of traces
+  for (const [nodeId, node] of nodes) {
+    // Skip trace points - they are only connecting wires, not important nodes
+    // However, we still use them to traverse connections and find all connected nodes/components
+    if (node.type === 'trace_point') {
+      continue;
+    }
+
+    // Get all nodes in the same net (for determining node type - Ground/Power/Signal)
+    // We use netGroups to check if this node is connected to ground/power
+    let rootNodeId: number | undefined;
+    for (const [rootId, netNodes] of netGroups) {
+      if (netNodes.some(n => n.id === nodeId)) {
+        rootNodeId = rootId;
+        break;
+      }
+    }
+    
+    const netNodes = rootNodeId ? netGroups.get(rootNodeId) || [] : [];
+    
+    // Determine node type label
+    // For vias and pads: use Signal, Ground, or Power based on connections
+    // For other node types: use their base type
+    let nodeType: string;
+    
+    // Check if this net contains ground or power nodes
+    // This traverses through all traces to find if any ground/power nodes are connected
+    const hasGround = netNodes.some(n => n.type === 'ground');
+    const powerNodes = netNodes.filter(n => n.type === 'power');
+    
+    if (node.type === 'via' || node.type === 'pad') {
+      // Vias and pads are labeled as Signal, Ground, or Power based on connections
+      if (hasGround) {
+        nodeType = 'Ground';
+      } else if (powerNodes.length > 0) {
+        // Use the voltage from power nodes, preserving original format (e.g., +5VDC, +3.3VDC, -3.3VDC)
+        const voltage = powerNodes[0].voltage || 'UNKNOWN';
+        // Clean voltage string but preserve VDC/VAC suffix if present
+        let cleanVoltage = voltage.trim();
+        if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
+          cleanVoltage = '+' + cleanVoltage;
+        }
+        // Ensure voltage ends with 'V' or 'VDC'/'VAC' if it's a numeric value
+        if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[VvDdCcAa]/g, ''))) {
+          // Check if it already has VDC/VAC suffix
+          if (!cleanVoltage.toUpperCase().endsWith('VDC') && !cleanVoltage.toUpperCase().endsWith('VAC')) {
+            if (!cleanVoltage.toUpperCase().endsWith('V')) {
+              cleanVoltage = cleanVoltage + 'VDC'; // Default to VDC for DC power
+            }
+          }
+        }
+        nodeType = `Power ${cleanVoltage}`;
+      } else {
+        nodeType = 'Signal';
+      }
+    } else {
+      // For other node types, use their base type or check for ground/power
+      nodeType = getNodeTypeLabel(node);
+      
+      if (hasGround) {
+        nodeType = 'Ground';
+      } else if (powerNodes.length > 0 && node.type === 'component_pin') {
+        // Component pins can also be labeled as Power if connected to power
+        const voltage = powerNodes[0].voltage || 'UNKNOWN';
+        let cleanVoltage = voltage.trim();
+        if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
+          cleanVoltage = '+' + cleanVoltage;
+        }
+        if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[VvDdCcAa]/g, ''))) {
+          if (!cleanVoltage.toUpperCase().endsWith('VDC') && !cleanVoltage.toUpperCase().endsWith('VAC')) {
+            if (!cleanVoltage.toUpperCase().endsWith('V')) {
+              cleanVoltage = cleanVoltage + 'VDC';
+            }
+          }
+        }
+        nodeType = `Power ${cleanVoltage}`;
+      }
+    }
+
+    // Traverse all traces connected to this node
+    // This explicitly follows all trace paths by examining each trace's points
+    // It follows the complete path including intermediate points to find all connected nodes
+    const traversalResult = traverseNodeConnections(
+      nodeId,
+      nodes,
+      drawingStrokes,
+      componentIdToDesignator
+    );
+
+    const connectedNodeIds = traversalResult.connectedNodeIds;
+    const connectedComponents = traversalResult.connectedComponents;
+    const componentPins = traversalResult.connectedComponentPins;
+
+    // Format connected node IDs - all in one column, semicolon-separated
+    const connectedNodeIdsStr = connectedNodeIds.length > 0 
+      ? connectedNodeIds.join(';') 
+      : '';
+
+    // Format connected components - all in one column, semicolon-separated
+    const connectedComponentsStr = connectedComponents.length > 0
+      ? connectedComponents.join(';')
+      : '';
+
+    // Format connected component pins - all in one column, semicolon-separated
+    const connectedComponentPinsStr = componentPins.length > 0
+      ? componentPins.map(p => `${p.designator}:${p.pin}`).join(';')
+      : '';
+
+    // Escape CSV values (handle commas, quotes, newlines, semicolons)
+    const escapeCsv = (value: string): string => {
+      // If value contains comma, quote, newline, or semicolon, wrap in quotes
+      if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes(';')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    // Create exactly 5 columns as specified
+    csvRows.push([
+      nodeId.toString(),
+      escapeCsv(nodeType),
+      escapeCsv(connectedNodeIdsStr),
+      escapeCsv(connectedComponentsStr),
+      escapeCsv(connectedComponentPinsStr),
+    ].join(','));
+  }
+
+  return csvRows.join('\n');
+}
+
+/**
+ * Get node type label for CSV export
+ */
+function getNodeTypeLabel(node: NetlistNode): string {
+  switch (node.type) {
+    case 'via':
+      return 'via';
+    case 'pad':
+      return 'pad';
+    case 'trace_point':
+      return 'trace_point';
+    case 'ground':
+      return 'GND';
+    case 'power':
+      return node.voltage ? `Power ${normalizeVoltage(node.voltage)}` : 'Power';
+    case 'component_pin':
+      return 'component_pin';
+    default:
+      return 'unknown';
+  }
+}
+
+/**
  * Generate a simple KiCad schematic that shows component connections
  * Uses generic symbols and simple wire connections
  */
@@ -223,7 +573,7 @@ export function generateSimpleSchematic(
   powerSymbols: PowerSymbol[],
   groundSymbols: GroundSymbol[],
   powerBuses: PowerBus[]
-): string {
+): { schematic: string; nodesCsv: string } {
   // Build connectivity using Node ID-based matching
   const nodes = buildConnectivityGraph(
     drawingStrokes,
@@ -1619,6 +1969,10 @@ export function generateSimpleSchematic(
 
   schematic += ')\n';
   
-  return schematic;
+  // Generate nodes CSV before returning
+  // Pass drawingStrokes so we can examine each trace's points directly
+  const nodesCsv = generateNodesCsv(nodes, netGroups, netNames, components, drawingStrokes);
+  
+  return { schematic, nodesCsv };
 }
 
