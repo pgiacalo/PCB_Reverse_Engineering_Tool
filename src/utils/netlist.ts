@@ -1240,23 +1240,37 @@ export function generateNetNames(
   
   for (const [root, netNodes] of netGroups) {
     // Check for ground nodes
+    // CRITICAL: Vias and pads that share the same Node ID with ground nodes
+    // are in the same net, so this net should be labeled as GND
     const hasGround = netNodes.some(n => n.type === 'ground');
     if (hasGround) {
       netNames.set(root, 'GND');
+      console.log(`[NetNames] Net ${root}: Labeled as GND (contains ${netNodes.filter(n => n.type === 'ground').length} ground node(s), ${netNodes.filter(n => n.type === 'via' || n.type === 'pad').length} via/pad node(s) sharing same Node ID)`);
       continue;
     }
     
     // Check for power nodes
+    // CRITICAL: Vias and pads that share the same Node ID with power nodes
+    // are in the same net, so this net should be labeled with the power bus voltage
     const powerNodes = netNodes.filter(n => n.type === 'power');
     if (powerNodes.length > 0) {
       // Use the voltage from the first power node
+      // All power nodes in the same net should have the same voltage (grouped by voltage)
       const voltage = powerNodes[0].voltage || 'UNKNOWN';
       // Clean voltage string (remove spaces, ensure +/- prefix)
       let cleanVoltage = voltage.trim();
       if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
         cleanVoltage = '+' + cleanVoltage;
       }
+      // Ensure voltage ends with 'V' if it's a numeric value (KiCad convention)
+      if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[Vv]/g, ''))) {
+        if (!cleanVoltage.toUpperCase().endsWith('V')) {
+          cleanVoltage = cleanVoltage + 'V';
+        }
+      }
       netNames.set(root, cleanVoltage);
+      const viaPadCount = netNodes.filter(n => n.type === 'via' || n.type === 'pad').length;
+      console.log(`[NetNames] Net ${root}: Labeled as ${cleanVoltage} (contains ${powerNodes.length} power node(s), ${viaPadCount} via/pad node(s) sharing same Node ID)`);
       continue;
     }
     

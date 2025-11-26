@@ -12,6 +12,41 @@ import {
   type NetlistNode 
 } from './netlist';
 
+/**
+ * Normalize voltage string for consistent comparison
+ * Handles variations like "+3.3V", "3.3V", "+3.3 VDC", etc.
+ * Returns normalized format: sign + numeric value + "V"
+ */
+function normalizeVoltage(voltage: string): string {
+  if (!voltage) return 'UNKNOWN';
+  
+  // Trim whitespace
+  let normalized = voltage.trim();
+  
+  // Remove common suffixes like "VDC", "VAC", "DC", "AC", or standalone "V" (case insensitive)
+  // Handle these in order: VDC/VAC first, then DC/AC, then standalone V
+  normalized = normalized.replace(/\s*(VDC|VAC)\s*$/i, '');
+  normalized = normalized.replace(/\s*(DC|AC)\s*$/i, '');
+  normalized = normalized.replace(/\s*V\s*$/i, '');
+  
+  // Extract sign (+ or -) and numeric value
+  const signMatch = normalized.match(/^([+-])?/);
+  const sign = signMatch ? signMatch[1] || '+' : '+';
+  
+  // Extract numeric part (allows decimals)
+  const numMatch = normalized.match(/(\d+\.?\d*)/);
+  if (!numMatch) {
+    // If no numeric value found, return original (trimmed) for fallback
+    return voltage.trim();
+  }
+  
+  const numValue = numMatch[1];
+  
+  // Return normalized format: sign + numeric value + "V"
+  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3.3V"
+  return `${sign}${numValue}V`;
+}
+
 // PowerSymbol interface (matches App.tsx definition)
 interface PowerSymbol {
   id: string;
@@ -243,6 +278,186 @@ export function generateSimpleSchematic(
   const netNames = generateNetNames(netGroups, nodes);
   
   console.log(`[Schematic] Net groups created: ${netGroups.size}`);
+  
+  // ============================================================================
+  // COMPREHENSIVE NODE TREE ANALYSIS
+  // ============================================================================
+  // Walk the entire tree of nodes to determine all connections, ground points, and power buses
+  console.log(`\n[Schematic Analysis] ========================================`);
+  console.log(`[Schematic Analysis] Starting comprehensive node tree analysis`);
+  console.log(`[Schematic Analysis] ========================================`);
+  
+  // Build component ID to designator map for analysis (temporary, will be rebuilt later)
+  const analysisComponentIdToDesignator = new Map<string, string>();
+  for (const comp of components) {
+    let designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
+    if (designator && (designator === '?' || designator === '??' || designator === '***' || designator === '****' || designator === '*')) {
+      designator = '';
+    }
+    if (designator && designator.length > 0) {
+      analysisComponentIdToDesignator.set(comp.id, designator);
+    }
+  }
+  
+  // Analyze all nets to identify connections, ground, and power buses
+  const analysisGroundNets: Array<{ netId: number; nodeCount: number; nodeIds: number[] }> = [];
+  const analysisPowerBusesByVoltage = new Map<string, Array<{ netId: number; nodeCount: number; nodeIds: number[] }>>();
+  const analysisSignalNets: Array<{ netId: number; netName: string; componentPins: Array<{ designator: string; pin: number; nodeId: number }>; nodeCount: number }> = [];
+  
+  for (const [rootNodeId, netNodes] of netGroups) {
+    const netName = netNames.get(rootNodeId) || `N$${rootNodeId}`;
+    
+    // Check for ground nodes
+    const groundNodes = netNodes.filter(n => n.type === 'ground');
+    if (groundNodes.length > 0) {
+      analysisGroundNets.push({
+        netId: rootNodeId,
+        nodeCount: netNodes.length,
+        nodeIds: netNodes.map(n => n.id),
+      });
+      continue;
+    }
+    
+    // Check for power nodes
+    const powerNodes = netNodes.filter(n => n.type === 'power');
+    if (powerNodes.length > 0) {
+      // Group by normalized voltage - each voltage is a separate power bus
+      const voltageMap = new Map<string, NetlistNode[]>();
+      for (const node of powerNodes) {
+        if (node.voltage) {
+          // Normalize voltage using the same logic as groupNodesIntoNets
+          const normalizedVoltage = normalizeVoltage(node.voltage);
+          if (!voltageMap.has(normalizedVoltage)) {
+            voltageMap.set(normalizedVoltage, []);
+          }
+          voltageMap.get(normalizedVoltage)!.push(node);
+        }
+      }
+      
+      // Each normalized voltage represents a separate power bus
+      for (const [voltage] of voltageMap) {
+        if (!analysisPowerBusesByVoltage.has(voltage)) {
+          analysisPowerBusesByVoltage.set(voltage, []);
+        }
+        analysisPowerBusesByVoltage.get(voltage)!.push({
+          netId: rootNodeId,
+          nodeCount: netNodes.length,
+          nodeIds: netNodes.map(n => n.id),
+        });
+      }
+      continue;
+    }
+    
+    // Signal nets (not power or ground)
+    const analysisComponentPins: Array<{ designator: string; pin: number; nodeId: number }> = [];
+    for (const node of netNodes) {
+      if (node.type === 'component_pin' && node.componentId && node.pinIndex !== undefined) {
+        const designator = analysisComponentIdToDesignator.get(node.componentId);
+        if (designator) {
+          analysisComponentPins.push({
+            designator,
+            pin: (node.pinIndex || 0) + 1,
+            nodeId: node.id,
+          });
+        }
+      }
+    }
+    
+    if (analysisComponentPins.length > 0 || netNodes.length > 0) {
+      analysisSignalNets.push({
+        netId: rootNodeId,
+        netName,
+        componentPins: analysisComponentPins,
+        nodeCount: netNodes.length,
+      });
+    }
+  }
+  
+  // Log comprehensive analysis results
+  console.log(`\n[Schematic Analysis] GROUND ANALYSIS:`);
+  if (analysisGroundNets.length === 0) {
+    console.log(`  No ground nets found`);
+  } else if (analysisGroundNets.length === 1) {
+    console.log(`  ✓ Single common ground plane identified`);
+    console.log(`    - Net ID: ${analysisGroundNets[0].netId}`);
+    console.log(`    - Total nodes: ${analysisGroundNets[0].nodeCount}`);
+    console.log(`    - All ${analysisGroundNets[0].nodeCount} ground points are connected`);
+  } else {
+    console.log(`  ⚠ WARNING: Multiple ground nets found (${analysisGroundNets.length})`);
+    for (const groundNet of analysisGroundNets) {
+      console.log(`    - Net ID ${groundNet.netId}: ${groundNet.nodeCount} nodes`);
+    }
+    console.log(`  Note: All ground points should be in a single net (common ground plane)`);
+  }
+  
+  console.log(`\n[Schematic Analysis] POWER BUS ANALYSIS:`);
+  if (analysisPowerBusesByVoltage.size === 0) {
+    console.log(`  No power buses found`);
+  } else {
+    console.log(`  ✓ Found ${analysisPowerBusesByVoltage.size} distinct power bus(es) by voltage:`);
+    for (const [voltage, buses] of analysisPowerBusesByVoltage) {
+      console.log(`\n  Power Bus: ${voltage}`);
+      if (buses.length === 1) {
+        console.log(`    - Single net (Net ID: ${buses[0].netId})`);
+        console.log(`    - Total nodes: ${buses[0].nodeCount}`);
+        console.log(`    - All power nodes at ${voltage} are connected`);
+      } else {
+        console.log(`    - ⚠ WARNING: ${voltage} appears in ${buses.length} separate nets:`);
+        for (const bus of buses) {
+          console.log(`      * Net ID ${bus.netId}: ${bus.nodeCount} nodes`);
+        }
+        console.log(`    - Note: All power nodes with the same voltage should be in a single net`);
+      }
+    }
+  }
+  
+  console.log(`\n[Schematic Analysis] COMPONENT CONNECTIONS:`);
+  const analysisComponentConnections = new Map<string, Array<{ pin: number; netName: string; nodeId: number }>>();
+  for (const signalNet of analysisSignalNets) {
+    for (const pinInfo of signalNet.componentPins) {
+      if (!analysisComponentConnections.has(pinInfo.designator)) {
+        analysisComponentConnections.set(pinInfo.designator, []);
+      }
+      analysisComponentConnections.get(pinInfo.designator)!.push({
+        pin: pinInfo.pin,
+        netName: signalNet.netName,
+        nodeId: pinInfo.nodeId,
+      });
+    }
+  }
+  
+  console.log(`  Total components with connections: ${analysisComponentConnections.size}`);
+  if (analysisComponentConnections.size > 0) {
+    console.log(`  Sample component connections (first 10):`);
+    let count = 0;
+    for (const [designator, pins] of analysisComponentConnections) {
+      if (count++ >= 10) break;
+      const pinList = pins.map(p => `pin${p.pin}→${p.netName}`).join(', ');
+      console.log(`    - ${designator}: ${pins.length} pins connected (${pinList})`);
+    }
+  }
+  
+  console.log(`\n[Schematic Analysis] SIGNAL NET SUMMARY:`);
+  const analysisNetsWithPins = analysisSignalNets.filter(n => n.componentPins.length > 0);
+  const analysisNetsWith2PlusPins = analysisSignalNets.filter(n => n.componentPins.length >= 2);
+  console.log(`  - Total signal nets: ${analysisSignalNets.length}`);
+  console.log(`  - Nets with component pins: ${analysisNetsWithPins.length}`);
+  console.log(`  - Nets with 2+ component pins: ${analysisNetsWith2PlusPins.length}`);
+  console.log(`  - Isolated nets (no component pins): ${analysisSignalNets.length - analysisNetsWithPins.length}`);
+  
+  if (analysisNetsWith2PlusPins.length > 0) {
+    console.log(`\n  Sample signal nets with 2+ pins (first 5):`);
+    let count = 0;
+    for (const net of analysisNetsWith2PlusPins) {
+      if (count++ >= 5) break;
+      const pinList = net.componentPins.map(p => `${p.designator}:pin${p.pin}`).join(', ');
+      console.log(`    - ${net.netName}: ${net.componentPins.length} pins (${pinList})`);
+    }
+  }
+  
+  console.log(`\n[Schematic Analysis] ========================================`);
+  console.log(`[Schematic Analysis] Analysis complete`);
+  console.log(`[Schematic Analysis] ========================================\n`);
   
   // Check which component pins are in nets vs isolated (after netGroups is created)
   if (componentPinNodes.length > 0) {
