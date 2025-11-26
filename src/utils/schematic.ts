@@ -353,7 +353,21 @@ export function generateSimpleSchematic(
         }
       } else if (node.type === 'power') {
         hasPower = true;
-        powerVoltage = node.voltage || powerVoltage;
+        // Clean voltage string for KiCad: ensure +/- prefix and V suffix
+        const voltage = node.voltage || powerVoltage || '';
+        if (voltage) {
+          let cleanVoltage = voltage.trim();
+          if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
+            cleanVoltage = '+' + cleanVoltage;
+          }
+          // Ensure voltage ends with 'V' if it's a numeric value (KiCad convention)
+          if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[Vv]/g, ''))) {
+            if (!cleanVoltage.toUpperCase().endsWith('V')) {
+              cleanVoltage = cleanVoltage + 'V';
+            }
+          }
+          powerVoltage = cleanVoltage;
+        }
       } else if (node.type === 'ground') {
         hasGround = true;
       } else if (node.type === 'via') {
@@ -706,77 +720,64 @@ export function generateSimpleSchematic(
   schematic += '      )\n';
   schematic += '    )\n';
   
-  // Integrated Circuit symbol (rectangular with configurable pins)
-  schematic += '    (symbol "simple:IC" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
-  schematic += '      (property "Reference" "U" (id 0) (at 0 2.54 0)\n';
-  schematic += '        (effects (font (size 1.27 1.27)))\n';
-  schematic += '      )\n';
-  schematic += '      (property "Value" "VAL" (id 1) (at 0 -2.54 0)\n';
-  schematic += '        (effects (font (size 1.27 1.27)))\n';
-  schematic += '      )\n';
-  schematic += '      (symbol "IC_0_1"\n';
-  schematic += '        (rectangle (start -5.08 -3.81) (end 5.08 3.81)\n';
-  schematic += '          (stroke (width 0.254)) (fill (type background))\n';
-  schematic += '        )\n';
-  schematic += '      )\n';
-  schematic += '      (symbol "IC_1_1"\n';
-  // Define 20 pins in the library symbol (left side 1-10, right side 11-20)
-  for (let i = 0; i < 10; i++) {
-    const pinNum = i + 1;
-    const pinY = -((10 - 1) * 2.54 / 2) + (i * 2.54);
-    const pinX = -5.08;
-    schematic += `        (pin passive line (at ${pinX} ${pinY} 0) (length 2.54)\n`;
-    schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
+  // Helper function to generate a multi-pin symbol with the correct number of pins
+  const generateMultiPinSymbol = (symbolName: string, refPrefix: string, maxPins: number = 20) => {
+    // Extract the base symbol name (e.g., "IC" from "simple:IC")
+    const baseSymbolName = symbolName.includes(':') ? symbolName.split(':')[1] : symbolName;
+    
+    schematic += `    (symbol "${symbolName}" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n`;
+    schematic += `      (property "Reference" "${refPrefix}" (id 0) (at 0 2.54 0)\n`;
+    schematic += '        (effects (font (size 1.27 1.27)))\n';
+    schematic += '      )\n';
+    schematic += '      (property "Value" "VAL" (id 1) (at 0 -2.54 0)\n';
+    schematic += '        (effects (font (size 1.27 1.27)))\n';
+    schematic += '      )\n';
+    schematic += `      (symbol "${baseSymbolName}_0_1"\n`;
+    schematic += '        (rectangle (start -5.08 -3.81) (end 5.08 3.81)\n';
+    schematic += '          (stroke (width 0.254)) (fill (type background))\n';
     schematic += '        )\n';
-  }
-  for (let i = 0; i < 10; i++) {
-    const pinNum = i + 11;
-    const pinY = -((10 - 1) * 2.54 / 2) + (i * 2.54);
-    const pinX = 5.08;
-    schematic += `        (pin passive line (at ${pinX} ${pinY} 180) (length 2.54)\n`;
-    schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += '        )\n';
-  }
-  schematic += '      )\n';
-  schematic += '    )\n';
+    schematic += '      )\n';
+    // Generate symbol variants for different pin counts (1-20 pins)
+    for (let pinCount = 1; pinCount <= maxPins; pinCount++) {
+      schematic += `      (symbol "${baseSymbolName}_1_${pinCount}"\n`;
+      const pinsPerLeftSide = Math.ceil(pinCount / 2);
+      const pinsPerRightSide = Math.floor(pinCount / 2);
+      
+      // Left side pins
+      for (let i = 0; i < pinsPerLeftSide; i++) {
+        const pinNum = i + 1;
+        const pinY = pinsPerLeftSide > 1 
+          ? -((pinsPerLeftSide - 1) * 2.54 / 2) + (i * 2.54)
+          : 0;
+        const pinX = -5.08;
+        schematic += `        (pin passive line (at ${pinX} ${pinY} 0) (length 2.54)\n`;
+        schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
+        schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
+        schematic += '        )\n';
+      }
+      
+      // Right side pins
+      for (let i = 0; i < pinsPerRightSide; i++) {
+        const pinNum = pinsPerLeftSide + i + 1;
+        const pinY = pinsPerRightSide > 1
+          ? -((pinsPerRightSide - 1) * 2.54 / 2) + (i * 2.54)
+          : 0;
+        const pinX = 5.08;
+        schematic += `        (pin passive line (at ${pinX} ${pinY} 180) (length 2.54)\n`;
+        schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
+        schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
+        schematic += '        )\n';
+      }
+      schematic += '      )\n';
+    }
+    schematic += '    )\n';
+  };
+  
+  // Integrated Circuit symbol (with configurable pin counts)
+  generateMultiPinSymbol('simple:IC', 'U', 20);
   
   // Generic symbol for other component types (fallback)
-  schematic += '    (symbol "simple:Generic" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)\n';
-  schematic += '      (property "Reference" "REF" (id 0) (at 0 2.54 0)\n';
-  schematic += '        (effects (font (size 1.27 1.27)))\n';
-  schematic += '      )\n';
-  schematic += '      (property "Value" "VAL" (id 1) (at 0 -2.54 0)\n';
-  schematic += '        (effects (font (size 1.27 1.27)))\n';
-  schematic += '      )\n';
-  schematic += '      (symbol "Generic_0_1"\n';
-  schematic += '        (rectangle (start -5.08 -3.81) (end 5.08 3.81)\n';
-  schematic += '          (stroke (width 0.254)) (fill (type background))\n';
-  schematic += '        )\n';
-  schematic += '      )\n';
-  schematic += '      (symbol "Generic_1_1"\n';
-  // Define 20 pins in the library symbol (left side 1-10, right side 11-20)
-  for (let i = 0; i < 10; i++) {
-    const pinNum = i + 1;
-    const pinY = -((10 - 1) * 2.54 / 2) + (i * 2.54);
-    const pinX = -5.08;
-    schematic += `        (pin passive line (at ${pinX} ${pinY} 0) (length 2.54)\n`;
-    schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += '        )\n';
-  }
-  for (let i = 0; i < 10; i++) {
-    const pinNum = i + 11;
-    const pinY = -((10 - 1) * 2.54 / 2) + (i * 2.54);
-    const pinX = 5.08;
-    schematic += `        (pin passive line (at ${pinX} ${pinY} 180) (length 2.54)\n`;
-    schematic += `          (name "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += `          (number "${pinNum}" (effects (font (size 1.27 1.27))))\n`;
-    schematic += '        )\n';
-  }
-  schematic += '      )\n';
-  schematic += '    )\n';
+  generateMultiPinSymbol('simple:Generic', 'REF', 20);
   schematic += '  )\n';
   schematic += '\n';
 
@@ -934,8 +935,16 @@ export function generateSimpleSchematic(
     if (rotation < 0) rotation += 360;
     if (rotation >= 360) rotation -= 360;
     
-    // Reference the library symbol - pins are already defined there
-    schematic += `  (symbol (lib_id "${symbolLibId}") (at ${info.x} ${info.y} ${rotation}) (unit 1)\n`;
+    // Reference the library symbol - use the correct unit based on pin count
+    // For multi-pin symbols (IC, Generic), unit corresponds to pin count
+    const actualPinCount = comp.pinCount || 2;
+    let symbolUnit = 1;
+    if (symbolLibId === 'simple:IC' || symbolLibId === 'simple:Generic') {
+      // Unit number corresponds to pin count (1-20)
+      symbolUnit = Math.min(Math.max(actualPinCount, 1), 20);
+    }
+    
+    schematic += `  (symbol (lib_id "${symbolLibId}") (at ${info.x} ${info.y} ${rotation}) (unit ${symbolUnit})\n`;
     schematic += `    (in_bom yes) (on_board yes) (dnp no)\n`;
     schematic += `    (uuid ${uuid})\n`;
     schematic += `    (property "Reference" "${designator}" (id 0) (at ${info.x} ${info.y + 3.81} 0)\n`;

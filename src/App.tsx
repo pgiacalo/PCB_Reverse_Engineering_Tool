@@ -6887,6 +6887,7 @@ function App() {
     }, 0);
   }, [componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName]);
 
+
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
   // Autosave is only active when the most recent file is the current file (currentFileIndex === 0)
