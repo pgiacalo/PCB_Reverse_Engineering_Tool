@@ -15,6 +15,7 @@ export interface DrawingStroke {
   type?: 'trace' | 'via' | 'pad';
   viaType?: string;
   padType?: string;
+  notes?: string | null; // Max 500 characters, null until user enters a value
 }
 
 /**

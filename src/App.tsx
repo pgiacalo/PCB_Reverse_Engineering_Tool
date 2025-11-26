@@ -22,6 +22,7 @@ import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
+import { NotesDialog } from './components/NotesDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { ComponentEditor } from './components/ComponentEditor';
 import {
@@ -859,6 +860,11 @@ function App() {
   const [detailedInfoDialogPosition, setDetailedInfoDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingDetailedInfoDialog, setIsDraggingDetailedInfoDialog] = useState(false);
   const [detailedInfoDialogDragOffset, setDetailedInfoDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // Notes Dialog state
+  const [notesDialogVisible, setNotesDialogVisible] = useState(false);
+  const [notesDialogPosition, setNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingNotesDialog, setIsDraggingNotesDialog] = useState(false);
+  const [notesDialogDragOffset, setNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Board dimensions for coordinate scaling
   const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
     const saved = localStorage.getItem('boardDimensions');
@@ -3347,101 +3353,8 @@ function App() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      // Helper function to find via/pad coordinates from point ID
-      const findViaPadCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
-        const pointId = parseInt(pointIdStr, 10);
-        if (isNaN(pointId)) return null;
-        
-        for (const stroke of drawingStrokes) {
-          if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
-            const point = stroke.points[0];
-            if (point.id === pointId) {
-              return { x: point.x, y: point.y };
-            }
-          }
-        }
-        return null;
-      };
-      
-      // Determine negative side indicator for components with polarity
-      const hasPolarity = c.componentType === 'Electrolytic Capacitor' || 
-                         c.componentType === 'Diode' || 
-                         c.componentType === 'Battery' || 
-                         c.componentType === 'ZenerDiode';
-      const isTantalumCap = c.componentType === 'Capacitor' && 
-                           'dielectric' in c && 
-                           (c as any).dielectric === 'Tantalum';
-      
-      let negativeIndicator: 'none' | 'underscore' | 'macron' | 'pipeBefore' | 'pipeAfter' = 'none';
-      
-      if ((hasPolarity || isTantalumCap) && c.pinPolarities && c.pinPolarities.length === 2) {
-        // Find which pin has negative polarity
-        const negativePinIndex = c.pinPolarities.findIndex(p => p === '-');
-        if (negativePinIndex >= 0 && pinConnections[negativePinIndex]) {
-          const negativeViaPad = findViaPadCoordinates(pinConnections[negativePinIndex]);
-          if (negativeViaPad) {
-            // Calculate direction from component center to negative via/pad
-            const dx = negativeViaPad.x - c.x;
-            const dy = negativeViaPad.y - c.y;
-            
-            // Determine primary direction (use larger absolute value)
-            if (Math.abs(dy) > Math.abs(dx)) {
-              // Vertical direction dominates
-              negativeIndicator = dy > 0 ? 'underscore' : 'macron'; // Below = underscore, Above = macron
-            } else {
-              // Horizontal direction dominates
-              negativeIndicator = dx > 0 ? 'pipeAfter' : 'pipeBefore'; // Right = pipe after, Left = pipe before
-            }
-          }
-        }
-      }
-      
-      // Draw designator with negative indicator
-      const textMetrics = ctx.measureText(abbreviation);
-      const textWidth = textMetrics.width;
-      const fontSize = Math.max(8, size * 0.35);
-      const textY = c.y;
-      
-      // Draw negative indicator based on direction
-      if (negativeIndicator === 'underscore') {
-        // Draw underscore below designator
-        const underlineY = textY + fontSize / 2 + 2;
-        ctx.strokeStyle = c.color || '#111';
-        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
-        ctx.beginPath();
-        ctx.moveTo(c.x - textWidth / 2, underlineY);
-        ctx.lineTo(c.x + textWidth / 2, underlineY);
-        ctx.stroke();
-      } else if (negativeIndicator === 'macron') {
-        // Draw macron above designator
-        const macronY = textY - fontSize / 2 - 2;
-        ctx.strokeStyle = c.color || '#111';
-        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
-        ctx.beginPath();
-        ctx.moveTo(c.x - textWidth / 2, macronY);
-        ctx.lineTo(c.x + textWidth / 2, macronY);
-        ctx.stroke();
-      } else if (negativeIndicator === 'pipeBefore') {
-        // Draw pipe before designator
-        const pipeX = c.x - textWidth / 2 - fontSize * 0.3;
-        ctx.strokeStyle = c.color || '#111';
-        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
-        ctx.beginPath();
-        ctx.moveTo(pipeX, textY - fontSize / 2);
-        ctx.lineTo(pipeX, textY + fontSize / 2);
-        ctx.stroke();
-      } else if (negativeIndicator === 'pipeAfter') {
-        // Draw pipe after designator
-        const pipeX = c.x + textWidth / 2 + fontSize * 0.3;
-        ctx.strokeStyle = c.color || '#111';
-        ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
-        ctx.beginPath();
-        ctx.moveTo(pipeX, textY - fontSize / 2);
-        ctx.lineTo(pipeX, textY + fontSize / 2);
-        ctx.stroke();
-      }
-      
       // Draw the designator text
+      const fontSize = Math.max(8, size * 0.35);
       ctx.fillText(abbreviation, c.x, c.y);
       
       // selection highlight
@@ -3503,31 +3416,52 @@ function App() {
       // Draw connection lines for all components
       const drawConnections = (comp: PCBComponent) => {
         const pinConnections = comp.pinConnections || [];
-        // Collect unique node IDs to avoid drawing duplicate lines
-        const connectedNodeIds = new Set<string>();
+        
+        // Check if component has polarity
+        const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
+                           comp.componentType === 'Diode' || 
+                           comp.componentType === 'Battery' || 
+                           comp.componentType === 'ZenerDiode';
+        const isTantalumCap = comp.componentType === 'Capacitor' && 
+                             'dielectric' in comp && 
+                             (comp as any).dielectric === 'Tantalum';
+        const isPolarized = (hasPolarity || isTantalumCap) && comp.pinPolarities;
+        
+        // Collect unique node IDs with their polarity info to avoid drawing duplicate lines
+        const connectedNodes = new Map<string, boolean>(); // Map<nodeId, isNegative>
         for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
           const connection = pinConnections[pinIndex];
           if (connection && connection.trim() !== '') {
-            connectedNodeIds.add(connection.trim());
+            const nodeIdStr = connection.trim();
+            // Check if this pin is negative (for polarized components)
+            const isNegative = isPolarized && 
+                             comp.pinPolarities && 
+                             pinIndex < comp.pinPolarities.length &&
+                             comp.pinPolarities[pinIndex] === '-';
+            // If node already exists, keep the negative flag if either connection is negative
+            if (connectedNodes.has(nodeIdStr)) {
+              connectedNodes.set(nodeIdStr, connectedNodes.get(nodeIdStr) || isNegative);
+            } else {
+              connectedNodes.set(nodeIdStr, isNegative);
+            }
           }
         }
         
         // Draw one line per unique connected node, from component center to node center
-        for (const nodeIdStr of connectedNodeIds) {
+        for (const [nodeIdStr, isNegative] of connectedNodes) {
           const nodePos = findNodeCoordinates(nodeIdStr);
           if (nodePos) {
             // Use component center as starting point
             const compCenter = { x: comp.x, y: comp.y };
             
             ctx.save();
-            ctx.strokeStyle = 'rgba(0, 150, 255, 0.6)'; // Semi-transparent blue
-            ctx.lineWidth = Math.max(1, 1.5 / Math.max(viewScale, 0.001));
-            ctx.setLineDash([4, 4]); // Dashed line
+            // Use black for negative connections of polarized components, blue otherwise
+            ctx.strokeStyle = isNegative ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 150, 255, 0.6)'; // Black for negative, blue for others
+            ctx.lineWidth = Math.max(1, 3 / Math.max(viewScale, 0.001));
             ctx.beginPath();
             ctx.moveTo(compCenter.x, compCenter.y);
             ctx.lineTo(nodePos.x, nodePos.y);
             ctx.stroke();
-            ctx.setLineDash([]);
             ctx.restore();
           }
         }
@@ -4492,6 +4426,16 @@ function App() {
         console.log(debugText);
         // Update dialog if already open, otherwise open it
         setDebugDialog({ visible: true, text: debugText });
+        return;
+      }
+    }
+    
+    // Notes Dialog: Open notes editor for selected objects (Cmd+N / Ctrl+N)
+    if (e.key === 'N' || e.key === 'n') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        setNotesDialogVisible(true);
         return;
       }
     }
@@ -5704,6 +5648,61 @@ function App() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingDetailedInfoDialog, detailedInfoDialogDragOffset]);
+
+  // Handle notes dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingNotesDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!notesDialogDragOffset) return;
+      const newPosition = {
+        x: e.clientX - notesDialogDragOffset.x,
+        y: e.clientY - notesDialogDragOffset.y,
+      };
+      setNotesDialogPosition(newPosition);
+      // Save position to localStorage
+      localStorage.setItem('notesDialogPosition', JSON.stringify(newPosition));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingNotesDialog(false);
+      setNotesDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingNotesDialog, notesDialogDragOffset]);
+
+  // Initialize notes dialog position when it opens (load from localStorage or default)
+  React.useEffect(() => {
+    if (notesDialogVisible && notesDialogPosition === null) {
+      // Try to load saved position from localStorage
+      const saved = localStorage.getItem('notesDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setNotesDialogPosition(savedPosition);
+        } catch {
+          // If parsing fails, use default right side position
+          setNotesDialogPosition({
+            x: window.innerWidth - 550, // Right side, similar to detailed info dialog
+            y: 100,
+          });
+        }
+      } else {
+        // No saved position, use default right side position
+        setNotesDialogPosition({
+          x: window.innerWidth - 550,
+          y: 100,
+        });
+      }
+    }
+  }, [notesDialogVisible, notesDialogPosition]);
 
   // Initialize dialog position when it opens (load from localStorage or center of screen)
   React.useEffect(() => {
@@ -9681,6 +9680,44 @@ function App() {
               y: e.clientY - detailedInfoDialogPosition.y,
             });
             setIsDraggingDetailedInfoDialog(true);
+            e.preventDefault();
+          }
+        }}
+      />
+
+      {/* Notes Dialog */}
+      <NotesDialog
+        visible={notesDialogVisible}
+        selectedIds={selectedIds}
+        selectedComponentIds={selectedComponentIds}
+        selectedPowerIds={selectedPowerIds}
+        selectedGroundIds={selectedGroundIds}
+        drawingStrokes={drawingStrokes}
+        componentsTop={componentsTop}
+        componentsBottom={componentsBottom}
+        powers={powers}
+        grounds={grounds}
+        powerBuses={powerBuses}
+        onClose={() => {
+          setNotesDialogVisible(false);
+          // Don't reset position - keep it for next time
+        }}
+        setComponentsTop={setComponentsTop}
+        setComponentsBottom={setComponentsBottom}
+        setDrawingStrokes={setDrawingStrokes}
+        setPowerSymbols={setPowerSymbols}
+        setGroundSymbols={setGroundSymbols}
+        determineViaType={determineViaType}
+        determinePadType={determinePadType}
+        position={notesDialogPosition}
+        isDragging={isDraggingNotesDialog}
+        onDragStart={(e) => {
+          if (notesDialogPosition) {
+            setNotesDialogDragOffset({
+              x: e.clientX - notesDialogPosition.x,
+              y: e.clientY - notesDialogPosition.y,
+            });
+            setIsDraggingNotesDialog(true);
             e.preventDefault();
           }
         }}

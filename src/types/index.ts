@@ -41,6 +41,7 @@ export interface DrawingStroke {
   size: number;
   layer: 'top' | 'bottom';
   type?: 'trace' | 'via' | 'pad';
+  notes?: string | null; // Max 500 characters, null until user enters a value
 }
 
 // ============================================================================
@@ -90,7 +91,7 @@ export interface PCBComponentBase {
   pinCount: number;
   pinConnections: string[]; // Array of node IDs (size = pinCount)
   pinPolarities?: ('+' | '-' | '')[]; // Array of pin polarities (size = pinCount), only for components with polarity (electrolytic caps, diodes, batteries, etc.)
-  notes?: string;
+  notes?: string | null; // Max 500 characters, null until user enters a value
   orientation?: number; // Rotation in degrees: 0, 90, 180, 270 (for components with required orientation like electrolytic caps, ICs with PIN #1)
 }
 
@@ -448,6 +449,7 @@ export interface GroundSymbol {
   y: number;
   color: string;
   size: number;
+  notes?: string | null; // Max 500 characters, null until user enters a value
 }
 
 export interface PowerNode {

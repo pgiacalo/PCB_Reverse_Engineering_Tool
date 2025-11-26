@@ -17,6 +17,7 @@ export interface PowerSymbol {
   layer: 'top' | 'bottom';
   type?: string;
   pointId?: number;
+  notes?: string | null; // Max 500 characters, null until user enters a value
 }
 
 export interface GroundSymbol {
@@ -27,6 +28,7 @@ export interface GroundSymbol {
   size: number;
   type?: string;
   pointId?: number;
+  notes?: string | null; // Max 500 characters, null until user enters a value
 }
 
 /**
