@@ -810,18 +810,7 @@ function App() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
-  // Component drag state (only components are moveable)
-  const [isDraggingComponent, setIsDraggingComponent] = useState(false);
-  const componentDragStartRef = useRef<{ 
-    mouseX: number; 
-    mouseY: number; 
-    components: Array<{ 
-      id: string;
-      layer: 'top' | 'bottom';
-      startX: number;
-      startY: number;
-    }> 
-  } | null>(null);
+  // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
@@ -1356,49 +1345,6 @@ function App() {
           setSelectedPowerIds(new Set());
           setSelectedGroundIds(new Set());
         }
-        
-        // Prepare for dragging if clicking on an already-selected component
-        // This allows click-to-select, then click-and-drag to move
-        if (finalSelectedIds.has(comp.id)) {
-          // Collect all selected components with their initial positions
-          const componentsToDrag: Array<{ 
-            id: string;
-            layer: 'top' | 'bottom';
-            startX: number;
-            startY: number;
-          }> = [];
-          for (const compId of finalSelectedIds) {
-            const topComp = componentsTop.find(c => c.id === compId);
-            if (topComp) {
-              componentsToDrag.push({ 
-                id: compId, 
-                layer: 'top', 
-                startX: topComp.x, 
-                startY: topComp.y 
-              });
-            } else {
-              const bottomComp = componentsBottom.find(c => c.id === compId);
-              if (bottomComp) {
-                componentsToDrag.push({ 
-                  id: compId, 
-                  layer: 'bottom', 
-                  startX: bottomComp.x, 
-                  startY: bottomComp.y 
-                });
-              }
-            }
-          }
-          
-          componentDragStartRef.current = {
-            mouseX: x,
-            mouseY: y,
-            components: componentsToDrag,
-          };
-          // Don't set isDraggingComponent yet - wait for mouse move to start dragging
-        } else {
-          // Clear any existing drag state if clicking on unselected component
-          componentDragStartRef.current = null;
-        }
         return;
       }
       
@@ -1546,25 +1492,19 @@ function App() {
       }
       
       // If we didn't hit anything (no via, no component, no power, no ground), clear selection and start rectangle selection
-      // But don't start selection if we're about to drag a component
-      if (!componentDragStartRef.current) {
-        // Clear selection immediately when clicking on empty space (unless Shift is held for multi-select)
-        if (!e.shiftKey) {
-          setSelectedIds(new Set());
-          setSelectedComponentIds(new Set());
-          setSelectedPowerIds(new Set());
-          setSelectedGroundIds(new Set());
-        }
-        
-        // Store whether Shift was pressed at mouseDown for use in mouseUp
-        // We'll pass this through the selectStart state
-        setIsSelecting(true);
-        setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
-        setSelectRect({ x, y, width: 0, height: 0 });
-      } else {
-        // Clear component drag start if we clicked on empty space
-        componentDragStartRef.current = null;
+      // Clear selection immediately when clicking on empty space (unless Shift is held for multi-select)
+      if (!e.shiftKey) {
+        setSelectedIds(new Set());
+        setSelectedComponentIds(new Set());
+        setSelectedPowerIds(new Set());
+        setSelectedGroundIds(new Set());
       }
+      
+      // Store whether Shift was pressed at mouseDown for use in mouseUp
+      // We'll pass this through the selectStart state
+      setIsSelecting(true);
+      setSelectStart({ x, y, shiftKey: e.shiftKey } as any);
+      setSelectRect({ x, y, width: 0, height: 0 });
       return;
     } else if (currentTool === 'magnify') {
       const factor = e.shiftKey ? 0.5 : 2;
@@ -2381,17 +2321,7 @@ function App() {
       setTracePreviewMousePos(null);
     }
 
-    // Check if we should start dragging a component
-    if (currentTool === 'select' && componentDragStartRef.current && !isDraggingComponent) {
-      const { mouseX, mouseY } = componentDragStartRef.current;
-      // Start dragging if mouse has moved more than a small threshold
-      const dragThreshold = 2 / viewScale; // 2 pixels in world space
-      const dx = x - mouseX;
-      const dy = y - mouseY;
-      if (Math.hypot(dx, dy) > dragThreshold) {
-        setIsDraggingComponent(true);
-      }
-    }
+    // Component dragging is started immediately on click-and-hold, so no threshold check needed
     
     if (currentTool === 'select' && isSelecting && selectStart) {
       const sx = selectStart.x;
@@ -2612,29 +2542,8 @@ function App() {
       }
       
       setTransformStartPos({ x, y });
-    } else if (isDraggingComponent && componentDragStartRef.current) {
-      // Handle component dragging
-      const { mouseX, mouseY, components: dragComponents } = componentDragStartRef.current;
-      const deltaX = x - mouseX;
-      const deltaY = y - mouseY;
-      
-      // Update all dragged components
-      for (const dragComp of dragComponents) {
-        const newX = dragComp.startX + deltaX;
-        const newY = dragComp.startY + deltaY;
-        
-        if (dragComp.layer === 'top') {
-          setComponentsTop(prev => prev.map(c => 
-            c.id === dragComp.id ? { ...c, x: newX, y: newY } : c
-          ));
-        } else {
-          setComponentsBottom(prev => prev.map(c => 
-            c.id === dragComp.id ? { ...c, x: newX, y: newY } : c
-          ));
-        }
-      }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, isDraggingComponent, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -2957,15 +2866,11 @@ function App() {
       panStartRef.current = null;
       panClientStartRef.current = null;
     }
-    if (isDraggingComponent) {
-      setIsDraggingComponent(false);
-      componentDragStartRef.current = null;
-    }
     setIsDrawing(false);
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, isDraggingComponent]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
 
   // Allow panning to continue even when the pointer leaves the canvas while the button is held
   React.useEffect(() => {
@@ -4401,6 +4306,53 @@ function App() {
       return;
     }
     
+    // Arrow keys: Move selected components
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && selectedComponentIds.size > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Movement step size (in world coordinates)
+      const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
+      
+      let deltaX = 0;
+      let deltaY = 0;
+      if (e.key === 'ArrowUp') {
+        deltaY = -stepSize;
+      } else if (e.key === 'ArrowDown') {
+        deltaY = stepSize;
+      } else if (e.key === 'ArrowLeft') {
+        deltaX = -stepSize;
+      } else if (e.key === 'ArrowRight') {
+        deltaX = stepSize;
+      }
+      
+      // Move all selected components
+      for (const compId of selectedComponentIds) {
+        const topComp = componentsTop.find(c => c.id === compId);
+        if (topComp) {
+          const newX = topComp.x + deltaX;
+          const newY = topComp.y + deltaY;
+          // Truncate coordinates to 3 decimal places for exact matching
+          const truncated = truncatePoint({ x: newX, y: newY });
+          setComponentsTop(prev => prev.map(c => 
+            c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
+          ));
+        } else {
+          const bottomComp = componentsBottom.find(c => c.id === compId);
+          if (bottomComp) {
+            const newX = bottomComp.x + deltaX;
+            const newY = bottomComp.y + deltaY;
+            // Truncate coordinates to 3 decimal places for exact matching
+            const truncated = truncatePoint({ x: newX, y: newY });
+            setComponentsBottom(prev => prev.map(c => 
+              c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
+            ));
+          }
+        }
+      }
+      return;
+    }
+    
     // Detailed Information: Display properties of selected objects (Cmd+I / Ctrl+I)
     if (e.key === 'I' || e.key === 'i') {
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
@@ -5108,7 +5060,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -5132,7 +5084,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool, selectedComponentIds, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
 
   // Consolidated initialization function - sets all application defaults
   // This is used on app startup, browser refresh, and when creating a new project
