@@ -250,12 +250,10 @@ export function generatePointId(): number {
   // Serialize ID generation through a promise chain
   // Each operation waits for the previous one to complete
   let result: number;
-  let resolved = false;
   
   idGenerationQueue = idGenerationQueue.then((lastId) => {
     result = lastId + 1;
     nextPointId = result + 1; // Update counter for next call
-    resolved = true;
     return result;
   });
   

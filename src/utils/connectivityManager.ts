@@ -497,7 +497,7 @@ export class PCBConnectivityManager {
    * Get net for a node
    */
   getNetForNode(nodeId: number): NetlistNode[] {
-    for (const [rootId, netNodes] of this.netGroups) {
+    for (const [, netNodes] of this.netGroups) {
       if (netNodes.some(n => n.id === nodeId)) {
         return netNodes;
       }

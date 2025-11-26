@@ -196,9 +196,9 @@ export function useComponents() {
 
   const updateComponent = useCallback((id: string, updates: Partial<PCBComponent>, layer: 'top' | 'bottom') => {
     if (layer === 'top') {
-      setComponentsTop(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+      setComponentsTop(prev => prev.map(c => c.id === id ? { ...c, ...updates } as PCBComponent : c));
     } else {
-      setComponentsBottom(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+      setComponentsBottom(prev => prev.map(c => c.id === id ? { ...c, ...updates } as PCBComponent : c));
     }
   }, []);
 

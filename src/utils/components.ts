@@ -268,16 +268,6 @@ export function autoAssignPolarity(
     return null;
   }
   
-  // Calculate + symbol position
-  const orientation = component.orientation || 0;
-  const size = component.size || 18;
-  const half = size / 2;
-  const plusSize = size * 0.25;
-  const offsetDistance = half + plusSize * 0.6;
-  const angleRad = (orientation * Math.PI) / 180;
-  const plusX = component.x + Math.cos(angleRad) * offsetDistance;
-  const plusY = component.y + Math.sin(angleRad) * offsetDistance;
-  
   // Find coordinates of connected vias/pads
   const findViaPadCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
     const pointId = parseInt(pointIdStr, 10);

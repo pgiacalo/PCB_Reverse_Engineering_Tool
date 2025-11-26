@@ -91,10 +91,10 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   connectingPin,
   setConnectingPin,
   componentDialogPosition,
-  setComponentDialogPosition,
+  setComponentDialogPosition: _setComponentDialogPosition,
   isDraggingDialog,
   setIsDraggingDialog,
-  dialogDragOffset,
+  dialogDragOffset: _dialogDragOffset,
   setDialogDragOffset,
   areComponentsLocked,
 }) => {
