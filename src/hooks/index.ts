@@ -29,3 +29,5 @@ export { useDialogs } from './useDialogs';
 
 export { useFileOperations } from './useFileOperations';
 
+export { usePCBConnectivity } from './usePCBConnectivity';
+
