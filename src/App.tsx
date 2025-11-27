@@ -4456,9 +4456,9 @@ function App() {
       return;
     }
     
-    // Detailed Information: Display properties of selected objects (Cmd+I / Ctrl+I)
+    // Detailed Information: Display properties of selected objects (Ctrl+I)
     if (e.key === 'I' || e.key === 'i') {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
         
@@ -4485,9 +4485,9 @@ function App() {
       }
     }
     
-    // Notes Dialog: Open notes editor for selected objects (Cmd+N / Ctrl+N)
+    // Notes Dialog: Open notes editor for selected objects (Ctrl+N)
     if (e.key === 'N' || e.key === 'n') {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
         setNotesDialogVisible(true);
@@ -4669,12 +4669,12 @@ function App() {
       }
       return;
     }
-    // Drawing undo: Cmd/Ctrl+Z removes last stroke on the selected layer
+    // Drawing undo: Ctrl+Z removes last stroke on the selected layer
     // Also handles Power and Ground tool undo
     // Only handle undo keys here; let other keys pass through to tool shortcuts
     if ((currentTool === 'draw' || currentTool === 'erase' || currentTool === 'power' || currentTool === 'ground') && 
         (e.key === 'z' || e.key === 'Z') && 
-        (e.metaKey || e.ctrlKey) && 
+        e.ctrlKey && 
         !e.shiftKey && !e.altKey) {
       e.preventDefault();
       e.stopPropagation();
@@ -4768,7 +4768,7 @@ function App() {
       }
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
-    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (!e.ctrlKey && !e.altKey) {
       // Ignore if user is typing in an input field, textarea, or contenteditable
       // But allow shortcuts when focus is on checkboxes, radio buttons, or range sliders
       const active = document.activeElement as HTMLElement | null;
@@ -4848,8 +4848,8 @@ function App() {
             return;
           case 'z':
           case 'Z':
-            // If not Cmd/Ctrl+Z (handled above), select Zoom tool (default to zoom-in)
-            if (!(e.metaKey || e.ctrlKey)) {
+            // If not Ctrl+Z (handled above), select Zoom tool (default to zoom-in)
+            if (!e.ctrlKey) {
               e.preventDefault();
               setIsShiftPressed(false);
               setCurrentTool('magnify');

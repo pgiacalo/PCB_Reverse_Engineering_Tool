@@ -60,6 +60,16 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 - Migration strategy and benefits
 - File organization structure
 
+### 💻 Technology Stack
+
+**[TECHNOLOGY_STACK.md](./TECHNOLOGY_STACK.md)**
+- Core technologies and frameworks (React, TypeScript, Vite)
+- UI libraries and components
+- Graphics and rendering (HTML5 Canvas)
+- Background processing (Web Workers)
+- Development workflow and tooling
+- Architecture patterns and project structure
+
 ### 📚 Reference Materials
 
 **[PCB Reverse Engineering Tips](./PCB%20Reverse%20Engineering%20Tips)**
@@ -152,10 +162,11 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 ## Getting Started
 
 1. **For Requirements**: Start with [REQUIREMENTS.md](./REQUIREMENTS.md)
-2. **For Component System**: Read [COMPONENT_SYSTEM.md](./COMPONENT_SYSTEM.md)
-3. **For Netlist Generation**: See [NETLIST_STRATEGY.md](./NETLIST_STRATEGY.md) and [TRACE_SYSTEM.md](./TRACE_SYSTEM.md)
-4. **For Code Organization**: Check [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md)
-5. **For PCB Basics**: Review [PCB Reverse Engineering Tips](./PCB%20Reverse%20Engineering%20Tips)
+2. **For Technology Stack**: See [TECHNOLOGY_STACK.md](./TECHNOLOGY_STACK.md)
+3. **For Component System**: Read [COMPONENT_SYSTEM.md](./COMPONENT_SYSTEM.md)
+4. **For Netlist Generation**: See [NETLIST_STRATEGY.md](./NETLIST_STRATEGY.md) and [TRACE_SYSTEM.md](./TRACE_SYSTEM.md)
+5. **For Code Organization**: Check [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md)
+6. **For PCB Basics**: Review [PCB Reverse Engineering Tips](./PCB%20Reverse%20Engineering%20Tips)
 
 ## Contributing
 

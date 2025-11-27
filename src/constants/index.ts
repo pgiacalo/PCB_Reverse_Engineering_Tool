@@ -107,7 +107,7 @@ export const KEYBOARD_SHORTCUTS = {
   ERASE: 'e',
   MOVE: 'h',
   ZOOM: 'z',
-  UNDO: 'z', // with Cmd/Ctrl modifier
+  UNDO: 'z', // with Ctrl modifier
   DELETE: ['Delete', 'Backspace'],
   ESCAPE: 'Escape',
   ENTER: 'Enter',

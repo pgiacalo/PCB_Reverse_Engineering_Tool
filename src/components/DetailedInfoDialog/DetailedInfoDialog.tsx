@@ -170,7 +170,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
           flexShrink: 0,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Detailed Information</h2>
+        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Information (Ctrl+I)</h2>
         <button
           onClick={onClose}
           style={{

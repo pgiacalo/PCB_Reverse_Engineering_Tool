@@ -311,7 +311,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
           flexShrink: 0,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Notes</h2>
+        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Notes (Ctrl+N)</h2>
         <button
           onClick={onClose}
           style={{
