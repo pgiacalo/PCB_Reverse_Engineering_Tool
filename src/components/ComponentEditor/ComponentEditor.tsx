@@ -119,7 +119,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Update component function - handles all component type-specific save logic
   const updateComponent = (comp: PCBComponent): PCBComponent => {
     const updated = { ...comp };
-    updated.designator = componentEditor.designator;
+    // Use abbreviation as designator if designator is empty or just a placeholder
+    // The UI field edits abbreviation, so we need to sync it to designator
+    const abbreviation = componentEditor.abbreviation?.trim() || '';
+    const designator = componentEditor.designator?.trim() || '';
+    updated.designator = (designator && designator !== '?' && designator !== '??' && designator !== '***' && designator !== '****' && designator !== '*') 
+      ? designator 
+      : (abbreviation || componentEditor.designator || '');
     updated.x = componentEditor.x;
     updated.y = componentEditor.y;
     updated.layer = componentEditor.layer;

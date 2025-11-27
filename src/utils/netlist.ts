@@ -402,10 +402,21 @@ function normalizeVoltage(voltage: string): string {
     return voltage.trim();
   }
   
-  const numValue = numMatch[1];
+  let numValue = numMatch[1];
   
-  // Return normalized format: sign + numeric value + "V"
-  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3.3V"
+  // KiCad convention: for decimals, use format like "3V3" instead of "3.3V"
+  // Example: 3.3 becomes 3V3, 5.0 becomes 5V0, 12.5 becomes 12V5
+  if (numValue.includes('.')) {
+    const parts = numValue.split('.');
+    const wholePart = parts[0];
+    const decimalPart = parts[1] || '0';
+    // Remove trailing zeros from decimal part
+    const cleanDecimal = decimalPart.replace(/0+$/, '') || '0';
+    numValue = `${wholePart}V${cleanDecimal}`;
+  }
+  
+  // Return normalized format: sign + numeric value + "V" (KiCad convention)
+  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3V3" (or "+5V" for whole numbers)
   return `${sign}${numValue}V`;
 }
 
@@ -857,11 +868,8 @@ export function generateNetNamesCoordinateBased(
     if (powerNodes.length > 0) {
       // Use the voltage from the first power node
       const voltage = powerNodes[0].voltage || 'UNKNOWN';
-      // Clean voltage string (remove spaces, ensure +/- prefix)
-      let cleanVoltage = voltage.trim();
-      if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
-        cleanVoltage = '+' + cleanVoltage;
-      }
+      // Format voltage to KiCad standard notation (+5V, -3V3, etc.)
+      const cleanVoltage = normalizeVoltage(voltage);
       netNames.set(rootCoordKey, cleanVoltage);
       continue;
     }
@@ -1257,17 +1265,8 @@ export function generateNetNames(
       // Use the voltage from the first power node
       // All power nodes in the same net should have the same voltage (grouped by voltage)
       const voltage = powerNodes[0].voltage || 'UNKNOWN';
-      // Clean voltage string (remove spaces, ensure +/- prefix)
-      let cleanVoltage = voltage.trim();
-      if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
-        cleanVoltage = '+' + cleanVoltage;
-      }
-      // Ensure voltage ends with 'V' if it's a numeric value (KiCad convention)
-      if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[Vv]/g, ''))) {
-        if (!cleanVoltage.toUpperCase().endsWith('V')) {
-          cleanVoltage = cleanVoltage + 'V';
-        }
-      }
+      // Format voltage to KiCad standard notation (+5V, -3V3, etc.)
+      const cleanVoltage = normalizeVoltage(voltage);
       netNames.set(root, cleanVoltage);
       const viaPadCount = netNodes.filter(n => n.type === 'via' || n.type === 'pad').length;
       console.log(`[NetNames] Net ${root}: Labeled as ${cleanVoltage} (contains ${powerNodes.length} power node(s), ${viaPadCount} via/pad node(s) sharing same Node ID)`);

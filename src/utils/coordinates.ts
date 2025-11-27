@@ -307,19 +307,20 @@ export function generateUniqueId(prefix: string = 'id'): string {
 }
 
 /**
- * Truncate coordinate to 3 decimal places
+ * Truncate coordinate to 4 decimal places for finer precision
  * This ensures consistent precision for all coordinates and enables exact matches
- * when objects snap to each other.
+ * when objects snap to each other. Increased from 3 to 4 decimal places to support
+ * ultra-fine placement when zoomed in.
  * 
  * @param coord - The coordinate value to truncate
- * @returns The coordinate truncated to 3 decimal places
+ * @returns The coordinate truncated to 4 decimal places
  */
 export function truncateCoordinate(coord: number): number {
-  return Math.round(coord * 1000) / 1000;
+  return Math.round(coord * 10000) / 10000;
 }
 
 /**
- * Truncate a point's x and y coordinates to 3 decimal places
+ * Truncate a point's x and y coordinates to 4 decimal places
  * 
  * @param point - The point with x and y coordinates
  * @returns A new point with truncated coordinates

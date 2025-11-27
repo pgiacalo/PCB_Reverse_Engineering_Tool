@@ -582,12 +582,12 @@ function App() {
       const currentToolDef = getCurrentToolDef(prev);
       
       if (currentToolDef) {
-        // Save to localStorage
-        saveToolSettings(currentToolDef.id, brushColor, brushSize);
-        
-        // Also save layer-specific defaults for trace, pad, and component
+        // Save to localStorage - use layer-specific settings for tools that support layers
         if (currentTool === 'draw' && drawingMode === 'trace') {
           const layer = traceToolLayer || 'top';
+          // Save layer-specific settings
+          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
+          // Also update state and legacy defaults
           if (layer === 'top') {
             setTopTraceColor(brushColor);
             setTopTraceSize(brushSize);
@@ -599,8 +599,23 @@ function App() {
             saveDefaultColor('trace', brushColor, 'bottom');
             saveDefaultSize('trace', brushSize, 'bottom');
           }
+          // Update registry with layer-specific settings
+          const updated = new Map(prev);
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          updated.set(currentToolDef.id, {
+            ...currentToolDef,
+            layerSettings,
+            settings: { color: brushColor, size: brushSize }
+          });
+          prevBrushColorRef.current = brushColor;
+          prevBrushSizeRef.current = brushSize;
+          return updated;
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
           const layer = padToolLayer || 'top';
+          // Save layer-specific settings
+          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
+          // Also update state and legacy defaults
           if (layer === 'top') {
             setTopPadColor(brushColor);
             setTopPadSize(brushSize);
@@ -612,8 +627,23 @@ function App() {
             saveDefaultColor('pad', brushColor, 'bottom');
             saveDefaultSize('pad', brushSize, 'bottom');
           }
+          // Update registry with layer-specific settings
+          const updated = new Map(prev);
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          updated.set(currentToolDef.id, {
+            ...currentToolDef,
+            layerSettings,
+            settings: { color: brushColor, size: brushSize }
+          });
+          prevBrushColorRef.current = brushColor;
+          prevBrushSizeRef.current = brushSize;
+          return updated;
         } else if (currentTool === 'component') {
           const layer = componentToolLayer || 'top';
+          // Save layer-specific settings
+          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
+          // Also update state and legacy defaults
           if (layer === 'top') {
             setTopComponentColor(brushColor);
             setTopComponentSize(brushSize);
@@ -625,21 +655,35 @@ function App() {
             saveDefaultColor('component', brushColor, 'bottom');
             saveDefaultSize('component', brushSize, 'bottom');
           }
+          // Update registry with layer-specific settings
+          const updated = new Map(prev);
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          updated.set(currentToolDef.id, {
+            ...currentToolDef,
+            layerSettings,
+            settings: { color: brushColor, size: brushSize }
+          });
+          prevBrushColorRef.current = brushColor;
+          prevBrushSizeRef.current = brushSize;
+          return updated;
+        } else {
+          // For other tools (via, etc.), save general tool settings
+          saveToolSettings(currentToolDef.id, brushColor, brushSize);
+          // Update registry
+          const updated = new Map(prev);
+          updated.set(currentToolDef.id, {
+            ...currentToolDef,
+            settings: { color: brushColor, size: brushSize }
+          });
+          prevBrushColorRef.current = brushColor;
+          prevBrushSizeRef.current = brushSize;
+          return updated;
         }
-        
-        // Update registry
-        const updated = new Map(prev);
-        updated.set(currentToolDef.id, {
-          ...currentToolDef,
-          settings: { color: brushColor, size: brushSize }
-        });
-        prevBrushColorRef.current = brushColor;
-        prevBrushSizeRef.current = brushSize;
-        return updated;
       }
       return prev;
     });
-  }, [brushColor, brushSize, currentTool, drawingMode, getCurrentToolDef, saveDefaultColor, saveDefaultSize]);
+  }, [brushColor, brushSize, currentTool, drawingMode, traceToolLayer, padToolLayer, componentToolLayer, getCurrentToolDef, saveDefaultColor, saveDefaultSize, saveToolLayerSettings, setTopTraceColor, setBottomTraceColor, setTopTraceSize, setBottomTraceSize, setTopPadColor, setBottomPadColor, setTopPadSize, setBottomPadSize, setTopComponentColor, setBottomComponentColor, setTopComponentSize, setBottomComponentSize]);
   
   // Show power bus selector when power tool is selected
   React.useEffect(() => {
@@ -1102,6 +1146,11 @@ function App() {
     
     const canvas = canvasRef.current;
     if (!canvas) return;
+    
+    // Ensure canvas has focus for keyboard shortcuts to work reliably
+    if (document.activeElement !== canvas) {
+      canvas.focus();
+    }
     const rect = canvas.getBoundingClientRect();
     const dprX = canvas.width / rect.width;
     const dprY = canvas.height / rect.height;
@@ -1448,8 +1497,16 @@ function App() {
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
         if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
-          // Only consider visible vias/pads
-          if (!showViasLayer) continue;
+          // Check visibility based on type and layer
+          let isVisible = false;
+          if (s.type === 'via') {
+            isVisible = showViasLayer;
+          } else if (s.type === 'pad') {
+            // Pads have layer-specific visibility
+            const padLayer = s.layer || 'top';
+            isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
+          }
+          if (!isVisible) continue;
           
           const c = s.points[0];
           const r = Math.max(1, s.size / 2);
@@ -1531,8 +1588,16 @@ function App() {
         let bestCenter: { x: number; y: number; id?: number } | null = null;
         // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
         // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        // When zoomed in very far, allow extremely fine placement with sub-micron precision
         const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+        // Scale minimum threshold based on zoom level for ultra-fine control
+        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+        const SNAP_THRESHOLD_WORLD = viewScale > 20 
+          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+          : viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
             // Vias can be snapped to from any layer (they go through both layers)
@@ -1571,7 +1636,7 @@ function App() {
             }
           }
         }
-        // Truncate coordinates to 3 decimal places for exact matching
+        // Truncate coordinates to 4 decimal places for exact matching
         const result = bestCenter ?? { x: wx, y: wy };
         const truncated = truncatePoint(result);
         return { 
@@ -1596,8 +1661,13 @@ function App() {
           let bestDist = Infinity;
           let bestPoint: { x: number; y: number; id?: number } | null = null;
           // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+          // When zoomed in very far (viewScale > 10), allow extremely fine placement by removing minimum threshold
           const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-          const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+          // At high zoom levels, allow sub-micron precision; at normal zoom, maintain reasonable minimum
+          const SNAP_THRESHOLD_WORLD = viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Ultra-fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
           for (const s of drawingStrokes) {
             if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
@@ -1672,8 +1742,13 @@ function App() {
           let bestDist = Infinity;
           let bestPoint: { x: number; y: number; id?: number } | null = null;
           // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+          // When zoomed in very far (viewScale > 10), allow extremely fine placement by removing minimum threshold
           const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-          const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+          // At high zoom levels, allow sub-micron precision; at normal zoom, maintain reasonable minimum
+          const SNAP_THRESHOLD_WORLD = viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Ultra-fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
           for (const s of drawingStrokes) {
             if (s.type === 'via' || s.type === 'pad') {
               const c = s.points[0];
@@ -1836,8 +1911,16 @@ function App() {
         let bestDist = Infinity;
         let bestPoint: { x: number; y: number; id?: number } | null = null;
         // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        // When zoomed in very far, allow extremely fine placement with sub-micron precision
         const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+        // Scale minimum threshold based on zoom level for ultra-fine control
+        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+        const SNAP_THRESHOLD_WORLD = viewScale > 20 
+          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+          : viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
         for (const s of drawingStrokes) {
           if (s.type === 'via' || s.type === 'pad') {
             // Vias and pads can be snapped to from any layer
@@ -1858,7 +1941,7 @@ function App() {
             }
           }
         }
-        // Truncate coordinates to 3 decimal places for exact matching
+        // Truncate coordinates to 4 decimal places for exact matching
         const result = bestPoint ?? { x: wx, y: wy };
         const truncated = truncatePoint(result);
         return {
@@ -1923,8 +2006,16 @@ function App() {
         let bestDist = Infinity;
         let bestPoint: { x: number; y: number; id?: number } | null = null;
         // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        // When zoomed in very far, allow extremely fine placement with sub-micron precision
         const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+        // Scale minimum threshold based on zoom level for ultra-fine control
+        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+        const SNAP_THRESHOLD_WORLD = viewScale > 20 
+          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+          : viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
         for (const s of drawingStrokes) {
           if (s.type === 'via' || s.type === 'pad') {
             // Vias and pads can be snapped to from any layer
@@ -1945,7 +2036,7 @@ function App() {
             }
           }
         }
-        // Truncate coordinates to 3 decimal places for exact matching
+        // Truncate coordinates to 4 decimal places for exact matching
         const result = bestPoint ?? { x: wx, y: wy };
         const truncated = truncatePoint(result);
         return {
@@ -1996,7 +2087,7 @@ function App() {
       }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -2267,8 +2358,16 @@ function App() {
         let bestCenter: { x: number; y: number; id?: number } | null = null;
         // Search all vias and pads - all can be snapped to from any layer (blind vias not supported yet)
         // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        // When zoomed in very far, allow extremely fine placement with sub-micron precision
         const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-        const SNAP_THRESHOLD_WORLD = Math.max(SNAP_THRESHOLD_SCREEN / viewScale, 5); // Minimum 5 world units
+        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+        // Scale minimum threshold based on zoom level for ultra-fine control
+        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+        const SNAP_THRESHOLD_WORLD = viewScale > 20 
+          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+          : viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
         for (const s of drawingStrokes) {
           if (s.type === 'via') {
             // Vias can be snapped to from any layer (they go through both layers)
@@ -2337,12 +2436,12 @@ function App() {
         if (isShiftConstrained) {
           const startPt = currentStroke[0];
           const snapped = snapConstrainedPoint(startPt, x, y);
-          // Truncate coordinates to 3 decimal places for exact matching
+          // Truncate coordinates to 4 decimal places for exact matching
           const truncatedSnapped = truncatePoint(snapped);
           const pt = { id: generatePointId(), x: truncatedSnapped.x, y: truncatedSnapped.y };
           setCurrentStroke([startPt, pt]);
         } else {
-          // Truncate coordinates to 3 decimal places for exact matching
+          // Truncate coordinates to 4 decimal places for exact matching
           const truncatedPos = truncatePoint({ x, y });
           setCurrentStroke(prev => [...prev, { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y }]);
         }
@@ -2714,8 +2813,12 @@ function App() {
           for (const s of drawingStrokes) {
             // Check visibility before considering this stroke
             let isVisible = false;
-            if (s.type === 'via' || s.type === 'pad') {
+            if (s.type === 'via') {
               isVisible = showViasLayer;
+            } else if (s.type === 'pad') {
+              // Pads have layer-specific visibility
+              const padLayer = s.layer || 'top';
+              isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
             } else {
               // Trace or default type
               isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
@@ -4332,7 +4435,7 @@ function App() {
         if (topComp) {
           const newX = topComp.x + deltaX;
           const newY = topComp.y + deltaY;
-          // Truncate coordinates to 3 decimal places for exact matching
+          // Truncate coordinates to 4 decimal places for exact matching
           const truncated = truncatePoint({ x: newX, y: newY });
           setComponentsTop(prev => prev.map(c => 
             c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
@@ -4342,7 +4445,7 @@ function App() {
           if (bottomComp) {
             const newX = bottomComp.x + deltaX;
             const newY = bottomComp.y + deltaY;
-            // Truncate coordinates to 3 decimal places for exact matching
+            // Truncate coordinates to 4 decimal places for exact matching
             const truncated = truncatePoint({ x: newX, y: newY });
             setComponentsBottom(prev => prev.map(c => 
               c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
@@ -7385,10 +7488,16 @@ function App() {
         setBottomTraceSize(bottomSize);
         saveDefaultSize('trace', topSize, 'top');
         saveDefaultSize('trace', bottomSize, 'bottom');
+        // Also save to tool registry layer-specific settings
+        saveToolLayerSettings('trace', 'top', project.traceColors?.top || topTraceColor, topSize);
+        saveToolLayerSettings('trace', 'bottom', project.traceColors?.bottom || bottomTraceColor, bottomSize);
       } else {
         // If traceSizes doesn't exist in project, ensure defaults are set
         setTopTraceSize(6);
         setBottomTraceSize(6);
+        // Also save defaults to tool registry
+        saveToolLayerSettings('trace', 'top', topTraceColor, 6);
+        saveToolLayerSettings('trace', 'bottom', bottomTraceColor, 6);
       }
       // Restore pad colors and sizes
       if (project.padColors) {
@@ -7452,7 +7561,21 @@ function App() {
           if (project.toolSettings.trace) {
             const traceDef = updated.get('trace');
             if (traceDef) {
-              updated.set('trace', { ...traceDef, settings: project.toolSettings.trace });
+              // Restore general settings
+              const restoredSettings = { ...traceDef, settings: project.toolSettings.trace };
+              // Also restore layer-specific settings from traceSizes and traceColors
+              const layerSettings = new Map(traceDef.layerSettings);
+              if (project.traceSizes && project.traceColors) {
+                layerSettings.set('top', { 
+                  color: project.traceColors.top || traceDef.layerSettings.get('top')?.color || '#AA4499', 
+                  size: project.traceSizes.top || traceDef.layerSettings.get('top')?.size || 6 
+                });
+                layerSettings.set('bottom', { 
+                  color: project.traceColors.bottom || traceDef.layerSettings.get('bottom')?.color || '#F781BF', 
+                  size: project.traceSizes.bottom || traceDef.layerSettings.get('bottom')?.size || 6 
+                });
+              }
+              updated.set('trace', { ...restoredSettings, layerSettings });
             }
           }
           if (project.toolSettings.via) {
@@ -8669,27 +8792,47 @@ function App() {
                         // Save color for the current tool using the new per-tool system
                         const currentToolDef = getCurrentToolDef(toolRegistry);
                         if (currentToolDef) {
-                          // This will trigger the useEffect that saves to localStorage
-                          // The useEffect will call saveToolSettings automatically
+                          // Save layer-specific settings for tools that support layers
+                          if (currentTool === 'draw' && drawingMode === 'trace') {
+                            const layer = traceToolLayer || 'top';
+                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            if (layer === 'top') {
+                              setTopTraceColor(c);
+                              saveDefaultColor('trace', c, 'top');
+                            } else {
+                              setBottomTraceColor(c);
+                              saveDefaultColor('trace', c, 'bottom');
+                            }
+                          } else if (currentTool === 'draw' && drawingMode === 'pad') {
+                            const layer = padToolLayer || 'top';
+                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            if (layer === 'top') {
+                              setTopPadColor(c);
+                              saveDefaultColor('pad', c, 'top');
+                            } else {
+                              setBottomPadColor(c);
+                              saveDefaultColor('pad', c, 'bottom');
+                            }
+                          } else if (currentTool === 'component') {
+                            const layer = componentToolLayer || 'top';
+                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            if (layer === 'top') {
+                              setTopComponentColor(c);
+                              saveDefaultColor('component', c, 'top');
+                            } else {
+                              setBottomComponentColor(c);
+                              saveDefaultColor('component', c, 'bottom');
+                            }
+                          } else {
+                            // For other tools (via, etc.), save general tool settings
+                            saveToolSettings(currentToolDef.id, c, brushSize);
+                            if (currentTool === 'draw' && drawingMode === 'via') {
+                              saveDefaultColor('via', c);
+                            }
+                          }
                         }
                         // Legacy support: also save using old system for backward compatibility
                         saveDefaultColor('brush', c);
-                        // If trace tool is active, save color to the appropriate layer (legacy)
-                        if (currentTool === 'draw' && drawingMode === 'trace') {
-                          if (selectedDrawingLayer === 'top') {
-                            setTopTraceColor(c);
-                            saveDefaultColor('trace', c, 'top');
-                          } else {
-                            setBottomTraceColor(c);
-                            saveDefaultColor('trace', c, 'bottom');
-                          }
-                        } else if (currentTool === 'draw' && drawingMode === 'via') {
-                          saveDefaultColor('via', c);
-                        } else if (currentTool === 'draw' && drawingMode === 'pad') {
-                          saveDefaultColor('pad', c);
-                        } else if (currentTool === 'component') {
-                          saveDefaultColor('component', c);
-                        }
                         if (selectedIds.size > 0) {
                           // Determine object types from selected items to persist defaults
                           setDrawingStrokes(prev => prev.map(s => {
@@ -9201,6 +9344,7 @@ function App() {
             ref={canvasRef}
             width={canvasSize.width}
             height={canvasSize.height}
+            tabIndex={0}
             onMouseDown={handleCanvasMouseDown}
             onMouseMove={handleCanvasMouseMove}
             onMouseUp={handleCanvasMouseUp}

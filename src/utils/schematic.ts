@@ -13,9 +13,11 @@ import {
 } from './netlist';
 
 /**
- * Normalize voltage string for consistent comparison
+ * Normalize voltage string for consistent comparison (KiCad standard notation)
  * Handles variations like "+3.3V", "3.3V", "+3.3 VDC", etc.
- * Returns normalized format: sign + numeric value + "V"
+ * Returns normalized format: sign + numeric value + "V" (KiCad convention: +5V, -3V3, etc.)
+ * For decimals, KiCad uses format like -3V3 instead of -3.3V
+ * Ground is always "GND" (not normalized here)
  */
 function normalizeVoltage(voltage: string): string {
   if (!voltage) return 'UNKNOWN';
@@ -40,11 +42,30 @@ function normalizeVoltage(voltage: string): string {
     return voltage.trim();
   }
   
-  const numValue = numMatch[1];
+  let numValue = numMatch[1];
   
-  // Return normalized format: sign + numeric value + "V"
-  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3.3V"
+  // KiCad convention: for decimals, use format like "3V3" instead of "3.3V"
+  // Example: 3.3 becomes 3V3, 5.0 becomes 5V0, 12.5 becomes 12V5
+  if (numValue.includes('.')) {
+    const parts = numValue.split('.');
+    const wholePart = parts[0];
+    const decimalPart = parts[1] || '0';
+    // Remove trailing zeros from decimal part
+    const cleanDecimal = decimalPart.replace(/0+$/, '') || '0';
+    numValue = `${wholePart}V${cleanDecimal}`;
+  }
+  
+  // Return normalized format: sign + numeric value + "V" (KiCad convention)
+  // This ensures "+3.3V", "3.3V", "+3.3 VDC" all become "+3V3" (or "+5V" for whole numbers)
   return `${sign}${numValue}V`;
+}
+
+/**
+ * Format voltage string to KiCad standard notation (+5V, -3V3, etc.)
+ * Uses normalizeVoltage but ensures proper formatting
+ */
+function formatVoltageKiCad(voltage: string): string {
+  return normalizeVoltage(voltage);
 }
 
 // PowerSymbol interface (matches App.tsx definition)
@@ -446,22 +467,9 @@ export function generateNodesCsv(
       if (hasGround) {
         nodeType = 'Ground';
       } else if (powerNodes.length > 0) {
-        // Use the voltage from power nodes, preserving original format (e.g., +5VDC, +3.3VDC, -3.3VDC)
+        // Use the voltage from power nodes, format to KiCad standard notation (+5V, -3V3, etc.)
         const voltage = powerNodes[0].voltage || 'UNKNOWN';
-        // Clean voltage string but preserve VDC/VAC suffix if present
-        let cleanVoltage = voltage.trim();
-        if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
-          cleanVoltage = '+' + cleanVoltage;
-        }
-        // Ensure voltage ends with 'V' or 'VDC'/'VAC' if it's a numeric value
-        if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[VvDdCcAa]/g, ''))) {
-          // Check if it already has VDC/VAC suffix
-          if (!cleanVoltage.toUpperCase().endsWith('VDC') && !cleanVoltage.toUpperCase().endsWith('VAC')) {
-            if (!cleanVoltage.toUpperCase().endsWith('V')) {
-              cleanVoltage = cleanVoltage + 'VDC'; // Default to VDC for DC power
-            }
-          }
-        }
+        const cleanVoltage = formatVoltageKiCad(voltage);
         nodeType = `Power ${cleanVoltage}`;
       } else {
         nodeType = 'Signal';
@@ -475,17 +483,7 @@ export function generateNodesCsv(
       } else if (powerNodes.length > 0 && node.type === 'component_pin') {
         // Component pins can also be labeled as Power if connected to power
         const voltage = powerNodes[0].voltage || 'UNKNOWN';
-        let cleanVoltage = voltage.trim();
-        if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
-          cleanVoltage = '+' + cleanVoltage;
-        }
-        if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[VvDdCcAa]/g, ''))) {
-          if (!cleanVoltage.toUpperCase().endsWith('VDC') && !cleanVoltage.toUpperCase().endsWith('VAC')) {
-            if (!cleanVoltage.toUpperCase().endsWith('V')) {
-              cleanVoltage = cleanVoltage + 'VDC';
-            }
-          }
-        }
+        const cleanVoltage = formatVoltageKiCad(voltage);
         nodeType = `Power ${cleanVoltage}`;
       }
     }
@@ -921,17 +919,8 @@ export function generateSimpleSchematic(
         // Clean voltage string for KiCad: ensure +/- prefix and V suffix
         const voltage = node.voltage || powerVoltage || '';
         if (voltage) {
-          let cleanVoltage = voltage.trim();
-          if (cleanVoltage && !cleanVoltage.startsWith('+') && !cleanVoltage.startsWith('-') && !cleanVoltage.startsWith('AC')) {
-            cleanVoltage = '+' + cleanVoltage;
-          }
-          // Ensure voltage ends with 'V' if it's a numeric value (KiCad convention)
-          if (cleanVoltage && /^[+-]?\d+\.?\d*$/.test(cleanVoltage.replace(/[Vv]/g, ''))) {
-            if (!cleanVoltage.toUpperCase().endsWith('V')) {
-              cleanVoltage = cleanVoltage + 'V';
-            }
-          }
-          powerVoltage = cleanVoltage;
+          // Format voltage to KiCad standard notation (+5V, -3V3, etc.)
+          powerVoltage = formatVoltageKiCad(voltage);
         }
       } else if (node.type === 'ground') {
         hasGround = true;
@@ -1005,6 +994,12 @@ export function generateSimpleSchematic(
 
   // Use PCB coordinates to preserve geometric relationships
   // Scale and translate PCB coordinates (pixels) to schematic coordinates (mm)
+  // Declare variables outside if block so they're available for power/ground symbol placement
+  let offsetX = 30; // Default margin
+  let offsetY = 30; // Default margin
+  let scaledWidth = 0;
+  let scaledHeight = 0;
+  
   if (componentsWithDesignators.length > 0) {
     // Find bounding box of all components
     let minX = Infinity;
@@ -1037,19 +1032,19 @@ export function generateSimpleSchematic(
     let scale = Math.min(scaleX, scaleY);
     
     // Ensure scale is reasonable (not too small or too large)
-    // Minimum: 0.01mm per pixel (prevents components from being too close)
+    // Minimum: 0.5mm per pixel (prevents components from being too close/overlapping)
     // Maximum: 2.0mm per pixel (prevents components from being too far apart)
-    const minScale = 0.01;
+    const minScale = 0.5;
     const maxScale = 2.0;
     scale = Math.max(minScale, Math.min(scale, maxScale));
     
     // Calculate actual bounds after scaling
-    const scaledWidth = pcbWidth * scale;
-    const scaledHeight = pcbHeight * scale;
+    scaledWidth = pcbWidth * scale;
+    scaledHeight = pcbHeight * scale;
     
     // Center the layout within the usable area
-    const offsetX = margin + (usableWidth - scaledWidth) / 2;
-    const offsetY = margin + (usableHeight - scaledHeight) / 2;
+    offsetX = margin + (usableWidth - scaledWidth) / 2;
+    offsetY = margin + (usableHeight - scaledHeight) / 2;
     
     // Map components using PCB coordinates
     for (const comp of componentsWithDesignators) {
@@ -1110,15 +1105,16 @@ export function generateSimpleSchematic(
   schematic += '    )\n';
   
   // Add ground symbol (simplified - just a connection point with label)
+  // GND symbol points DOWN (negative Y values)
   schematic += '    (symbol "simple:Ground" (pin_names (offset 1.016)) (in_bom no) (on_board no)\n';
   schematic += '      (property "Reference" "#PWR" (id 0) (at 0 0 0)\n';
   schematic += '        (effects (font (size 1.27 1.27)) hide)\n';
   schematic += '      )\n';
   schematic += '      (symbol "Ground_0_1"\n';
-  schematic += '        (polyline (pts (xy 0 0) (xy 0 2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
-  schematic += '        (polyline (pts (xy -2.54 2.54) (xy 2.54 2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
-  schematic += '        (polyline (pts (xy -1.27 3.81) (xy 1.27 3.81)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
-  schematic += '        (polyline (pts (xy -0.635 4.445) (xy 0.635 4.445)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy 0 0) (xy 0 -2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -2.54 -2.54) (xy 2.54 -2.54)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -1.27 -3.81) (xy 1.27 -3.81)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
+  schematic += '        (polyline (pts (xy -0.635 -4.445) (xy 0.635 -4.445)) (stroke (width 0.254) (type default)) (fill (type none)))\n';
   schematic += '      )\n';
   schematic += '    )\n';
   
@@ -1527,9 +1523,10 @@ export function generateSimpleSchematic(
   schematic += '\n';
   
   // Place power and ground symbols
-  let powerGroundX = 25.4;
-  let powerGroundY = 25.4;
-  const powerGroundSpacing = 25.4;
+  // Position them near the components (to the right of the component area)
+  let powerGroundX = offsetX + scaledWidth + 20; // 20mm to the right of components
+  let powerGroundY = offsetY + scaledHeight / 2; // Vertically centered with components
+  const powerGroundSpacing = 15; // Spacing between power/ground symbols
   const powerGroundSymbols = new Map<string, { x: number; y: number; uuid: string }>();
   
   // For each net, connect all component pins with wires and labels
@@ -1840,7 +1837,8 @@ export function generateSimpleSchematic(
         const groundKey = 'GND';
         const groundSymbol = powerGroundSymbols.get(groundKey);
         if (groundSymbol) {
-          const groundConnectionY = groundSymbol.y + 2.54;
+          // GND symbol points down, so connection point is above the symbol (negative Y offset)
+          const groundConnectionY = groundSymbol.y - 2.54;
           const groundConnectionX = groundSymbol.x;
           
           const groundJunctionUuid = generateUuid();

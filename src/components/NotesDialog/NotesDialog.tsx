@@ -83,7 +83,7 @@ export interface NotesDialogProps {
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-const MAX_NOTES_LENGTH = 100;
+const MAX_NOTES_LENGTH = 200;
 
 export const NotesDialog: React.FC<NotesDialogProps> = ({
   visible,
@@ -387,7 +387,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(comp.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
@@ -439,7 +439,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
@@ -491,7 +491,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
@@ -538,7 +538,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
@@ -590,7 +590,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(power.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
@@ -641,7 +641,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <textarea
                           value={notes}
                           onChange={(e) => handleNotesChange(ground.id, e.target.value)}
-                          placeholder="Enter notes (max 100 characters)..."
+                          placeholder="Enter notes (max 200 characters)..."
                           maxLength={MAX_NOTES_LENGTH}
                           style={{
                             width: '100%',
