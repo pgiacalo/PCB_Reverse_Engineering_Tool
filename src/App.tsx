@@ -1131,14 +1131,34 @@ function App() {
         fr.onerror = reject;
         fr.readAsDataURL(file);
       });
+      // Calculate initial world position for image center
+      // Images should start centered, which in world coordinates is:
+      // worldX = (centerX - viewPan.x) / viewScale
+      // For initial load, viewPan is typically set to center the view, so world position is approximately 0
+      // But to be precise, we'll calculate it based on current canvas and view state
+      const canvas = canvasRef.current;
+      let initialWorldX = 0;
+      let initialWorldY = 0;
+      if (canvas) {
+        const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+        const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+        const centerX = contentWidth / 2;
+        const centerY = contentHeight / 2;
+        // Convert center position to world coordinates
+        initialWorldX = (centerX - viewPan.x) / viewScale;
+        initialWorldY = (centerY - viewPan.y) / viewScale;
+      }
+      
       const imageData: PCBImage = {
         url,
         name: file.name,
         width: bitmap.width,
         height: bitmap.height,
         dataUrl,
-        x: 0,
-        y: 0,
+        // Store images in world coordinates from the start
+        // This ensures they stay aligned with drawn items when canvas resizes
+        x: initialWorldX,
+        y: initialWorldY,
         scale: 1,
         rotation: 0,
         flipX: false,
@@ -3062,10 +3082,7 @@ function App() {
     ctx.rect(CONTENT_BORDER, CONTENT_BORDER, canvas.width - 2 * CONTENT_BORDER, canvas.height - 2 * CONTENT_BORDER);
     ctx.clip();
     ctx.translate(CONTENT_BORDER, CONTENT_BORDER);
-    // Apply global view transform once (pan then scale)
-    ctx.translate(viewPan.x, viewPan.y);
-    ctx.scale(viewScale, viewScale);
-
+    
     // Helper to create an edge-detected (black & white) canvas from a CanvasImageSource
     const createEdgeCanvas = (source: CanvasImageSource, invert: boolean): HTMLCanvasElement => {
       const w = (source as any).width as number;
@@ -3199,10 +3216,79 @@ function App() {
 
       ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
     };
-
-    // Draw images with transformations and apply view transform per draw
-    const overlayMode = showTopImage && showBottomImage;
-    if (topImage && topImage.bitmap && showTopImage) {
+    
+    // Draw locked images first (before view transform) so they're fixed at canvas (0,0)
+    if (areImagesLocked) {
+      const overlayMode = showTopImage && showBottomImage;
+      if (topImage && topImage.bitmap && showTopImage) {
+        const bmp = topImage.bitmap;
+        ctx.save();
+        ctx.globalAlpha = 1;
+        if (isGrayscale && !isBlackAndWhiteEdges) {
+          ctx.filter = 'grayscale(100%)';
+        } else {
+          ctx.filter = 'none';
+        }
+        // Draw at fixed canvas position (0,0) - no viewPan, but still apply viewScale for zoom
+        ctx.scale(viewScale, viewScale);
+        ctx.translate(topImage.x / viewScale, topImage.y / viewScale);
+        ctx.rotate((topImage.rotation * Math.PI) / 180);
+        if (topImage.skewX || topImage.skewY) {
+          const sx = Math.tan(topImage.skewX || 0);
+          const sy = Math.tan(topImage.skewY || 0);
+          ctx.transform(1, sy, sx, 1, 0, 0);
+        }
+        ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
+        const scaledWidth = bmp.width * 1;
+        const scaledHeight = bmp.height * 1;
+        const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+        if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
+          drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
+        } else {
+          ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        }
+        ctx.restore();
+      }
+      if (bottomImage && bottomImage.bitmap && showBottomImage) {
+        const bmp = bottomImage.bitmap;
+        ctx.save();
+        ctx.globalAlpha = overlayMode ? (transparency / 100) : 1;
+        if (isGrayscale && !isBlackAndWhiteEdges) {
+          ctx.filter = 'grayscale(100%)';
+        } else {
+          ctx.filter = 'none';
+        }
+        // Draw at fixed canvas position (0,0) - no viewPan, but still apply viewScale for zoom
+        ctx.scale(viewScale, viewScale);
+        ctx.translate(bottomImage.x / viewScale, bottomImage.y / viewScale);
+        ctx.rotate((bottomImage.rotation * Math.PI) / 180);
+        if (bottomImage.skewX || bottomImage.skewY) {
+          const sx = Math.tan(bottomImage.skewX || 0);
+          const sy = Math.tan(bottomImage.skewY || 0);
+          ctx.transform(1, sy, sx, 1, 0, 0);
+        }
+        ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
+        const scaledWidth = bmp.width * 1;
+        const scaledHeight = bmp.height * 1;
+        const sourceToDrawB: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+        if ((bottomImage.keystoneV && Math.abs(bottomImage.keystoneV) > 1e-6) || (bottomImage.keystoneH && Math.abs(bottomImage.keystoneH) > 1e-6)) {
+          drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight);
+        } else {
+          ctx.drawImage(sourceToDrawB, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        }
+        ctx.restore();
+      }
+    }
+    
+    // Apply global view transform once (pan then scale)
+    ctx.translate(viewPan.x, viewPan.y);
+    ctx.scale(viewScale, viewScale);
+    
+    // Draw images with transformations and apply view transform per draw (only if not locked)
+    if (!areImagesLocked) {
+      const overlayMode = showTopImage && showBottomImage;
+      
+      if (topImage && topImage.bitmap && showTopImage) {
       const bmp = topImage.bitmap;
       ctx.save();
       ctx.globalAlpha = 1;
@@ -3213,11 +3299,9 @@ function App() {
         ctx.filter = 'none';
       }
       // Apply per-image transformations
-      const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-      const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-      const centerX = contentWidth / 2;
-      const centerY = contentHeight / 2;
-      ctx.translate(centerX + topImage.x, centerY + topImage.y);
+      // Images are stored with x,y values that are updated during transforms in world coordinates
+      // So we can use them directly as world coordinates (the view transform is already applied)
+      ctx.translate(topImage.x, topImage.y);
       ctx.rotate((topImage.rotation * Math.PI) / 180);
       // Apply skew (keystone) if any
       if (topImage.skewX || topImage.skewY) {
@@ -3247,11 +3331,9 @@ function App() {
         ctx.filter = 'none';
       }
       // Apply per-image transformations
-      const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-      const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-      const centerX = contentWidth / 2;
-      const centerY = contentHeight / 2;
-      ctx.translate(centerX + bottomImage.x, centerY + bottomImage.y);
+      // Images are stored with x,y values that are updated during transforms in world coordinates
+      // So we can use them directly as world coordinates (the view transform is already applied)
+      ctx.translate(bottomImage.x, bottomImage.y);
       ctx.rotate((bottomImage.rotation * Math.PI) / 180);
       // Apply skew (keystone) if any
       if (bottomImage.skewX || bottomImage.skewY) {
@@ -3269,6 +3351,7 @@ function App() {
         ctx.drawImage(sourceToDrawB, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
       }
       ctx.restore();
+    }
     }
 
     // Always draw strokes on top (respecting view transform applied above)
@@ -3585,7 +3668,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked]);
 
   // Resize scrollbar extents based on transformed image bounds
   React.useEffect(() => {
@@ -3713,12 +3796,32 @@ function App() {
       width = Math.max(600, width);
       height = Math.max(375, height);
       
-      setCanvasSize(prev => (prev.width === width && prev.height === height) ? prev : { width, height });
+      setCanvasSize(prev => {
+        // If canvas size is changing, adjust viewPan to maintain the same world-to-screen mapping
+        if (prev.width !== width || prev.height !== height) {
+          const oldContentWidth = prev.width - 2 * CONTENT_BORDER;
+          const oldContentHeight = prev.height - 2 * CONTENT_BORDER;
+          const newContentWidth = width - 2 * CONTENT_BORDER;
+          const newContentHeight = height - 2 * CONTENT_BORDER;
+          
+          // Calculate scale factors for content area
+          const scaleX = oldContentWidth > 0 ? newContentWidth / oldContentWidth : 1;
+          const scaleY = oldContentHeight > 0 ? newContentHeight / oldContentHeight : 1;
+          
+          // Adjust viewPan proportionally to maintain the same visual position
+          // This ensures world coordinates stay aligned with images when canvas resizes
+          setViewPan(prevPan => ({
+            x: prevPan.x * scaleX,
+            y: prevPan.y * scaleY,
+          }));
+        }
+        return (prev.width === width && prev.height === height) ? prev : { width, height };
+      });
     };
     computeSize();
     window.addEventListener('resize', computeSize);
     return () => window.removeEventListener('resize', computeSize);
-  }, []);
+  }, [setViewPan]);
 
   const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
     // Pass 1: draw traces first (so vias and pads appear on top)
