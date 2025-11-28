@@ -181,6 +181,177 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setShowGroundBusManager,
   menuBarRef,
 }) => {
+  // Track which image submenu is open
+  const [openImageSubmenu, setOpenImageSubmenu] = React.useState<'top' | 'bottom' | 'both' | null>(null);
+  const submenuTimeoutRef = React.useRef<number | null>(null);
+
+  // Helper function to render image submenu items
+  const renderImageSubmenu = (imageType: 'top' | 'bottom' | 'both', submenuTimeoutRef: React.MutableRefObject<number | null>) => {
+    const isTop = imageType === 'top';
+    const isBottom = imageType === 'bottom';
+    const isBoth = imageType === 'both';
+    const image = isTop ? topImage : (isBottom ? bottomImage : null);
+    const hasImage = isBoth ? (topImage && bottomImage) : (image !== null);
+    const isDisabled = !hasImage || areImagesLocked;
+
+    return (
+      <div 
+        onMouseEnter={() => {
+          // Clear any pending timeout when mouse enters submenu
+          if (submenuTimeoutRef.current) {
+            clearTimeout(submenuTimeoutRef.current);
+            submenuTimeoutRef.current = null;
+          }
+          setOpenImageSubmenu(imageType);
+        }}
+        onMouseLeave={() => {
+          // Close submenu when mouse leaves
+          setOpenImageSubmenu(null);
+        }}
+        style={{ position: 'absolute', top: 0, left: '100%', marginLeft: '4px', minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 10 }}
+      >
+        <button 
+          onClick={() => { 
+            if (imageType === 'both') {
+              const newFlipX = !(topImage?.flipX || false);
+              updateImageTransform('both', { flipX: newFlipX });
+            } else {
+              const currentFlipX = isTop ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
+              updateImageTransform(imageType, { flipX: !currentFlipX });
+            }
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          Toggle Horizontal Flip
+        </button>
+        <button 
+          onClick={() => { 
+            if (imageType === 'both') {
+              const newFlipY = !(topImage?.flipY || false);
+              updateImageTransform('both', { flipY: newFlipY });
+            } else {
+              const currentFlipY = isTop ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
+              updateImageTransform(imageType, { flipY: !currentFlipY });
+            }
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          Toggle Vertical Flip
+        </button>
+        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+        <button 
+          onClick={() => { 
+            setSelectedImageForTransform(imageType);
+            setTransformMode('nudge');
+            setCurrentTool('transform');
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {transformMode === 'nudge' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Nudge
+        </button>
+        <button 
+          onClick={() => { 
+            setSelectedImageForTransform(imageType);
+            setTransformMode('scale');
+            setCurrentTool('transform');
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {transformMode === 'scale' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Scale
+        </button>
+        <button 
+          onClick={() => { 
+            setSelectedImageForTransform(imageType);
+            setTransformMode('rotate');
+            setCurrentTool('transform');
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {transformMode === 'rotate' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Rotate
+        </button>
+        <button 
+          onClick={() => { 
+            setSelectedImageForTransform(imageType);
+            setTransformMode('slant');
+            setCurrentTool('transform');
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {transformMode === 'slant' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Slant
+        </button>
+        <button 
+          onClick={() => { 
+            setSelectedImageForTransform(imageType);
+            setTransformMode('keystone');
+            setCurrentTool('transform');
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {transformMode === 'keystone' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Keystone
+        </button>
+        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+        <button 
+          onClick={() => {
+            setSelectedImageForTransform(imageType);
+            setCurrentTool('transform');
+            if (isGrayscale || isBlackAndWhiteEdges) {
+              setIsGrayscale(false);
+              setIsBlackAndWhiteEdges(false);
+              setIsBlackAndWhiteInverted(false);
+            } else {
+              setIsGrayscale(true);
+            }
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {(isGrayscale || isBlackAndWhiteEdges) ? 'Color Mode' : 'Grayscale Mode'}
+        </button>
+        <button 
+          onClick={() => {
+            setSelectedImageForTransform(imageType);
+            setCurrentTool('transform');
+            if (!isBlackAndWhiteEdges) {
+              setIsBlackAndWhiteEdges(true);
+              setIsBlackAndWhiteInverted(false);
+            } else {
+              setIsBlackAndWhiteInverted(prev => !prev);
+            }
+            setOpenImageSubmenu(null);
+            setOpenMenu(null);
+          }} 
+          disabled={isDisabled}
+          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+        >
+          {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
+        </button>
+      </div>
+    );
+  };
+
   // Determine current size for Set Size dialog
   const getCurrentSize = (): number => {
     if (selectedIds.size > 0) {
@@ -320,87 +491,130 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
             <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Load Images</div>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode && !areImagesLocked) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
+              disabled={isReadOnlyMode || areImagesLocked}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked) ? 'not-allowed' : 'pointer' }}
             >
               Load Top PCB…
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode && !areImagesLocked) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
+              disabled={isReadOnlyMode || areImagesLocked}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked) ? 'not-allowed' : 'pointer' }}
             >
               Load Bottom PCB…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { onEnterBoardDimensions(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Enter PCB Dimensions…</button>
+            <button 
+              onClick={() => { if (!areImagesLocked) { onEnterBoardDimensions(); setOpenMenu(null); } }} 
+              disabled={areImagesLocked}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: areImagesLocked ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: areImagesLocked ? 'not-allowed' : 'pointer' }}
+            >
+              Enter PCB Dimensions…
+            </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
-            <button disabled={!topImage} onClick={() => { setSelectedImageForTransform('top'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: topImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image</button>
-            <button disabled={!bottomImage} onClick={() => { setSelectedImageForTransform('bottom'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: bottomImage ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image</button>
-            <button disabled={!topImage || !bottomImage} onClick={() => { setSelectedImageForTransform('both'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (topImage && bottomImage) ? '#f2f2f2' : '#777', background: 'transparent', border: 'none' }}>{selectedImageForTransform === 'both' ? '✓ ' : ''}Both Images</button>
+            <div style={{ position: 'relative' }}>
+              <button 
+                disabled={!topImage || areImagesLocked} 
+                onMouseEnter={() => {
+                  if (!areImagesLocked) {
+                    if (submenuTimeoutRef.current) {
+                      clearTimeout(submenuTimeoutRef.current);
+                      submenuTimeoutRef.current = null;
+                    }
+                    setOpenImageSubmenu('top');
+                  }
+                }}
+                onMouseLeave={() => {
+                  // Delay to allow moving to submenu (increased delay for better UX)
+                  submenuTimeoutRef.current = setTimeout(() => {
+                    setOpenImageSubmenu(prev => prev === 'top' ? null : prev);
+                  }, 300);
+                }}
+                onClick={() => { 
+                  if (!areImagesLocked) {
+                    setSelectedImageForTransform('top'); 
+                    setCurrentTool('transform');
+                  }
+                }} 
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (!topImage || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (!topImage || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              >
+                {selectedImageForTransform === 'top' ? '✓ ' : ''}Top Image ▸
+              </button>
+              {openImageSubmenu === 'top' && !areImagesLocked && renderImageSubmenu('top', submenuTimeoutRef)}
+            </div>
+            <div style={{ position: 'relative' }}>
+              <button 
+                disabled={!bottomImage || areImagesLocked} 
+                onMouseEnter={() => {
+                  if (!areImagesLocked) {
+                    if (submenuTimeoutRef.current) {
+                      clearTimeout(submenuTimeoutRef.current);
+                      submenuTimeoutRef.current = null;
+                    }
+                    setOpenImageSubmenu('bottom');
+                  }
+                }}
+                onMouseLeave={() => {
+                  // Delay to allow moving to submenu (increased delay for better UX)
+                  submenuTimeoutRef.current = setTimeout(() => {
+                    setOpenImageSubmenu(prev => prev === 'bottom' ? null : prev);
+                  }, 300);
+                }}
+                onClick={() => { 
+                  if (!areImagesLocked) {
+                    setSelectedImageForTransform('bottom'); 
+                    setCurrentTool('transform');
+                  }
+                }} 
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (!bottomImage || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (!bottomImage || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              >
+                {selectedImageForTransform === 'bottom' ? '✓ ' : ''}Bottom Image ▸
+              </button>
+              {openImageSubmenu === 'bottom' && !areImagesLocked && renderImageSubmenu('bottom', submenuTimeoutRef)}
+            </div>
+            <div style={{ position: 'relative' }}>
+              <button 
+                disabled={(!topImage || !bottomImage) || areImagesLocked} 
+                onMouseEnter={() => {
+                  if (!areImagesLocked) {
+                    if (submenuTimeoutRef.current) {
+                      clearTimeout(submenuTimeoutRef.current);
+                      submenuTimeoutRef.current = null;
+                    }
+                    setOpenImageSubmenu('both');
+                  }
+                }}
+                onMouseLeave={() => {
+                  // Delay to allow moving to submenu (increased delay for better UX)
+                  submenuTimeoutRef.current = setTimeout(() => {
+                    setOpenImageSubmenu(prev => prev === 'both' ? null : prev);
+                  }, 300);
+                }}
+                onClick={() => { 
+                  if (!areImagesLocked) {
+                    setSelectedImageForTransform('both'); 
+                    setCurrentTool('transform');
+                  }
+                }} 
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: ((!topImage || !bottomImage) || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: ((!topImage || !bottomImage) || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              >
+                {selectedImageForTransform === 'both' ? '✓ ' : ''}Both Images ▸
+              </button>
+              {openImageSubmenu === 'both' && !areImagesLocked && renderImageSubmenu('both', submenuTimeoutRef)}
+            </div>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { 
-              if (selectedImageForTransform) {
-                if (selectedImageForTransform === 'both') {
-                  const newFlipX = !(topImage?.flipX || false);
-                  updateImageTransform('both', { flipX: newFlipX });
-                } else {
-                  const currentFlipX = selectedImageForTransform === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
-                  updateImageTransform(selectedImageForTransform, { flipX: !currentFlipX });
-                }
-              }
-              setOpenMenu(null);
-            }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Horizontal Flip</button>
-            <button onClick={() => { 
-              if (selectedImageForTransform) {
-                if (selectedImageForTransform === 'both') {
-                  const newFlipY = !(topImage?.flipY || false);
-                  updateImageTransform('both', { flipY: newFlipY });
-                } else {
-                  const currentFlipY = selectedImageForTransform === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
-                  updateImageTransform(selectedImageForTransform, { flipY: !currentFlipY });
-                }
-              }
-              setOpenMenu(null);
-            }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Toggle Vertical Flip</button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { setTransformMode('nudge'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'nudge' ? '✓ ' : ''}Mode: Nudge</button>
-            <button onClick={() => { setTransformMode('scale'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'scale' ? '✓ ' : ''}Mode: Scale</button>
-            <button onClick={() => { setTransformMode('rotate'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'rotate' ? '✓ ' : ''}Mode: Rotate</button>
-            <button onClick={() => { setTransformMode('slant'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'slant' ? '✓ ' : ''}Mode: Slant</button>
-            <button onClick={() => { setTransformMode('keystone'); setCurrentTool('transform'); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>{transformMode === 'keystone' ? '✓ ' : ''}Mode: Keystone</button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => {
-              setCurrentTool('transform');
-              if (isGrayscale || isBlackAndWhiteEdges) {
-                setIsGrayscale(false);
-                setIsBlackAndWhiteEdges(false);
-                setIsBlackAndWhiteInverted(false);
-              } else {
-                setIsGrayscale(true);
-              }
-              setOpenMenu(null);
-            }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              {(isGrayscale || isBlackAndWhiteEdges) ? 'Color Mode' : 'Grayscale Mode'}
+            <button 
+              onClick={() => { if (!areImagesLocked) { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); } }} 
+              disabled={areImagesLocked}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: areImagesLocked ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: areImagesLocked ? 'not-allowed' : 'pointer' }}
+            >
+              Reset Transform
             </button>
-            <button onClick={() => {
-              setCurrentTool('transform');
-              if (!isBlackAndWhiteEdges) {
-                setIsBlackAndWhiteEdges(true);
-                setIsBlackAndWhiteInverted(false);
-              } else {
-                setIsBlackAndWhiteInverted(prev => !prev);
-              }
-              setOpenMenu(null);
-            }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
-            </button>
-            <button onClick={() => { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Reset Transform</button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Images {areImagesLocked ? '✓' : ''}
+              {areImagesLocked ? 'Unlock Images ✓' : 'Lock Images'}
             </button>
           </div>
         )}

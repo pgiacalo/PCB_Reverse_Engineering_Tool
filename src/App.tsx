@@ -2663,9 +2663,10 @@ function App() {
         }
       }
     } else if (isTransforming && transformStartPos && selectedImageForTransform) {
-      // Don't allow transforms if images are locked
+      // Don't allow transforms if images are locked - stop the transform immediately
       if (areImagesLocked) {
-        alert('Cannot transform: Images are locked. Unlock images to transform them.');
+        setIsTransforming(false);
+        setTransformStartPos(null);
         return;
       }
       const deltaX = x - transformStartPos.x;
@@ -3217,29 +3218,38 @@ function App() {
       ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
     };
     
-    // Draw locked images first (before view transform) so they're fixed at canvas (0,0)
-    if (areImagesLocked) {
+    // Apply global view transform once (pan then scale)
+    ctx.translate(viewPan.x, viewPan.y);
+    ctx.scale(viewScale, viewScale);
+    
+    // Draw images with transformations (locked and unlocked use same coordinate system)
+    // Locked images just can't be transformed, but they appear in the same position
+    {
       const overlayMode = showTopImage && showBottomImage;
+      
       if (topImage && topImage.bitmap && showTopImage) {
         const bmp = topImage.bitmap;
         ctx.save();
         ctx.globalAlpha = 1;
+        // Apply grayscale filter if enabled and not in edge mode
         if (isGrayscale && !isBlackAndWhiteEdges) {
           ctx.filter = 'grayscale(100%)';
         } else {
           ctx.filter = 'none';
         }
-        // Draw at fixed canvas position (0,0) - no viewPan, but still apply viewScale for zoom
-        ctx.scale(viewScale, viewScale);
-        ctx.translate(topImage.x / viewScale, topImage.y / viewScale);
+        // Apply per-image transformations
+        // Images are stored with x,y values that are updated during transforms in world coordinates
+        // So we can use them directly as world coordinates (the view transform is already applied)
+        ctx.translate(topImage.x, topImage.y);
         ctx.rotate((topImage.rotation * Math.PI) / 180);
+        // Apply skew (keystone) if any
         if (topImage.skewX || topImage.skewY) {
           const sx = Math.tan(topImage.skewX || 0);
           const sy = Math.tan(topImage.skewY || 0);
           ctx.transform(1, sy, sx, 1, 0, 0);
         }
         ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
-        const scaledWidth = bmp.width * 1;
+        const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
         const scaledHeight = bmp.height * 1;
         const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
         if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
@@ -3249,6 +3259,7 @@ function App() {
         }
         ctx.restore();
       }
+
       if (bottomImage && bottomImage.bitmap && showBottomImage) {
         const bmp = bottomImage.bitmap;
         ctx.save();
@@ -3258,82 +3269,10 @@ function App() {
         } else {
           ctx.filter = 'none';
         }
-        // Draw at fixed canvas position (0,0) - no viewPan, but still apply viewScale for zoom
-        ctx.scale(viewScale, viewScale);
-        ctx.translate(bottomImage.x / viewScale, bottomImage.y / viewScale);
-        ctx.rotate((bottomImage.rotation * Math.PI) / 180);
-        if (bottomImage.skewX || bottomImage.skewY) {
-          const sx = Math.tan(bottomImage.skewX || 0);
-          const sy = Math.tan(bottomImage.skewY || 0);
-          ctx.transform(1, sy, sx, 1, 0, 0);
-        }
-        ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
-        const scaledWidth = bmp.width * 1;
-        const scaledHeight = bmp.height * 1;
-        const sourceToDrawB: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
-        if ((bottomImage.keystoneV && Math.abs(bottomImage.keystoneV) > 1e-6) || (bottomImage.keystoneH && Math.abs(bottomImage.keystoneH) > 1e-6)) {
-          drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight);
-        } else {
-          ctx.drawImage(sourceToDrawB, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        }
-        ctx.restore();
-      }
-    }
-    
-    // Apply global view transform once (pan then scale)
-    ctx.translate(viewPan.x, viewPan.y);
-    ctx.scale(viewScale, viewScale);
-    
-    // Draw images with transformations and apply view transform per draw (only if not locked)
-    if (!areImagesLocked) {
-      const overlayMode = showTopImage && showBottomImage;
-      
-      if (topImage && topImage.bitmap && showTopImage) {
-      const bmp = topImage.bitmap;
-      ctx.save();
-      ctx.globalAlpha = 1;
-      // Apply grayscale filter if enabled and not in edge mode
-      if (isGrayscale && !isBlackAndWhiteEdges) {
-        ctx.filter = 'grayscale(100%)';
-      } else {
-        ctx.filter = 'none';
-      }
-      // Apply per-image transformations
-      // Images are stored with x,y values that are updated during transforms in world coordinates
-      // So we can use them directly as world coordinates (the view transform is already applied)
-      ctx.translate(topImage.x, topImage.y);
-      ctx.rotate((topImage.rotation * Math.PI) / 180);
-      // Apply skew (keystone) if any
-      if (topImage.skewX || topImage.skewY) {
-        const sx = Math.tan(topImage.skewX || 0);
-        const sy = Math.tan(topImage.skewY || 0);
-        ctx.transform(1, sy, sx, 1, 0, 0);
-      }
-      ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
-      const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
-      const scaledHeight = bmp.height * 1;
-      const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
-      if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
-        drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
-      } else {
-        ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-      }
-      ctx.restore();
-    }
-
-    if (bottomImage && bottomImage.bitmap && showBottomImage) {
-      const bmp = bottomImage.bitmap;
-      ctx.save();
-      ctx.globalAlpha = overlayMode ? (transparency / 100) : 1;
-      if (isGrayscale && !isBlackAndWhiteEdges) {
-        ctx.filter = 'grayscale(100%)';
-      } else {
-        ctx.filter = 'none';
-      }
-      // Apply per-image transformations
-      // Images are stored with x,y values that are updated during transforms in world coordinates
-      // So we can use them directly as world coordinates (the view transform is already applied)
-      ctx.translate(bottomImage.x, bottomImage.y);
+        // Apply per-image transformations
+        // Images are stored with x,y values that are updated during transforms in world coordinates
+        // So we can use them directly as world coordinates (the view transform is already applied)
+        ctx.translate(bottomImage.x, bottomImage.y);
       ctx.rotate((bottomImage.rotation * Math.PI) / 180);
       // Apply skew (keystone) if any
       if (bottomImage.skewX || bottomImage.skewY) {
@@ -3822,6 +3761,19 @@ function App() {
     window.addEventListener('resize', computeSize);
     return () => window.removeEventListener('resize', computeSize);
   }, [setViewPan]);
+
+  // Stop any active transform and clear image selections when images are locked
+  React.useEffect(() => {
+    if (areImagesLocked) {
+      // Stop any active transform
+      if (isTransforming) {
+        setIsTransforming(false);
+        setTransformStartPos(null);
+      }
+      // Clear selected image for transform
+      setSelectedImageForTransform(null);
+    }
+  }, [areImagesLocked, isTransforming, setIsTransforming, setTransformStartPos, setSelectedImageForTransform]);
 
   const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
     // Pass 1: draw traces first (so vias and pads appear on top)
@@ -5067,6 +5019,11 @@ function App() {
         if (input.type === 'radio') {
           input.blur();
         }
+      }
+
+      // Don't allow transforms if images are locked
+      if (areImagesLocked) {
+        return;
       }
 
       if (transformMode === 'nudge') {
