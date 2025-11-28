@@ -4429,6 +4429,8 @@ function App() {
     
     // Use project directory for auto-save (same directory as project.json)
     // For both New Project and Open Project, projectDirHandle should be set
+    // When a file is opened, projectDirHandle is automatically set to the opened file's directory
+    // This ensures auto-save uses the same directory as the opened file
     let dirHandleToUse = projectDirHandle;
     if (!dirHandleToUse) {
       // This should only happen in fallback scenarios (file input without File System Access API)
@@ -6641,7 +6643,9 @@ function App() {
           width: topImage.width,
           height: topImage.height,
           dataUrl: topImage.dataUrl ?? topImage.url, // prefer embedded content
-          x: topImage.x, y: topImage.y,
+          x: topImage.x, y: topImage.y, // World coordinates - saved as-is
+          // Debug: Log image position when saving
+          // console.log('Saving topImage position:', { x: topImage.x, y: topImage.y });
           scale: topImage.scale,
           rotation: topImage.rotation,
           flipX: topImage.flipX, flipY: topImage.flipY,
@@ -6841,11 +6845,13 @@ function App() {
         return;
       }
       
-      // Before saving new file, check if there's a previous auto-saved file in root directory
-      // and move it to history/
+      // Before saving new file, check if there's a previous project file in root directory
+      // and move it to history/ (including the file that was opened, if it's in this directory)
       try {
-        // Look for auto-saved files in root directory by checking file content
+        // Look for project files in root directory by checking file content
         const rootFiles: string[] = [];
+        const currentFilePath = currentProjectFilePathRef.current;
+        
         for await (const name of (dirHandle as any).keys()) {
           try {
             // Skip directories and the file we're about to create
@@ -6869,12 +6875,16 @@ function App() {
               // Move it to history if it's either:
               // 1. An auto-saved file (has fileType field), OR
               // 2. A manually saved/opened project file (has version but no fileType)
+              // This includes the file that was just opened, which should be moved to history
+              // when auto-save is first invoked
               if (parsed.version && (
                 parsed.fileType === 'PCB_REVERSE_ENGINEERING_AUTOSAVE' ||
                 !parsed.fileType // Manually saved files don't have fileType
               )) {
                 rootFiles.push(name);
-                console.log(`Auto save: Found PCB project file in root: ${name} (${parsed.fileType ? 'auto-saved' : 'manually saved'})`);
+                const fileType = parsed.fileType ? 'auto-saved' : 'manually saved/opened';
+                const isOpenedFile = name === currentFilePath;
+                console.log(`Auto save: Found PCB project file in root: ${name} (${fileType}${isOpenedFile ? ' - this is the opened file' : ''})`);
               }
             } catch (parseError) {
               // Not valid JSON, skip
@@ -7830,8 +7840,10 @@ function App() {
           width: img.width ?? (bitmap ? bitmap.width : 0),
           height: img.height ?? (bitmap ? bitmap.height : 0),
           dataUrl: img.dataUrl,
-          x: img.x ?? 0,
-          y: img.y ?? 0,
+          x: img.x ?? 0, // World coordinates - loaded as-is
+          y: img.y ?? 0, // World coordinates - loaded as-is
+          // Debug: Log image position when loading
+          // console.log('Loading image position:', { x: img.x ?? 0, y: img.y ?? 0, name: img.name });
           scale: img.scale ?? 1,
           rotation: img.rotation ?? 0,
           flipX: !!img.flipX,
@@ -8512,9 +8524,12 @@ function App() {
         const project = JSON.parse(text);
         
         // Get the directory handle from the file handle (parent directory)
+        // This sets the project directory so that when auto-save is enabled,
+        // it will automatically use this directory (no need to prompt user)
         try {
           const dirHandle = await handle.getParent();
           setProjectDirHandle(dirHandle);
+          console.log(`Opened project file: ${file.name} in directory (auto-save will use this directory)`);
         } catch (e) {
           console.warn('Could not get directory handle from file handle:', e);
           // Continue without directory handle (fallback will prompt if needed)
