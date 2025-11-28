@@ -6119,28 +6119,57 @@ function App() {
         ctx.stroke();
       }
     } else if (kind === 'ground') {
-      // Draw ground symbol cursor: empty black circle with extending vertical and horizontal lines
+      // Draw ground symbol cursor based on selected ground bus type
       ctx.strokeStyle = '#000000'; // Ground symbols are always black
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
-      const lineExtension = r * 0.8; // Lines extend outside the circle
       
-      // Draw empty circle (not filled)
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.stroke();
+      // Check if Earth Ground is selected
+      const isEarthGround = selectedGroundBusId === 'groundbus-earth';
       
-      // Draw vertical line extending above and below the circle
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - r - lineExtension);
-      ctx.lineTo(cx, cy + r + lineExtension);
-      ctx.stroke();
-      
-      // Draw horizontal line extending left and right of the circle
-      ctx.beginPath();
-      ctx.moveTo(cx - r - lineExtension, cy);
-      ctx.lineTo(cx + r + lineExtension, cy);
-      ctx.stroke();
+      if (isEarthGround) {
+        // Draw Earth Ground symbol: vertical line with 3 horizontal bars (progressively shorter)
+        const unit = r * 1.5; // Scale based on cursor radius
+        const vLen = unit * 0.9; // Vertical line length
+        const barG = unit * 0.24; // Gap between bars
+        const width = unit * 1.6; // Width of first (longest) bar
+        
+        // Vertical line (from top)
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - vLen / 2);
+        ctx.lineTo(cx, cy + vLen / 2);
+        ctx.stroke();
+        
+        // Three horizontal bars (progressively shorter)
+        for (let i = 0; i < 3; i++) {
+          const barY = cy + vLen / 2 + i * barG;
+          const barWidth = width * (1 - i * 0.25); // Each bar is 25% shorter than previous
+          ctx.beginPath();
+          ctx.moveTo(cx - barWidth / 2, barY);
+          ctx.lineTo(cx + barWidth / 2, barY);
+          ctx.stroke();
+        }
+      } else {
+        // Draw GND or other ground symbol: circle with crossing lines
+        const lineExtension = r * 0.8; // Lines extend outside the circle
+        
+        // Draw empty circle (not filled)
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw vertical line extending above and below the circle
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r - lineExtension);
+        ctx.lineTo(cx, cy + r + lineExtension);
+        ctx.stroke();
+        
+        // Draw horizontal line extending left and right of the circle
+        ctx.beginPath();
+        ctx.moveTo(cx - r - lineExtension, cy);
+        ctx.lineTo(cx + r + lineExtension, cy);
+        ctx.stroke();
+      }
     } else if (kind === 'power') {
       // Draw power symbol cursor: empty red circle with extending vertical and horizontal lines
       ctx.strokeStyle = '#ff0000'; // Power symbols are always red
@@ -6192,7 +6221,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, powerBuses, toolRegistry, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, toolRegistry, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -9196,26 +9225,48 @@ function App() {
               {groundBuses.length === 0 ? (
                 <div style={{ padding: '8px', color: '#666', fontSize: '12px' }}>No ground buses defined. Use Tools → Manage Ground Buses to add one.</div>
               ) : (
-                [...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => (
-                  <button
-                    key={bus.id}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Set the selected ground bus and close the selector
-                      setSelectedGroundBusId(bus.id);
-                      setShowGroundBusSelector(false);
-                    }}
-                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{bus.name}</div>
+                [...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => {
+                  const isEarthGround = bus.id === 'groundbus-earth';
+                  const isSelected = selectedGroundBusId === bus.id;
+                  return (
+                    <button
+                      key={bus.id}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Set the selected ground bus and close the selector
+                        setSelectedGroundBusId(bus.id);
+                        setShowGroundBusSelector(false);
+                      }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: isSelected ? '#e0e0e0' : '#f5f5f5', border: isSelected ? '2px solid #000' : '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {/* Ground Symbol Icon */}
+                        <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {isEarthGround ? (
+                            // Earth Ground symbol: vertical line with 3 horizontal bars
+                            <svg width="20" height="20" viewBox="0 0 20 20" style={{ display: 'block' }}>
+                              <line x1="10" y1="2" x2="10" y2="10" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                              <line x1="4" y1="10" x2="16" y2="10" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                              <line x1="5" y1="12.5" x2="15" y2="12.5" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                              <line x1="6" y1="15" x2="14" y2="15" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                            </svg>
+                          ) : (
+                            // GND symbol: circle with crossing lines
+                            <svg width="20" height="20" viewBox="0 0 20 20" style={{ display: 'block' }}>
+                              <circle cx="10" cy="10" r="6" fill="none" stroke="#000" strokeWidth="2" />
+                              <line x1="10" y1="2" x2="10" y2="18" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                              <line x1="2" y1="10" x2="18" y2="10" stroke="#000" strokeWidth="2" strokeLinecap="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{bus.name}</div>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))
+                    </button>
+                  );
+                })
               )}
               <div style={{ height: 1, background: '#ddd', margin: '4px 0' }} />
               <button
