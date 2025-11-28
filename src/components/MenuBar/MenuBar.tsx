@@ -102,6 +102,7 @@ export interface MenuBarProps {
   // Ground bus
   setShowGroundBusManager: (show: boolean) => void;
   
+  
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
 }

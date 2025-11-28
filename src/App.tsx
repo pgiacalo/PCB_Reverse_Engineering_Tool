@@ -1177,7 +1177,7 @@ function App() {
     } catch (err) {
       console.error('Failed to load image', err);
     }
-  }, []);
+  }, [viewPan.x, viewPan.y, viewScale, topImage, bottomImage]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Stop propagation to prevent document-level handlers from interfering
@@ -3467,7 +3467,6 @@ function App() {
       ctx.textBaseline = 'middle';
       
       // Draw the designator text
-      const fontSize = Math.max(8, size * 0.35);
       ctx.fillText(abbreviation, c.x, c.y);
       
       // selection highlight
@@ -3547,13 +3546,15 @@ function App() {
           if (connection && connection.trim() !== '') {
             const nodeIdStr = connection.trim();
             // Check if this pin is negative (for polarized components)
-            const isNegative = isPolarized && 
+            const isNegative: boolean = Boolean(isPolarized && 
                              comp.pinPolarities && 
                              pinIndex < comp.pinPolarities.length &&
-                             comp.pinPolarities[pinIndex] === '-';
+                             comp.pinPolarities[pinIndex] === '-');
             // If node already exists, keep the negative flag if either connection is negative
-            if (connectedNodes.has(nodeIdStr)) {
-              connectedNodes.set(nodeIdStr, connectedNodes.get(nodeIdStr) || isNegative);
+            const existingValue = connectedNodes.get(nodeIdStr);
+            if (existingValue !== undefined) {
+              // existingValue is guaranteed to be boolean here (Map<string, boolean>)
+              connectedNodes.set(nodeIdStr, existingValue || isNegative);
             } else {
               connectedNodes.set(nodeIdStr, isNegative);
             }
@@ -4102,6 +4103,7 @@ function App() {
       }
     }
   }, [topImage, bottomImage, areImagesLocked]);
+
 
   const resetImageTransform = useCallback(() => {
     // Reset only the selected image to its original transform
