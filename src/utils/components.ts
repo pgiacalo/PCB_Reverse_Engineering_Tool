@@ -395,7 +395,7 @@ export function componentToBOM(component: PCBComponent): BOMEntry {
     partMarkings: component.partMarkings,
     pinCount: component.pinCount,
     layer: component.layer,
-    notes: component.notes,
+    notes: component.notes ?? undefined, // Convert null to undefined
   };
   
   // Add type-specific fields

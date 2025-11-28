@@ -239,8 +239,10 @@ function getComponentValueForSchematic(comp: PCBComponent): string {
  * Uses depth-first search to follow all trace paths until reaching nodes or components
  * CRITICAL: Examines each trace's points directly to follow the complete path,
  * including intermediate points without Node IDs, to find all connected nodes
+ * 
+ * NOTE: This function is currently unused but kept for potential future use
  */
-function traverseNodeConnections(
+export function traverseNodeConnections(
   startNodeId: number,
   nodes: Map<number, NetlistNode>,
   drawingStrokes: DrawingStroke[],

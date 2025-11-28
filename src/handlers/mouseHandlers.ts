@@ -1049,6 +1049,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         size: toolRegistry.get('ground')?.settings.size || 18,
         type: groundType, // Auto-populate type
         pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
+        layer: selectedDrawingLayer, // Set layer based on current drawing layer
       };
       setGroundSymbols(prev => [...prev, g]);
       
