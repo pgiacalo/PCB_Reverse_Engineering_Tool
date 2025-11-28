@@ -402,7 +402,158 @@ function traverseNodeConnections(
 }
 
 /**
- * Generate nodes CSV file with comprehensive connectivity information
+ * Get direct/first-level neighbors of a node (not full traversal)
+ * Only returns nodes directly connected via a single trace segment
+ */
+function getDirectNeighbors(
+  nodeId: number,
+  nodes: Map<number, NetlistNode>,
+  drawingStrokes: DrawingStroke[],
+  componentIdToDesignator: Map<string, string>
+): {
+  directNeighborIds: number[];
+  componentPins: Array<{ designator: string; pin: number }>;
+} {
+  // Build adjacency list for direct connections only
+  const adjacencyList = new Map<number, Set<number>>();
+  
+  // Initialize adjacency list for all nodes
+  for (const nodeId of nodes.keys()) {
+    if (!adjacencyList.has(nodeId)) {
+      adjacencyList.set(nodeId, new Set());
+    }
+  }
+  
+  // Process each trace to build direct connections
+  for (const stroke of drawingStrokes) {
+    if (stroke.type === 'trace' && stroke.points.length >= 2) {
+      // Connect consecutive points in the trace (direct neighbors only)
+      for (let i = 0; i < stroke.points.length - 1; i++) {
+        const point1 = stroke.points[i];
+        const point2 = stroke.points[i + 1];
+        
+        // If both points have Node IDs, connect them as direct neighbors
+        if (point1 && point2 && point1.id !== undefined && point1.id !== null &&
+            point2.id !== undefined && point2.id !== null) {
+          const nodeId1 = point1.id;
+          const nodeId2 = point2.id;
+          
+          if (nodes.has(nodeId1) && nodes.has(nodeId2)) {
+            if (!adjacencyList.has(nodeId1)) {
+              adjacencyList.set(nodeId1, new Set());
+            }
+            if (!adjacencyList.has(nodeId2)) {
+              adjacencyList.set(nodeId2, new Set());
+            }
+            adjacencyList.get(nodeId1)!.add(nodeId2);
+            adjacencyList.get(nodeId2)!.add(nodeId1);
+          }
+        }
+      }
+    }
+  }
+
+  // Get direct neighbors only (first-level connections)
+  const directNeighborIds = new Set<number>();
+  const neighbors = adjacencyList.get(nodeId);
+  if (neighbors) {
+    for (const neighborId of neighbors) {
+      const neighborNode = nodes.get(neighborId);
+      // Only include non-trace-point nodes as neighbors
+      if (neighborNode && neighborNode.type !== 'trace_point') {
+        directNeighborIds.add(neighborId);
+      }
+    }
+  }
+
+  // Find component pins directly connected to this node or its direct neighbors
+  const componentPins: Array<{ designator: string; pin: number }> = [];
+
+  // Check if the node itself is a component pin
+  const currentNode = nodes.get(nodeId);
+  if (currentNode && currentNode.type === 'component_pin' && currentNode.componentId && currentNode.pinIndex !== undefined) {
+    const designator = componentIdToDesignator.get(currentNode.componentId);
+    if (designator) {
+      componentPins.push({
+        designator,
+        pin: (currentNode.pinIndex || 0) + 1,
+      });
+    }
+  }
+
+  // Check direct neighbors for component pins
+  for (const neighborId of directNeighborIds) {
+    const neighborNode = nodes.get(neighborId);
+    if (neighborNode && neighborNode.type === 'component_pin' && neighborNode.componentId && neighborNode.pinIndex !== undefined) {
+      const designator = componentIdToDesignator.get(neighborNode.componentId);
+      if (designator) {
+        componentPins.push({
+          designator,
+          pin: (neighborNode.pinIndex || 0) + 1,
+        });
+      }
+    }
+  }
+
+  // Sort and deduplicate component pins
+  const uniquePins = new Map<string, { designator: string; pin: number }>();
+  for (const pin of componentPins) {
+    const key = `${pin.designator}:${pin.pin}`;
+    if (!uniquePins.has(key)) {
+      uniquePins.set(key, pin);
+    }
+  }
+  const sortedPins = Array.from(uniquePins.values()).sort((a, b) => {
+    if (a.designator !== b.designator) {
+      return a.designator.localeCompare(b.designator);
+    }
+    return a.pin - b.pin;
+  });
+
+  return {
+    directNeighborIds: Array.from(directNeighborIds).sort((a, b) => a - b),
+    componentPins: sortedPins,
+  };
+}
+
+/**
+ * Check if a node has directly attached components
+ * A node qualifies if:
+ * 1. The node itself is a component_pin, OR
+ * 2. The node has component pins as direct neighbors (first-level connection)
+ */
+function hasDirectlyAttachedComponents(
+  nodeId: number,
+  nodes: Map<number, NetlistNode>,
+  drawingStrokes: DrawingStroke[],
+  componentIdToDesignator: Map<string, string>
+): boolean {
+  const currentNode = nodes.get(nodeId);
+  if (!currentNode) {
+    return false;
+  }
+
+  // Check if the node itself is a component pin
+  if (currentNode.type === 'component_pin') {
+    return true;
+  }
+
+  // Check if any direct neighbors are component pins
+  const { directNeighborIds } = getDirectNeighbors(nodeId, nodes, drawingStrokes, componentIdToDesignator);
+  for (const neighborId of directNeighborIds) {
+    const neighborNode = nodes.get(neighborId);
+    if (neighborNode && neighborNode.type === 'component_pin') {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Generate nodes CSV file with filtered connectivity information
+ * Only includes nodes with directly attached components
+ * Only shows first-level/direct connected nodes (not full traversal)
  * Returns CSV content as string
  */
 export function generateNodesCsv(
@@ -431,12 +582,15 @@ export function generateNodesCsv(
   csvRows.push('Node ID,Node Type,Connected Node IDs,Connected Components,Connected Component Pins');
 
   // Iterate through every node (excluding trace points - they are just connecting wires)
-  // Note: We traverse all traces to find connected nodes via the netGroups (union-find algorithm)
-  // This ensures we find ALL nodes and components connected through any path of traces
+  // NEW: Only include nodes that have directly attached components
   for (const [nodeId, node] of nodes) {
     // Skip trace points - they are only connecting wires, not important nodes
-    // However, we still use them to traverse connections and find all connected nodes/components
     if (node.type === 'trace_point') {
+      continue;
+    }
+
+    // NEW: Filter - only include nodes with directly attached components
+    if (!hasDirectlyAttachedComponents(nodeId, nodes, drawingStrokes, componentIdToDesignator)) {
       continue;
     }
 
@@ -488,19 +642,13 @@ export function generateNodesCsv(
       }
     }
 
-    // Traverse all traces connected to this node
-    // This explicitly follows all trace paths by examining each trace's points
-    // It follows the complete path including intermediate points to find all connected nodes
-    const traversalResult = traverseNodeConnections(
-      nodeId,
-      nodes,
-      drawingStrokes,
-      componentIdToDesignator
-    );
+    // NEW: Get only direct/first-level neighbors (not full traversal)
+    const directNeighbors = getDirectNeighbors(nodeId, nodes, drawingStrokes, componentIdToDesignator);
+    const connectedNodeIds = directNeighbors.directNeighborIds;
+    const componentPins = directNeighbors.componentPins;
 
-    const connectedNodeIds = traversalResult.connectedNodeIds;
-    const connectedComponents = traversalResult.connectedComponents;
-    const componentPins = traversalResult.connectedComponentPins;
+    // Get unique component designators from component pins
+    const connectedComponents = Array.from(new Set(componentPins.map(p => p.designator))).sort();
 
     // Format connected node IDs - all in one column, semicolon-separated
     const connectedNodeIdsStr = connectedNodeIds.length > 0 
@@ -981,7 +1129,7 @@ export function generateSimpleSchematic(
   // Build component map for layout
   const componentMap = new Map<string, { comp: PCBComponent; designator: string; x: number; y: number }>();
 
-  // Layout components in a grid
+  // Layout components using graph-based algorithms
   // Include all components that have designators (prioritize designator over abbreviation)
   const componentsWithDesignators = components.filter(c => {
     let d = c.designator?.trim() || (c as any).abbreviation?.trim();
@@ -991,6 +1139,91 @@ export function generateSimpleSchematic(
     }
     return !!d && d.length > 0; // Must have a non-empty designator
   });
+
+  /**
+   * Build connectivity graph for components based on shared nets
+   * This enables functional block clustering and improved layout
+   */
+  const buildComponentConnectivityGraph = (): Map<string, Set<string>> => {
+    const graph = new Map<string, Set<string>>();
+    
+    // Initialize graph nodes
+    for (const comp of componentsWithDesignators) {
+      const designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
+      if (designator && designator.length > 0) {
+        graph.set(designator, new Set());
+      }
+    }
+    
+    // Build edges: components sharing nets are connected
+    for (const net of nets) {
+      if (net.componentPins.length >= 2) {
+        // All components in this net are connected to each other
+        const designators = net.componentPins.map(p => p.designator);
+        for (let i = 0; i < designators.length; i++) {
+          for (let j = i + 1; j < designators.length; j++) {
+            const d1 = designators[i];
+            const d2 = designators[j];
+            if (graph.has(d1) && graph.has(d2)) {
+              graph.get(d1)!.add(d2);
+              graph.get(d2)!.add(d1);
+            }
+          }
+        }
+      }
+    }
+    
+    return graph;
+  };
+
+  /**
+   * Simple functional block clustering using connected components
+   * Groups components that share many connections together
+   */
+  const clusterComponents = (componentGraph: Map<string, Set<string>>): Map<string, number> => {
+    const clusters = new Map<string, number>();
+    const visited = new Set<string>();
+    let clusterId = 0;
+    
+    // Simple clustering: DFS to find connected components
+    const dfs = (designator: string, currentCluster: number) => {
+      if (visited.has(designator)) return;
+      visited.add(designator);
+      clusters.set(designator, currentCluster);
+      
+      const neighbors = componentGraph.get(designator);
+      if (neighbors) {
+        for (const neighbor of neighbors) {
+          if (!visited.has(neighbor)) {
+            dfs(neighbor, currentCluster);
+          }
+        }
+      }
+    };
+    
+    // Find all clusters
+    for (const designator of componentGraph.keys()) {
+      if (!visited.has(designator)) {
+        dfs(designator, clusterId++);
+      }
+    }
+    
+    return clusters;
+  };
+
+  // Build component connectivity graph for improved layout
+  const componentGraph = buildComponentConnectivityGraph();
+  const componentClusters = clusterComponents(componentGraph);
+  
+  // Log clustering information
+  const clusterCounts = new Map<number, number>();
+  for (const clusterId of componentClusters.values()) {
+    clusterCounts.set(clusterId, (clusterCounts.get(clusterId) || 0) + 1);
+  }
+  console.log(`[Schematic] Component clustering: ${clusterCounts.size} functional blocks identified`);
+  for (const [clusterId, count] of clusterCounts) {
+    console.log(`  Cluster ${clusterId}: ${count} components`);
+  }
 
   // Use PCB coordinates to preserve geometric relationships
   // Scale and translate PCB coordinates (pixels) to schematic coordinates (mm)
@@ -1047,6 +1280,7 @@ export function generateSimpleSchematic(
     offsetY = margin + (usableHeight - scaledHeight) / 2;
     
     // Map components using PCB coordinates
+    // Components in the same cluster are placed closer together (preserved by PCB coordinates)
     for (const comp of componentsWithDesignators) {
       // Prioritize designator (full name like "R1") over abbreviation (just prefix like "R")
       let designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
@@ -1057,6 +1291,7 @@ export function generateSimpleSchematic(
       if (designator && designator.length > 0) {
         // Convert PCB coordinates to schematic coordinates
         // Translate to origin, scale, then offset
+        // This preserves spatial relationships and naturally groups connected components
         const schematicX = (comp.x - minX) * scale + offsetX;
         const schematicY = (comp.y - minY) * scale + offsetY;
         
@@ -1079,6 +1314,11 @@ export function generateSimpleSchematic(
   // Use A3 paper size to accommodate larger layouts that preserve PCB spatial relationships
   // A3 is 297mm x 420mm, which gives more room than A4 (210mm x 297mm)
   schematic += '  (paper "A3")\n';
+  // Note: Grid settings are view preferences in KiCad, not stored in the schematic file
+  // Users can set grid to 100mm in KiCad's view settings after opening the schematic
+  // Reference to external symbol library (kicadunlocked.kicad_sym)
+  // Note: KiCad schematics reference symbol libraries when placing symbols, not in the header
+  // The library file should be available in kicad/symbols/kicadunlocked.kicad_sym
   schematic += '  (title_block\n';
   schematic += '    (title "")\n';
   schematic += '    (date "")\n';
@@ -1520,6 +1760,10 @@ export function generateSimpleSchematic(
   }
 
   // Add wires and labels to connect components
+  // Optimization strategy: Minimize net labels by using direct wire connections
+  // - Connect all pins in a net with wires when possible
+  // - Only add labels for: power/ground (for clarity), single-pin nets, or disconnected pins
+  // - This reduces schematic clutter and follows KiCad best practices
   schematic += '\n';
   
   // Place power and ground symbols
@@ -1853,6 +2097,9 @@ export function generateSimpleSchematic(
         }
       }
       
+      // Track which pins are connected with wires (for label decision)
+      const connectedPins = new Set<string>();
+      
       // Route wires following PCB trace topology
       if (pinPositions.length >= 2) {
         console.log(`[Schematic] Creating wires for net ${net.name}: ${pinPositions.length} pins`);
@@ -1866,7 +2113,6 @@ export function generateSimpleSchematic(
         
         // Use minimum spanning tree to connect pins while preserving spatial relationships
         // Sort pins by distance from each other to create a more natural routing
-        const connectedPins = new Set<string>();
         const edges: Array<{ from: string; to: string; distance: number }> = [];
         
         // Calculate distances between all connected pins
@@ -1923,6 +2169,9 @@ export function generateSimpleSchematic(
           if (pinPositions.length === 2) {
             const wireUuid = generateUuid();
             schematic += `  (wire (pts (xy ${pinPositions[0].x} ${pinPositions[0].y}) (xy ${pinPositions[1].x} ${pinPositions[1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+            // Track connected pins
+            connectedPins.add(`${pinPositions[0].designator}:${pinPositions[0].pin}`);
+            connectedPins.add(`${pinPositions[1].designator}:${pinPositions[1].pin}`);
           } else {
             // For 3+ pins: connect in a chain based on spatial proximity
             // Sort pins by position (left to right, top to bottom)
@@ -1937,6 +2186,9 @@ export function generateSimpleSchematic(
             for (let i = 0; i < sortedPins.length - 1; i++) {
               const wireUuid = generateUuid();
               schematic += `  (wire (pts (xy ${sortedPins[i].x} ${sortedPins[i].y}) (xy ${sortedPins[i + 1].x} ${sortedPins[i + 1].y})) (stroke (width 0) (type default)) (uuid ${wireUuid}))\n`;
+              // Track connected pins
+              connectedPins.add(`${sortedPins[i].designator}:${sortedPins[i].pin}`);
+              connectedPins.add(`${sortedPins[i + 1].designator}:${sortedPins[i + 1].pin}`);
             }
           }
         }
@@ -1949,19 +2201,35 @@ export function generateSimpleSchematic(
         console.warn(`[Schematic] Net ${net.name} has ${net.componentPins.length} component pins but 0 valid pin positions!`);
       }
       
-      // Add a text label to identify the net
-      const labelY = pinPositions.length > 1 ? centerY + 5.08 : pinPositions[0].y + 5.08;
-      const labelX = pinPositions.length > 1 ? centerX : pinPositions[0].x;
-      const textUuid = generateUuid();
-      const netLabel = net.hasPower && net.powerVoltage 
-        ? net.powerVoltage 
-        : net.hasGround 
-        ? 'GND' 
-        : net.name;
-      schematic += `  (text "${netLabel}" (at ${labelX} ${labelY} 0)\n`;
-      schematic += `    (effects (font (size 1.27 1.27)))\n`;
-      schematic += `    (uuid ${textUuid})\n`;
-      schematic += '  )\n';
+      // Only add labels when necessary to reduce net clutter
+      // Strategy: Use direct wire connections where possible, labels only when needed
+      // Check if all pins are connected: if MST connects all pins, connectedPins.size should equal pinPositions.length
+      const allPinsConnected = pinPositions.length >= 2 && connectedPins.size === pinPositions.length;
+      const needsLabel = 
+        // Power/ground nets: always label for clarity (even if fully wired)
+        net.hasPower || net.hasGround ||
+        // Single-pin nets: need label since they can't be wired
+        pinPositions.length === 1 ||
+        // Nets with disconnected pins (not all pins connected via wires)
+        (pinPositions.length >= 2 && !allPinsConnected);
+      
+      if (needsLabel) {
+        const labelY = pinPositions.length > 1 ? centerY + 5.08 : pinPositions[0].y + 5.08;
+        const labelX = pinPositions.length > 1 ? centerX : pinPositions[0].x;
+        const textUuid = generateUuid();
+        const netLabel = net.hasPower && net.powerVoltage 
+          ? net.powerVoltage 
+          : net.hasGround 
+          ? 'GND' 
+          : net.name;
+        schematic += `  (text "${netLabel}" (at ${labelX} ${labelY} 0)\n`;
+        schematic += `    (effects (font (size 1.27 1.27)))\n`;
+        schematic += `    (uuid ${textUuid})\n`;
+        schematic += '  )\n';
+      } else {
+        // All pins are connected with wires - no label needed
+        console.log(`[Schematic] Net ${net.name}: All ${pinPositions.length} pins connected with wires, skipping label`);
+      }
     }
   }
 

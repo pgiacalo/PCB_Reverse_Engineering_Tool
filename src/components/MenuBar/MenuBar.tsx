@@ -99,6 +99,8 @@ export interface MenuBarProps {
   
   // Power bus
   setShowPowerBusManager: (show: boolean) => void;
+  // Ground bus
+  setShowGroundBusManager: (show: boolean) => void;
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
@@ -176,6 +178,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectAllPowerNodes,
   selectAllGroundNodes,
   setShowPowerBusManager,
+  setShowGroundBusManager,
   menuBarRef,
 }) => {
   // Determine current size for Set Size dialog
@@ -496,6 +499,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Power Buses…
+            </button>
+            <button onClick={() => { setShowGroundBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Manage Ground Buses…
             </button>
           </div>
         )}

@@ -42,6 +42,7 @@ import {
   type DrawingStroke,
   type PCBImage,
   type PowerBus,
+  type GroundBus,
   type PowerSymbol,
   type GroundSymbol,
   type Tool,
@@ -696,6 +697,17 @@ function App() {
     }
   }, [currentTool]);
   
+  // Show ground bus selector when ground tool is selected
+  React.useEffect(() => {
+    if (currentTool === 'ground') {
+      setShowGroundBusSelector(true);
+      setSelectedGroundBusId(null); // Reset selection when tool is selected
+    } else {
+      setShowGroundBusSelector(false);
+      setSelectedGroundBusId(null);
+    }
+  }, [currentTool]);
+  
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
   const [, setViaOrderBottom] = useState<string[]>([]);
@@ -754,6 +766,8 @@ function App() {
   const {
     powerBuses,
     setPowerBuses,
+    groundBuses,
+    setGroundBuses,
     powerSymbols,
     setPowerSymbols,
     groundSymbols,
@@ -885,6 +899,10 @@ function App() {
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
+  // Ground bus management (similar to power buses)
+  const [showGroundBusManager, setShowGroundBusManager] = useState(false);
+  const [showGroundBusSelector, setShowGroundBusSelector] = useState(false);
+  const [selectedGroundBusId, setSelectedGroundBusId] = useState<string | null>(null);
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   // Connections layer
@@ -1080,6 +1098,7 @@ function App() {
   const padChooserRef = useRef<HTMLDivElement>(null);
   // Power Bus selector
   const powerBusSelectorRef = useRef<HTMLDivElement>(null);
+  const groundBusSelectorRef = useRef<HTMLDivElement>(null);
   // Component type selection (appears after clicking to set position)
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
@@ -1091,6 +1110,7 @@ function App() {
   const padButtonRef = useRef<HTMLButtonElement>(null);
   const componentButtonRef = useRef<HTMLButtonElement>(null);
   const powerButtonRef = useRef<HTMLButtonElement>(null);
+  const groundButtonRef = useRef<HTMLButtonElement>(null);
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
   
@@ -1999,95 +2019,116 @@ function App() {
       }
       return;
     } else if (currentTool === 'ground') {
-      // Ground tool: place ground symbol at click location
-      // Snap to nearest via, pad, or trace point unless Option/Alt key is held
-      // Returns both coordinates and the Node ID of the snapped object (if any)
-      const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
-        let bestDist = Infinity;
-        let bestPoint: { x: number; y: number; id?: number } | null = null;
-        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
-        // When zoomed in very far, allow extremely fine placement with sub-micron precision
-        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
-        // Scale minimum threshold based on zoom level for ultra-fine control
-        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
-        const SNAP_THRESHOLD_WORLD = viewScale > 20 
-          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
-          : viewScale > 10 
-            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
-            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
-        for (const s of drawingStrokes) {
-          if (s.type === 'via' || s.type === 'pad') {
-            // Vias and pads can be snapped to from any layer
-            const c = s.points[0];
-            const d = Math.hypot(c.x - wx, c.y - wy);
-            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
-              bestDist = d;
-              bestPoint = c;
-            }
-          } else if (s.type === 'trace') {
-            // Check all trace points
-            for (const point of s.points) {
-              const d = Math.hypot(point.x - wx, point.y - wy);
-              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
-                bestDist = d;
-                bestPoint = point;
-              }
-            }
-          }
+      // Ground tool: place ground symbol at click location (similar to power tool)
+      // Show ground bus selector if no bus is selected
+      if (selectedGroundBusId === null) {
+        if (groundBuses.length === 0) {
+          // No ground buses exist - show error and suggest creating one
+          setErrorDialog({
+            visible: true,
+            title: 'No Ground Bus',
+            message: 'No ground buses are defined. Please create a ground bus first using Tools → Manage Ground Buses.',
+          });
+          return;
         }
-        // Truncate coordinates to 4 decimal places for exact matching
-        const result = bestPoint ?? { x: wx, y: wy };
-        const truncated = truncatePoint(result);
-        return {
-          x: truncated.x,
-          y: truncated.y,
-          nodeId: bestPoint?.id
-        };
-      };
-      const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
-      const nodeId = snapped.nodeId ?? generatePointId();
-      const groundType = 'Ground';
-      
-      // Check for conflict: if there's already a power node at this Node ID, show error
-      const existingPower = powers.find(p => p.pointId === nodeId);
-      if (existingPower) {
-        setErrorDialog({
-          visible: true,
-          title: 'Node ID Conflict',
-          message: `Cannot place ground node: A power node (${existingPower.type || 'Power Node'}) already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
-        });
+        // Show ground bus selector
+        setShowGroundBusSelector(true);
         return;
       }
       
-      // If we snapped to an existing object, use its Node ID; otherwise generate a new one
-      const g: GroundSymbol = {
-        id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        x: snapped.x,
-        y: snapped.y,
-        color: '#000000', // Ground symbols are always black
-        size: toolRegistry.get('ground')?.settings.size || 18,
-        type: groundType, // Auto-populate type
-        pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
-      };
-      setGroundSymbols(prev => [...prev, g]);
-      
-      // Update via and pad types if we snapped to an existing via or pad
-      if (snapped.nodeId !== undefined) {
-        const newViaType = determineViaType(snapped.nodeId, powerBuses);
-        const newPadType = determinePadType(snapped.nodeId, powerBuses);
-        setDrawingStrokes(prev => prev.map(s => {
-          if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
-            return { ...s, viaType: newViaType };
-          } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
-            return { ...s, padType: newPadType };
+      const bus = groundBuses.find(b => b.id === selectedGroundBusId);
+      if (bus) {
+        // Snap to nearest via, pad, or trace point unless Option/Alt key is held
+        // Returns both coordinates and the Node ID of the snapped object (if any)
+        const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+          // When zoomed in very far, allow extremely fine placement with sub-micron precision
+          const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+          // Scale minimum threshold based on zoom level for ultra-fine control
+          // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+          const SNAP_THRESHOLD_WORLD = viewScale > 20 
+            ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+            : viewScale > 10 
+              ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+              : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad') {
+              // Vias and pads can be snapped to from any layer
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            } else if (s.type === 'trace') {
+              // Check all trace points
+              for (const point of s.points) {
+                const d = Math.hypot(point.x - wx, point.y - wy);
+                if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                  bestDist = d;
+                  bestPoint = point;
+                }
+              }
+            }
           }
-          return s;
-        }));
+          // Truncate coordinates to 4 decimal places for exact matching
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        const groundType = `${bus.name} Ground Node`;
+        
+        // Check for conflict: if there's already a power node at this Node ID, show error
+        const existingPower = powers.find(p => p.pointId === nodeId);
+        if (existingPower) {
+          setErrorDialog({
+            visible: true,
+            title: 'Node ID Conflict',
+            message: `Cannot place ground node: A power node (${existingPower.type || 'Power Node'}) already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
+          });
+          return;
+        }
+        
+        // Place ground node immediately
+        const g: GroundSymbol = {
+          id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          x: snapped.x,
+          y: snapped.y,
+          color: bus.color, // Use ground bus color
+          size: toolRegistry.get('ground')?.settings.size || 18,
+          groundBusId: bus.id,
+          layer: selectedDrawingLayer,
+          type: groundType, // Auto-populate type with bus name
+          pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
+        };
+        setGroundSymbols(prev => [...prev, g]);
+        
+        // Update via and pad types if we snapped to an existing via or pad
+        if (snapped.nodeId !== undefined) {
+          const newViaType = determineViaType(snapped.nodeId, powerBuses);
+          const newPadType = determinePadType(snapped.nodeId, powerBuses);
+          setDrawingStrokes(prev => prev.map(s => {
+            if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+              return { ...s, viaType: newViaType };
+            } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+              return { ...s, padType: newPadType };
+            }
+            return s;
+          }));
+        }
       }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, powerBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -3290,40 +3331,82 @@ function App() {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
         const isSelected = selectedGroundIds.has(g.id);
-        const groundColor = '#000000'; // Ground symbols are always black
-        ctx.strokeStyle = groundColor;
-        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
-        ctx.lineCap = 'round';
-        const radius = Math.max(6, (g.size || 18) / 2);
-        const lineExtension = radius * 0.8; // Lines extend outside the circle
+        const groundColor = g.color || '#000000'; // Use ground bus color if available
         
-        // Draw selection highlight if selected
-        if (isSelected) {
-          ctx.strokeStyle = '#0066ff';
-          ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
+        // Check if this is Earth Ground (use Earth Ground symbol)
+        const isEarthGround = g.groundBusId === 'groundbus-earth';
+        
+        if (isEarthGround) {
+          // Draw Earth Ground symbol: vertical line with 3 horizontal bars (progressively shorter)
+          const unit = Math.max(6, g.size || 18);
+          const vLen = unit * 0.9; // Vertical line length
+          const barG = unit * 0.24; // Gap between bars
+          const width = unit * 1.6; // Width of first (longest) bar
+          
+          ctx.strokeStyle = groundColor;
+          ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+          ctx.lineCap = 'round';
+          
+          // Draw selection highlight if selected
+          if (isSelected) {
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(g.x - width / 2 - 3, g.y - 3, width + 6, vLen + barG * 2 + 6);
+            ctx.setLineDash([]);
+          }
+          
+          ctx.strokeStyle = groundColor;
+          ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+          
+          // Vertical line (from top)
           ctx.beginPath();
-          ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
+          ctx.moveTo(g.x, g.y);
+          ctx.lineTo(g.x, g.y + vLen);
+          ctx.stroke();
+          
+          // Three horizontal bars (progressively shorter)
+          for (let i = 0; i < 3; i++) {
+            const barY = g.y + vLen + i * barG;
+            const barWidth = width * (1 - i * 0.25); // Each bar is 25% shorter than previous
+            ctx.beginPath();
+            ctx.moveTo(g.x - barWidth / 2, barY);
+            ctx.lineTo(g.x + barWidth / 2, barY);
+            ctx.stroke();
+          }
+        } else {
+          // Draw GND or other ground symbol: circle with lines
+          const radius = Math.max(6, (g.size || 18) / 2);
+          const lineExtension = radius * 0.8; // Lines extend outside the circle
+          
+          // Draw selection highlight if selected
+          if (isSelected) {
+            ctx.strokeStyle = '#0066ff';
+            ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
+            ctx.beginPath();
+            ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          
+          // Draw empty circle (not filled)
+          ctx.strokeStyle = groundColor;
+          ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Draw vertical line extending above and below the circle
+          ctx.beginPath();
+          ctx.moveTo(g.x, g.y - radius - lineExtension);
+          ctx.lineTo(g.x, g.y + radius + lineExtension);
+          ctx.stroke();
+          
+          // Draw horizontal line extending left and right of the circle
+          ctx.beginPath();
+          ctx.moveTo(g.x - radius - lineExtension, g.y);
+          ctx.lineTo(g.x + radius + lineExtension, g.y);
           ctx.stroke();
         }
-        
-        // Draw empty circle (not filled)
-        ctx.strokeStyle = groundColor;
-        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
-        ctx.beginPath();
-        ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Draw vertical line extending above and below the circle
-        ctx.beginPath();
-        ctx.moveTo(g.x, g.y - radius - lineExtension);
-        ctx.lineTo(g.x, g.y + radius + lineExtension);
-        ctx.stroke();
-        
-        // Draw horizontal line extending left and right of the circle
-        ctx.beginPath();
-        ctx.moveTo(g.x - radius - lineExtension, g.y);
-        ctx.lineTo(g.x + radius + lineExtension, g.y);
-        ctx.stroke();
         
         ctx.restore();
       };
@@ -5228,8 +5311,13 @@ function App() {
     setBrushSize(6);
     // Reset power buses to defaults
     setPowerBuses([
-      { id: 'powerbus-1', name: '+3.3VDC', voltage: '+3.3VDC', color: '#ff0000' },
-      { id: 'powerbus-2', name: '+5VDC', voltage: '+5VDC', color: '#ff0000' },
+      { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
+      { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+    ]);
+    // Reset ground buses to defaults (GND and Earth Ground)
+    setGroundBuses([
+      { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
+      { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
     ]);
     // Reset locks
     setAreImagesLocked(false);
@@ -5446,6 +5534,14 @@ function App() {
       powerBusSelectorRef.current.style.left = `${pos.left}px`;
     }
   }, [showPowerBusSelector]);
+
+  React.useEffect(() => {
+    if (showGroundBusSelector && groundBusSelectorRef.current && groundButtonRef.current) {
+      const pos = getDialogPosition(groundButtonRef as React.RefObject<HTMLButtonElement | null>);
+      groundBusSelectorRef.current.style.top = `${pos.top}px`;
+      groundBusSelectorRef.current.style.left = `${pos.left}px`;
+    }
+  }, [showGroundBusSelector]);
 
   // Document-level handler for pin connections (works even when dialog is open)
   React.useEffect(() => {
@@ -6493,6 +6589,7 @@ function App() {
         powers,
       },
       powerBuses, // Save power bus definitions
+      groundBuses, // Save ground bus definitions
       pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
       traceColors: {
         top: topTraceColor,
@@ -6560,7 +6657,7 @@ function App() {
       },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -7937,10 +8034,29 @@ function App() {
         setGroundSymbols(validGrounds);
       }
       // Load power buses first (needed for legacy power node migration)
-      let busesToUse = powerBuses; // Default buses
-      if (project.powerBuses && Array.isArray(project.powerBuses)) {
-        busesToUse = project.powerBuses as PowerBus[];
-        setPowerBuses(busesToUse);
+      let loadedPowerBuses: PowerBus[];
+      if (project.powerBuses && Array.isArray(project.powerBuses) && project.powerBuses.length > 0) {
+        // Load saved power buses (preserves user edits)
+        loadedPowerBuses = project.powerBuses as PowerBus[];
+        setPowerBuses(loadedPowerBuses);
+      } else {
+        // Initialize default power buses if project doesn't have any (for legacy projects)
+        loadedPowerBuses = [
+          { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
+          { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+        ];
+        setPowerBuses(loadedPowerBuses);
+      }
+      // Load ground buses
+      if (project.groundBuses && Array.isArray(project.groundBuses) && project.groundBuses.length > 0) {
+        // Load saved ground buses (preserves user edits)
+        setGroundBuses(project.groundBuses as GroundBus[]);
+      } else {
+        // Initialize default ground buses if project doesn't have any (for legacy projects)
+        setGroundBuses([
+          { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
+          { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
+        ]);
       }
       if (project.drawing?.powers) {
         const loadedPowers = project.drawing.powers as PowerSymbol[];
@@ -7954,7 +8070,7 @@ function App() {
             const truncatedPos = truncatePoint({ x: p.x, y: p.y });
             if (!p.powerBusId) {
               // Assign to first power bus or create a default one
-              return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, powerBusId: busesToUse.length > 0 ? busesToUse[0].id : 'default-5v', layer: p.layer || 'top' };
+              return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, powerBusId: loadedPowerBuses.length > 0 ? loadedPowerBuses[0].id : 'default-5v', layer: p.layer || 'top' };
             }
             return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, layer: p.layer || 'top' };
           })
@@ -8423,6 +8539,7 @@ function App() {
         selectAllPowerNodes={selectAllPowerNodes}
         selectAllGroundNodes={selectAllGroundNodes}
         setShowPowerBusManager={setShowPowerBusManager}
+        setShowGroundBusManager={setShowGroundBusManager}
         menuBarRef={menuBarRef}
       />
 
@@ -8632,6 +8749,7 @@ function App() {
             </button>
             {/* Ground tool */}
             <button 
+              ref={groundButtonRef}
               onClick={() => { if (!isReadOnlyMode) setCurrentTool('ground'); }} 
               disabled={isReadOnlyMode}
               title="Draw Ground (G)" 
@@ -9062,6 +9180,61 @@ function App() {
                   e.stopPropagation();
                   setShowPowerBusSelector(false);
                   setSelectedPowerBusId(null);
+                  // Switch back to select tool if user cancels
+                  setCurrentTool('select');
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '4px 6px', marginTop: '2px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#666', fontSize: '11px' }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          {/* Ground Bus Selector */}
+          {showGroundBusSelector && currentTool === 'ground' && (
+            <div ref={groundBusSelectorRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25, minWidth: '200px' }}>
+              <div style={{ marginBottom: '4px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Ground Bus:</div>
+              {groundBuses.length === 0 ? (
+                <div style={{ padding: '8px', color: '#666', fontSize: '12px' }}>No ground buses defined. Use Tools → Manage Ground Buses to add one.</div>
+              ) : (
+                [...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => (
+                  <button
+                    key={bus.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Set the selected ground bus and close the selector
+                      setSelectedGroundBusId(bus.id);
+                      setShowGroundBusSelector(false);
+                    }}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '13px' }}>{bus.name}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+              <div style={{ height: 1, background: '#ddd', margin: '4px 0' }} />
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowGroundBusSelector(false);
+                  setShowGroundBusManager(true);
+                }}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#333', fontSize: '11px' }}
+              >
+                Manage Ground Buses…
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowGroundBusSelector(false);
+                  setSelectedGroundBusId(null);
                   // Switch back to select tool if user cancels
                   setCurrentTool('select');
                 }}
@@ -9562,12 +9735,12 @@ function App() {
 
       {/* Power Bus Manager Dialog */}
       {showPowerBusManager && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '12px', zIndex: 1000, minWidth: '400px', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
-            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#666', padding: 0, width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px', zIndex: 1000, minWidth: '280px', maxWidth: '320px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
+            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
-          <div style={{ marginBottom: '16px' }}>
+          <div style={{ marginBottom: '12px' }}>
             {[...powerBuses].sort((a, b) => {
               // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
               const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
@@ -9598,31 +9771,60 @@ function App() {
               // Find the original index for state updates
               const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
               return (
-              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px', marginBottom: '6px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-                <div style={{ width: 18, height: 18, borderRadius: '50%', background: bus.color, border: '1px solid #ccc' }} />
-                <div style={{ flex: 1 }}>
-                  <input
-                    type="text"
-                    value={bus.name}
-                    onChange={(e) => {
-                      const updated = [...powerBuses];
-                      updated[originalIndex] = { ...bus, name: e.target.value };
-                      setPowerBuses(updated);
-                    }}
-                    placeholder="Name"
-                    style={{ width: '100%', padding: '3px 6px', marginBottom: '3px', border: '1px solid #ccc', borderRadius: 3, fontSize: '12px' }}
-                  />
-                  <input
-                    type="text"
-                    value={bus.voltage}
-                    onChange={(e) => {
-                      const updated = [...powerBuses];
-                      updated[originalIndex] = { ...bus, voltage: e.target.value };
-                      setPowerBuses(updated);
-                    }}
-                    placeholder="Voltage (e.g., +5VDC, +3.3VDC, -5VDC)"
-                    style={{ width: '100%', padding: '3px 6px', border: '1px solid #ccc', borderRadius: 3, fontSize: '12px' }}
-                  />
+              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
+                <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Name</div>
+                    <input
+                      type="text"
+                      value={bus.name}
+                      onChange={(e) => {
+                        const updated = [...powerBuses];
+                        updated[originalIndex] = { ...bus, name: e.target.value };
+                        setPowerBuses(updated);
+                      }}
+                      placeholder="e.g., +3V3, -3V3"
+                      style={{ flex: 1, padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Value</div>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={bus.voltage}
+                      onChange={(e) => {
+                        const inputValue = e.target.value;
+                        // Allow empty, numbers, decimal point, and + or - at start only
+                        if (inputValue === '' || /^[+-]?\d*\.?\d*$/.test(inputValue)) {
+                          const updated = [...powerBuses];
+                          updated[originalIndex] = { ...bus, voltage: inputValue };
+                          setPowerBuses(updated);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // Validate and format on blur: ensure it's a valid float
+                        const inputValue = e.target.value.trim();
+                        if (inputValue === '') {
+                          return; // Allow empty
+                        }
+                        // Try to parse as float
+                        const numericValue = parseFloat(inputValue);
+                        if (!isNaN(numericValue)) {
+                          // Format with sign and up to 1 decimal place
+                          const sign = numericValue >= 0 ? '+' : '-';
+                          const absValue = Math.abs(numericValue);
+                          const formatted = `${sign}${absValue.toFixed(1).replace(/\.?0+$/, '')}`;
+                          const updated = [...powerBuses];
+                          updated[originalIndex] = { ...bus, voltage: formatted };
+                          setPowerBuses(updated);
+                        }
+                      }}
+                      placeholder="e.g., +3.3, -3.3"
+                      style={{ flex: 1, padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                    />
+                  </div>
                 </div>
                 <input
                   type="color"
@@ -9632,7 +9834,7 @@ function App() {
                     updated[originalIndex] = { ...bus, color: e.target.value };
                     setPowerBuses(updated);
                   }}
-                  style={{ width: '32px', height: '32px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer' }}
+                  style={{ width: '28px', height: '28px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
                 />
                 <button
                   onClick={() => {
@@ -9644,7 +9846,7 @@ function App() {
                     }
                     setPowerBuses(prev => prev.filter(b => b.id !== bus.id));
                   }}
-                  style={{ padding: '4px 8px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '11px' }}
+                  style={{ padding: '3px 6px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
                 >
                   Delete
                 </button>
@@ -9657,18 +9859,95 @@ function App() {
               const newBus: PowerBus = {
                 id: `powerbus-${Date.now()}-${Math.random()}`,
                 name: 'New Power Bus',
-                voltage: '+0VDC',
+                voltage: '+0.0',
                 color: '#ff0000',
               };
               setPowerBuses(prev => [...prev, newBus]);
             }}
-            style={{ width: '100%', padding: '6px 10px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px', marginBottom: '8px' }}
+            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
           >
             + Add Power Bus
           </button>
           <button
             onClick={() => setShowPowerBusManager(false)}
-            style={{ width: '100%', padding: '6px 10px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
+            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px' }}
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {/* Ground Bus Manager Dialog */}
+      {showGroundBusManager && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px', zIndex: 1000, minWidth: '280px', maxWidth: '320px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Ground Buses</h2>
+            <button onClick={() => setShowGroundBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+          <div style={{ marginBottom: '12px' }}>
+            {[...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => {
+              // Find the original index for state updates
+              const originalIndex = groundBuses.findIndex(b => b.id === bus.id);
+              return (
+              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
+                <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <input
+                    type="text"
+                    value={bus.name}
+                    onChange={(e) => {
+                      const updated = [...groundBuses];
+                      updated[originalIndex] = { ...bus, name: e.target.value };
+                      setGroundBuses(updated);
+                    }}
+                    placeholder="Name"
+                    style={{ width: '100%', padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                  />
+                </div>
+                <input
+                  type="color"
+                  value={bus.color}
+                  onChange={(e) => {
+                    const updated = [...groundBuses];
+                    updated[originalIndex] = { ...bus, color: e.target.value };
+                    setGroundBuses(updated);
+                  }}
+                  style={{ width: '28px', height: '28px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
+                />
+                <button
+                  onClick={() => {
+                    // Don't allow deleting if any ground nodes use this bus
+                    const nodesUsingBus = grounds.filter(g => g.groundBusId === bus.id);
+                    if (nodesUsingBus.length > 0) {
+                      alert(`Cannot delete: ${nodesUsingBus.length} ground node(s) are using this bus. Remove or reassign them first.`);
+                      return;
+                    }
+                    setGroundBuses(prev => prev.filter(b => b.id !== bus.id));
+                  }}
+                  style={{ padding: '3px 6px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
+                >
+                  Delete
+                </button>
+              </div>
+            );
+            })}
+          </div>
+          <button
+            onClick={() => {
+              const newBus: GroundBus = {
+                id: `groundbus-${Date.now()}-${Math.random()}`,
+                name: 'New Ground Bus',
+                color: '#000000',
+              };
+              setGroundBuses(prev => [...prev, newBus]);
+            }}
+            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
+          >
+            + Add Ground Bus
+          </button>
+          <button
+            onClick={() => setShowGroundBusManager(false)}
+            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px' }}
           >
             Close
           </button>

@@ -7,6 +7,12 @@ export interface PowerBus {
   color: string;
 }
 
+export interface GroundBus {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface PowerSymbol {
   id: string;
   x: number;
@@ -26,6 +32,8 @@ export interface GroundSymbol {
   y: number;
   color: string;
   size: number;
+  groundBusId?: string; // Optional: reference to ground bus (similar to powerBusId)
+  layer: 'top' | 'bottom';
   type?: string;
   pointId?: number;
   notes?: string | null; // Max 500 characters, null until user enters a value
@@ -36,6 +44,11 @@ export interface GroundSymbol {
  */
 export function usePowerGround() {
   const [powerBuses, setPowerBuses] = useState<PowerBus[]>([]);
+  // Initialize with default ground buses: GND and Earth Ground
+  const [groundBuses, setGroundBuses] = useState<GroundBus[]>(() => [
+    { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
+    { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
+  ]);
   const [powerSymbols, setPowerSymbols] = useState<PowerSymbol[]>([]);
   const [groundSymbols, setGroundSymbols] = useState<GroundSymbol[]>([]);
   const [powerEditor, setPowerEditor] = useState<{
@@ -85,10 +98,26 @@ export function usePowerGround() {
     setGroundSymbols(prev => prev.filter(g => g.id !== id));
   }, []);
 
+  const addGroundBus = useCallback((bus: GroundBus) => {
+    setGroundBuses(prev => [...prev, bus]);
+  }, []);
+
+  const updateGroundBus = useCallback((id: string, updates: Partial<GroundBus>) => {
+    setGroundBuses(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
+  }, []);
+
+  const removeGroundBus = useCallback((id: string) => {
+    setGroundBuses(prev => prev.filter(b => b.id !== id));
+    // Also remove ground symbols that reference this bus
+    setGroundSymbols(prev => prev.filter(g => g.groundBusId === id));
+  }, []);
+
   return {
     // State
     powerBuses,
     setPowerBuses,
+    groundBuses,
+    setGroundBuses,
     powerSymbols,
     setPowerSymbols,
     groundSymbols,
@@ -106,6 +135,9 @@ export function usePowerGround() {
     removePowerSymbol,
     addGroundSymbol,
     removeGroundSymbol,
+    addGroundBus,
+    updateGroundBus,
+    removeGroundBus,
   };
 }
 

@@ -16,7 +16,7 @@ export { useView } from './useView';
 export { useComponents, combineValueAndUnit } from './useComponents';
 
 export { usePowerGround } from './usePowerGround';
-export type { PowerBus, PowerSymbol, GroundSymbol } from './usePowerGround';
+export type { PowerBus, GroundBus, PowerSymbol, GroundSymbol } from './usePowerGround';
 
 export { useLayerSettings } from './useLayerSettings';
 
