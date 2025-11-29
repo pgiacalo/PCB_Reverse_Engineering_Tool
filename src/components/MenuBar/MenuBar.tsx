@@ -65,6 +65,8 @@ export interface MenuBarProps {
   componentsBottom: PCBComponent[];
   powers: Array<{ id: string; size: number }>;
   grounds: Array<{ id: string; size: number }>;
+  powerNodeNames: string[];
+  groundNodeNames: string[];
   setSetSizeDialog: (dialog: { visible: boolean; size: number }) => void;
   
   // Locks
@@ -95,6 +97,8 @@ export interface MenuBarProps {
   selectDisconnectedComponents: () => void;
   selectAllPowerNodes: () => void;
   selectAllGroundNodes: () => void;
+  selectPowerNodesByName: (name: string) => void;
+  selectGroundNodesByName: (name: string) => void;
   
   // Power bus
   setShowPowerBusManager: (show: boolean) => void;
@@ -152,6 +156,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   componentsBottom,
   powers,
   grounds,
+  powerNodeNames,
+  groundNodeNames,
   setSetSizeDialog,
   areViasLocked,
   setAreViasLocked,
@@ -176,6 +182,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectDisconnectedComponents,
   selectAllPowerNodes,
   selectAllGroundNodes,
+  selectPowerNodesByName,
+  selectGroundNodesByName,
   setShowPowerBusManager,
   setShowGroundBusManager,
   menuBarRef,
@@ -183,6 +191,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Track which image submenu is open
   const [openImageSubmenu, setOpenImageSubmenu] = React.useState<'top' | 'bottom' | 'both' | null>(null);
   const submenuTimeoutRef = React.useRef<number | null>(null);
+
+  // Track which node selection submenu is open (power or ground)
+  const [openSelectNodesSubmenu, setOpenSelectNodesSubmenu] = React.useState<'power' | 'ground' | null>(null);
+  const selectSubmenuTimeoutRef = React.useRef<number | null>(null);
 
   // Helper function to render image submenu items
   const renderImageSubmenu = (imageType: 'top' | 'bottom' | 'both', submenuTimeoutRef: React.MutableRefObject<number | null>) => {
@@ -347,6 +359,102 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         >
           {isBlackAndWhiteEdges ? 'Invert Edges' : 'Black & White Edges'}
         </button>
+      </div>
+    );
+  };
+
+  const renderSelectNodesSubmenu = (type: 'power' | 'ground') => {
+    const names = type === 'power' ? powerNodeNames : groundNodeNames;
+    const hasNames = names.length > 0;
+    const title = type === 'power' ? 'Select Power Nodes' : 'Select Ground Nodes';
+
+    return (
+      <div
+        onMouseEnter={() => {
+          if (selectSubmenuTimeoutRef.current) {
+            clearTimeout(selectSubmenuTimeoutRef.current);
+            selectSubmenuTimeoutRef.current = null;
+          }
+          setOpenSelectNodesSubmenu(type);
+        }}
+        onMouseLeave={() => {
+          selectSubmenuTimeoutRef.current = window.setTimeout(() => {
+            setOpenSelectNodesSubmenu(prev => prev === type ? null : prev);
+          }, 200);
+        }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '100%',
+          marginLeft: '4px',
+          minWidth: 220,
+          background: '#2b2b31',
+          border: '1px solid #1f1f24',
+          borderRadius: 6,
+          boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+          padding: 6,
+          zIndex: 10,
+        }}
+      >
+        <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>
+          {title} by Name
+        </div>
+        <button
+          onClick={() => {
+            if (type === 'power') {
+              selectAllPowerNodes();
+            } else {
+              selectAllGroundNodes();
+            }
+            setOpenSelectNodesSubmenu(null);
+            setOpenMenu(null);
+          }}
+          style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'left',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          All {type === 'power' ? 'Power Nodes' : 'Ground Nodes'}
+        </button>
+        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+        {hasNames ? (
+          names.map(name => (
+            <button
+              key={name}
+              onClick={() => {
+                if (type === 'power') {
+                  selectPowerNodesByName(name);
+                } else {
+                  selectGroundNodesByName(name);
+                }
+                setOpenSelectNodesSubmenu(null);
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {name}
+            </button>
+          ))
+        ) : (
+          <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>
+            No {type === 'power' ? 'power' : 'ground'} nodes available.
+          </div>
+        )}
       </div>
     );
   };
@@ -687,12 +795,70 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button onClick={() => { selectAllComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select All Components
             </button>
-            <button onClick={() => { selectAllPowerNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Power Nodes
-            </button>
-            <button onClick={() => { selectAllGroundNodes(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Ground Nodes
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                onMouseEnter={() => {
+                  if (selectSubmenuTimeoutRef.current) {
+                    clearTimeout(selectSubmenuTimeoutRef.current);
+                    selectSubmenuTimeoutRef.current = null;
+                  }
+                  setOpenSelectNodesSubmenu('power');
+                }}
+                onMouseLeave={() => {
+                  selectSubmenuTimeoutRef.current = window.setTimeout(() => {
+                    setOpenSelectNodesSubmenu(prev => prev === 'power' ? null : prev);
+                  }, 200);
+                }}
+                onClick={() => {
+                  setOpenSelectNodesSubmenu(prev => (prev === 'power' ? null : 'power'));
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  color: '#f2f2f2',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Select Power Nodes ▸
+              </button>
+              {openSelectNodesSubmenu === 'power' && renderSelectNodesSubmenu('power')}
+            </div>
+            <div style={{ position: 'relative' }}>
+              <button
+                onMouseEnter={() => {
+                  if (selectSubmenuTimeoutRef.current) {
+                    clearTimeout(selectSubmenuTimeoutRef.current);
+                    selectSubmenuTimeoutRef.current = null;
+                  }
+                  setOpenSelectNodesSubmenu('ground');
+                }}
+                onMouseLeave={() => {
+                  selectSubmenuTimeoutRef.current = window.setTimeout(() => {
+                    setOpenSelectNodesSubmenu(prev => prev === 'ground' ? null : prev);
+                  }, 200);
+                }}
+                onClick={() => {
+                  setOpenSelectNodesSubmenu(prev => (prev === 'ground' ? null : 'ground'));
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  color: '#f2f2f2',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                Select Ground Nodes ▸
+              </button>
+              {openSelectNodesSubmenu === 'ground' && renderSelectNodesSubmenu('ground')}
+            </div>
             <button onClick={() => { selectDisconnectedComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Select Disconnected
             </button>

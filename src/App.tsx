@@ -1090,6 +1090,31 @@ function App() {
     setSelectedGroundIds(new Set());
   }, [viewScale, setViewPan, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
 
+  const powerNodeNames = React.useMemo(() => {
+    // Collect bus IDs that have at least one power symbol
+    const busIdsWithSymbols = new Set(
+      powers
+        .map(p => p.powerBusId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    );
+    const names = powerBuses
+      .filter(b => busIdsWithSymbols.has(b.id))
+      .map(b => b.name);
+    return Array.from(new Set(names)).sort();
+  }, [powers, powerBuses]);
+
+  const groundNodeNames = React.useMemo(() => {
+    const busIdsWithSymbols = new Set(
+      grounds
+        .map(g => g.groundBusId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    );
+    const names = groundBuses
+      .filter(b => busIdsWithSymbols.has(b.id))
+      .map(b => b.name);
+    return Array.from(new Set(names)).sort();
+  }, [grounds, groundBuses]);
+
   const selectAllPowerNodes = useCallback(() => {
     const powerIds = powers.map(p => p.id);
     setSelectedPowerIds(new Set(powerIds));
@@ -1105,6 +1130,38 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
   }, [grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
+
+  const selectPowerNodesByName = useCallback((name: string) => {
+    const busIds = powerBuses
+      .filter(b => b.name === name)
+      .map(b => b.id);
+    if (busIds.length === 0) {
+      return;
+    }
+    const powerIds = powers
+      .filter(p => p.powerBusId && busIds.includes(p.powerBusId))
+      .map(p => p.id);
+    setSelectedPowerIds(new Set(powerIds));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [powerBuses, powers, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
+
+  const selectGroundNodesByName = useCallback((name: string) => {
+    const busIds = groundBuses
+      .filter(b => b.name === name)
+      .map(b => b.id);
+    if (busIds.length === 0) {
+      return;
+    }
+    const groundIds = grounds
+      .filter(g => g.groundBusId && busIds.includes(g.groundBusId))
+      .map(g => g.id);
+    setSelectedGroundIds(new Set(groundIds));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+  }, [groundBuses, grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
   
   // Tool-specific layer defaults are now declared above (before useToolRegistry hook)
   // Show chooser popovers only when tool is (re)selected
@@ -8665,6 +8722,8 @@ function App() {
         componentsBottom={componentsBottom}
         powers={powers}
         grounds={grounds}
+        powerNodeNames={powerNodeNames}
+        groundNodeNames={groundNodeNames}
         setSetSizeDialog={setSetSizeDialog}
         areViasLocked={areViasLocked}
         setAreViasLocked={setAreViasLocked}
@@ -8689,6 +8748,8 @@ function App() {
         selectDisconnectedComponents={selectDisconnectedComponents}
         selectAllPowerNodes={selectAllPowerNodes}
         selectAllGroundNodes={selectAllGroundNodes}
+        selectPowerNodesByName={selectPowerNodesByName}
+        selectGroundNodesByName={selectGroundNodesByName}
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
         menuBarRef={menuBarRef}
