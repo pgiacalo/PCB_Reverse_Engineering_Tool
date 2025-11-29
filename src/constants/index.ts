@@ -125,7 +125,7 @@ export const DEFAULT_PROJECT_NAME = 'pcb_project';
 // ============================================================================
 
 export const COMPONENT_ICON = {
-  DEFAULT_SIZE: 24,
+  DEFAULT_SIZE: 18,
   MIN_SIZE: 12,
   MAX_SIZE: 100,
 };
@@ -228,7 +228,7 @@ export const GROUND_SYMBOL = {
 // ============================================================================
 
 export const VIA = {
-  DEFAULT_SIZE: 26,
+  DEFAULT_SIZE: 18,
   MIN_SIZE: 4,
   MAX_SIZE: 40,
   INNER_CIRCLE_RATIO: 0.5, // inner circle is 50% of outer diameter

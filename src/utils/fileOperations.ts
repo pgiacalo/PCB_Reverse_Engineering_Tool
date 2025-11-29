@@ -28,6 +28,33 @@ export function formatTimestamp(): string {
 }
 
 /**
+ * Remove timestamp from filename if present
+ * Handles multiple timestamp formats:
+ * - Current format: _YYYY_MM_DD-HH-mm-ss (e.g., _2025_11_16-02-18-20)
+ * - Old format: _YYYY_MM_DD_HH_mm_ss (e.g., _2025_11_16_02_18_20)
+ * This function removes any trailing timestamp pattern(s) from the filename
+ */
+export function removeTimestampFromFilename(filename: string): string {
+  // Remove .json extension if present
+  let withoutExt = filename.replace(/\.json$/i, '');
+  
+  // Pattern 1: Current format with dashes: _YYYY_MM_DD-HH-mm-ss
+  // Pattern 2: Old format with underscores: _YYYY_MM_DD_HH_mm_ss
+  // Remove all trailing timestamps (handles multiple timestamps)
+  // Keep removing until no more timestamps are found
+  let previous = '';
+  while (previous !== withoutExt) {
+    previous = withoutExt;
+    // Remove current format timestamp: _YYYY_MM_DD-HH-mm-ss
+    withoutExt = withoutExt.replace(/_\d{4}_\d{2}_\d{2}-\d{2}-\d{2}-\d{2}$/, '');
+    // Remove old format timestamp: _YYYY_MM_DD_HH_mm_ss
+    withoutExt = withoutExt.replace(/_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$/, '');
+  }
+  
+  return withoutExt;
+}
+
+/**
  * Convert an image to a data URL for saving
  */
 export async function imageToDataUrl(image: PCBImage): Promise<string> {

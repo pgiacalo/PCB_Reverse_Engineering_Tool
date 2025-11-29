@@ -16,7 +16,7 @@ import {
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
 import { generateSimpleSchematic } from './utils/schematic';
-import { formatTimestamp } from './utils/fileOperations';
+import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import type { ComponentType, PCBComponent, DrawingStroke as ImportedDrawingStroke } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
@@ -189,7 +189,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
   
   // Default layer-specific colors and sizes (from user requirements)
   const DEFAULT_PAD_COLORS = { top: '#0072B2', bottom: '#56B4E9' };
-  const DEFAULT_PAD_SIZES = { top: VIA.DEFAULT_SIZE, bottom: VIA.DEFAULT_SIZE };
+  const DEFAULT_PAD_SIZES = { top: 18, bottom: 18 };
   const DEFAULT_TRACE_COLORS = { top: '#AA4499', bottom: '#F781BF' };
   const DEFAULT_TRACE_SIZES = { top: 6, bottom: 6 };
   const DEFAULT_COMPONENT_COLORS = { top: '#6A3D9A', bottom: '#9467BD' };
@@ -236,7 +236,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'P',
     tooltip: 'Place pad connection',
     colorReflective: true,
-    settings: loadToolSettings('pad', DEFAULT_PAD_COLOR, VIA.DEFAULT_SIZE),
+    settings: loadToolSettings('pad', DEFAULT_PAD_COLOR, 18),
     layerSettings: new Map([
       ['top', loadToolLayerSettings('pad', 'top', DEFAULT_PAD_COLORS.top, DEFAULT_PAD_SIZES.top)],
       ['bottom', loadToolLayerSettings('pad', 'bottom', DEFAULT_PAD_COLORS.bottom, DEFAULT_PAD_SIZES.bottom)],
@@ -253,7 +253,7 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'T',
     tooltip: 'Draw copper traces',
     colorReflective: true,
-    settings: loadToolSettings('trace', DEFAULT_TRACE_COLOR, 2),
+    settings: loadToolSettings('trace', DEFAULT_TRACE_COLOR, 6),
     layerSettings: new Map([
       ['top', loadToolLayerSettings('trace', 'top', DEFAULT_TRACE_COLORS.top, DEFAULT_TRACE_SIZES.top)],
       ['bottom', loadToolLayerSettings('trace', 'bottom', DEFAULT_TRACE_COLORS.bottom, DEFAULT_TRACE_SIZES.bottom)],
@@ -285,10 +285,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'B',
     tooltip: 'Place power node',
     colorReflective: true,
-    settings: loadToolSettings('power', DEFAULT_POWER_COLOR, 26),
+    settings: loadToolSettings('power', DEFAULT_POWER_COLOR, 18),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('power', 'top', DEFAULT_POWER_COLOR, 26)],
-      ['bottom', loadToolLayerSettings('power', 'bottom', DEFAULT_POWER_COLOR, 26)],
+      ['top', loadToolLayerSettings('power', 'top', DEFAULT_POWER_COLOR, 18)],
+      ['bottom', loadToolLayerSettings('power', 'bottom', DEFAULT_POWER_COLOR, 18)],
     ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
@@ -301,10 +301,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'G',
     tooltip: 'Place ground symbol',
     colorReflective: true,
-    settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, 26),
+    settings: loadToolSettings('ground', DEFAULT_GROUND_COLOR, 18),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('ground', 'top', DEFAULT_GROUND_COLOR, 26)],
-      ['bottom', loadToolLayerSettings('ground', 'bottom', DEFAULT_GROUND_COLOR, 26)],
+      ['top', loadToolLayerSettings('ground', 'top', DEFAULT_GROUND_COLOR, 18)],
+      ['bottom', loadToolLayerSettings('ground', 'bottom', DEFAULT_GROUND_COLOR, 18)],
     ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });
@@ -317,10 +317,10 @@ const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'E',
     tooltip: 'Erase objects',
     colorReflective: false,
-    settings: loadToolSettings('erase', '#f5a3b3', 5),
+    settings: loadToolSettings('erase', '#f5a3b3', 18),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('erase', 'top', '#f5a3b3', 5)],
-      ['bottom', loadToolLayerSettings('erase', 'bottom', '#f5a3b3', 5)],
+      ['top', loadToolLayerSettings('erase', 'top', '#f5a3b3', 18)],
+      ['bottom', loadToolLayerSettings('erase', 'bottom', '#f5a3b3', 18)],
     ] as [Layer, ToolSettings][]),
   });
   
@@ -707,6 +707,24 @@ function App() {
       setSelectedGroundBusId(null);
     }
   }, [currentTool]);
+
+  // Show trace layer chooser when trace tool is selected
+  React.useEffect(() => {
+    if (currentTool === 'draw' && drawingMode === 'trace') {
+      setShowTraceLayerChooser(true);
+    } else {
+      setShowTraceLayerChooser(false);
+    }
+  }, [currentTool, drawingMode]);
+
+  // Show pad layer chooser when pad tool is selected
+  React.useEffect(() => {
+    if (currentTool === 'draw' && drawingMode === 'pad') {
+      setShowPadLayerChooser(true);
+    } else {
+      setShowPadLayerChooser(false);
+    }
+  }, [currentTool, drawingMode]);
   
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
@@ -4455,8 +4473,10 @@ function App() {
     
     // Use project directory for auto-save (same directory as project.json)
     setAutoSaveDirHandle(dirHandleToUse);
-    // Use project name as base name for auto-save files
-    const cleanBaseName = projectName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    // Use project name as base name for auto-save files, removing any existing timestamp
+    const projectNameWithoutExt = projectName.replace(/\.json$/i, '');
+    const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
+    const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
     setAutoSaveBaseName(cleanBaseName);
     
     // Update refs immediately so performAutoSave can use them
@@ -4954,8 +4974,7 @@ function App() {
             // Default to Top layer, but use last choice if available
             const padLayerToUse = padToolLayer || 'top';
             setSelectedDrawingLayer(padLayerToUse);
-            // The useEffect hook will load pad tool settings automatically
-            setShowPadLayerChooser(true);
+            // The useEffect hook will automatically show the layer chooser
             return;
           case 't':
           case 'T':
@@ -4965,8 +4984,7 @@ function App() {
             // Default to Top layer, but use last choice if available
             const layerToUse = traceToolLayer || 'top';
             setSelectedDrawingLayer(layerToUse);
-            // The useEffect hook will load trace tool settings automatically
-            setShowTraceLayerChooser(true);
+            // The useEffect hook will automatically show the layer chooser
             return;
           case 'c':
           case 'C':
@@ -5352,13 +5370,13 @@ function App() {
     // Reset pad colors and sizes to defaults
     setTopPadColor('#0072B2');
     setBottomPadColor('#56B4E9');
-    setTopPadSize(26);
-    setBottomPadSize(26);
+    setTopPadSize(18);
+    setBottomPadSize(18);
     // Save pad defaults to localStorage
     saveDefaultColor('pad', '#0072B2', 'top');
     saveDefaultColor('pad', '#56B4E9', 'bottom');
-    saveDefaultSize('pad', 26, 'top');
-    saveDefaultSize('pad', 26, 'bottom');
+    saveDefaultSize('pad', 18, 'top');
+    saveDefaultSize('pad', 18, 'bottom');
     // Reset component colors and sizes to defaults
     setTopComponentColor('#6A3D9A');
     setBottomComponentColor('#9467BD');
@@ -5383,6 +5401,13 @@ function App() {
       { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
       { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
     ]);
+    // Reset pad tool sizes to defaults (both localStorage systems)
+    saveToolSettings('pad', DEFAULT_PAD_COLOR, 18);
+    // Reset power and ground tool sizes to defaults
+    saveToolSettings('power', DEFAULT_POWER_COLOR, 18);
+    saveToolSettings('ground', DEFAULT_GROUND_COLOR, 18);
+    saveDefaultSize('power', 18);
+    saveDefaultSize('ground', 18);
     // Reset locks
     setAreImagesLocked(false);
     setAreViasLocked(false);
@@ -5566,22 +5591,44 @@ function App() {
     };
   };
 
+  // Helper function to update trace chooser position
+  const updateTraceChooserPosition = useCallback(() => {
+    if (traceChooserRef.current && traceButtonRef.current) {
+      requestAnimationFrame(() => {
+        if (traceChooserRef.current && traceButtonRef.current) {
+          const pos = getDialogPosition(traceButtonRef as React.RefObject<HTMLButtonElement | null>);
+          traceChooserRef.current.style.top = `${pos.top}px`;
+          traceChooserRef.current.style.left = `${pos.left}px`;
+        }
+      });
+    }
+  }, []);
+
+  // Helper function to update pad chooser position
+  const updatePadChooserPosition = useCallback(() => {
+    if (padChooserRef.current && padButtonRef.current) {
+      requestAnimationFrame(() => {
+        if (padChooserRef.current && padButtonRef.current) {
+          const pos = getDialogPosition(padButtonRef as React.RefObject<HTMLButtonElement | null>);
+          padChooserRef.current.style.top = `${pos.top}px`;
+          padChooserRef.current.style.left = `${pos.left}px`;
+        }
+      });
+    }
+  }, []);
+
   // Update dialog positions when they are shown
   React.useEffect(() => {
-    if (showTraceLayerChooser && traceChooserRef.current && traceButtonRef.current) {
-      const pos = getDialogPosition(traceButtonRef as React.RefObject<HTMLButtonElement | null>);
-      traceChooserRef.current.style.top = `${pos.top}px`;
-      traceChooserRef.current.style.left = `${pos.left}px`;
+    if (showTraceLayerChooser) {
+      updateTraceChooserPosition();
     }
-  }, [showTraceLayerChooser]);
+  }, [showTraceLayerChooser, updateTraceChooserPosition]);
 
   React.useEffect(() => {
-    if (showPadLayerChooser && padChooserRef.current && padButtonRef.current) {
-      const pos = getDialogPosition(padButtonRef as React.RefObject<HTMLButtonElement | null>);
-      padChooserRef.current.style.top = `${pos.top}px`;
-      padChooserRef.current.style.left = `${pos.left}px`;
+    if (showPadLayerChooser) {
+      updatePadChooserPosition();
     }
-  }, [showPadLayerChooser]);
+  }, [showPadLayerChooser, updatePadChooserPosition]);
 
   React.useEffect(() => {
     if (showComponentLayerChooser && componentLayerChooserRef.current && componentButtonRef.current) {
@@ -6713,12 +6760,13 @@ function App() {
       traceToolLayer, // Save last layer choice
       toolSettings: {
         // Convert Map to plain object for JSON serialization
-        trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 10 },
-        via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 26 },
-        pad: toolRegistry.get('pad')?.settings || { color: '#ff0000', size: 26 },
+        trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 6 },
+        via: toolRegistry.get('via')?.settings || { color: '#ff0000', size: 18 },
+        pad: toolRegistry.get('pad')?.settings || { color: '#ff0000', size: 18 },
         component: toolRegistry.get('component')?.settings || { color: '#ff0000', size: 18 },
         ground: toolRegistry.get('ground')?.settings || { color: '#000000', size: 18 },
         power: toolRegistry.get('power')?.settings || { color: '#ff0000', size: 18 },
+        erase: toolRegistry.get('erase')?.settings || { color: '#f5a3b3', size: 18 },
       },
       locks: {
         areImagesLocked,
@@ -6831,7 +6879,9 @@ function App() {
     // Use ref to get latest buildProjectData without causing dependency changes
     // buildProjectData will use the cleaned drawingStrokes from the ref
     const { project, timestamp } = buildProjectDataRef.current();
-    const filename = `${baseName}_${timestamp}.json`;
+    // Remove any existing timestamp from baseName before appending new timestamp
+    const cleanBaseName = removeTimestampFromFilename(baseName);
+    const filename = `${cleanBaseName}_${timestamp}.json`;
     const json = JSON.stringify(project, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     
@@ -6955,10 +7005,91 @@ function App() {
     const blob = new Blob([json], { type: 'application/json' });
 
     // If we have a project directory handle and name, use them (from New Project or previous save)
-    // Standard IDE pattern: save as project.json inside the project folder
+    // Always add timestamp to project files and move old files to history
     if (projectDirHandle && projectName) {
       try {
-        const filename = 'project.json'; // Standard name inside project folder
+        // Get or create history directory
+        let historyDirHandle: FileSystemDirectoryHandle | null = null;
+        try {
+          historyDirHandle = await projectDirHandle.getDirectoryHandle('history', { create: true });
+        } catch (e) {
+          console.error('Failed to get/create history directory:', e);
+          // Continue with save even if history directory creation fails
+          historyDirHandle = null;
+        }
+        
+        // Remove any existing timestamp from project name and add new timestamp
+        const projectNameWithoutExt = projectName.replace(/\.json$/i, '');
+        const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
+        const { timestamp } = buildProjectData();
+        const filename = `${projectNameWithoutTimestamp}_${timestamp}.json`;
+        
+        // Move any existing project files in root to history before saving
+        if (historyDirHandle) {
+          try {
+            const rootFiles: string[] = [];
+            for await (const name of (projectDirHandle as any).keys()) {
+              try {
+                // Skip directories and the file we're about to create
+                if (name === 'history' || name === filename) {
+                  continue;
+                }
+                
+                const fileHandle = await projectDirHandle.getFileHandle(name);
+                const file = await fileHandle.getFile();
+                
+                // Only check .json files
+                if (!name.endsWith('.json')) {
+                  continue;
+                }
+                
+                // Read file content to check if it's a PCB project file
+                const fileContent = await file.text();
+                try {
+                  const parsed = JSON.parse(fileContent);
+                  // Check if this is a PCB project file (has version field)
+                  if (parsed.version) {
+                    rootFiles.push(name);
+                    console.log(`Save: Found PCB project file in root: ${name}`);
+                  }
+                } catch (parseError) {
+                  // Not valid JSON, skip
+                  continue;
+                }
+              } catch (e) {
+                // Skip if not a file or doesn't exist
+                continue;
+              }
+            }
+            
+            // Move existing project files to history
+            for (const oldFilename of rootFiles) {
+              try {
+                const oldFileHandle = await projectDirHandle.getFileHandle(oldFilename);
+                const oldFile = await oldFileHandle.getFile();
+                const oldFileContent = await oldFile.text();
+                
+                // Write to history directory
+                const historyFileHandle = await historyDirHandle.getFileHandle(oldFilename, { create: true });
+                const historyWritable = await historyFileHandle.createWritable();
+                await historyWritable.write(new Blob([oldFileContent], { type: 'application/json' }));
+                await historyWritable.close();
+                
+                // Remove from root directory
+                await projectDirHandle.removeEntry(oldFilename);
+                console.log(`Save: Moved ${oldFilename} from root to history/`);
+              } catch (e) {
+                console.warn(`Save: Failed to move ${oldFilename} to history:`, e);
+                // Continue with other files even if one fails
+              }
+            }
+          } catch (e) {
+            console.warn('Save: Error checking for old files in root:', e);
+            // Continue with save even if moving old files fails
+          }
+        }
+        
+        // Save new file to root directory with timestamp
         const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
@@ -7046,8 +7177,10 @@ function App() {
           // Get the directory handle - we need to get it from the file's parent
           // Since FileSystemFileHandle doesn't expose parent directly,
           // we'll need to prompt user or use a workaround
-          // For now, set base name from filename
-          const baseName = handle.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+          // Remove timestamp from filename and clean it for use as base name
+          const filenameWithoutExt = handle.name.replace(/\.json$/i, '');
+          const baseNameWithoutTimestamp = removeTimestampFromFilename(filenameWithoutExt);
+          const baseName = baseNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
           setAutoSaveBaseName(baseName);
           
           // Try to get directory handle - we'll need user to select it
@@ -7459,10 +7592,12 @@ function App() {
     // Use consolidated initialization function for all defaults
     initializeApplicationDefaults();
     
-    // Save the project file immediately (standard name: project.json)
+    // Save the project file immediately with project name and timestamp
     try {
-      const { project } = buildProjectData();
-      const filename = 'project.json'; // Standard IDE pattern: project.json inside project folder
+      const { project, timestamp } = buildProjectData();
+      // Remove any existing timestamp from project name and add current timestamp
+      const projectNameWithoutTimestamp = removeTimestampFromFilename(cleanProjectName);
+      const filename = `${projectNameWithoutTimestamp}_${timestamp}.json`;
       const json = JSON.stringify(project, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       
@@ -7473,7 +7608,7 @@ function App() {
       
       // Update current project file path
       setCurrentProjectFilePath(filename);
-      console.log(`New project created: ${cleanProjectName}/project.json`);
+      console.log(`New project created: ${cleanProjectName}/${filename}`);
       
       // Prompt user to enable auto-save
       setAutoSavePromptDialog({ visible: true, source: 'new', interval: 5 });
@@ -7709,8 +7844,8 @@ function App() {
         }
       }
       if (project.padSizes) {
-        const topSize = project.padSizes.top != null && project.padSizes.top > 0 ? project.padSizes.top : 26;
-        const bottomSize = project.padSizes.bottom != null && project.padSizes.bottom > 0 ? project.padSizes.bottom : 26;
+        const topSize = project.padSizes.top != null && project.padSizes.top > 0 ? project.padSizes.top : 18;
+        const bottomSize = project.padSizes.bottom != null && project.padSizes.bottom > 0 ? project.padSizes.bottom : 18;
         setTopPadSize(topSize);
         setBottomPadSize(bottomSize);
         saveDefaultSize('pad', topSize, 'top');
@@ -7804,6 +7939,12 @@ function App() {
             const powerDef = updated.get('power');
             if (powerDef) {
               updated.set('power', { ...powerDef, settings: project.toolSettings.power });
+            }
+          }
+          if (project.toolSettings.erase) {
+            const eraseDef = updated.get('erase');
+            if (eraseDef) {
+              updated.set('erase', { ...eraseDef, settings: project.toolSettings.erase });
             }
           }
           
@@ -8153,7 +8294,12 @@ function App() {
       // Load ground buses
       if (project.groundBuses && Array.isArray(project.groundBuses) && project.groundBuses.length > 0) {
         // Load saved ground buses (preserves user edits)
-        setGroundBuses(project.groundBuses as GroundBus[]);
+        // Remove value field if present (legacy projects may have it)
+        const migratedGroundBuses = (project.groundBuses as any[]).map(bus => {
+          const { value, ...busWithoutValue } = bus;
+          return busWithoutValue as GroundBus;
+        });
+        setGroundBuses(migratedGroundBuses);
       } else {
         // Initialize default ground buses if project doesn't have any (for legacy projects)
         setGroundBuses([
@@ -8655,17 +8801,19 @@ function App() {
         {/* Canvas Area */}
         <div ref={canvasContainerRef} style={{ position: 'relative', width: '100%', height: '100%', margin: 0, padding: 0, boxSizing: 'border-box', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)', borderRadius: '16px', overflow: 'hidden' }}>
           {/* Left toolstrip (icons) */}
-          <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 44, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 6px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
+          <div style={{ position: 'absolute', top: 6, left: 6, bottom: 6, width: 46, display: 'flex', flexDirection: 'column', gap: 8, padding: '6px 3px', background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 20 }}>
             <button 
               onClick={() => { if (!isReadOnlyMode) switchToSelectTool(); }} 
               onMouseDown={(e) => e.currentTarget.blur()}
               disabled={isReadOnlyMode}
               title="Select (S)" 
               style={{
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: currentTool === 'select' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'select' ? '#e6f0ff' : '#fff', 
@@ -8675,17 +8823,23 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <MousePointer size={16} />
+              <MousePointer size={14} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>S</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
+              </div>
             </button>
             <button 
               onClick={() => { if (!isReadOnlyMode) { setDrawingMode('via'); setCurrentTool('draw'); } }} 
               disabled={isReadOnlyMode}
               title="Draw Vias (V)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: (currentTool === 'draw' && drawingMode === 'via') ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'draw' && drawingMode === 'via' ? '#e6f0ff' : '#fff', 
@@ -8694,7 +8848,7 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   const viaDef = toolRegistry.get('via');
                   const viaColor = viaDef?.settings.color || localStorage.getItem('defaultViaColor') || '#ff0000' || brushColor;
@@ -8706,6 +8860,10 @@ function App() {
                   );
                 })()}
               </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('via')?.settings.size || 26}</span>
+              </div>
             </button>
             <button 
               ref={padButtonRef}
@@ -8716,17 +8874,20 @@ function App() {
                   // Default to Top layer, but use last choice if available
                   const padLayerToUse = padToolLayer || 'top';
                   setSelectedDrawingLayer(padLayerToUse);
-                  // The useEffect hook will load pad tool settings automatically
-                  setShowPadLayerChooser(true);
+                  // The useEffect hook will automatically show the layer chooser
+                  // Force position recalculation on every click, even if dialog is already visible
+                  setTimeout(() => updatePadChooserPosition(), 0);
                 } 
               }} 
               disabled={isReadOnlyMode}
               title="Draw Pads (P)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: (currentTool === 'draw' && drawingMode === 'pad') ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'draw' && drawingMode === 'pad' ? '#e6f0ff' : '#fff', 
@@ -8735,18 +8896,26 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   const padDef = toolRegistry.get('pad');
-                  const padSize = padDef?.settings.size || topPadSize || 26;
-                  const padColor = padDef?.settings.color || topPadColor || brushColor;
-                  // Scale pad size to fit in 16x16 icon (max 14 to leave some margin)
-                  const iconSize = Math.min(14, Math.max(4, (padSize / 26) * 14));
+                  const padLayer = padToolLayer || 'top';
+                  const padColor = padDef?.settings.color || (padLayer === 'top' ? topPadColor : bottomPadColor) || brushColor;
+                  // Fixed icon size for toolbar (constant, regardless of actual pad size)
+                  const iconSize = 10;
                   const iconX = (24 - iconSize) / 2;
                   const iconY = (24 - iconSize) / 2;
                   return <rect x={iconX} y={iconY} width={iconSize} height={iconSize} fill={padColor} />;
                 })()}
               </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>P</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  const padDef = toolRegistry.get('pad');
+                  const padLayer = padToolLayer || 'top';
+                  return padDef?.settings.size || (padLayer === 'top' ? topPadSize : bottomPadSize) || 18;
+                })()}</span>
+              </div>
             </button>
             <button 
               ref={traceButtonRef}
@@ -8757,17 +8926,20 @@ function App() {
                   // Default to Top layer, but use last choice if available
                   const layerToUse = traceToolLayer || 'top';
                   setSelectedDrawingLayer(layerToUse);
-                  // The useEffect hook will load trace tool settings automatically
-                  setShowTraceLayerChooser(true);
+                  // The useEffect hook will automatically show the layer chooser
+                  // Force position recalculation on every click, even if dialog is already visible
+                  setTimeout(() => updateTraceChooserPosition(), 0);
                 }
               }} 
               disabled={isReadOnlyMode}
               title="Draw Traces (T)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: (currentTool === 'draw' && drawingMode === 'trace') ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'draw' && drawingMode === 'trace' ? '#e6f0ff' : '#fff', 
@@ -8776,7 +8948,11 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <PenLine size={16} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
+              <PenLine size={14} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>T</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{traceToolLayer === 'top' ? topTraceSize : bottomTraceSize}</span>
+              </div>
             </button>
             <button 
               ref={componentButtonRef}
@@ -8793,10 +8969,12 @@ function App() {
               disabled={isReadOnlyMode}
               title="Draw Component (C)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: currentTool === 'component' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'component' ? '#e6f0ff' : '#fff', 
@@ -8813,13 +8991,13 @@ function App() {
                 // Use layer-specific color based on componentToolLayer (this is the source of truth)
                 const componentColor = (layer === 'top' ? topComponentColor : bottomComponentColor) || componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
                 return selectedComponentType ? (
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                     {/* Square icon with text - show default abbreviation based on component type */}
                     <rect x="4" y="4" width="16" height="16" fill="rgba(255,255,255,0.9)" stroke={componentColor} strokeWidth="1.5" />
                     <text x="12" y="14" textAnchor="middle" fontSize="7" fill={componentColor} fontWeight="bold" fontFamily="monospace">{getDefaultAbbreviation(selectedComponentType)}</text>
                   </svg>
                 ) : (
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                     {/* top body */}
                     <rect x="5" y="3" width="14" height="7" fill={componentColor} stroke={componentColor} strokeWidth="0.5" />
                     {/* pin headers */}
@@ -8830,6 +9008,13 @@ function App() {
                   </svg>
                 );
               })()}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>C</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  const layer = componentToolLayer || 'top';
+                  return layer === 'top' ? topComponentSize : bottomComponentSize;
+                })()}</span>
+              </div>
             </button>
             {/* Power tool */}
             <button 
@@ -8838,10 +9023,12 @@ function App() {
               disabled={isReadOnlyMode}
               title="Draw Power (B)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: currentTool === 'power' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'power' ? '#e6f0ff' : '#fff', 
@@ -8851,7 +9038,11 @@ function App() {
               }}
             >
               {/* Power symbol icon - use tool-specific color */}
-              <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
+              <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>B</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('power')?.settings.size || 18}</span>
+              </div>
             </button>
             {/* Ground tool */}
             <button 
@@ -8860,10 +9051,12 @@ function App() {
               disabled={isReadOnlyMode}
               title="Draw Ground (G)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: currentTool === 'ground' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'ground' ? '#e6f0ff' : '#fff', 
@@ -8873,7 +9066,7 @@ function App() {
               }}
             >
               {/* Ground symbol icon */}
-              <svg width="16" height="16" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible' }}>
+              <svg width="14" height="14" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible', flexShrink: 0 }}>
                 <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
                   <line x1="12" y1="2" x2="12" y2="10" />
                   <line x1="5" y1="10" x2="19" y2="10" />
@@ -8881,41 +9074,22 @@ function App() {
                   <line x1="9.5" y1="16" x2="14.5" y2="16" />
                 </g>
               </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>G</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size || 18}</span>
+              </div>
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('erase'); }} 
-              disabled={isReadOnlyMode}
-              title="Erase (E)" 
-              style={{ 
-                width: 32, 
-                height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
-                borderRadius: 6, 
-                border: currentTool === 'erase' ? '2px solid #000' : '1px solid #ddd', 
-                background: currentTool === 'erase' ? '#ffecec' : '#fff', 
-                color: isReadOnlyMode ? '#999' : '#222',
-                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-                opacity: isReadOnlyMode ? 0.5 : 1
-              }}
-            >
-              {/* Tilted pink eraser */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <g transform="rotate(-35 12 12)">
-                  <rect x="6" y="8" width="12" height="8" rx="1.5" fill="#f5a3b3" stroke="#111" strokeWidth="1.5" />
-                  <rect x="6" y="13" width="12" height="3" fill="#f18ea4" stroke="none" />
-                </g>
-              </svg>
-            </button>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
                 disabled={isReadOnlyMode}
                 title="Move (H)" 
                 style={{ 
-                  width: 32, 
+                  width: '100%', 
                   height: 32, 
-                  display: 'grid', 
-                  placeItems: 'center', 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 6px',
                   borderRadius: 6, 
                   border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
                   background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
@@ -8925,22 +9099,28 @@ function App() {
                 }}
               >
               {/* Simple hand icon (matches canvas cursor style) */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M8 11v-4c0-.8.6-1.3 1.3-1.3S11 6.2 11 7v4" />
                   <path d="M11 11V6.5c0-.8.6-1.3 1.3-1.3S14 5.7 14 6.5V11" />
                   <path d="M14 11V7.2c0-.8.6-1.3 1.3-1.3.7 0 1.3.5 1.3 1.3V12c1 .6 1.6 1.5 1.6 2.7A4.3 4.3 0 0 1 14 19H9.2A4.2 4.2 0 0 1 5 14.8V11c0-.6.4-1 .9-1 .6 0 1 .4 1 1v2" />
                 </g>
               </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>H</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
+              </div>
             </button>
             <button 
               onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} 
               title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
                 borderRadius: 6, 
                 border: currentTool === 'magnify' ? '2px solid #000' : '1px solid #ddd', 
                 background: currentTool === 'magnify' ? '#e6f0ff' : '#fff', 
@@ -8949,7 +9129,7 @@ function App() {
               }}
             >
               {/* Enlarged magnifier lens and symbols */}
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <circle cx="10" cy="10" r="7.5" fill="none" stroke="#111" strokeWidth="2" />
                 <line x1="15.5" y1="15.5" x2="21" y2="21" stroke="#111" strokeWidth="2" strokeLinecap="round" />
                 {isShiftPressed ? (
@@ -8961,6 +9141,42 @@ function App() {
                   </>
                 )}
               </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>Z</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
+              </div>
+            </button>
+            {/* Erase tool - moved below Zoom tool */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('erase'); }} 
+              disabled={isReadOnlyMode}
+              title="Erase (E)" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
+                borderRadius: 6, 
+                border: currentTool === 'erase' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'erase' ? '#ffecec' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              {/* Tilted pink eraser */}
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <g transform="rotate(-35 12 12)">
+                  <rect x="6" y="8" width="12" height="8" rx="1.5" fill="#f5a3b3" stroke="#111" strokeWidth="1.5" />
+                  <rect x="6" y="13" width="12" height="3" fill="#f18ea4" stroke="none" />
+                </g>
+              </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>E</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('erase')?.settings.size || 18}</span>
+              </div>
             </button>
             {/* Color picker moved just below magnify */}
             <div style={{ position: 'relative' }}>
@@ -8981,7 +9197,7 @@ function App() {
                 }}
               >
                 {/* Color palette grid icon - 4x4 grid representing the color picker */}
-                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
                   {/* Row 1 */}
                   <rect x="0" y="0" width="3.5" height="3.5" fill="#9E9E9E" stroke="#ccc" strokeWidth="0.3" />
                   <rect x="4" y="0" width="3.5" height="3.5" fill="#0072B2" stroke="#ccc" strokeWidth="0.3" />
@@ -9898,6 +10114,10 @@ function App() {
             }).map((bus) => {
               // Find the original index for state updates
               const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
+              // Check for duplicate names within Power Buses only (excluding current bus)
+              const nameIsDuplicate = powerBuses.some(pb => pb.name === bus.name && pb.id !== bus.id);
+              // Check for duplicate values within Power Buses only (excluding current bus)
+              const valueIsDuplicate = powerBuses.some(pb => pb.voltage === bus.voltage && pb.id !== bus.id);
               return (
               <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
                 <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
@@ -9913,7 +10133,7 @@ function App() {
                         setPowerBuses(updated);
                       }}
                       placeholder="e.g., +3V3, -3V3"
-                      style={{ flex: 1, padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                      style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
                     />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -9950,7 +10170,7 @@ function App() {
                         }
                       }}
                       placeholder="e.g., +3.3, -3.3"
-                      style={{ flex: 1, padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                      style={{ flex: 1, padding: '2px 4px', border: valueIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
                     />
                   </div>
                 </div>
@@ -10016,21 +10236,26 @@ function App() {
             {[...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => {
               // Find the original index for state updates
               const originalIndex = groundBuses.findIndex(b => b.id === bus.id);
+              // Check for duplicate names within Ground Buses only (excluding current bus)
+              const nameIsDuplicate = groundBuses.some(gb => gb.name === bus.name && gb.id !== bus.id);
               return (
               <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
                 <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <input
-                    type="text"
-                    value={bus.name}
-                    onChange={(e) => {
-                      const updated = [...groundBuses];
-                      updated[originalIndex] = { ...bus, name: e.target.value };
-                      setGroundBuses(updated);
-                    }}
-                    placeholder="Name"
-                    style={{ width: '100%', padding: '2px 4px', border: '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Name</div>
+                    <input
+                      type="text"
+                      value={bus.name}
+                      onChange={(e) => {
+                        const updated = [...groundBuses];
+                        updated[originalIndex] = { ...bus, name: e.target.value };
+                        setGroundBuses(updated);
+                      }}
+                      placeholder="e.g., GND, Earth"
+                      style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
+                    />
+                  </div>
                 </div>
                 <input
                   type="color"
