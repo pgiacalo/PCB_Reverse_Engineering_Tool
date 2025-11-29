@@ -104,7 +104,8 @@ export interface MenuBarProps {
   setShowPowerBusManager: (show: boolean) => void;
   // Ground bus
   setShowGroundBusManager: (show: boolean) => void;
-  
+  // Designator management
+  setShowDesignatorManager: (show: boolean) => void;
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
@@ -186,6 +187,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectGroundNodesByName,
   setShowPowerBusManager,
   setShowGroundBusManager,
+  setShowDesignatorManager,
   menuBarRef,
 }) => {
   // Track which image submenu is open
@@ -868,6 +870,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <button onClick={() => { setShowGroundBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Ground Buses…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button onClick={() => { setShowDesignatorManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Manage Designators…
             </button>
           </div>
         )}

@@ -52,6 +52,7 @@ export function getDefaultPrefix(componentType: ComponentType): string {
 
 /**
  * Create a new component instance with default values
+ * Automatically assigns designator based on component type and existing components if autoAssign is true
  */
 export function createComponent(
   componentType: ComponentType,
@@ -59,12 +60,27 @@ export function createComponent(
   x: number,
   y: number,
   color: string,
-  size: number = COMPONENT_ICON.DEFAULT_SIZE
+  size: number = COMPONENT_ICON.DEFAULT_SIZE,
+  existingComponents: PCBComponent[] = [],
+  counters: DesignatorCounters = loadDesignatorCounters(),
+  autoAssign: boolean = true
 ): PCBComponent {
+  // Automatically assign designator if enabled
+  let designator = '';
+  if (autoAssign) {
+    const prefix = getDefaultPrefix(componentType);
+    const nextNumber = getNextDesignatorNumber(prefix, existingComponents, counters);
+    designator = `${prefix}${nextNumber}`;
+    
+    // Note: Counter updating is now handled by the caller (App.tsx) after component creation
+    // This allows the caller to update counters immediately and reload them for the next component
+    // This ensures proper sequencing when placing multiple components rapidly
+  }
+  
   const baseComponent: PCBComponentBase = {
     id: generateUniqueId('comp'),
     componentType,
-    designator: '', // Will be set by user
+    designator, // Automatically assigned
     layer,
     x,
     y,
@@ -345,21 +361,55 @@ export function validateComponent(component: PCBComponent): string[] {
 }
 
 /**
- * Get suggested designator for next component of a type
+ * Designator counter management
+ * Tracks the last used number for each designator prefix (C, R, Q, U, etc.)
  */
-export function suggestNextDesignator(
-  componentType: ComponentType,
-  existingComponents: PCBComponent[]
-): string {
-  const prefix = getDefaultPrefix(componentType);
-  
-  // Find highest number for this prefix
+export type DesignatorCounters = Record<string, number>; // prefix -> last number
+
+const DESIGNATOR_COUNTERS_STORAGE_KEY = 'designatorCounters';
+
+/**
+ * Load designator counters from localStorage
+ */
+export function loadDesignatorCounters(): DesignatorCounters {
+  try {
+    const stored = localStorage.getItem(DESIGNATOR_COUNTERS_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn('Failed to load designator counters from localStorage:', e);
+  }
+  return {};
+}
+
+/**
+ * Save designator counters to localStorage
+ */
+export function saveDesignatorCounters(counters: DesignatorCounters): void {
+  try {
+    localStorage.setItem(DESIGNATOR_COUNTERS_STORAGE_KEY, JSON.stringify(counters));
+  } catch (e) {
+    console.warn('Failed to save designator counters to localStorage:', e);
+  }
+}
+
+/**
+ * Get the next designator number for a prefix
+ */
+export function getNextDesignatorNumber(
+  prefix: string,
+  existingComponents: PCBComponent[],
+  counters: DesignatorCounters
+): number {
+  // First, check existing components for the highest number with this prefix
   let maxNumber = 0;
   for (const comp of existingComponents) {
-    if (comp.componentType === componentType && comp.designator) {
-      const match = comp.designator.match(/\d+$/);
-      if (match) {
-        const num = parseInt(match[0], 10);
+    if (comp.designator) {
+      // Check if designator starts with this prefix followed by a number
+      const prefixMatch = comp.designator.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
+      if (prefixMatch) {
+        const num = parseInt(prefixMatch[1], 10);
         if (num > maxNumber) {
           maxNumber = num;
         }
@@ -367,7 +417,37 @@ export function suggestNextDesignator(
     }
   }
   
-  return `${prefix}${maxNumber + 1}`;
+  // Then check the persisted counter
+  const counterValue = counters[prefix] || 0;
+  
+  // Return the maximum of both, plus 1
+  return Math.max(maxNumber, counterValue) + 1;
+}
+
+/**
+ * Update designator counter for a prefix
+ */
+export function updateDesignatorCounter(
+  prefix: string,
+  number: number,
+  counters: DesignatorCounters
+): DesignatorCounters {
+  const updated = { ...counters };
+  updated[prefix] = Math.max(updated[prefix] || 0, number);
+  return updated;
+}
+
+/**
+ * Get suggested designator for next component of a type
+ */
+export function suggestNextDesignator(
+  componentType: ComponentType,
+  existingComponents: PCBComponent[],
+  counters: DesignatorCounters = loadDesignatorCounters()
+): string {
+  const prefix = getDefaultPrefix(componentType);
+  const nextNumber = getNextDesignatorNumber(prefix, existingComponents, counters);
+  return `${prefix}${nextNumber}`;
 }
 
 /**

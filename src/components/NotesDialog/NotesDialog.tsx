@@ -373,14 +373,14 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={comp.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',
                           fontSize: '12px',
                           fontWeight: 500
                         }}>
-                          {comp.componentType}
+                          {comp.componentType}{comp.designator && comp.designator.trim() ? ` (${comp.designator.trim()})` : ''}
                         </div>
                       </div>
                       <div style={{ padding: '8px' }}>
@@ -422,7 +422,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={stroke.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',
@@ -474,7 +474,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={stroke.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',
@@ -524,7 +524,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={stroke.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',
@@ -573,7 +573,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={power.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',
@@ -624,7 +624,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   return (
                     <div key={ground.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                       <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
                         <div style={{
                           color: '#fff',
                           padding: '4px 8px',

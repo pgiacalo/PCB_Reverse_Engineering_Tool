@@ -211,18 +211,23 @@ export function useComponents() {
   }, []);
 
   const openComponentEditor = useCallback((component: PCBComponent, layer: 'top' | 'bottom') => {
+    // Extract abbreviation from designator if not already set
+    const designator = component.designator || '';
+    const abbreviation = (component as any).abbreviation || (designator.length > 0 ? designator.charAt(0).toUpperCase() : '');
+    
     const editor: any = {
       visible: true,
       layer,
       id: component.id,
-      designator: component.designator || '',
-      abbreviation: (component as any).abbreviation || '',
+      designator: designator,
+      abbreviation: abbreviation,
       manufacturer: 'manufacturer' in component ? (component as any).manufacturer || '' : '',
       partNumber: 'partNumber' in component ? (component as any).partNumber || '' : '',
       pinCount: component.pinCount,
       x: component.x,
       y: component.y,
       orientation: component.orientation ?? 0,
+      description: (component as any).description || '', // Initialize description for all components
     };
     
     // Extract type-specific fields based on component type
@@ -399,7 +404,9 @@ export function useComponents() {
       editor.signal = tp.signal || '';
     } else if (component.componentType === 'IntegratedCircuit') {
       const ic = component as any;
-      editor.description = ic.description || '';
+      // For ICs, description should be synced with designator if description is empty
+      // This ensures auto-assigned designators are properly displayed
+      editor.description = ic.description || component.designator || '';
       editor.datasheet = ic.datasheet || '';
       editor.icType = ic.icType || 'Op-Amp';
     } else if (component.componentType === 'VacuumTube') {

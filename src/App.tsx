@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { PenLine, MousePointer } from 'lucide-react';
-import { createComponent, autoAssignPolarity } from './utils/components';
+import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
 import { 
   COMPONENT_TYPE_INFO,
   COMPONENT_CATEGORIES,
@@ -922,6 +922,15 @@ function App() {
   const [showGroundBusManager, setShowGroundBusManager] = useState(false);
   const [showGroundBusSelector, setShowGroundBusSelector] = useState(false);
   const [selectedGroundBusId, setSelectedGroundBusId] = useState<string | null>(null);
+  // Designator management
+  const [autoAssignDesignators, setAutoAssignDesignators] = useState<boolean>(() => {
+    const saved = localStorage.getItem('autoAssignDesignators');
+    return saved !== null ? saved === 'true' : true; // Default to true
+  });
+  const [useGlobalDesignatorCounters, setUseGlobalDesignatorCounters] = useState<boolean>(false); // Default to OFF (project-local)
+  const [showDesignatorManager, setShowDesignatorManager] = useState(false);
+  // Session-level counters for project-local mode (tracks designators created in this session)
+  const sessionDesignatorCountersRef = useRef<Record<string, number>>({});
   // Ground layer
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   // Connections layer
@@ -2068,17 +2077,54 @@ function App() {
       // Use layer-specific colors and sizes for components
       const componentColor = componentToolLayer === 'top' ? topComponentColor : bottomComponentColor;
       const componentSize = componentToolLayer === 'top' ? topComponentSize : bottomComponentSize;
+      // Pass all existing components for designator auto-assignment
+      const allExistingComponents = [...componentsTop, ...componentsBottom];
+      
+      // Prepare counters based on mode
+      let counters: Record<string, number>;
+      if (useGlobalDesignatorCounters) {
+        // Global mode: reload from localStorage each time to get latest values
+        counters = loadDesignatorCounters();
+      } else {
+        // Project-local mode: use session counters (starts empty, gets updated as components are created)
+        counters = { ...sessionDesignatorCountersRef.current };
+      }
       const comp = createComponent(
         selectedComponentType,
         componentToolLayer, // Use componentToolLayer instead of selectedDrawingLayer
         truncatedPos.x,
         truncatedPos.y,
         componentColor,
-        componentSize
+        componentSize,
+        allExistingComponents,
+        counters, // Pass counters based on useGlobalDesignatorCounters setting
+        autoAssignDesignators // Pass auto-assignment setting
       );
       
       // Initialize abbreviation to default based on component type prefix
       (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentType);
+      
+      // IMPORTANT: Update counters immediately after component creation so the next component gets the correct number
+      // This ensures that when placing multiple components rapidly, each gets a unique sequential designator
+      if (autoAssignDesignators && comp.designator) {
+        const prefix = getDefaultPrefix(selectedComponentType);
+        const match = comp.designator.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
+        if (match) {
+          const number = parseInt(match[1], 10);
+          if (useGlobalDesignatorCounters) {
+            // Update global counters in localStorage
+            const currentCounters = loadDesignatorCounters();
+            const updatedCounters = updateDesignatorCounter(prefix, number, currentCounters);
+            saveDesignatorCounters(updatedCounters);
+          } else {
+            // Update session counters for project-local mode
+            sessionDesignatorCountersRef.current[prefix] = Math.max(
+              sessionDesignatorCountersRef.current[prefix] || 0,
+              number
+            );
+          }
+        }
+      }
       
       // Add component to appropriate layer
       if (componentToolLayer === 'top') {
@@ -2211,92 +2257,92 @@ function App() {
       
       const bus = groundBuses.find(b => b.id === selectedGroundBusId);
       if (bus) {
-        // Snap to nearest via, pad, or trace point unless Option/Alt key is held
-        // Returns both coordinates and the Node ID of the snapped object (if any)
-        const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
-          let bestDist = Infinity;
-          let bestPoint: { x: number; y: number; id?: number } | null = null;
-          // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
-          // When zoomed in very far, allow extremely fine placement with sub-micron precision
-          const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
-          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
-          // Scale minimum threshold based on zoom level for ultra-fine control
-          // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
-          const SNAP_THRESHOLD_WORLD = viewScale > 20 
-            ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
-            : viewScale > 10 
-              ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
-              : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
-          for (const s of drawingStrokes) {
-            if (s.type === 'via' || s.type === 'pad') {
-              // Vias and pads can be snapped to from any layer
-              const c = s.points[0];
-              const d = Math.hypot(c.x - wx, c.y - wy);
+      // Snap to nearest via, pad, or trace point unless Option/Alt key is held
+      // Returns both coordinates and the Node ID of the snapped object (if any)
+      const snapToNearestPoint = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+        let bestDist = Infinity;
+        let bestPoint: { x: number; y: number; id?: number } | null = null;
+        // Zoom-aware snap threshold: maintain ~10 screen pixels at all zoom levels
+        // When zoomed in very far, allow extremely fine placement with sub-micron precision
+        const SNAP_THRESHOLD_SCREEN = 10; // Screen pixels
+        const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+        // Scale minimum threshold based on zoom level for ultra-fine control
+        // At very high zoom (viewScale > 20), allow 0.0001 precision; at high zoom (>10), 0.001; otherwise 0.01
+        const SNAP_THRESHOLD_WORLD = viewScale > 20 
+          ? Math.max(baseThreshold, 0.0001) // Ultra-fine: 0.0001 world units (0.1 micron equivalent)
+          : viewScale > 10 
+            ? Math.max(baseThreshold, 0.001) // Fine: 0.001 world units (1 micron equivalent)
+            : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
+        for (const s of drawingStrokes) {
+          if (s.type === 'via' || s.type === 'pad') {
+            // Vias and pads can be snapped to from any layer
+            const c = s.points[0];
+            const d = Math.hypot(c.x - wx, c.y - wy);
+            if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+              bestDist = d;
+              bestPoint = c;
+            }
+          } else if (s.type === 'trace') {
+            // Check all trace points
+            for (const point of s.points) {
+              const d = Math.hypot(point.x - wx, point.y - wy);
               if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
                 bestDist = d;
-                bestPoint = c;
-              }
-            } else if (s.type === 'trace') {
-              // Check all trace points
-              for (const point of s.points) {
-                const d = Math.hypot(point.x - wx, point.y - wy);
-                if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
-                  bestDist = d;
-                  bestPoint = point;
-                }
+                bestPoint = point;
               }
             }
           }
-          // Truncate coordinates to 4 decimal places for exact matching
-          const result = bestPoint ?? { x: wx, y: wy };
-          const truncated = truncatePoint(result);
-          return {
-            x: truncated.x,
-            y: truncated.y,
-            nodeId: bestPoint?.id
-          };
-        };
-        const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
-        const nodeId = snapped.nodeId ?? generatePointId();
-        const groundType = `${bus.name} Ground Node`;
-        
-        // Check for conflict: if there's already a power node at this Node ID, show error
-        const existingPower = powers.find(p => p.pointId === nodeId);
-        if (existingPower) {
-          setErrorDialog({
-            visible: true,
-            title: 'Node ID Conflict',
-            message: `Cannot place ground node: A power node (${existingPower.type || 'Power Node'}) already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
-          });
-          return;
         }
-        
+        // Truncate coordinates to 4 decimal places for exact matching
+        const result = bestPoint ?? { x: wx, y: wy };
+        const truncated = truncatePoint(result);
+        return {
+          x: truncated.x,
+          y: truncated.y,
+          nodeId: bestPoint?.id
+        };
+      };
+      const snapped = !isSnapDisabled ? snapToNearestPoint(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+      const nodeId = snapped.nodeId ?? generatePointId();
+        const groundType = `${bus.name} Ground Node`;
+      
+      // Check for conflict: if there's already a power node at this Node ID, show error
+      const existingPower = powers.find(p => p.pointId === nodeId);
+      if (existingPower) {
+        setErrorDialog({
+          visible: true,
+          title: 'Node ID Conflict',
+          message: `Cannot place ground node: A power node (${existingPower.type || 'Power Node'}) already exists at this Node ID (${nodeId}). Power and ground nodes cannot share the same Node ID.`,
+        });
+        return;
+      }
+      
         // Place ground node immediately
-        const g: GroundSymbol = {
-          id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          x: snapped.x,
-          y: snapped.y,
+      const g: GroundSymbol = {
+        id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        x: snapped.x,
+        y: snapped.y,
           color: bus.color, // Use ground bus color
-          size: toolRegistry.get('ground')?.settings.size || 18,
+        size: toolRegistry.get('ground')?.settings.size || 18,
           groundBusId: bus.id,
           layer: selectedDrawingLayer,
           type: groundType, // Auto-populate type with bus name
-          pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
-        };
-        setGroundSymbols(prev => [...prev, g]);
-        
-        // Update via and pad types if we snapped to an existing via or pad
-        if (snapped.nodeId !== undefined) {
-          const newViaType = determineViaType(snapped.nodeId, powerBuses);
-          const newPadType = determinePadType(snapped.nodeId, powerBuses);
-          setDrawingStrokes(prev => prev.map(s => {
-            if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
-              return { ...s, viaType: newViaType };
-            } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
-              return { ...s, padType: newPadType };
-            }
-            return s;
-          }));
+        pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
+      };
+      setGroundSymbols(prev => [...prev, g]);
+      
+      // Update via and pad types if we snapped to an existing via or pad
+      if (snapped.nodeId !== undefined) {
+        const newViaType = determineViaType(snapped.nodeId, powerBuses);
+        const newPadType = determinePadType(snapped.nodeId, powerBuses);
+        setDrawingStrokes(prev => prev.map(s => {
+          if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+            return { ...s, viaType: newViaType };
+          } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+            return { ...s, padType: newPadType };
+          }
+          return s;
+        }));
         }
       }
       return;
@@ -3266,7 +3312,7 @@ function App() {
     ctx.rect(CONTENT_BORDER, CONTENT_BORDER, canvas.width - 2 * CONTENT_BORDER, canvas.height - 2 * CONTENT_BORDER);
     ctx.clip();
     ctx.translate(CONTENT_BORDER, CONTENT_BORDER);
-    
+
     // Helper to create an edge-detected (black & white) canvas from a CanvasImageSource
     const createEdgeCanvas = (source: CanvasImageSource, invert: boolean): HTMLCanvasElement => {
       const w = (source as any).width as number;
@@ -3400,7 +3446,7 @@ function App() {
 
       ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
     };
-    
+
     // Apply global view transform once (pan then scale)
     ctx.translate(viewPan.x, viewPan.y);
     ctx.scale(viewScale, viewScale);
@@ -3408,51 +3454,51 @@ function App() {
     // Draw images with transformations (locked and unlocked use same coordinate system)
     // Locked images just can't be transformed, but they appear in the same position
     {
-      const overlayMode = showTopImage && showBottomImage;
+    const overlayMode = showTopImage && showBottomImage;
       
-      if (topImage && topImage.bitmap && showTopImage) {
-        const bmp = topImage.bitmap;
-        ctx.save();
-        ctx.globalAlpha = 1;
-        // Apply grayscale filter if enabled and not in edge mode
-        if (isGrayscale && !isBlackAndWhiteEdges) {
-          ctx.filter = 'grayscale(100%)';
-        } else {
-          ctx.filter = 'none';
-        }
-        // Apply per-image transformations
+    if (topImage && topImage.bitmap && showTopImage) {
+      const bmp = topImage.bitmap;
+      ctx.save();
+      ctx.globalAlpha = 1;
+      // Apply grayscale filter if enabled and not in edge mode
+      if (isGrayscale && !isBlackAndWhiteEdges) {
+        ctx.filter = 'grayscale(100%)';
+      } else {
+        ctx.filter = 'none';
+      }
+      // Apply per-image transformations
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
         ctx.translate(topImage.x, topImage.y);
-        ctx.rotate((topImage.rotation * Math.PI) / 180);
-        // Apply skew (keystone) if any
-        if (topImage.skewX || topImage.skewY) {
-          const sx = Math.tan(topImage.skewX || 0);
-          const sy = Math.tan(topImage.skewY || 0);
-          ctx.transform(1, sy, sx, 1, 0, 0);
-        }
-        ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
-        const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
-        const scaledHeight = bmp.height * 1;
-        const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
-        if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
-          drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
-        } else {
-          ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-        }
-        ctx.restore();
+      ctx.rotate((topImage.rotation * Math.PI) / 180);
+      // Apply skew (keystone) if any
+      if (topImage.skewX || topImage.skewY) {
+        const sx = Math.tan(topImage.skewX || 0);
+        const sy = Math.tan(topImage.skewY || 0);
+        ctx.transform(1, sy, sx, 1, 0, 0);
       }
+      ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
+      const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
+      const scaledHeight = bmp.height * 1;
+      const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+      if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
+        drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
+      } else {
+        ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      }
+      ctx.restore();
+    }
 
-      if (bottomImage && bottomImage.bitmap && showBottomImage) {
-        const bmp = bottomImage.bitmap;
-        ctx.save();
-        ctx.globalAlpha = overlayMode ? (transparency / 100) : 1;
-        if (isGrayscale && !isBlackAndWhiteEdges) {
-          ctx.filter = 'grayscale(100%)';
-        } else {
-          ctx.filter = 'none';
-        }
-        // Apply per-image transformations
+    if (bottomImage && bottomImage.bitmap && showBottomImage) {
+      const bmp = bottomImage.bitmap;
+      ctx.save();
+      ctx.globalAlpha = overlayMode ? (transparency / 100) : 1;
+      if (isGrayscale && !isBlackAndWhiteEdges) {
+        ctx.filter = 'grayscale(100%)';
+      } else {
+        ctx.filter = 'none';
+      }
+      // Apply per-image transformations
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
         ctx.translate(bottomImage.x, bottomImage.y);
@@ -3548,9 +3594,9 @@ function App() {
           const barG = unit * 0.24; // Gap between bars
           const width = unit * 1.6; // Width of first (longest) bar
           
-          ctx.strokeStyle = groundColor;
-          ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
-          ctx.lineCap = 'round';
+        ctx.strokeStyle = groundColor;
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+        ctx.lineCap = 'round';
           
           // Draw selection highlight if selected
           if (isSelected) {
@@ -3581,36 +3627,36 @@ function App() {
           }
         } else {
           // Draw GND or other ground symbol: circle with lines
-          const radius = Math.max(6, (g.size || 18) / 2);
-          const lineExtension = radius * 0.8; // Lines extend outside the circle
-          
-          // Draw selection highlight if selected
-          if (isSelected) {
-            ctx.strokeStyle = '#0066ff';
-            ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
-            ctx.beginPath();
-            ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-          
-          // Draw empty circle (not filled)
-          ctx.strokeStyle = groundColor;
-          ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+        const radius = Math.max(6, (g.size || 18) / 2);
+        const lineExtension = radius * 0.8; // Lines extend outside the circle
+        
+        // Draw selection highlight if selected
+        if (isSelected) {
+          ctx.strokeStyle = '#0066ff';
+          ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
+          ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
           ctx.stroke();
-          
-          // Draw vertical line extending above and below the circle
-          ctx.beginPath();
-          ctx.moveTo(g.x, g.y - radius - lineExtension);
-          ctx.lineTo(g.x, g.y + radius + lineExtension);
-          ctx.stroke();
-          
-          // Draw horizontal line extending left and right of the circle
-          ctx.beginPath();
-          ctx.moveTo(g.x - radius - lineExtension, g.y);
-          ctx.lineTo(g.x + radius + lineExtension, g.y);
-          ctx.stroke();
+        }
+        
+        // Draw empty circle (not filled)
+        ctx.strokeStyle = groundColor;
+        ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
+        ctx.beginPath();
+        ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw vertical line extending above and below the circle
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y - radius - lineExtension);
+        ctx.lineTo(g.x, g.y + radius + lineExtension);
+        ctx.stroke();
+        
+        // Draw horizontal line extending left and right of the circle
+        ctx.beginPath();
+        ctx.moveTo(g.x - radius - lineExtension, g.y);
+        ctx.lineTo(g.x + radius + lineExtension, g.y);
+        ctx.stroke();
         }
         
         ctx.restore();
@@ -3638,19 +3684,29 @@ function App() {
       ctx.fill();
       ctx.stroke();
       
-      // Draw abbreviation text (default based on component type prefix)
-      let abbreviation = ('abbreviation' in c && (c as any).abbreviation) ? 
-        String((c as any).abbreviation).trim() : '';
-      if (!abbreviation || abbreviation === '' || abbreviation === '****' || abbreviation === '*' || abbreviation === '?') {
-        abbreviation = getDefaultAbbreviation(c.componentType);
-      }
+      // Draw designator text inside the component icon
+      const designator = c.designator?.trim() || '';
+      if (designator) {
       ctx.fillStyle = c.color || '#111';
-      ctx.font = `bold ${Math.max(8, size * 0.35)}px sans-serif`;
+        // Calculate font size based on component size and designator length
+        // For longer designators (like "U123"), use smaller font
+        const baseFontSize = Math.max(6, size * 0.35);
+        const maxWidth = size * 0.9; // Leave 5% margin on each side
+        let fontSize = baseFontSize;
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        
+        // Measure text and adjust font size if needed to fit
+        const metrics = ctx.measureText(designator);
+        if (metrics.width > maxWidth) {
+          fontSize = (maxWidth / metrics.width) * fontSize;
+          fontSize = Math.max(6, fontSize); // Minimum readable size
+          ctx.font = `bold ${fontSize}px sans-serif`;
+        }
+        
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      
-      // Draw the designator text
-      ctx.fillText(abbreviation, c.x, c.y);
+        ctx.fillText(designator, c.x, c.y);
+      }
       
       // selection highlight
       const isSelected = selectedComponentIds.has(c.id);
@@ -5525,6 +5581,8 @@ function App() {
   // Consolidated initialization function - sets all application defaults
   // This is used on app startup, browser refresh, and when creating a new project
   const initializeApplicationDefaults = useCallback(() => {
+    // Reset session designator counters
+    sessionDesignatorCountersRef.current = {};
     // Reset trace colors and sizes to defaults
     setTopTraceColor('#AA4499');
     setBottomTraceColor('#F781BF');
@@ -5764,10 +5822,10 @@ function App() {
     if (traceChooserRef.current && traceButtonRef.current) {
       requestAnimationFrame(() => {
         if (traceChooserRef.current && traceButtonRef.current) {
-          const pos = getDialogPosition(traceButtonRef as React.RefObject<HTMLButtonElement | null>);
-          traceChooserRef.current.style.top = `${pos.top}px`;
-          traceChooserRef.current.style.left = `${pos.left}px`;
-        }
+      const pos = getDialogPosition(traceButtonRef as React.RefObject<HTMLButtonElement | null>);
+      traceChooserRef.current.style.top = `${pos.top}px`;
+      traceChooserRef.current.style.left = `${pos.left}px`;
+    }
       });
     }
   }, []);
@@ -5777,10 +5835,10 @@ function App() {
     if (padChooserRef.current && padButtonRef.current) {
       requestAnimationFrame(() => {
         if (padChooserRef.current && padButtonRef.current) {
-          const pos = getDialogPosition(padButtonRef as React.RefObject<HTMLButtonElement | null>);
-          padChooserRef.current.style.top = `${pos.top}px`;
-          padChooserRef.current.style.left = `${pos.left}px`;
-        }
+      const pos = getDialogPosition(padButtonRef as React.RefObject<HTMLButtonElement | null>);
+      padChooserRef.current.style.top = `${pos.top}px`;
+      padChooserRef.current.style.left = `${pos.left}px`;
+    }
       });
     }
   }, []);
@@ -6430,24 +6488,24 @@ function App() {
         }
       } else {
         // Draw GND or other ground symbol: circle with crossing lines
-        const lineExtension = r * 0.8; // Lines extend outside the circle
-        
-        // Draw empty circle (not filled)
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Draw vertical line extending above and below the circle
-        ctx.beginPath();
-        ctx.moveTo(cx, cy - r - lineExtension);
-        ctx.lineTo(cx, cy + r + lineExtension);
-        ctx.stroke();
-        
-        // Draw horizontal line extending left and right of the circle
-        ctx.beginPath();
-        ctx.moveTo(cx - r - lineExtension, cy);
-        ctx.lineTo(cx + r + lineExtension, cy);
-        ctx.stroke();
+      const lineExtension = r * 0.8; // Lines extend outside the circle
+      
+      // Draw empty circle (not filled)
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw vertical line extending above and below the circle
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - r - lineExtension);
+      ctx.lineTo(cx, cy + r + lineExtension);
+      ctx.stroke();
+      
+      // Draw horizontal line extending left and right of the circle
+      ctx.beginPath();
+      ctx.moveTo(cx - r - lineExtension, cy);
+      ctx.lineTo(cx + r + lineExtension, cy);
+      ctx.stroke();
       }
     } else if (kind === 'power') {
       // Draw power symbol cursor: empty red circle with extending vertical and horizontal lines
@@ -6901,6 +6959,9 @@ function App() {
       powerBuses, // Save power bus definitions
       groundBuses, // Save ground bus definitions
       pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
+      designatorCounters: loadDesignatorCounters(), // Save designator counters for each prefix
+      autoAssignDesignators, // Save auto-designator assignment setting
+      useGlobalDesignatorCounters, // Save global designator counter setting
       traceColors: {
         top: topTraceColor,
         bottom: bottomTraceColor,
@@ -6968,7 +7029,7 @@ function App() {
       },
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -8322,6 +8383,55 @@ function App() {
         });
         setComponentsBottom(compsBottom);
       }
+      
+      // Restore designator counters from project file, or initialize from existing components
+      if (project.designatorCounters && typeof project.designatorCounters === 'object') {
+        // Load saved counters
+        const savedCounters = project.designatorCounters as Record<string, number>;
+        saveDesignatorCounters(savedCounters);
+      } else {
+        // For legacy projects or if counters are missing, initialize from existing components
+        const allComponents = [
+          ...(project.drawing?.componentsTop || []),
+          ...(project.drawing?.componentsBottom || [])
+        ];
+        const counters: Record<string, number> = {};
+        for (const comp of allComponents) {
+          if (comp.designator && comp.designator.trim()) {
+            const prefix = getDefaultPrefix(comp.componentType);
+            const match = comp.designator.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (!counters[prefix] || num > counters[prefix]) {
+                counters[prefix] = num;
+              }
+            }
+          }
+        }
+        // Merge with any existing localStorage counters (take the max)
+        const existingCounters = loadDesignatorCounters();
+        for (const [prefix, num] of Object.entries(counters)) {
+          counters[prefix] = Math.max(num, existingCounters[prefix] || 0);
+        }
+        saveDesignatorCounters(counters);
+      }
+      
+      // Restore auto-designator assignment setting
+      if (typeof project.autoAssignDesignators === 'boolean') {
+        setAutoAssignDesignators(project.autoAssignDesignators);
+        localStorage.setItem('autoAssignDesignators', String(project.autoAssignDesignators));
+      }
+      
+      // Restore global designator counter setting (default to false/OFF)
+      if (typeof project.useGlobalDesignatorCounters === 'boolean') {
+        setUseGlobalDesignatorCounters(project.useGlobalDesignatorCounters);
+      } else {
+        setUseGlobalDesignatorCounters(false); // Default to OFF
+      }
+      
+      // Reset session counters when loading a project
+      sessionDesignatorCountersRef.current = {};
+      
       if (project.drawing?.grounds) {
         const loadedGrounds = project.drawing.grounds as GroundSymbol[];
         // Filter out ground symbols with invalid coordinates (in border area or negative)
@@ -8864,6 +8974,7 @@ function App() {
         selectGroundNodesByName={selectGroundNodesByName}
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
+        setShowDesignatorManager={setShowDesignatorManager}
         menuBarRef={menuBarRef}
       />
 
@@ -9151,8 +9262,8 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size || 18}</span>
               </div>
             </button>
-            <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
+              <button 
+                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
                 disabled={isReadOnlyMode}
                 title="Move (H)" 
                 style={{ 
@@ -9968,6 +10079,8 @@ function App() {
             dialogDragOffset={dialogDragOffset}
             setDialogDragOffset={setDialogDragOffset}
             areComponentsLocked={areComponentsLocked}
+            setSelectedComponentIds={setSelectedComponentIds}
+            setNotesDialogVisible={setNotesDialogVisible}
           />
 
           {/* Component Hover Tooltip (only shown when Option key is held) */}
@@ -9989,8 +10102,12 @@ function App() {
                   lineHeight: '1.4',
                   zIndex: 10000,
                   pointerEvents: 'none',
-                  maxWidth: '250px',
+                  width: 'max-content',
+                  maxWidth: '400px',
+                  minWidth: '150px',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: '4px' }}>
@@ -10002,7 +10119,7 @@ function App() {
                   </div>
                 )}
                 {comp.notes && (
-                  <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '11px', color: '#d0d0d0' }}>
+                  <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '11px', color: '#d0d0d0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {comp.notes}
                   </div>
                 )}
@@ -10236,31 +10353,31 @@ function App() {
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Name</div>
-                    <input
-                      type="text"
-                      value={bus.name}
-                      onChange={(e) => {
-                        const updated = [...powerBuses];
-                        updated[originalIndex] = { ...bus, name: e.target.value };
-                        setPowerBuses(updated);
-                      }}
+                  <input
+                    type="text"
+                    value={bus.name}
+                    onChange={(e) => {
+                      const updated = [...powerBuses];
+                      updated[originalIndex] = { ...bus, name: e.target.value };
+                      setPowerBuses(updated);
+                    }}
                       placeholder="e.g., +3V3, -3V3"
                       style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
-                    />
+                  />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Value</div>
-                    <input
-                      type="text"
+                  <input
+                    type="text"
                       inputMode="decimal"
-                      value={bus.voltage}
-                      onChange={(e) => {
+                    value={bus.voltage}
+                    onChange={(e) => {
                         const inputValue = e.target.value;
                         // Allow empty, numbers, decimal point, and + or - at start only
                         if (inputValue === '' || /^[+-]?\d*\.?\d*$/.test(inputValue)) {
-                          const updated = [...powerBuses];
+                      const updated = [...powerBuses];
                           updated[originalIndex] = { ...bus, voltage: inputValue };
-                          setPowerBuses(updated);
+                      setPowerBuses(updated);
                         }
                       }}
                       onBlur={(e) => {
@@ -10413,6 +10530,72 @@ function App() {
           <button
             onClick={() => setShowGroundBusManager(false)}
             style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px' }}
+          >
+            Close
+          </button>
+        </div>
+      )}
+
+      {/* Designator Manager Dialog */}
+      {showDesignatorManager && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '16px', zIndex: 1000, minWidth: '300px', maxWidth: '400px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Designators</h2>
+            <button onClick={() => setShowDesignatorManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          </div>
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#333', marginBottom: '12px' }}>
+              <input
+                type="checkbox"
+                checked={autoAssignDesignators}
+                onChange={(e) => {
+                  const newValue = e.target.checked;
+                  setAutoAssignDesignators(newValue);
+                  localStorage.setItem('autoAssignDesignators', String(newValue));
+                }}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <span>Automatically assign designators</span>
+            </label>
+            <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666', lineHeight: '1.4', marginBottom: '12px' }}>
+              {autoAssignDesignators ? (
+                <div>
+                  When enabled, new components automatically receive sequential designators (e.g., C1, C2, C3 for Capacitors; R1, R2, R3 for Resistors).
+                </div>
+              ) : (
+                <div>
+                  When disabled, you must manually assign designators to each component. The designator field will be empty when components are created.
+                </div>
+              )}
+            </div>
+            
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#333' }}>
+              <input
+                type="checkbox"
+                checked={useGlobalDesignatorCounters}
+                onChange={(e) => {
+                  const newValue = e.target.checked;
+                  setUseGlobalDesignatorCounters(newValue);
+                }}
+                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+              />
+              <span>Use global designator counters</span>
+            </label>
+            <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666', lineHeight: '1.4' }}>
+              {useGlobalDesignatorCounters ? (
+                <div>
+                  When ON, designators continue from global counters across all projects. New components start with the next value from the global counter (e.g., if global counter is C10, new capacitor will be C11).
+                </div>
+              ) : (
+                <div>
+                  When OFF (default), designators start at 1 for each project. Each project maintains its own independent designator sequence (e.g., C1, C2, C3...).
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowDesignatorManager(false)}
+            style={{ width: '100%', padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
           >
             Close
           </button>

@@ -28,6 +28,10 @@ export interface ComponentTypeFieldsProps {
   componentEditor: any;
   setComponentEditor: (editor: any) => void;
   areComponentsLocked: boolean;
+  componentsTop: PCBComponent[];
+  componentsBottom: PCBComponent[];
+  setComponentsTop: (updater: (prev: PCBComponent[]) => PCBComponent[]) => void;
+  setComponentsBottom: (updater: (prev: PCBComponent[]) => PCBComponent[]) => void;
 }
 
 export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
@@ -35,6 +39,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   componentEditor,
   setComponentEditor,
   areComponentsLocked,
+  componentsTop,
+  componentsBottom,
+  setComponentsTop,
+  setComponentsBottom,
 }) => {
   return (
     <>
@@ -727,6 +735,55 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
             <input id={`component-datasheet-${comp.id}`} type="text" value={componentEditor.datasheet || ''} onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }} placeholder="URL" />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+              Pin Count:
+            </label>
+            <input
+              id={`component-pincount-${comp.id}`}
+              name={`component-pincount-${comp.id}`}
+              type="number"
+              min="1"
+              value={componentEditor.pinCount}
+              onChange={(e) => {
+                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+              }}
+              onBlur={(e) => {
+                if (areComponentsLocked) {
+                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                  return;
+                }
+                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                if (currentComp && newPinCount !== currentComp.pinCount) {
+                  const currentConnections = currentComp.pinConnections || [];
+                  const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
+                    i < currentConnections.length ? currentConnections[i] : ''
+                  );
+                  const currentPolarities = currentComp.pinPolarities || [];
+                  const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
+                    i < currentPolarities.length ? currentPolarities[i] : ''
+                  ) : undefined;
+                  const updatedComp = {
+                    ...currentComp,
+                    pinCount: newPinCount,
+                    pinConnections: newPinConnections,
+                    ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
+                  };
+                  if (componentEditor.layer === 'top') {
+                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  } else {
+                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  }
+                  setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                }
+              }}
+              disabled={areComponentsLocked}
+              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            />
           </div>
         </>
       )}

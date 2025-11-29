@@ -79,6 +79,10 @@ export interface ComponentEditorProps {
   setDialogDragOffset: (offset: { x: number; y: number } | null) => void;
   /** Are components locked */
   areComponentsLocked: boolean;
+  /** Set selected component IDs */
+  setSelectedComponentIds: (ids: Set<string>) => void;
+  /** Set notes dialog visible */
+  setNotesDialogVisible: (visible: boolean) => void;
 }
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
@@ -97,6 +101,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   dialogDragOffset: _dialogDragOffset,
   setDialogDragOffset,
   areComponentsLocked,
+  setSelectedComponentIds,
+  setNotesDialogVisible,
 }) => {
   if (!componentEditor || !componentEditor.visible) {
     return null;
@@ -119,19 +125,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Update component function - handles all component type-specific save logic
   const updateComponent = (comp: PCBComponent): PCBComponent => {
     const updated = { ...comp };
-    // Use abbreviation as designator if designator is empty or just a placeholder
-    // The UI field edits abbreviation, so we need to sync it to designator
-    const abbreviation = componentEditor.abbreviation?.trim() || '';
+    // Always use the designator field value directly (not abbreviation)
+    // The designator field is the source of truth for the component's designator
     const designator = componentEditor.designator?.trim() || '';
-    updated.designator = (designator && designator !== '?' && designator !== '??' && designator !== '***' && designator !== '****' && designator !== '*') 
-      ? designator 
-      : (abbreviation || componentEditor.designator || '');
+    updated.designator = designator;
     updated.x = componentEditor.x;
     updated.y = componentEditor.y;
     updated.layer = componentEditor.layer;
     updated.orientation = componentEditor.orientation ?? 0;
-    // Store abbreviation as a dynamic property
-    (updated as any).abbreviation = componentEditor.abbreviation.trim() || getDefaultAbbreviation(comp.componentType);
+    // Derive abbreviation from designator (first character)
+    const abbreviation = designator.length > 0 ? designator.charAt(0).toUpperCase() : getDefaultAbbreviation(comp.componentType);
+    (updated as any).abbreviation = abbreviation;
     if ('manufacturer' in updated) {
       (updated as any).manufacturer = componentEditor.manufacturer;
     }
@@ -280,15 +284,22 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     } else if (comp.componentType === 'TestPoint') {
       (updated as any).signal = componentEditor.signal || undefined;
     } else if (comp.componentType === 'IntegratedCircuit') {
-      // For ICs, description and designator should be the same
-      (updated as any).description = componentEditor.description || componentEditor.designator || undefined;
+      // For ICs, description and designator should be synced
+      // Designator is the source of truth - sync description to designator
+      const designator = componentEditor.designator?.trim() || '';
+      (updated as any).description = designator || componentEditor.description || undefined;
       (updated as any).datasheet = componentEditor.datasheet || undefined;
       (updated as any).icType = componentEditor.icType || undefined;
-      // Ensure designator is also set from description for ICs
-      if (componentEditor.description) {
-        updated.designator = componentEditor.description;
+      // Ensure designator is set (it should already be set above, but ensure it's not lost)
+      updated.designator = designator;
+    } else {
+      // For non-IC components, save description separately (if it exists)
+      if (componentEditor.description !== undefined) {
+        (updated as any).description = componentEditor.description?.trim() || undefined;
       }
-    } else if (comp.componentType === 'VacuumTube') {
+    }
+    
+    if (comp.componentType === 'VacuumTube') {
       (updated as any).tubeType = componentEditor.tubeType || undefined;
     } else if (comp.componentType === 'VariableResistor') {
       (updated as any).vrType = componentEditor.vrType || undefined;
@@ -544,26 +555,27 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           componentEditor={componentEditor}
           setComponentEditor={setComponentEditor}
           areComponentsLocked={areComponentsLocked}
+          componentsTop={componentsTop}
+          componentsBottom={componentsBottom}
+          setComponentsTop={setComponentsTop}
+          setComponentsBottom={setComponentsBottom}
         />
         
         {/* Designator - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-          <label htmlFor={`component-abbreviation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
             Designator:
           </label>
           <input
-            id={`component-abbreviation-${comp.id}`}
-            name={`component-abbreviation-${comp.id}`}
+            id={`component-designator-${comp.id}`}
+            name={`component-designator-${comp.id}`}
             type="text"
-            maxLength={4}
-            value={componentEditor.abbreviation.replace(/\*/g, '')}
+            value={componentEditor.designator || ''}
             onChange={(e) => {
-              const val = e.target.value.substring(0, 4).toUpperCase();
-              setComponentEditor({ ...componentEditor, abbreviation: val });
-            }}
-            onBlur={(e) => {
-              const val = e.target.value.substring(0, 4).toUpperCase();
-              setComponentEditor({ ...componentEditor, abbreviation: val });
+              const val = e.target.value;
+              // Extract abbreviation (first letter) from designator for display purposes
+              const newAbbreviation = val.length > 0 ? val.charAt(0).toUpperCase() : componentEditor.abbreviation;
+              setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
             }}
             disabled={areComponentsLocked}
             style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
@@ -580,12 +592,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             id={`component-description-${comp.id}`}
             name={`component-description-${comp.id}`}
             type="text"
-            value={comp.componentType === 'IntegratedCircuit' ? (componentEditor.description || componentEditor.designator || '') : (componentEditor.designator || '')}
+            value={componentEditor.description || ''}
             onChange={(e) => {
               if (comp.componentType === 'IntegratedCircuit') {
+                // For ICs, description and designator are synced
                 setComponentEditor({ ...componentEditor, description: e.target.value, designator: e.target.value });
               } else {
-                setComponentEditor({ ...componentEditor, designator: e.target.value });
+                // For non-ICs, description is separate from designator
+                setComponentEditor({ ...componentEditor, description: e.target.value });
               }
             }}
             disabled={areComponentsLocked}
@@ -593,6 +607,97 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             placeholder={comp.componentType === 'IntegratedCircuit' ? "e.g., Dual Op-Amp" : "e.g., Op Amp OP07"}
           />
         </div>
+        
+        {/* Notes - single line, clickable to open Notes dialog */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label htmlFor={`component-notes-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+            Notes:
+          </label>
+          <input
+            id={`component-notes-${comp.id}`}
+            name={`component-notes-${comp.id}`}
+            type="text"
+            readOnly
+            value={comp.notes || ''}
+            onClick={() => {
+              if (!areComponentsLocked) {
+                // Select this component and open Notes dialog
+                setSelectedComponentIds(new Set([comp.id]));
+                setNotesDialogVisible(true);
+              }
+            }}
+            disabled={areComponentsLocked}
+            style={{ 
+              flex: 1, 
+              padding: '2px 3px', 
+              background: '#f5f5f5', 
+              border: '1px solid #ddd', 
+              borderRadius: 2, 
+              fontSize: '10px', 
+              color: '#666', 
+              opacity: areComponentsLocked ? 0.6 : 1,
+              cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
+            placeholder="Click to edit notes..."
+            title={comp.notes || 'Click to edit notes...'}
+          />
+        </div>
+        
+        {/* Pin Count - on one line (only for non-IC components; ICs show it under IC Properties) */}
+        {comp.componentType !== 'IntegratedCircuit' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+              Pin Count:
+            </label>
+            <input
+              id={`component-pincount-${comp.id}`}
+              name={`component-pincount-${comp.id}`}
+              type="number"
+              min="1"
+              value={componentEditor.pinCount}
+              onChange={(e) => {
+                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+              }}
+              onBlur={(e) => {
+                if (areComponentsLocked) {
+                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                  return;
+                }
+                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                if (currentComp && newPinCount !== currentComp.pinCount) {
+                  const currentConnections = currentComp.pinConnections || [];
+                  const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
+                    i < currentConnections.length ? currentConnections[i] : ''
+                  );
+                  const currentPolarities = currentComp.pinPolarities || [];
+                  const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
+                    i < currentPolarities.length ? currentPolarities[i] : ''
+                  ) : undefined;
+                  const updatedComp = {
+                    ...currentComp,
+                    pinCount: newPinCount,
+                    pinConnections: newPinConnections,
+                    ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
+                  };
+                  if (componentEditor.layer === 'top') {
+                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  } else {
+                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  }
+                  setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                }
+              }}
+              disabled={areComponentsLocked}
+              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            />
+          </div>
+        )}
         
         {/* X - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -659,57 +764,6 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             type="text"
             value={componentEditor.partNumber}
             onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-            disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
-          />
-        </div>
-        
-        {/* Pin Count - on one line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
-            Pin Count:
-          </label>
-          <input
-            id={`component-pincount-${comp.id}`}
-            name={`component-pincount-${comp.id}`}
-            type="number"
-            min="1"
-            value={componentEditor.pinCount}
-            onChange={(e) => {
-              const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
-              setComponentEditor({ ...componentEditor, pinCount: newPinCount });
-            }}
-            onBlur={(e) => {
-              if (areComponentsLocked) {
-                alert('Cannot edit: Components are locked. Unlock components to edit them.');
-                return;
-              }
-              const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
-              const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-              const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-              if (currentComp && newPinCount !== currentComp.pinCount) {
-                const currentConnections = currentComp.pinConnections || [];
-                const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
-                  i < currentConnections.length ? currentConnections[i] : ''
-                );
-                const currentPolarities = currentComp.pinPolarities || [];
-                const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
-                  i < currentPolarities.length ? currentPolarities[i] : ''
-                ) : undefined;
-                const updatedComp = {
-                  ...currentComp,
-                  pinCount: newPinCount,
-                  pinConnections: newPinConnections,
-                  ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
-                };
-                if (componentEditor.layer === 'top') {
-                  setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                } else {
-                  setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                }
-                setComponentEditor({ ...componentEditor, pinCount: newPinCount });
-              }
-            }}
             disabled={areComponentsLocked}
             style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
