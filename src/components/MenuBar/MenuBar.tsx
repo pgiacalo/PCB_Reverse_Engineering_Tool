@@ -18,7 +18,6 @@ export interface MenuBarProps {
   onOpenProject: () => Promise<void>;
   onSaveProject: () => Promise<void>;
   onSaveAs: () => void;
-  onExportSchematic: () => Promise<void>;
   onPrint: () => void;
   hasUnsavedChanges: () => boolean;
   
@@ -116,7 +115,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onOpenProject,
   onSaveProject,
   onSaveAs,
-  onExportSchematic,
   onPrint,
   hasUnsavedChanges,
   setNewProjectDialog,
@@ -451,19 +449,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Auto Save…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button
-              onClick={() => {
-                if (!isReadOnlyMode) {
-                  void onExportSchematic(); 
-                  setOpenMenu(null); 
-                }
-              }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
-            >
-              Export Simple Schematic…
-            </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { onPrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
             <button onClick={() => { onPrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
           </div>
@@ -745,7 +730,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images.
               </p>
               <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                This application supports typical 4-layer PCBs and allows you to load top and bottom PCB images, trace connections, place components, and export schematics in KiCad format.
+                This application supports typical 4-layer PCBs and allows you to load top and bottom PCB images, trace connections, and place components.
               </p>
               <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
                 <strong>Key Features:</strong>
@@ -755,11 +740,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <li>Trace connections with automatic node snapping</li>
                 <li>Place and annotate components with pin connections</li>
                 <li>Manage power buses and ground connections</li>
-                <li>Export to KiCad schematic format</li>
                 <li>Auto-save functionality for project management</li>
               </ul>
               <p style={{ margin: '0 0 0 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                Use the <strong>File</strong> menu to create new projects, save your work, and export schematics. The <strong>Images</strong> menu provides tools for aligning and transforming PCB images. The <strong>Tools</strong> menu offers size adjustments and locking controls for different PCB elements.
+                Use the <strong>File</strong> menu to create new projects and save your work. The <strong>Images</strong> menu provides tools for aligning and transforming PCB images. The <strong>Tools</strong> menu offers size adjustments and locking controls for different PCB elements.
               </p>
             </div>
           </div>

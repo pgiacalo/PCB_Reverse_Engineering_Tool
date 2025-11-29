@@ -2,7 +2,7 @@
 
 ## Overview
 
-The PCB Reverse Engineering Tool is a modern browser-based single-page application (SPA) that enables users to reverse engineer printed circuit boards by tracing connections, placing components, and generating KiCad-compatible netlists. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
+The PCB Reverse Engineering Tool is a modern browser-based single-page application (SPA) that enables users to reverse engineer printed circuit boards by tracing connections and placing components. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
 
 This document outlines the core technologies, frameworks, and tools used to build and deploy the application.
 

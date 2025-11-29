@@ -316,22 +316,20 @@ Ensure your web server is configured for Single Page Applications:
 
 ## Project Goals
 
-### Primary Goal: KiCad Netlist Export
-The PCB Reverse Engineering Tool shall output **KiCad netlist format data** once the vias, traces, components, power, and ground connections are fully established. The purpose of this KiCad output data is to enable the creation of a schematic based on PCB reverse engineering efforts.
+### Primary Goal: Netlist Export
+The PCB Reverse Engineering Tool shall output **netlist format data** once the vias, traces, components, power, and ground connections are fully established. The purpose of this output data is to enable connectivity analysis and documentation of PCB reverse engineering efforts.
 
 **Workflow Integration:**
 1. User reverse-engineers PCB using this tool (identifying vias, traces, components, ground/power connections)
-2. Tool exports netlist in KiCad-compatible format
-3. User imports netlist into third-party schematic generation tools such as:
-   - [nl2sch](https://github.com/tpecar/nl2sch) - Netlist to KiCad schematic conversion tool
-   - Other KiCad-compatible netlist importers
+2. Tool exports netlist in standard format
+3. User can analyze connectivity and document the PCB layout
 
 **Netlist Export Requirements:**
 - **REQ-GOAL-001**: Export complete netlist including all identified components
 - **REQ-GOAL-002**: Include all via connections between top and bottom layers
 - **REQ-GOAL-003**: Include all traced connections (nets) with proper naming
 - **REQ-GOAL-004**: Include power and ground net designations
-- **REQ-GOAL-005**: Generate KiCad-compatible Protel netlist format
+- **REQ-GOAL-005**: Generate netlist format for connectivity analysis
 - **REQ-GOAL-006**: Preserve component designators, footprints, and values
 - **REQ-GOAL-007**: Maintain pin-to-net associations for all components
 
@@ -456,7 +454,7 @@ The tool shall implement the following drawing layer hierarchy:
 
 ### Overview
 
-The tool implements a comprehensive component type system based on standard PCB designator prefixes. Each component type has specific properties relevant to PCB reverse engineering and schematic generation.
+The tool implements a comprehensive component type system based on standard PCB designator prefixes. Each component type has specific properties relevant to PCB reverse engineering and documentation.
 
 ### Component Placement Workflow
 

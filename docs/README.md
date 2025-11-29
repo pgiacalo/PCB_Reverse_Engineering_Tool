@@ -10,7 +10,7 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 
 **[REQUIREMENTS.md](./REQUIREMENTS.md)**
 - Complete technical and functional requirements
-- Project goals (KiCad netlist export)
+- Project goals
 - Target PCB complexity (4-layer boards)
 - Drawing layer organization (9 layers)
 - Component type system requirements (24 component types)
@@ -35,7 +35,7 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 - Netlist concept (nodes and nets)
 - Connectivity graph structure
 - Net assignment algorithms
-- KiCad Protel netlist format
+- Netlist format
 - Validation and error checking
 - Implementation roadmap
 
@@ -127,7 +127,7 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 2. **Union-Find Net Assignment** - Group connected nodes into electrical nets
 3. **Net Naming** - Automatic naming (GND, +5V, N$1, N$2, etc.)
 4. **BOM Export** - Component data export in CSV/JSON format
-5. **KiCad Netlist Export** - Protel format for schematic generation
+5. **Netlist Export** - Format for connectivity analysis
 
 ## Implementation Status
 
@@ -149,7 +149,7 @@ This directory contains comprehensive documentation for the PCB Reverse Engineer
 
 - [ ] Netlist connectivity analysis
 - [ ] Net assignment algorithms
-- [ ] KiCad netlist export
+- [ ] Netlist export
 
 ### 📋 Planned (Phase 2)
 
@@ -179,7 +179,6 @@ When adding new features or modifying existing ones:
 
 ## External Resources
 
-- **KiCad Netlist Format**: [KiCad Documentation](https://docs.kicad.org/)
 - **nl2sch Tool**: [GitHub Repository](https://github.com/tpecar/nl2sch)
 - **Component Packages**: [DigiKey Package Types](https://forum.digikey.com/t/common-electronic-component-package-types/34882)
 - **PCB Reverse Engineering**: [Hackaday Video](https://www.youtube.com/watch?v=dQ9Mh9BbyP0&t=6251s)

@@ -15,9 +15,8 @@ import {
   COMPONENT_ICON,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
-import { generateSimpleSchematic } from './utils/schematic';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
-import type { ComponentType, PCBComponent, DrawingStroke as ImportedDrawingStroke } from './types';
+import type { ComponentType, PCBComponent } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -7219,105 +7218,6 @@ function App() {
   // exportNetlist function removed - menu item was commented out and function is unused
   // If needed in the future, uncomment the menu item and restore this function
 
-  // Export simple schematic function
-  const exportSimpleSchematic = useCallback(async () => {
-    // Generate schematic and nodes CSV
-    const allComponents = [...componentsTop, ...componentsBottom];
-    // Type assertion: The local DrawingStroke type has optional point.id, but the imported
-    // type requires it. The generateSimpleSchematic function handles undefined IDs safely
-    // by checking point.id !== undefined before using it.
-    const { schematic: schematicContent, nodesCsv } = generateSimpleSchematic(
-      allComponents,
-      drawingStrokes as ImportedDrawingStroke[],
-      powers,
-      grounds,
-      powerBuses
-    );
-
-    // Generate timestamp for CSV filename
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5); // Format: 2024-01-15T12-30-45
-    const baseName = projectName || 'pcb_project';
-
-    // Save nodes CSV first
-    const csvBlob = new Blob([nodesCsv], { type: 'text/csv' });
-    const csvFilename = `${timestamp}_nodes.csv`;
-
-    // Try to use File System Access API for CSV
-    const w = window as any;
-    if (typeof w.showSaveFilePicker === 'function') {
-      try {
-        const csvHandle = await w.showSaveFilePicker({
-          suggestedName: csvFilename,
-          types: [{ description: 'CSV Files', accept: { 'text/csv': ['.csv'] } }],
-        });
-        const csvWritable = await csvHandle.createWritable();
-        await csvWritable.write(csvBlob);
-        await csvWritable.close();
-        console.log(`Nodes CSV exported: ${csvHandle.name}`);
-      } catch (e) {
-        if ((e as any)?.name === 'AbortError') return;
-        console.warn('showSaveFilePicker failed for CSV, falling back to download', e);
-        // Fallback: download CSV
-        const csvLink = document.createElement('a');
-        csvLink.href = URL.createObjectURL(csvBlob);
-        csvLink.download = csvFilename;
-        document.body.appendChild(csvLink);
-        csvLink.click();
-        setTimeout(() => {
-          URL.revokeObjectURL(csvLink.href);
-          document.body.removeChild(csvLink);
-        }, 0);
-      }
-    } else {
-      // Fallback: download CSV
-      const csvLink = document.createElement('a');
-      csvLink.href = URL.createObjectURL(csvBlob);
-      csvLink.download = csvFilename;
-      document.body.appendChild(csvLink);
-      csvLink.click();
-      setTimeout(() => {
-        URL.revokeObjectURL(csvLink.href);
-        document.body.removeChild(csvLink);
-      }, 0);
-    }
-
-    // Create blob for schematic
-    const blob = new Blob([schematicContent], { type: 'text/plain' });
-
-    // Determine filename
-    const filename = `${baseName}.kicad_sch`;
-
-    // Try to use File System Access API for schematic
-    if (typeof w.showSaveFilePicker === 'function') {
-      try {
-        const handle = await w.showSaveFilePicker({
-          suggestedName: filename,
-          types: [{ description: 'KiCad Schematic', accept: { 'text/plain': ['kicad_sch'] } }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        console.log(`Simple schematic exported: ${handle.name}`);
-        return;
-      } catch (e) {
-        if ((e as any)?.name === 'AbortError') return;
-        console.warn('showSaveFilePicker failed, falling back to download', e);
-      }
-    }
-
-    // Fallback: regular download
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href);
-      document.body.removeChild(a);
-    }, 0);
-  }, [componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName]);
-
-
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
   // Autosave is only active when the most recent file is the current file (currentFileIndex === 0)
@@ -8715,7 +8615,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Reverse Engineering Tool (v2.0)</h1>
+        <h1>🔧 PCB Reverse Engineering Tool (v2.1)</h1>
       </header>
 
       {/* Application menu bar */}
@@ -8728,7 +8628,6 @@ function App() {
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}
         onSaveAs={openSaveAsDialog}
-        onExportSchematic={exportSimpleSchematic}
         onPrint={handlePrint}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
