@@ -887,6 +887,8 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [isOptionPressed, setIsOptionPressed] = useState(false);
+  const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const setSizeInputRef = useRef<HTMLInputElement>(null);
@@ -1162,6 +1164,83 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
   }, [groundBuses, grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
+
+  // Utility function to get contextual value for a component
+  const getComponentContextualValue = useCallback((comp: PCBComponent): string | null => {
+    switch (comp.componentType) {
+      case 'Resistor':
+      case 'ResistorNetwork':
+      case 'Thermistor':
+      case 'VariableResistor':
+        if ('resistance' in comp && comp.resistance && 'resistanceUnit' in comp && comp.resistanceUnit) {
+          return `${comp.resistance} ${comp.resistanceUnit}`;
+        }
+        break;
+      case 'Capacitor':
+      case 'Electrolytic Capacitor':
+        if ('capacitance' in comp && comp.capacitance && 'capacitanceUnit' in comp && comp.capacitanceUnit) {
+          return `${comp.capacitance} ${comp.capacitanceUnit}`;
+        }
+        break;
+      case 'Inductor':
+        if ('inductance' in comp && comp.inductance && 'inductanceUnit' in comp && comp.inductanceUnit) {
+          return `${comp.inductance} ${comp.inductanceUnit}`;
+        }
+        break;
+      case 'Battery':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          return `${comp.voltage} ${comp.voltageUnit}`;
+        }
+        break;
+      case 'Diode':
+      case 'ZenerDiode':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          return `${comp.voltage} ${comp.voltageUnit}`;
+        }
+        break;
+      case 'Fuse':
+        if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
+          return `${comp.current} ${comp.currentUnit}`;
+        }
+        break;
+      case 'FerriteBead':
+        if ('impedance' in comp && comp.impedance && 'impedanceUnit' in comp && comp.impedanceUnit) {
+          return `${comp.impedance} ${comp.impedanceUnit}`;
+        }
+        break;
+      case 'Relay':
+        if ('coilVoltage' in comp && comp.coilVoltage && 'coilVoltageUnit' in comp && comp.coilVoltageUnit) {
+          return `${comp.coilVoltage} ${comp.coilVoltageUnit}`;
+        }
+        break;
+      case 'Speaker':
+        if ('impedance' in comp && comp.impedance && 'impedanceUnit' in comp && comp.impedanceUnit) {
+          return `${comp.impedance} ${comp.impedanceUnit}`;
+        }
+        break;
+      case 'Motor':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          return `${comp.voltage} ${comp.voltageUnit}`;
+        }
+        break;
+      case 'PowerSupply':
+        if ('outputVoltage' in comp && comp.outputVoltage && 'outputVoltageUnit' in comp && comp.outputVoltageUnit) {
+          return `${comp.outputVoltage} ${comp.outputVoltageUnit}`;
+        }
+        break;
+      case 'Transistor':
+        if ('partNumber' in comp && comp.partNumber) {
+          return comp.partNumber;
+        }
+        break;
+      case 'IntegratedCircuit':
+        if ('partNumber' in comp && comp.partNumber) {
+          return comp.partNumber;
+        }
+        break;
+    }
+    return null;
+  }, []);
   
   // Tool-specific layer defaults are now declared above (before useToolRegistry hook)
   // Show chooser popovers only when tool is (re)selected
@@ -2555,6 +2634,36 @@ function App() {
       setTracePreviewMousePos(null);
     }
 
+    // Component hover detection (only when Option key is held)
+    if (isOptionPressed) {
+      const hitSize = 10; // half box for hit test
+      const hitComponent = (() => {
+        for (const c of componentsTop) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'top' as const, comp: c };
+          }
+        }
+        for (const c of componentsBottom) {
+          if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+            return { layer: 'bottom' as const, comp: c };
+          }
+        }
+        return null;
+      })();
+      if (hitComponent) {
+        setHoverComponent({ 
+          component: hitComponent.comp, 
+          layer: hitComponent.layer,
+          x: e.clientX,
+          y: e.clientY
+        });
+      } else {
+        setHoverComponent(null);
+      }
+    } else {
+      setHoverComponent(null);
+    }
+
     // Component dragging is started immediately on click-and-hold, so no threshold check needed
     
     if (currentTool === 'select' && isSelecting && selectStart) {
@@ -2778,7 +2887,7 @@ function App() {
       
       setTransformStartPos({ x, y });
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -4806,9 +4915,10 @@ function App() {
       return;
     }
     
-    // Option/Alt key: Disable snap-to while drawing
+    // Option/Alt key: Disable snap-to while drawing and enable component hover
     if (e.key === 'Alt' || e.altKey) {
       setIsSnapDisabled(true);
+      setIsOptionPressed(true);
     }
     
     // Escape key: Always return to Select tool (checkbox/radio blur handled at start of function)
@@ -5398,9 +5508,11 @@ function App() {
     // Use capture to intercept before default handling on focused controls (e.g., radios)
     window.addEventListener('keydown', handleKeyDown, true);
     const onKeyUp = (e: KeyboardEvent) => {
-      // Option/Alt key released: Re-enable snap-to
+      // Option/Alt key released: Re-enable snap-to and disable component hover
       if (e.key === 'Alt') {
         setIsSnapDisabled(false);
+        setIsOptionPressed(false);
+        setHoverComponent(null);
       }
     };
     window.addEventListener('keyup', onKeyUp, true);
@@ -9857,6 +9969,46 @@ function App() {
             setDialogDragOffset={setDialogDragOffset}
             areComponentsLocked={areComponentsLocked}
           />
+
+          {/* Component Hover Tooltip (only shown when Option key is held) */}
+          {hoverComponent && isOptionPressed && (() => {
+            const comp = hoverComponent.component;
+            const contextualValue = getComponentContextualValue(comp);
+            if (!comp) return null;
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  left: `${hoverComponent.x + 10}px`,
+                  top: `${hoverComponent.y + 10}px`,
+                  background: 'rgba(0, 0, 0, 0.85)',
+                  color: '#fff',
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                  fontSize: '12px',
+                  lineHeight: '1.4',
+                  zIndex: 10000,
+                  pointerEvents: 'none',
+                  maxWidth: '250px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                  {comp.componentType}
+                </div>
+                {contextualValue && (
+                  <div style={{ marginBottom: '4px', color: '#e0e0e0' }}>
+                    {contextualValue}
+                  </div>
+                )}
+                {comp.notes && (
+                  <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '11px', color: '#d0d0d0' }}>
+                    {comp.notes}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
 
           {/* Power Properties Editor Dialog */}
