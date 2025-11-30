@@ -772,16 +772,16 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         }}
       >
         <button onClick={() => { selectAllVias(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-          Select All Vias
+          All Vias
         </button>
         <button onClick={() => { selectAllTraces(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-          Select All Traces
+          All Traces
         </button>
         <button onClick={() => { selectAllPads(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-          Select All Pads
+          All Pads
         </button>
         <button onClick={() => { selectAllComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-          Select All Components
+          All Components
         </button>
         <div style={{ position: 'relative' }}>
           <button
@@ -811,7 +811,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               cursor: 'pointer',
             }}
           >
-            Select Power Nodes ▸
+            Power Nodes ▸
           </button>
           {openSelectNodesSubmenu === 'power' && renderSelectNodesSubmenu('power')}
         </div>
@@ -843,12 +843,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               cursor: 'pointer',
             }}
           >
-            Select Ground Nodes ▸
+            Ground Nodes ▸
           </button>
           {openSelectNodesSubmenu === 'ground' && renderSelectNodesSubmenu('ground')}
         </div>
         <button onClick={() => { selectDisconnectedComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-          Select Disconnected
+          Disconnected Components
         </button>
       </div>
     );
@@ -1281,28 +1281,137 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           About ▾
         </button>
         {openMenu === 'about' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 400, maxWidth: 600, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 16, overflowY: 'auto', zIndex: 100 }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 12px 0', color: '#000', fontSize: '18px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
-              <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images.
-              </p>
-              <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                This application supports typical 4-layer PCBs and allows you to load top and bottom PCB images, trace connections, and place components.
-              </p>
-              <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                <strong>Key Features:</strong>
-              </p>
-              <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                <li>Load and align top and bottom PCB images</li>
-                <li>Trace connections with automatic node snapping</li>
-                <li>Place and annotate components with pin connections</li>
-                <li>Manage power buses and ground connections</li>
-                <li>Auto-save functionality for project management</li>
-              </ul>
-              <p style={{ margin: '0 0 0 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                Use the <strong>File</strong> menu to create new projects and save your work. The <strong>Images</strong> menu provides tools for aligning and transforming PCB images. The <strong>Tools</strong> menu offers size adjustments and locking controls for different PCB elements.
-              </p>
+              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
+              
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>About</h3>
+                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images. This application supports typical 4-layer PCBs and enables comprehensive PCB analysis and documentation.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
+                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  The PCB Reverse Engineering Tool is a modern browser-based single-page application (SPA) that enables users to reverse engineer printed circuit boards by tracing connections and placing components. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Features</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Image Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Load top and bottom PCB images</li>
+                      <li>Image alignment and transformation</li>
+                      <li>Transform modes: nudge, scale, rotate, slant, keystone</li>
+                      <li>Horizontal and vertical flip controls</li>
+                      <li>Grayscale and edge detection modes</li>
+                      <li>Board dimensions configuration</li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Drawing Tools</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Draw copper traces (top and bottom layers)</li>
+                      <li>Place vias for layer connections</li>
+                      <li>Place component pads (SMD and through-hole)</li>
+                      <li>Place and annotate components</li>
+                      <li>Place power and ground nodes</li>
+                      <li>Erase tool for removing elements</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Layer Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Separate top and bottom layer support</li>
+                      <li>Layer-specific color customization</li>
+                      <li>Layer-specific size controls</li>
+                      <li>Layer visibility toggles</li>
+                      <li>Overlay view mode</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Component Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Component placement with pin counts</li>
+                      <li>Pin connection tracking</li>
+                      <li>Component type classification</li>
+                      <li>Designator and value annotation</li>
+                      <li>Component editor dialog</li>
+                      <li>Find and center component</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Selection & Locking</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Select individual elements or groups</li>
+                      <li>Select all vias, traces, pads, or components</li>
+                      <li>Select power/ground nodes by name</li>
+                      <li>Select disconnected components</li>
+                      <li>Lock/unlock elements by type</li>
+                      <li>Image locking for protection</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Power & Ground</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Multiple voltage power nodes</li>
+                      <li>Power bus management</li>
+                      <li>Ground node placement</li>
+                      <li>Ground bus management</li>
+                      <li>Node naming and organization</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Customization</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Customizable colors per layer</li>
+                      <li>Adjustable brush/tool sizes</li>
+                      <li>Size presets for common tools</li>
+                      <li>Color palette management</li>
+                      <li>Tool settings persistence</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Project Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Create, open, and save projects</li>
+                      <li>Auto-save with configurable intervals</li>
+                      <li>Project file format (JSON)</li>
+                      <li>Print functionality</li>
+                      <li>Export to KiCad schematic format</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>View Controls</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>Zoom in/out with mouse wheel</li>
+                      <li>Pan view with hand tool</li>
+                      <li>Zoom to fit</li>
+                      <li>View mode switching (top/bottom/overlay)</li>
+                      <li>Detailed information dialog</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+                <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '12px', lineHeight: '1.5' }}>
+                  Use the <strong>File</strong> menu to manage projects, the <strong>Images</strong> menu for image loading and transformation, and the <strong>Tools</strong> menu for selection, locking, and customization options.
+                </p>
+              </div>
             </div>
           </div>
         )}
