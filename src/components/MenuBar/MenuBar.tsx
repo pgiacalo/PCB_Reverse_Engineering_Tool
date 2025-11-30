@@ -114,6 +114,7 @@ export interface MenuBarProps {
   updateToolSettings: (toolId: string, settings: ToolSettings) => void;
   updateToolLayerSettings: (toolId: string, layer: 'top' | 'bottom', settings: ToolSettings) => void;
   setBrushSize: (size: number | ((prev: number) => number)) => void;
+  setBrushColor: (color: string | ((prev: string) => string)) => void;
   saveToolSettings: (toolId: string, color: string, size: number) => void;
   saveToolLayerSettings: (toolId: string, layer: 'top' | 'bottom', color: string, size: number) => void;
   colorPalette: string[];
@@ -141,8 +142,17 @@ export interface MenuBarProps {
   topComponentColor: string;
   bottomComponentColor: string;
   
+  // Layer-specific color setters
+  setTopTraceColor: (color: string) => void;
+  setBottomTraceColor: (color: string) => void;
+  setTopPadColor: (color: string) => void;
+  setBottomPadColor: (color: string) => void;
+  setTopComponentColor: (color: string) => void;
+  setBottomComponentColor: (color: string) => void;
+  
   // Legacy save functions (used by +/- keys)
   saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
@@ -229,6 +239,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   updateToolSettings,
   updateToolLayerSettings,
   setBrushSize,
+  setBrushColor,
   saveToolSettings,
   saveToolLayerSettings,
   colorPalette,
@@ -249,7 +260,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   bottomPadColor,
   topComponentColor,
   bottomComponentColor,
+  setTopTraceColor,
+  setBottomTraceColor,
+  setTopPadColor,
+  setBottomPadColor,
+  setTopComponentColor,
+  setBottomComponentColor,
   saveDefaultSize,
+  saveDefaultColor,
   menuBarRef,
 }) => {
   // Track which image submenu is open
@@ -1353,7 +1371,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         updateToolLayerSettings={updateToolLayerSettings}
         saveToolSettings={saveToolSettings}
         saveToolLayerSettings={saveToolLayerSettings}
+        setBrushColor={setBrushColor}
+        setTopTraceColor={setTopTraceColor}
+        setBottomTraceColor={setBottomTraceColor}
+        setTopPadColor={setTopPadColor}
+        setBottomPadColor={setBottomPadColor}
+        setTopComponentColor={setTopComponentColor}
+        setBottomComponentColor={setBottomComponentColor}
+        saveDefaultColor={saveDefaultColor}
         colorPalette={colorPalette}
+        topTraceColor={topTraceColor}
+        bottomTraceColor={bottomTraceColor}
+        topPadColor={topPadColor}
+        bottomPadColor={bottomPadColor}
+        topComponentColor={topComponentColor}
+        bottomComponentColor={bottomComponentColor}
         onClose={() => setSetToolColorDialogVisible(false)}
       />
     </>

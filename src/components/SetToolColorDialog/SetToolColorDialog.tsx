@@ -45,8 +45,26 @@ export interface SetToolColorDialogProps {
   saveToolSettings: (toolId: string, color: string, size: number) => void;
   /** Callback to save tool layer settings */
   saveToolLayerSettings: (toolId: string, layer: 'top' | 'bottom', color: string, size: number) => void;
+  /** Callback to set brush color */
+  setBrushColor: (color: string | ((prev: string) => string)) => void;
+  /** Layer-specific color setters */
+  setTopTraceColor: (color: string) => void;
+  setBottomTraceColor: (color: string) => void;
+  setTopPadColor: (color: string) => void;
+  setBottomPadColor: (color: string) => void;
+  setTopComponentColor: (color: string) => void;
+  setBottomComponentColor: (color: string) => void;
+  /** Legacy save function */
+  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   /** Color palette */
   colorPalette: string[];
+  /** Layer-specific color getters (for syncing registry with state) */
+  topTraceColor: string;
+  bottomTraceColor: string;
+  topPadColor: string;
+  bottomPadColor: string;
+  topComponentColor: string;
+  bottomComponentColor: string;
   /** Callback to close the dialog */
   onClose: () => void;
 }
@@ -63,7 +81,21 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   updateToolLayerSettings,
   saveToolSettings,
   saveToolLayerSettings,
+  setBrushColor,
+  setTopTraceColor,
+  setBottomTraceColor,
+  setTopPadColor,
+  setBottomPadColor,
+  setTopComponentColor,
+  setBottomComponentColor,
+  saveDefaultColor,
   colorPalette,
+  topTraceColor,
+  bottomTraceColor,
+  topPadColor,
+  bottomPadColor,
+  topComponentColor,
+  bottomComponentColor,
   onClose,
 }) => {
   const [openColorPicker, setOpenColorPicker] = React.useState<{ toolId: string; layer?: 'top' | 'bottom' } | null>(null);
@@ -73,9 +105,9 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   // Tools that have layer-specific colors (Top/Bottom)
   const layerTools = ['pad', 'trace', 'component'];
   
-  // Tool definitions - layer-specific tools shown as separate entries
+  // Tool definitions - ordered to match toolbar order: Via, Pad, Trace, Component, Power, Ground, Erase
+  // Layer-specific tools shown as separate entries (Top then Bottom)
   const toolEntries: Array<{ id: string; name: string; layer?: 'top' | 'bottom' }> = [
-    { id: 'select', name: 'Select' },
     { id: 'via', name: 'Via' },
     { id: 'pad', name: 'Pad', layer: 'top' },
     { id: 'pad', name: 'Pad', layer: 'bottom' },
@@ -95,20 +127,83 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     if (layer && layerTools.includes(toolId)) {
       // Update layer-specific settings
       const layerSettings = toolDef.layerSettings.get(layer);
+      const currentSize = layerSettings?.size || toolDef.settings.size;
+      
+      // Update layer-specific state immediately (following Set Tool Size pattern)
+      if (toolId === 'trace') {
+        if (layer === 'top') {
+          setTopTraceColor(color);
+          saveDefaultColor('trace', color, 'top');
+        } else {
+          setBottomTraceColor(color);
+          saveDefaultColor('trace', color, 'bottom');
+        }
+      } else if (toolId === 'pad') {
+        if (layer === 'top') {
+          setTopPadColor(color);
+          saveDefaultColor('pad', color, 'top');
+        } else {
+          setBottomPadColor(color);
+          saveDefaultColor('pad', color, 'bottom');
+        }
+      } else if (toolId === 'component') {
+        if (layer === 'top') {
+          setTopComponentColor(color);
+          saveDefaultColor('component', color, 'top');
+        } else {
+          setBottomComponentColor(color);
+          saveDefaultColor('component', color, 'bottom');
+        }
+      }
+      
       const newLayerSettings: ToolSettings = {
         color,
-        size: layerSettings?.size || toolDef.settings.size,
+        size: currentSize,
       };
       updateToolLayerSettings(toolId, layer, newLayerSettings);
-      saveToolLayerSettings(toolId, layer, color, layerSettings?.size || toolDef.settings.size);
+      saveToolLayerSettings(toolId, layer, color, currentSize);
+      
+      // If this tool is currently active and this layer is selected, update brushColor immediately
+      const isActiveTool = 
+        (toolId === 'trace' && currentTool === 'draw' && drawingMode === 'trace') ||
+        (toolId === 'pad' && currentTool === 'draw' && drawingMode === 'pad') ||
+        (toolId === 'component' && currentTool === 'component');
+      
+      if (isActiveTool) {
+        const activeLayer = 
+          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : componentToolLayer) || 'top';
+        if (activeLayer === layer) {
+          // Update brushColor immediately so subsequent drawings use the new color
+          setBrushColor(color);
+        }
+      }
     } else {
-      // Update general tool settings
+      // For non-layer tools, just update general settings
       const newSettings: ToolSettings = {
         ...toolDef.settings,
         color,
       };
       updateToolSettings(toolId, newSettings);
       saveToolSettings(toolId, color, toolDef.settings.size);
+      
+      // If this tool is currently active, update brushColor immediately
+      const isActiveTool = 
+        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
+        (toolId === 'power' && currentTool === 'power') ||
+        (toolId === 'ground' && currentTool === 'ground') ||
+        (toolId === 'erase' && currentTool === 'erase');
+      
+      if (isActiveTool) {
+        setBrushColor(color);
+      }
+      
+      // Save default color for legacy support
+      if (toolId === 'via') {
+        saveDefaultColor('via', color);
+      } else if (toolId === 'erase') {
+        saveDefaultColor('brush', color);
+      }
+      // Note: power and ground colors are saved via updateToolSettings above
     }
     
     setOpenColorPicker(null);
@@ -118,16 +213,20 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     const toolDef = toolRegistry.get(toolId);
     if (!toolDef) return null;
     
+    // Get current color from tool registry (one source of truth)
+    // For layer-specific tools, read from layerSettings, fallback to settings.color
     const currentColor = layer && layerTools.includes(toolId)
-      ? toolDef.layerSettings.get(layer)?.color || toolDef.settings.color
-      : toolDef.settings.color;
+      ? toolDef.layerSettings.get(layer)?.color ?? toolDef.settings.color ?? '#000000'
+      : toolDef.settings.color ?? '#000000';
     
     const pickerKey = layer ? `${toolId}-${layer}` : toolId;
     const isOpen = openColorPicker?.toolId === toolId && openColorPicker?.layer === layer;
 
     return (
-      <div key={pickerKey} style={{ position: 'relative', display: 'inline-block' }}>
+      <div key={`${pickerKey}-${currentColor}`} style={{ position: 'relative', display: 'inline-block' }}>
         <button
+          key={`${pickerKey}-button-${currentColor}`}
+          className="color-swatch-button"
           onClick={(e) => {
             e.stopPropagation();
             setOpenColorPicker(isOpen ? null : { toolId, layer });
@@ -135,12 +234,17 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
           style={{
             width: '40px',
             height: '24px',
+            background: currentColor,
             backgroundColor: currentColor,
+            backgroundImage: 'none',
             border: '1px solid #3a3a44',
             borderRadius: 3,
             cursor: 'pointer',
-            marginLeft: '8px',
-          }}
+            padding: 0,
+            margin: 0,
+            display: 'block',
+            '--swatch-color': currentColor,
+          } as React.CSSProperties & { '--swatch-color': string }}
           title={currentColor}
         />
         {isOpen && (
@@ -207,20 +311,20 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
         style={{
           backgroundColor: '#2b2b31',
           borderRadius: 8,
-          padding: '24px',
-          minWidth: '400px',
+          padding: '16px',
+          width: 'fit-content',
           maxWidth: '600px',
-          maxHeight: '80vh',
+          maxHeight: '70vh',
           overflowY: 'auto',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
           border: '1px solid #1f1f24',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 style={{ margin: '0 0 20px 0', color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+        <h3 style={{ margin: '0 0 12px 0', color: '#fff', fontSize: '16px', fontWeight: 600 }}>
           Set Tool Color
         </h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {toolEntries.map((entry, index) => {
             const toolDef = toolRegistry.get(entry.id);
             if (!toolDef) return null;
@@ -233,8 +337,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                   background: '#1f1f24',
                   borderRadius: 4,
                 }}
@@ -242,35 +345,33 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
                 <label
                   style={{
                     color: '#f2f2f2',
-                    fontSize: '14px',
-                    flex: '0 0 auto',
-                    marginRight: '16px',
-                    minWidth: '150px',
+                    fontSize: '13px',
+                    width: '140px',
+                    flexShrink: 0,
+                    marginRight: '8px',
                   }}
                 >
                   {displayName}:
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flex: '1 1 auto' }}>
-                  {renderColorPicker(entry.id, entry.layer)}
-                </div>
+                {renderColorPicker(entry.id, entry.layer)}
               </div>
             );
           })}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
           <button
             onClick={() => {
               onClose();
               setOpenColorPicker(null);
             }}
             style={{
-              padding: '8px 16px',
+              padding: '6px 12px',
               background: '#4CAF50',
               color: '#fff',
               border: '1px solid #45a049',
               borderRadius: 6,
               cursor: 'pointer',
-              fontSize: '14px',
+              fontSize: '13px',
               fontWeight: 600,
             }}
           >

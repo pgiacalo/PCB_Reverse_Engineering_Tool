@@ -8,6 +8,7 @@ import {
   DEFAULT_VIA_COLOR, 
   DEFAULT_TRACE_COLOR, 
   DEFAULT_COMPONENT_COLOR, 
+  DEFAULT_PAD_COLOR,
   DEFAULT_POWER_COLOR,
   VIA,
 } from './constants';
@@ -264,8 +265,15 @@ function App() {
           setBrushSize(traceSize);
           prevBrushColorRef.current = traceColor;
           prevBrushSizeRef.current = traceSize;
-          // Update toolRegistry to reflect current layer's color
-          updated.set('trace', { ...currentToolDef, settings: { color: traceColor, size: traceSize } });
+          // Update toolRegistry to reflect current layer's color and size, and sync all layer settings
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set('top', { color: topTraceColor, size: topTraceSize });
+          layerSettings.set('bottom', { color: bottomTraceColor, size: bottomTraceSize });
+          updated.set('trace', { 
+            ...currentToolDef, 
+            settings: { color: traceColor, size: traceSize },
+            layerSettings 
+          });
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
           // Use layer-specific pad colors
           const layer = padToolLayer || 'top';
@@ -275,8 +283,15 @@ function App() {
           setBrushSize(padSize);
           prevBrushColorRef.current = padColor;
           prevBrushSizeRef.current = padSize;
-          // Update toolRegistry to reflect current layer's color
-          updated.set('pad', { ...currentToolDef, settings: { color: padColor, size: padSize } });
+          // Update toolRegistry to reflect current layer's color and size, and sync all layer settings
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set('top', { color: topPadColor, size: topPadSize });
+          layerSettings.set('bottom', { color: bottomPadColor, size: bottomPadSize });
+          updated.set('pad', { 
+            ...currentToolDef, 
+            settings: { color: padColor, size: padSize },
+            layerSettings 
+          });
         } else if (currentTool === 'component') {
           // Use layer-specific component colors
           const layer = componentToolLayer || 'top';
@@ -286,8 +301,15 @@ function App() {
           setBrushSize(componentSize);
           prevBrushColorRef.current = componentColor;
           prevBrushSizeRef.current = componentSize;
-          // Update toolRegistry to reflect current layer's color
-          updated.set('component', { ...currentToolDef, settings: { color: componentColor, size: componentSize } });
+          // Update toolRegistry to reflect current layer's color and size, and sync all layer settings
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set('top', { color: topComponentColor, size: topComponentSize });
+          layerSettings.set('bottom', { color: bottomComponentColor, size: bottomComponentSize });
+          updated.set('component', { 
+            ...currentToolDef, 
+            settings: { color: componentColor, size: componentSize },
+            layerSettings 
+          });
         } else {
           // For other tools, use registry settings
           const settings = currentToolDef.settings;
@@ -347,6 +369,44 @@ function App() {
       }
     }
   }, []); // Only run on mount
+  
+  // Sync tool registry layerSettings with state colors/sizes (keeps registry in sync with state)
+  // This ensures toolbar and dialogs always show the correct colors/sizes
+  // Following the same pattern used for size synchronization
+  React.useEffect(() => {
+    setToolRegistry(prev => {
+      const updated = new Map(prev);
+      
+      // Sync trace layer settings
+      const traceDef = prev.get('trace');
+      if (traceDef) {
+        const layerSettings = new Map(traceDef.layerSettings);
+        layerSettings.set('top', { color: topTraceColor, size: topTraceSize });
+        layerSettings.set('bottom', { color: bottomTraceColor, size: bottomTraceSize });
+        updated.set('trace', { ...traceDef, layerSettings });
+      }
+      
+      // Sync pad layer settings
+      const padDef = prev.get('pad');
+      if (padDef) {
+        const layerSettings = new Map(padDef.layerSettings);
+        layerSettings.set('top', { color: topPadColor, size: topPadSize });
+        layerSettings.set('bottom', { color: bottomPadColor, size: bottomPadSize });
+        updated.set('pad', { ...padDef, layerSettings });
+      }
+      
+      // Sync component layer settings
+      const componentDef = prev.get('component');
+      if (componentDef) {
+        const layerSettings = new Map(componentDef.layerSettings);
+        layerSettings.set('top', { color: topComponentColor, size: topComponentSize });
+        layerSettings.set('bottom', { color: bottomComponentColor, size: bottomComponentSize });
+        updated.set('component', { ...componentDef, layerSettings });
+      }
+      
+      return updated;
+    });
+  }, [topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, setToolRegistry]);
   
   // Update tool-specific settings when color/size changes (for the active tool)
   // This persists to localStorage and updates the registry
@@ -8824,6 +8884,7 @@ function App() {
         updateToolSettings={updateToolSettings}
         updateToolLayerSettings={updateToolLayerSettings}
         setBrushSize={setBrushSize}
+        setBrushColor={setBrushColor}
         saveToolSettings={saveToolSettings}
         saveToolLayerSettings={saveToolLayerSettings}
         colorPalette={palette8x8}
@@ -8844,7 +8905,14 @@ function App() {
         bottomPadColor={bottomPadColor}
         topComponentColor={topComponentColor}
         bottomComponentColor={bottomComponentColor}
+        setTopTraceColor={setTopTraceColor}
+        setBottomTraceColor={setBottomTraceColor}
+        setTopPadColor={setTopPadColor}
+        setBottomPadColor={setBottomPadColor}
+        setTopComponentColor={setTopComponentColor}
+        setBottomComponentColor={setBottomComponentColor}
         saveDefaultSize={saveDefaultSize}
+        saveDefaultColor={saveDefaultColor}
         menuBarRef={menuBarRef}
       />
 
@@ -8904,7 +8972,7 @@ function App() {
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   const viaDef = toolRegistry.get('via');
-                  const viaColor = viaDef?.settings.color || localStorage.getItem('defaultViaColor') || '#ff0000' || brushColor;
+                  const viaColor = viaDef?.settings.color || DEFAULT_VIA_COLOR;
                   return (
                     <>
                       <circle cx="12" cy="12" r="8" fill="none" stroke={viaColor} strokeWidth="3" />
@@ -8953,7 +9021,8 @@ function App() {
                 {(() => {
                   const padDef = toolRegistry.get('pad');
                   const padLayer = padToolLayer || 'top';
-                  const padColor = padDef?.settings.color || (padLayer === 'top' ? topPadColor : bottomPadColor) || brushColor;
+                  // Read from tool registry layerSettings (one source of truth)
+                  const padColor = padDef?.layerSettings.get(padLayer)?.color ?? padDef?.settings.color ?? DEFAULT_PAD_COLOR;
                   // Fixed icon size for toolbar (constant, regardless of actual pad size)
                   const iconSize = 10;
                   const iconX = (24 - iconSize) / 2;
@@ -9002,7 +9071,12 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <PenLine size={14} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
+              <PenLine size={14} color={(() => {
+                const traceDef = toolRegistry.get('trace');
+                const layer = traceToolLayer || 'top';
+                // Read from tool registry layerSettings (one source of truth)
+                return traceDef?.layerSettings.get(layer)?.color ?? traceDef?.settings.color ?? DEFAULT_TRACE_COLOR;
+              })()} />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>T</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
@@ -9044,11 +9118,10 @@ function App() {
             >
               {(() => {
                 // Use layer-specific component colors based on componentToolLayer (like pad pattern)
-                // Priority: componentToolLayer -> toolRegistry -> fallback
                 const layer = componentToolLayer || 'top';
                 const componentDef = toolRegistry.get('component');
-                // Use layer-specific color based on componentToolLayer (this is the source of truth)
-                const componentColor = (layer === 'top' ? topComponentColor : bottomComponentColor) || componentDef?.settings.color || DEFAULT_COMPONENT_COLOR;
+                // Read from tool registry layerSettings (one source of truth)
+                const componentColor = componentDef?.layerSettings.get(layer)?.color ?? componentDef?.settings.color ?? DEFAULT_COMPONENT_COLOR;
                 return selectedComponentType ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                     {/* Square icon with text - show default abbreviation based on component type */}
@@ -9296,7 +9369,11 @@ function App() {
                           // Save layer-specific settings for tools that support layers
                           if (currentTool === 'draw' && drawingMode === 'trace') {
                             const layer = traceToolLayer || 'top';
-                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            const layerSettings = currentToolDef.layerSettings.get(layer);
+                            const currentSize = layerSettings?.size || currentToolDef.settings.size;
+                            const newLayerSettings = { color: c, size: currentSize };
+                            updateToolLayerSettings(currentToolDef.id, layer, newLayerSettings);
+                            saveToolLayerSettings(currentToolDef.id, layer, c, currentSize);
                             if (layer === 'top') {
                               setTopTraceColor(c);
                               saveDefaultColor('trace', c, 'top');
@@ -9306,7 +9383,11 @@ function App() {
                             }
                           } else if (currentTool === 'draw' && drawingMode === 'pad') {
                             const layer = padToolLayer || 'top';
-                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            const layerSettings = currentToolDef.layerSettings.get(layer);
+                            const currentSize = layerSettings?.size || currentToolDef.settings.size;
+                            const newLayerSettings = { color: c, size: currentSize };
+                            updateToolLayerSettings(currentToolDef.id, layer, newLayerSettings);
+                            saveToolLayerSettings(currentToolDef.id, layer, c, currentSize);
                             if (layer === 'top') {
                               setTopPadColor(c);
                               saveDefaultColor('pad', c, 'top');
@@ -9316,7 +9397,11 @@ function App() {
                             }
                           } else if (currentTool === 'component') {
                             const layer = componentToolLayer || 'top';
-                            saveToolLayerSettings(currentToolDef.id, layer, c, brushSize);
+                            const layerSettings = currentToolDef.layerSettings.get(layer);
+                            const currentSize = layerSettings?.size || currentToolDef.settings.size;
+                            const newLayerSettings = { color: c, size: currentSize };
+                            updateToolLayerSettings(currentToolDef.id, layer, newLayerSettings);
+                            saveToolLayerSettings(currentToolDef.id, layer, c, currentSize);
                             if (layer === 'top') {
                               setTopComponentColor(c);
                               saveDefaultColor('component', c, 'top');
@@ -9326,7 +9411,9 @@ function App() {
                             }
                           } else {
                             // For other tools (via, etc.), save general tool settings
-                            saveToolSettings(currentToolDef.id, c, brushSize);
+                            const newSettings = { ...currentToolDef.settings, color: c };
+                            updateToolSettings(currentToolDef.id, newSettings);
+                            saveToolSettings(currentToolDef.id, c, currentToolDef.settings.size);
                             if (currentTool === 'draw' && drawingMode === 'via') {
                               saveDefaultColor('via', c);
                             }

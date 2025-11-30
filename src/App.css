@@ -383,6 +383,12 @@ button:disabled:hover {
   transition: all 0.3s ease;
 }
 
+/* Override global button gradient for color swatch buttons */
+.color-swatch-button {
+  background: var(--swatch-color, #000000) !important;
+  background-image: none !important;
+}
+
 .color-button:hover {
   border-color: #667eea;
   transform: translateY(-1px);
