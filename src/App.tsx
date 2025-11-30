@@ -100,37 +100,42 @@ const getDefaultAbbreviation = (componentType: ComponentType): string => {
 // ToolSettings, Layer, ToolDefinition types are now imported from hooks
 
 // Helper functions to load/save per-tool settings from localStorage
-const loadToolSettings = (toolId: string, defaultColor: string, defaultSize: number): ToolSettings => {
-  const colorKey = `tool_${toolId}_color`;
-  const sizeKey = `tool_${toolId}_size`;
-  const savedColor = localStorage.getItem(colorKey);
-  const savedSize = localStorage.getItem(sizeKey);
+// Tool settings are now project-specific, not global
+// These functions only return defaults - actual settings come from project data
+const loadToolSettings = (_toolId: string, defaultColor: string, defaultSize: number): ToolSettings => {
+  // Tool settings are project-specific, so we only use defaults here
+  // Actual settings will be loaded from project data when a project is opened
   return {
-    color: savedColor || defaultColor,
-    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
+    color: defaultColor,
+    size: defaultSize,
   };
 };
 
-const saveToolSettings = (toolId: string, color: string, size: number): void => {
-  localStorage.setItem(`tool_${toolId}_color`, color);
-  localStorage.setItem(`tool_${toolId}_size`, String(size));
+// Tool settings are project-specific - this is now a no-op
+// Settings are persisted in the project file, not localStorage
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const saveToolSettings = (_toolId: string, _color: string, _size: number): void => {
+  // No-op: Tool settings are project-specific and saved in project files
+  // This function is kept for compatibility but does nothing
 };
 
-// Helper functions to load/save layer-specific tool settings from localStorage
-const loadToolLayerSettings = (toolId: string, layer: Layer, defaultColor: string, defaultSize: number): ToolSettings => {
-  const colorKey = `tool_${toolId}_${layer}_color`;
-  const sizeKey = `tool_${toolId}_${layer}_size`;
-  const savedColor = localStorage.getItem(colorKey);
-  const savedSize = localStorage.getItem(sizeKey);
+// Helper functions to load/save layer-specific tool settings
+// Tool settings are now project-specific, not global
+const loadToolLayerSettings = (_toolId: string, _layer: Layer, defaultColor: string, defaultSize: number): ToolSettings => {
+  // Tool settings are project-specific, so we only use defaults here
+  // Actual settings will be loaded from project data when a project is opened
   return {
-    color: savedColor || defaultColor,
-    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
+    color: defaultColor,
+    size: defaultSize,
   };
 };
 
-const saveToolLayerSettings = (toolId: string, layer: Layer, color: string, size: number): void => {
-  localStorage.setItem(`tool_${toolId}_${layer}_color`, color);
-  localStorage.setItem(`tool_${toolId}_${layer}_size`, String(size));
+// Tool settings are project-specific - this is now a no-op
+// Settings are persisted in the project file, not localStorage
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const saveToolLayerSettings = (_toolId: string, _layer: Layer, _color: string, _size: number): void => {
+  // No-op: Tool settings are project-specific and saved in project files
+  // This function is kept for compatibility but does nothing
 };
 
 // Helper functions for tool registry (prepared for future use)
@@ -494,6 +499,8 @@ function App() {
     toolRegistry,
     setToolRegistry,
     getCurrentToolDef,
+    updateToolSettings,
+    updateToolLayerSettings,
   } = toolRegistryHook;
   
   // Refs for tracking previous tool state (since hook doesn't export them)
@@ -513,8 +520,7 @@ function App() {
       if (prevToolId && prevToolId !== currentToolId) {
         const prevToolDef = prev.get(prevToolId);
         if (prevToolDef) {
-          // Save to localStorage
-          saveToolSettings(prevToolId, prevBrushColorRef.current, prevBrushSizeRef.current);
+          // Tool settings are project-specific, saved in project file
           // Update registry
           updated.set(prevToolId, {
             ...prevToolDef,
@@ -574,6 +580,51 @@ function App() {
     });
   }, [currentTool, drawingMode, getCurrentToolDef, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]); // Only depend on tool changes
   
+  // Sync state variables with tool registry on mount (ensure single source of truth)
+  React.useEffect(() => {
+    const traceDef = toolRegistry.get('trace');
+    if (traceDef) {
+      const topTrace = traceDef.layerSettings.get('top');
+      const bottomTrace = traceDef.layerSettings.get('bottom');
+      if (topTrace) {
+        setTopTraceColor(topTrace.color);
+        setTopTraceSize(topTrace.size);
+      }
+      if (bottomTrace) {
+        setBottomTraceColor(bottomTrace.color);
+        setBottomTraceSize(bottomTrace.size);
+      }
+    }
+    
+    const padDef = toolRegistry.get('pad');
+    if (padDef) {
+      const topPad = padDef.layerSettings.get('top');
+      const bottomPad = padDef.layerSettings.get('bottom');
+      if (topPad) {
+        setTopPadColor(topPad.color);
+        setTopPadSize(topPad.size);
+      }
+      if (bottomPad) {
+        setBottomPadColor(bottomPad.color);
+        setBottomPadSize(bottomPad.size);
+      }
+    }
+    
+    const componentDef = toolRegistry.get('component');
+    if (componentDef) {
+      const topComponent = componentDef.layerSettings.get('top');
+      const bottomComponent = componentDef.layerSettings.get('bottom');
+      if (topComponent) {
+        setTopComponentColor(topComponent.color);
+        setTopComponentSize(topComponent.size);
+      }
+      if (bottomComponent) {
+        setBottomComponentColor(bottomComponent.color);
+        setBottomComponentSize(bottomComponent.size);
+      }
+    }
+  }, []); // Only run on mount
+  
   // Update tool-specific settings when color/size changes (for the active tool)
   // This persists to localStorage and updates the registry
   // Also saves layer-specific defaults for trace, pad, and component tools
@@ -585,9 +636,8 @@ function App() {
         // Save to localStorage - use layer-specific settings for tools that support layers
         if (currentTool === 'draw' && drawingMode === 'trace') {
           const layer = traceToolLayer || 'top';
-          // Save layer-specific settings
-          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
-          // Also update state and legacy defaults
+          // Tool settings are project-specific, saved in project file
+          // Update state and legacy defaults
           if (layer === 'top') {
             setTopTraceColor(brushColor);
             setTopTraceSize(brushSize);
@@ -613,9 +663,8 @@ function App() {
           return updated;
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
           const layer = padToolLayer || 'top';
-          // Save layer-specific settings
-          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
-          // Also update state and legacy defaults
+          // Tool settings are project-specific, saved in project file
+          // Update state and legacy defaults
           if (layer === 'top') {
             setTopPadColor(brushColor);
             setTopPadSize(brushSize);
@@ -641,9 +690,8 @@ function App() {
           return updated;
         } else if (currentTool === 'component') {
           const layer = componentToolLayer || 'top';
-          // Save layer-specific settings
-          saveToolLayerSettings(currentToolDef.id, layer, brushColor, brushSize);
-          // Also update state and legacy defaults
+          // Tool settings are project-specific, saved in project file
+          // Update state and legacy defaults
           if (layer === 'top') {
             setTopComponentColor(brushColor);
             setTopComponentSize(brushSize);
@@ -668,8 +716,7 @@ function App() {
           prevBrushSizeRef.current = brushSize;
           return updated;
         } else {
-          // For other tools (via, etc.), save general tool settings
-          saveToolSettings(currentToolDef.id, brushColor, brushSize);
+          // For other tools (via, etc.), tool settings are project-specific, saved in project file
           // Update registry
           const updated = new Map(prev);
           updated.set(currentToolDef.id, {
@@ -1850,13 +1897,11 @@ function App() {
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Read directly from localStorage to ensure we have the latest values
-        // This is critical for immediate drawing after tool selection
+        // Use brushSize and brushColor (which are synced with tool registry) for immediate updates
         const viaDef = toolRegistry.get('via');
-        const savedColor = localStorage.getItem('tool_via_color');
-        const savedSize = localStorage.getItem('tool_via_size');
-        const viaColor = savedColor || viaDef?.settings.color || DEFAULT_VIA_COLOR;
-        const viaSize = savedSize ? parseInt(savedSize, 10) : (viaDef?.settings.size || VIA.DEFAULT_SIZE);
+        // Use brushSize and brushColor which are kept in sync with tool registry
+        const viaColor = brushColor || viaDef?.settings.color || DEFAULT_VIA_COLOR;
+        const viaSize = brushSize || viaDef?.settings.size || VIA.DEFAULT_SIZE;
         
         // Snap to nearest via, pad, power, or ground node unless Option/Alt key is held
         const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
@@ -1996,9 +2041,9 @@ function App() {
         const padType = determinePadType(nodeId, powerBuses);
         
         // Add a square representing a pad at click location
-        // Use layer-specific colors and sizes
-        const padColor = padToolLayer === 'top' ? topPadColor : bottomPadColor;
-        const padSize = padToolLayer === 'top' ? topPadSize : bottomPadSize;
+        // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
+        const padColor = brushColor || (padToolLayer === 'top' ? topPadColor : bottomPadColor);
+        const padSize = brushSize || (padToolLayer === 'top' ? topPadSize : bottomPadSize);
         const center = { id: nodeId, x: snapped.x, y: snapped.y };
         const padStroke: DrawingStroke = {
           id: `${Date.now()}-pad`,
@@ -2074,9 +2119,9 @@ function App() {
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      // Use layer-specific colors and sizes for components
-      const componentColor = componentToolLayer === 'top' ? topComponentColor : bottomComponentColor;
-      const componentSize = componentToolLayer === 'top' ? topComponentSize : bottomComponentSize;
+      // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
+      const componentColor = brushColor || (componentToolLayer === 'top' ? topComponentColor : bottomComponentColor);
+      const componentSize = brushSize || (componentToolLayer === 'top' ? topComponentSize : bottomComponentSize);
       // Pass all existing components for designator auto-assignment
       const allExistingComponents = [...componentsTop, ...componentsBottom];
       
@@ -2323,7 +2368,7 @@ function App() {
         x: snapped.x,
         y: snapped.y,
           color: bus.color, // Use ground bus color
-        size: toolRegistry.get('ground')?.settings.size || 18,
+        size: brushSize || toolRegistry.get('ground')?.settings.size || 18,
           groundBusId: bus.id,
           layer: selectedDrawingLayer,
           type: groundType, // Auto-populate type with bus name
@@ -4441,7 +4486,7 @@ function App() {
     } else {
       setBrushSize(b => {
         const newSize = Math.min(40, b + 1);
-        // The useEffect hook will automatically save to localStorage via saveToolSettings
+        // Tool settings are project-specific and will be saved in the project file
         // when brushSize changes, so we don't need to call saveDefaultSize here
         return newSize;
       });
@@ -4517,7 +4562,7 @@ function App() {
     } else {
       setBrushSize(b => {
         const newSize = Math.max(1, b - 1);
-        // The useEffect hook will automatically save to localStorage via saveToolSettings
+        // Tool settings are project-specific and will be saved in the project file
         // when brushSize changes, so we don't need to call saveDefaultSize here
         return newSize;
       });
@@ -4606,7 +4651,7 @@ function App() {
       }
     } else {
       setBrushSize(sz);
-      // The useEffect hook will automatically save to localStorage via saveToolSettings
+      // Tool settings are project-specific and will be saved in the project file
       // when brushSize changes, so we don't need to manually save here
       // Legacy support: also save using old system for backward compatibility
       if (currentTool === 'draw' && drawingMode === 'trace') {
@@ -5627,11 +5672,8 @@ function App() {
       { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
       { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
     ]);
-    // Reset pad tool sizes to defaults (both localStorage systems)
-    saveToolSettings('pad', DEFAULT_PAD_COLOR, 18);
-    // Reset power and ground tool sizes to defaults
-    saveToolSettings('power', DEFAULT_POWER_COLOR, 18);
-    saveToolSettings('ground', DEFAULT_GROUND_COLOR, 18);
+    // Reset pad tool sizes to defaults (project-specific, will be saved in project file)
+    // Reset power and ground tool sizes to defaults (project-specific, will be saved in project file)
     saveDefaultSize('power', 18);
     saveDefaultSize('ground', 18);
     // Reset locks
@@ -6962,29 +7004,30 @@ function App() {
       designatorCounters: loadDesignatorCounters(), // Save designator counters for each prefix
       autoAssignDesignators, // Save auto-designator assignment setting
       useGlobalDesignatorCounters, // Save global designator counter setting
+      // Save layer-specific tool settings from tool registry (project-specific)
       traceColors: {
-        top: topTraceColor,
-        bottom: bottomTraceColor,
+        top: toolRegistry.get('trace')?.layerSettings.get('top')?.color || topTraceColor,
+        bottom: toolRegistry.get('trace')?.layerSettings.get('bottom')?.color || bottomTraceColor,
       },
       traceSizes: {
-        top: topTraceSize,
-        bottom: bottomTraceSize,
+        top: toolRegistry.get('trace')?.layerSettings.get('top')?.size || topTraceSize,
+        bottom: toolRegistry.get('trace')?.layerSettings.get('bottom')?.size || bottomTraceSize,
       },
       padColors: {
-        top: topPadColor,
-        bottom: bottomPadColor,
+        top: toolRegistry.get('pad')?.layerSettings.get('top')?.color || topPadColor,
+        bottom: toolRegistry.get('pad')?.layerSettings.get('bottom')?.color || bottomPadColor,
       },
       padSizes: {
-        top: topPadSize,
-        bottom: bottomPadSize,
+        top: toolRegistry.get('pad')?.layerSettings.get('top')?.size || topPadSize,
+        bottom: toolRegistry.get('pad')?.layerSettings.get('bottom')?.size || bottomPadSize,
       },
       componentColors: {
-        top: topComponentColor,
-        bottom: bottomComponentColor,
+        top: toolRegistry.get('component')?.layerSettings.get('top')?.color || topComponentColor,
+        bottom: toolRegistry.get('component')?.layerSettings.get('bottom')?.color || bottomComponentColor,
       },
       componentSizes: {
-        top: topComponentSize,
-        bottom: bottomComponentSize,
+        top: toolRegistry.get('component')?.layerSettings.get('top')?.size || topComponentSize,
+        bottom: toolRegistry.get('component')?.layerSettings.get('bottom')?.size || bottomComponentSize,
       },
       traceToolLayer, // Save last layer choice
       toolSettings: {
@@ -7951,16 +7994,12 @@ function App() {
         setBottomTraceSize(bottomSize);
         saveDefaultSize('trace', topSize, 'top');
         saveDefaultSize('trace', bottomSize, 'bottom');
-        // Also save to tool registry layer-specific settings
-        saveToolLayerSettings('trace', 'top', project.traceColors?.top || topTraceColor, topSize);
-        saveToolLayerSettings('trace', 'bottom', project.traceColors?.bottom || bottomTraceColor, bottomSize);
+        // Tool settings are project-specific, loaded from project file
       } else {
         // If traceSizes doesn't exist in project, ensure defaults are set
         setTopTraceSize(6);
         setBottomTraceSize(6);
-        // Also save defaults to tool registry
-        saveToolLayerSettings('trace', 'top', topTraceColor, 6);
-        saveToolLayerSettings('trace', 'bottom', bottomTraceColor, 6);
+        // Tool settings are project-specific, using defaults
       }
       // Restore pad colors and sizes
       if (project.padColors) {
@@ -8050,13 +8089,41 @@ function App() {
           if (project.toolSettings.pad) {
             const padDef = updated.get('pad');
             if (padDef) {
-              updated.set('pad', { ...padDef, settings: project.toolSettings.pad });
+              // Restore general settings
+              const restoredSettings = { ...padDef, settings: project.toolSettings.pad };
+              // Also restore layer-specific settings from padSizes and padColors
+              const layerSettings = new Map(padDef.layerSettings);
+              if (project.padSizes && project.padColors) {
+                layerSettings.set('top', { 
+                  color: project.padColors.top || padDef.layerSettings.get('top')?.color || '#0072B2', 
+                  size: project.padSizes.top || padDef.layerSettings.get('top')?.size || 18 
+                });
+                layerSettings.set('bottom', { 
+                  color: project.padColors.bottom || padDef.layerSettings.get('bottom')?.color || '#56B4E9', 
+                  size: project.padSizes.bottom || padDef.layerSettings.get('bottom')?.size || 18 
+                });
+              }
+              updated.set('pad', { ...restoredSettings, layerSettings });
             }
           }
           if (project.toolSettings.component) {
             const componentDef = updated.get('component');
             if (componentDef) {
-              updated.set('component', { ...componentDef, settings: project.toolSettings.component });
+              // Restore general settings
+              const restoredSettings = { ...componentDef, settings: project.toolSettings.component };
+              // Also restore layer-specific settings from componentSizes and componentColors
+              const layerSettings = new Map(componentDef.layerSettings);
+              if (project.componentSizes && project.componentColors) {
+                layerSettings.set('top', { 
+                  color: project.componentColors.top || componentDef.layerSettings.get('top')?.color || '#6A3D9A', 
+                  size: project.componentSizes.top || componentDef.layerSettings.get('top')?.size || 18 
+                });
+                layerSettings.set('bottom', { 
+                  color: project.componentColors.bottom || componentDef.layerSettings.get('bottom')?.color || '#9467BD', 
+                  size: project.componentSizes.bottom || componentDef.layerSettings.get('bottom')?.size || 18 
+                });
+              }
+              updated.set('component', { ...restoredSettings, layerSettings });
             }
           }
           if (project.toolSettings.ground) {
@@ -8090,8 +8157,63 @@ function App() {
           })();
           
           if (currentToolDef) {
-            setBrushColor(currentToolDef.settings.color);
-            setBrushSize(currentToolDef.settings.size);
+            // For layer-specific tools, use layer-specific settings
+            if (currentTool === 'draw' && drawingMode === 'trace') {
+              const layer = traceToolLayer || 'top';
+              const layerSettings = currentToolDef.layerSettings.get(layer);
+              if (layerSettings) {
+                setBrushColor(layerSettings.color);
+                setBrushSize(layerSettings.size);
+                if (layer === 'top') {
+                  setTopTraceColor(layerSettings.color);
+                  setTopTraceSize(layerSettings.size);
+                } else {
+                  setBottomTraceColor(layerSettings.color);
+                  setBottomTraceSize(layerSettings.size);
+                }
+              } else {
+                setBrushColor(currentToolDef.settings.color);
+                setBrushSize(currentToolDef.settings.size);
+              }
+            } else if (currentTool === 'draw' && drawingMode === 'pad') {
+              const layer = padToolLayer || 'top';
+              const layerSettings = currentToolDef.layerSettings.get(layer);
+              if (layerSettings) {
+                setBrushColor(layerSettings.color);
+                setBrushSize(layerSettings.size);
+                if (layer === 'top') {
+                  setTopPadColor(layerSettings.color);
+                  setTopPadSize(layerSettings.size);
+                } else {
+                  setBottomPadColor(layerSettings.color);
+                  setBottomPadSize(layerSettings.size);
+                }
+              } else {
+                setBrushColor(currentToolDef.settings.color);
+                setBrushSize(currentToolDef.settings.size);
+              }
+            } else if (currentTool === 'component') {
+              const layer = componentToolLayer || 'top';
+              const layerSettings = currentToolDef.layerSettings.get(layer);
+              if (layerSettings) {
+                setBrushColor(layerSettings.color);
+                setBrushSize(layerSettings.size);
+                if (layer === 'top') {
+                  setTopComponentColor(layerSettings.color);
+                  setTopComponentSize(layerSettings.size);
+                } else {
+                  setBottomComponentColor(layerSettings.color);
+                  setBottomComponentSize(layerSettings.size);
+                }
+              } else {
+                setBrushColor(currentToolDef.settings.color);
+                setBrushSize(currentToolDef.settings.size);
+              }
+            } else {
+              // For other tools, use general settings
+              setBrushColor(currentToolDef.settings.color);
+              setBrushSize(currentToolDef.settings.size);
+            }
           }
           
           return updated;
@@ -8975,6 +9097,31 @@ function App() {
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
         setShowDesignatorManager={setShowDesignatorManager}
+        toolRegistry={toolRegistry}
+        updateToolSettings={updateToolSettings}
+        updateToolLayerSettings={updateToolLayerSettings}
+        setBrushSize={setBrushSize}
+        saveToolSettings={saveToolSettings}
+        saveToolLayerSettings={saveToolLayerSettings}
+        colorPalette={palette8x8}
+        currentTool={currentTool}
+        drawingMode={drawingMode}
+        traceToolLayer={traceToolLayer}
+        padToolLayer={padToolLayer}
+        componentToolLayer={componentToolLayer}
+        setTopTraceSize={setTopTraceSize}
+        setBottomTraceSize={setBottomTraceSize}
+        setTopPadSize={setTopPadSize}
+        setBottomPadSize={setBottomPadSize}
+        setTopComponentSize={setTopComponentSize}
+        setBottomComponentSize={setBottomComponentSize}
+        topTraceColor={topTraceColor}
+        bottomTraceColor={bottomTraceColor}
+        topPadColor={topPadColor}
+        bottomPadColor={bottomPadColor}
+        topComponentColor={topComponentColor}
+        bottomComponentColor={bottomComponentColor}
+        saveDefaultSize={saveDefaultSize}
         menuBarRef={menuBarRef}
       />
 
@@ -9045,7 +9192,7 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('via')?.settings.size || 26}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('via')?.settings.size ?? 26}</span>
               </div>
             </button>
             <button 
@@ -9096,7 +9243,8 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
                   const padDef = toolRegistry.get('pad');
                   const padLayer = padToolLayer || 'top';
-                  return padDef?.settings.size || (padLayer === 'top' ? topPadSize : bottomPadSize) || 18;
+                  // Read from tool registry layerSettings (one source of truth)
+                  return padDef?.layerSettings.get(padLayer)?.size ?? padDef?.settings.size ?? 18;
                 })()}</span>
               </div>
             </button>
@@ -9134,7 +9282,12 @@ function App() {
               <PenLine size={14} color={toolRegistry.get('trace')?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || DEFAULT_TRACE_COLOR} />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>T</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{traceToolLayer === 'top' ? topTraceSize : bottomTraceSize}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  const traceDef = toolRegistry.get('trace');
+                  const layer = traceToolLayer || 'top';
+                  // Read from tool registry layerSettings (one source of truth)
+                  return traceDef?.layerSettings.get(layer)?.size ?? traceDef?.settings.size ?? 6;
+                })()}</span>
               </div>
             </button>
             <button 
@@ -9194,8 +9347,10 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>C</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  const componentDef = toolRegistry.get('component');
                   const layer = componentToolLayer || 'top';
-                  return layer === 'top' ? topComponentSize : bottomComponentSize;
+                  // Read from tool registry layerSettings (one source of truth)
+                  return componentDef?.layerSettings.get(layer)?.size ?? componentDef?.settings.size ?? 18;
                 })()}</span>
               </div>
             </button>
@@ -9224,7 +9379,7 @@ function App() {
               <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>B</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('power')?.settings.size || 18}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('power')?.settings.size ?? 18}</span>
               </div>
             </button>
             {/* Ground tool */}
@@ -9259,7 +9414,7 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>G</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size || 18}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size ?? 18}</span>
               </div>
             </button>
               <button 
@@ -9358,7 +9513,7 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>E</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('erase')?.settings.size || 18}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('erase')?.settings.size ?? 18}</span>
               </div>
             </button>
             {/* Color picker moved just below magnify */}

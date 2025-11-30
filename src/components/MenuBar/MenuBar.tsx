@@ -1,8 +1,10 @@
 import React from 'react';
-import type { Tool } from '../../hooks/useToolRegistry';
+import type { Tool, ToolDefinition, ToolSettings } from '../../hooks/useToolRegistry';
 import type { PCBImage } from '../../hooks/useImage';
 import type { DrawingStroke } from '../../hooks/useDrawing';
 import type { PCBComponent } from '../../types';
+import { SetToolSizeDialog } from '../SetToolSizeDialog';
+import { SetToolColorDialog } from '../SetToolColorDialog';
 
 export interface MenuBarProps {
   // Menu state
@@ -107,6 +109,41 @@ export interface MenuBarProps {
   // Designator management
   setShowDesignatorManager: (show: boolean) => void;
   
+  // Tool registry
+  toolRegistry: Map<string, ToolDefinition>;
+  updateToolSettings: (toolId: string, settings: ToolSettings) => void;
+  updateToolLayerSettings: (toolId: string, layer: 'top' | 'bottom', settings: ToolSettings) => void;
+  setBrushSize: (size: number | ((prev: number) => number)) => void;
+  saveToolSettings: (toolId: string, color: string, size: number) => void;
+  saveToolLayerSettings: (toolId: string, layer: 'top' | 'bottom', color: string, size: number) => void;
+  colorPalette: string[];
+  
+  // Current tool state (to determine if size change should affect brushSize immediately)
+  currentTool: Tool;
+  drawingMode: 'trace' | 'via' | 'pad';
+  traceToolLayer: 'top' | 'bottom';
+  padToolLayer: 'top' | 'bottom';
+  componentToolLayer: 'top' | 'bottom';
+  
+  // Layer-specific size setters
+  setTopTraceSize: (size: number) => void;
+  setBottomTraceSize: (size: number) => void;
+  setTopPadSize: (size: number) => void;
+  setBottomPadSize: (size: number) => void;
+  setTopComponentSize: (size: number) => void;
+  setBottomComponentSize: (size: number) => void;
+  
+  // Layer-specific color getters (to get current color when updating size)
+  topTraceColor: string;
+  bottomTraceColor: string;
+  topPadColor: string;
+  bottomPadColor: string;
+  topComponentColor: string;
+  bottomComponentColor: string;
+  
+  // Legacy save functions (used by +/- keys)
+  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -188,6 +225,31 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setShowPowerBusManager,
   setShowGroundBusManager,
   setShowDesignatorManager,
+  toolRegistry,
+  updateToolSettings,
+  updateToolLayerSettings,
+  setBrushSize,
+  saveToolSettings,
+  saveToolLayerSettings,
+  colorPalette,
+  currentTool,
+  drawingMode,
+  traceToolLayer,
+  padToolLayer,
+  componentToolLayer,
+  setTopTraceSize,
+  setBottomTraceSize,
+  setTopPadSize,
+  setBottomPadSize,
+  setTopComponentSize,
+  setBottomComponentSize,
+  topTraceColor,
+  bottomTraceColor,
+  topPadColor,
+  bottomPadColor,
+  topComponentColor,
+  bottomComponentColor,
+  saveDefaultSize,
   menuBarRef,
 }) => {
   // Track which image submenu is open
@@ -197,6 +259,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Track which node selection submenu is open (power or ground)
   const [openSelectNodesSubmenu, setOpenSelectNodesSubmenu] = React.useState<'power' | 'ground' | null>(null);
   const selectSubmenuTimeoutRef = React.useRef<number | null>(null);
+
+  // Track which Tools submenu is open (Lock or Select)
+  const [openToolsSubmenu, setOpenToolsSubmenu] = React.useState<'lock' | 'select' | null>(null);
+  const toolsSubmenuTimeoutRef = React.useRef<number | null>(null);
+  
+  // Dialog visibility state
+  const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
+  const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
 
   // Helper function to render image submenu items
   const renderImageSubmenu = (imageType: 'top' | 'bottom' | 'both', submenuTimeoutRef: React.MutableRefObject<number | null>) => {
@@ -461,6 +531,311 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     );
   };
 
+  // Helper function to render Lock submenu
+  const renderLockSubmenu = () => {
+    return (
+      <div
+        onMouseEnter={() => {
+          if (toolsSubmenuTimeoutRef.current) {
+            clearTimeout(toolsSubmenuTimeoutRef.current);
+            toolsSubmenuTimeoutRef.current = null;
+          }
+          setOpenToolsSubmenu('lock');
+        }}
+        onMouseLeave={() => {
+          toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+            setOpenToolsSubmenu(prev => prev === 'lock' ? null : prev);
+          }, 200);
+        }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '100%',
+          marginLeft: '4px',
+          minWidth: 220,
+          background: '#2b2b31',
+          border: '1px solid #1f1f24',
+          borderRadius: 6,
+          boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+          padding: 6,
+          zIndex: 10,
+        }}
+      >
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={areViasLocked}
+            onChange={() => { setAreViasLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Vias</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={arePadsLocked}
+            onChange={() => { setArePadsLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Pads</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={areTracesLocked}
+            onChange={() => { setAreTracesLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Traces</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={areComponentsLocked}
+            onChange={() => { setAreComponentsLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Components</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={areGroundNodesLocked}
+            onChange={() => { setAreGroundNodesLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Ground Node</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={arePowerNodesLocked}
+            onChange={() => { setArePowerNodesLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Power Nodes</span>
+        </label>
+      </div>
+    );
+  };
+
+  // Dialogs are now separate components - removed renderSetSizeSubmenu and renderSetColorSubmenu
+
+  // Helper function to render Select submenu
+  const renderSelectSubmenu = () => {
+    return (
+      <div
+        onMouseEnter={() => {
+          if (toolsSubmenuTimeoutRef.current) {
+            clearTimeout(toolsSubmenuTimeoutRef.current);
+            toolsSubmenuTimeoutRef.current = null;
+          }
+          setOpenToolsSubmenu('select');
+        }}
+        onMouseLeave={() => {
+          toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+            setOpenToolsSubmenu(prev => prev === 'select' ? null : prev);
+          }, 200);
+        }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: '100%',
+          marginLeft: '4px',
+          minWidth: 220,
+          background: '#2b2b31',
+          border: '1px solid #1f1f24',
+          borderRadius: 6,
+          boxShadow: '0 6px 18px rgba(0,0,0,0.25)',
+          padding: 6,
+          zIndex: 10,
+        }}
+      >
+        <button onClick={() => { selectAllVias(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          Select All Vias
+        </button>
+        <button onClick={() => { selectAllTraces(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          Select All Traces
+        </button>
+        <button onClick={() => { selectAllPads(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          Select All Pads
+        </button>
+        <button onClick={() => { selectAllComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          Select All Components
+        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            onMouseEnter={() => {
+              if (selectSubmenuTimeoutRef.current) {
+                clearTimeout(selectSubmenuTimeoutRef.current);
+                selectSubmenuTimeoutRef.current = null;
+              }
+              setOpenSelectNodesSubmenu('power');
+            }}
+            onMouseLeave={() => {
+              selectSubmenuTimeoutRef.current = window.setTimeout(() => {
+                setOpenSelectNodesSubmenu(prev => prev === 'power' ? null : prev);
+              }, 200);
+            }}
+            onClick={() => {
+              setOpenSelectNodesSubmenu(prev => (prev === 'power' ? null : 'power'));
+            }}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              color: '#f2f2f2',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Select Power Nodes ▸
+          </button>
+          {openSelectNodesSubmenu === 'power' && renderSelectNodesSubmenu('power')}
+        </div>
+        <div style={{ position: 'relative' }}>
+          <button
+            onMouseEnter={() => {
+              if (selectSubmenuTimeoutRef.current) {
+                clearTimeout(selectSubmenuTimeoutRef.current);
+                selectSubmenuTimeoutRef.current = null;
+              }
+              setOpenSelectNodesSubmenu('ground');
+            }}
+            onMouseLeave={() => {
+              selectSubmenuTimeoutRef.current = window.setTimeout(() => {
+                setOpenSelectNodesSubmenu(prev => prev === 'ground' ? null : prev);
+              }, 200);
+            }}
+            onClick={() => {
+              setOpenSelectNodesSubmenu(prev => (prev === 'ground' ? null : 'ground'));
+            }}
+            style={{
+              display: 'block',
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 10px',
+              color: '#f2f2f2',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            Select Ground Nodes ▸
+          </button>
+          {openSelectNodesSubmenu === 'ground' && renderSelectNodesSubmenu('ground')}
+        </div>
+        <button onClick={() => { selectDisconnectedComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          Select Disconnected
+        </button>
+      </div>
+    );
+  };
+
   // Determine current size for Set Size dialog
   const getCurrentSize = (): number => {
     if (selectedIds.size > 0) {
@@ -488,6 +863,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   };
 
   return (
+    <>
     <div ref={menuBarRef} style={{ position: 'relative', background: 'rgba(250,250,255,0.9)', borderBottom: '1px solid #e6e6ef', padding: '6px 12px', display: 'flex', gap: 16, alignItems: 'center', zIndex: 3 }}>
       {/* File menu */}
       <div style={{ position: 'relative' }}>
@@ -755,64 +1131,59 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Decrease Size (-)
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button 
+            <button
               onClick={() => {
-                setSetSizeDialog({ visible: true, size: getCurrentSize() });
+                setSetToolSizeDialogVisible(true);
                 setOpenMenu(null);
               }}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
-              Set Size…
+              Set Tool Size…
+            </button>
+            <button
+              onClick={() => {
+                setSetToolColorDialogVisible(true);
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Set Tool Color…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { setAreViasLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Vias {areViasLocked ? '✓' : ''}
-            </button>
-            <button onClick={() => { setArePadsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Pads {arePadsLocked ? '✓' : ''}
-            </button>
-            <button onClick={() => { setAreTracesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Traces {areTracesLocked ? '✓' : ''}
-            </button>
-            <button onClick={() => { setAreComponentsLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Components {areComponentsLocked ? '✓' : ''}
-            </button>
-            <button onClick={() => { setAreGroundNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Ground Node {areGroundNodesLocked ? '✓' : ''}
-            </button>
-            <button onClick={() => { setArePowerNodesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Lock Power Nodes {arePowerNodesLocked ? '✓' : ''}
-            </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select All</div>
-            <button onClick={() => { selectAllVias(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Vias
-            </button>
-            <button onClick={() => { selectAllTraces(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Traces
-            </button>
-            <button onClick={() => { selectAllPads(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Pads
-            </button>
-            <button onClick={() => { selectAllComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select All Components
-            </button>
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
-                  if (selectSubmenuTimeoutRef.current) {
-                    clearTimeout(selectSubmenuTimeoutRef.current);
-                    selectSubmenuTimeoutRef.current = null;
+                  if (toolsSubmenuTimeoutRef.current) {
+                    clearTimeout(toolsSubmenuTimeoutRef.current);
+                    toolsSubmenuTimeoutRef.current = null;
                   }
-                  setOpenSelectNodesSubmenu('power');
+                  setOpenToolsSubmenu('lock');
                 }}
                 onMouseLeave={() => {
-                  selectSubmenuTimeoutRef.current = window.setTimeout(() => {
-                    setOpenSelectNodesSubmenu(prev => prev === 'power' ? null : prev);
+                  toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                    setOpenToolsSubmenu(prev => prev === 'lock' ? null : prev);
                   }, 200);
                 }}
                 onClick={() => {
-                  setOpenSelectNodesSubmenu(prev => (prev === 'power' ? null : 'power'));
+                  setOpenToolsSubmenu(prev => (prev === 'lock' ? null : 'lock'));
                 }}
                 style={{
                   display: 'block',
@@ -825,26 +1196,26 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                Select Power Nodes ▸
+                Lock ▸
               </button>
-              {openSelectNodesSubmenu === 'power' && renderSelectNodesSubmenu('power')}
+              {openToolsSubmenu === 'lock' && renderLockSubmenu()}
             </div>
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
-                  if (selectSubmenuTimeoutRef.current) {
-                    clearTimeout(selectSubmenuTimeoutRef.current);
-                    selectSubmenuTimeoutRef.current = null;
+                  if (toolsSubmenuTimeoutRef.current) {
+                    clearTimeout(toolsSubmenuTimeoutRef.current);
+                    toolsSubmenuTimeoutRef.current = null;
                   }
-                  setOpenSelectNodesSubmenu('ground');
+                  setOpenToolsSubmenu('select');
                 }}
                 onMouseLeave={() => {
-                  selectSubmenuTimeoutRef.current = window.setTimeout(() => {
-                    setOpenSelectNodesSubmenu(prev => prev === 'ground' ? null : prev);
+                  toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                    setOpenToolsSubmenu(prev => prev === 'select' ? null : prev);
                   }, 200);
                 }}
                 onClick={() => {
-                  setOpenSelectNodesSubmenu(prev => (prev === 'ground' ? null : 'ground'));
+                  setOpenToolsSubmenu(prev => (prev === 'select' ? null : 'select'));
                 }}
                 style={{
                   display: 'block',
@@ -857,13 +1228,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   cursor: 'pointer',
                 }}
               >
-                Select Ground Nodes ▸
+                Select ▸
               </button>
-              {openSelectNodesSubmenu === 'ground' && renderSelectNodesSubmenu('ground')}
+              {openToolsSubmenu === 'select' && renderSelectSubmenu()}
             </div>
-            <button onClick={() => { selectDisconnectedComponents(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Select Disconnected
-            </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Power Buses…
@@ -945,6 +1313,50 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </div>
       )}
     </div>
+      <SetToolSizeDialog
+        visible={setToolSizeDialogVisible}
+        toolRegistry={toolRegistry}
+        currentTool={currentTool}
+        drawingMode={drawingMode}
+        traceToolLayer={traceToolLayer}
+        padToolLayer={padToolLayer}
+        componentToolLayer={componentToolLayer}
+        updateToolSettings={updateToolSettings}
+        updateToolLayerSettings={updateToolLayerSettings}
+        setBrushSize={setBrushSize}
+        saveToolSettings={saveToolSettings}
+        saveToolLayerSettings={saveToolLayerSettings}
+        setTopTraceSize={setTopTraceSize}
+        setBottomTraceSize={setBottomTraceSize}
+        setTopPadSize={setTopPadSize}
+        setBottomPadSize={setBottomPadSize}
+        setTopComponentSize={setTopComponentSize}
+        setBottomComponentSize={setBottomComponentSize}
+        topTraceColor={topTraceColor}
+        bottomTraceColor={bottomTraceColor}
+        topPadColor={topPadColor}
+        bottomPadColor={bottomPadColor}
+        topComponentColor={topComponentColor}
+        bottomComponentColor={bottomComponentColor}
+        saveDefaultSize={saveDefaultSize}
+        onClose={() => setSetToolSizeDialogVisible(false)}
+      />
+      <SetToolColorDialog
+        visible={setToolColorDialogVisible}
+        toolRegistry={toolRegistry}
+        currentTool={currentTool}
+        drawingMode={drawingMode}
+        traceToolLayer={traceToolLayer}
+        padToolLayer={padToolLayer}
+        componentToolLayer={componentToolLayer}
+        updateToolSettings={updateToolSettings}
+        updateToolLayerSettings={updateToolLayerSettings}
+        saveToolSettings={saveToolSettings}
+        saveToolLayerSettings={saveToolLayerSettings}
+        colorPalette={colorPalette}
+        onClose={() => setSetToolColorDialogVisible(false)}
+      />
+    </>
   );
 };
 

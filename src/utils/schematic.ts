@@ -2216,18 +2216,18 @@ export function generateSimpleSchematic(
         (pinPositions.length >= 2 && !allPinsConnected);
       
       if (needsLabel) {
-        const labelY = pinPositions.length > 1 ? centerY + 5.08 : pinPositions[0].y + 5.08;
-        const labelX = pinPositions.length > 1 ? centerX : pinPositions[0].x;
-        const textUuid = generateUuid();
-        const netLabel = net.hasPower && net.powerVoltage 
-          ? net.powerVoltage 
-          : net.hasGround 
-          ? 'GND' 
-          : net.name;
-        schematic += `  (text "${netLabel}" (at ${labelX} ${labelY} 0)\n`;
-        schematic += `    (effects (font (size 1.27 1.27)))\n`;
-        schematic += `    (uuid ${textUuid})\n`;
-        schematic += '  )\n';
+      const labelY = pinPositions.length > 1 ? centerY + 5.08 : pinPositions[0].y + 5.08;
+      const labelX = pinPositions.length > 1 ? centerX : pinPositions[0].x;
+      const textUuid = generateUuid();
+      const netLabel = net.hasPower && net.powerVoltage 
+        ? net.powerVoltage 
+        : net.hasGround 
+        ? 'GND' 
+        : net.name;
+      schematic += `  (text "${netLabel}" (at ${labelX} ${labelY} 0)\n`;
+      schematic += `    (effects (font (size 1.27 1.27)))\n`;
+      schematic += `    (uuid ${textUuid})\n`;
+      schematic += '  )\n';
       } else {
         // All pins are connected with wires - no label needed
         console.log(`[Schematic] Net ${net.name}: All ${pinPositions.length} pins connected with wires, skipping label`);

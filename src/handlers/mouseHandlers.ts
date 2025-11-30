@@ -225,7 +225,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     selectedImageForTransform,
     toolRegistry,
     brushSize,
-    brushColor: _brushColor,
+    brushColor,
     topPadColor,
     bottomPadColor,
     topPadSize,
@@ -757,13 +757,11 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Read directly from localStorage to ensure we have the latest values
-        // This is critical for immediate drawing after tool selection
+        // Use brushSize and brushColor (which are synced with tool registry) for immediate updates
         const viaDef = toolRegistry.get('via');
-        const savedColor = localStorage.getItem('tool_via_color');
-        const savedSize = localStorage.getItem('tool_via_size');
-        const viaColor = savedColor || viaDef?.settings.color || defaultViaColor;
-        const viaSize = savedSize ? parseInt(savedSize, 10) : (viaDef?.settings.size || viaDefaultSize);
+        // Use brushSize and brushColor which are kept in sync with tool registry
+        const viaColor = brushColor || viaDef?.settings.color || defaultViaColor;
+        const viaSize = brushSize || viaDef?.settings.size || viaDefaultSize;
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -792,9 +790,9 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         }
         
         // Add a square representing a pad at click location
-        // Use layer-specific colors and sizes
-        const padColor = padToolLayer === 'top' ? topPadColor : bottomPadColor;
-        const padSize = padToolLayer === 'top' ? topPadSize : bottomPadSize;
+        // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
+        const padColor = brushColor || (padToolLayer === 'top' ? topPadColor : bottomPadColor);
+        const padSize = brushSize || (padToolLayer === 'top' ? topPadSize : bottomPadSize);
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -872,9 +870,9 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      // Use layer-specific colors and sizes for components
-      const componentColor = componentToolLayer === 'top' ? topComponentColor : bottomComponentColor;
-      const componentSize = componentToolLayer === 'top' ? topComponentSize : bottomComponentSize;
+      // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
+      const componentColor = brushColor || (componentToolLayer === 'top' ? topComponentColor : bottomComponentColor);
+      const componentSize = brushSize || (componentToolLayer === 'top' ? topComponentSize : bottomComponentSize);
       const comp = createComponent(
         selectedComponentType,
         componentToolLayer, // Use componentToolLayer instead of selectedDrawingLayer
@@ -1046,7 +1044,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         x: snapped.x,
         y: snapped.y,
         color: '#000000', // Ground symbols are always black
-        size: toolRegistry.get('ground')?.settings.size || 18,
+        size: brushSize || toolRegistry.get('ground')?.settings.size || 18,
         type: groundType, // Auto-populate type
         pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
         layer: selectedDrawingLayer, // Set layer based on current drawing layer
