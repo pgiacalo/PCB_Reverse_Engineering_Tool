@@ -223,7 +223,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     const isOpen = openColorPicker?.toolId === toolId && openColorPicker?.layer === layer;
 
     return (
-      <div key={`${pickerKey}-${currentColor}`} style={{ position: 'relative', display: 'inline-block' }}>
+      <div key={`${pickerKey}-${currentColor}`} style={{ position: 'relative', display: 'inline-block', zIndex: 10005 }}>
         <button
           key={`${pickerKey}-button-${currentColor}`}
           className="color-swatch-button"
@@ -252,9 +252,9 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
             onClick={(e) => { e.stopPropagation(); }}
             style={{
               position: 'absolute',
-              top: '100%',
-              left: 0,
-              marginTop: '4px',
+              top: 0,
+              left: '100%',
+              marginLeft: '4px',
               padding: 8,
               background: '#fff',
               border: '1px solid #ddd',
@@ -313,9 +313,11 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
           borderRadius: 8,
           padding: '16px',
           width: 'fit-content',
+          minWidth: '450px',
           maxWidth: '600px',
           maxHeight: '70vh',
           overflowY: 'auto',
+          overflowX: 'visible',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
           border: '1px solid #1f1f24',
         }}
