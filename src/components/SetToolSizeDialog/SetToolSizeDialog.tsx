@@ -224,7 +224,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
           backgroundColor: '#2b2b31',
           borderRadius: 8,
           padding: '16px',
-          minWidth: '320px',
+          width: 'fit-content',
           maxWidth: '400px',
           maxHeight: '70vh',
           overflowY: 'auto',
@@ -253,7 +253,6 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
                   padding: '6px 10px',
                   background: '#1f1f24',
                   borderRadius: 4,
@@ -263,37 +262,39 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
                   style={{
                     color: '#f2f2f2',
                     fontSize: '13px',
-                    flex: '0 0 auto',
-                    marginRight: '12px',
-                    minWidth: '130px',
+                    width: '140px',
+                    flexShrink: 0,
+                    marginRight: '8px',
                   }}
                 >
                   {displayName}:
                 </label>
-                <select
-                  value={currentSize}
-                  onChange={(e) => {
-                    const newSize = parseInt(e.target.value, 10);
-                    handleSizeChange(entry.id, newSize, entry.layer);
-                  }}
-                  style={{
-                    flex: '1 1 auto',
-                    padding: '4px 8px',
-                    background: '#2b2b31',
-                    border: '1px solid #3a3a44',
-                    borderRadius: 4,
-                    color: '#f2f2f2',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    minWidth: '80px',
-                  }}
-                >
-                  {sizeOptions.map(size => (
-                    <option key={size} value={size} style={{ background: '#2b2b31', color: '#f2f2f2' }}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <select
+                    value={currentSize}
+                    onChange={(e) => {
+                      const newSize = parseInt(e.target.value, 10);
+                      handleSizeChange(entry.id, newSize, entry.layer);
+                    }}
+                    style={{
+                      width: '50px',
+                      padding: '4px 6px',
+                      background: '#2b2b31',
+                      border: '1px solid #3a3a44',
+                      borderRadius: 4,
+                      color: '#f2f2f2',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {sizeOptions.map(size => (
+                      <option key={size} value={size} style={{ background: '#2b2b31', color: '#f2f2f2' }}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ color: '#f2f2f2', fontSize: '12px' }}>px</span>
+                </div>
               </div>
             );
           })}
