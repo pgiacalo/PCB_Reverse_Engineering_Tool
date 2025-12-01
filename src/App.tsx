@@ -141,6 +141,10 @@ function App() {
     setTopComponentSize,
     bottomComponentSize,
     setBottomComponentSize,
+    componentConnectionColor,
+    setComponentConnectionColor,
+    componentConnectionSize,
+    setComponentConnectionSize,
     saveDefaultSize,
     saveDefaultColor,
   } = layerSettings;
@@ -404,9 +408,18 @@ function App() {
         updated.set('component', { ...componentDef, layerSettings });
       }
       
+      // Sync component connection settings
+      const componentConnectionDef = prev.get('componentConnection');
+      if (componentConnectionDef) {
+        updated.set('componentConnection', {
+          ...componentConnectionDef,
+          settings: { color: componentConnectionColor, size: componentConnectionSize },
+        });
+      }
+      
       return updated;
     });
-  }, [topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, setToolRegistry]);
+  }, [topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, componentConnectionColor, componentConnectionSize, setToolRegistry]);
   
   // Update tool-specific settings when color/size changes (for the active tool)
   // This persists to localStorage and updates the registry
@@ -1012,6 +1025,7 @@ function App() {
         break;
       case 'Capacitor':
       case 'Electrolytic Capacitor':
+      case 'Film Capacitor':
         if ('capacitance' in comp && comp.capacitance && 'capacitanceUnit' in comp && comp.capacitanceUnit) {
           return `${comp.capacitance} ${comp.capacitanceUnit}`;
         }
@@ -3671,9 +3685,9 @@ function App() {
             const compCenter = { x: comp.x, y: comp.y };
             
             ctx.save();
-            // Use black for negative connections of polarized components, blue otherwise
-            ctx.strokeStyle = isNegative ? 'rgba(0, 0, 0, 0.8)' : 'rgba(0, 150, 255, 0.6)'; // Black for negative, blue for others
-            ctx.lineWidth = Math.max(1, 3 / Math.max(viewScale, 0.001));
+            // Use black for negative connections of polarized components, otherwise use component connection color
+            ctx.strokeStyle = isNegative ? 'rgba(0, 0, 0, 0.8)' : componentConnectionColor;
+            ctx.lineWidth = Math.max(1, componentConnectionSize / Math.max(viewScale, 0.001));
             ctx.beginPath();
             ctx.moveTo(compCenter.x, compCenter.y);
             ctx.lineTo(nodePos.x, nodePos.y);
@@ -3710,7 +3724,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -5926,16 +5940,33 @@ function App() {
     }
   }, [connectingPin, componentsTop, componentsBottom, drawingStrokes, viewScale, viewPan.x, viewPan.y]);
 
+  // Helper function to constrain dialog position within window boundaries
+  const constrainDialogPosition = useCallback((x: number, y: number, dialogWidth: number, dialogHeight: number): { x: number; y: number } => {
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    const padding = 10; // Padding from edges
+    
+    // Constrain x position (prevent overflow on right edge, ensure not negative)
+    let constrainedX = Math.max(padding, Math.min(x, windowWidth - dialogWidth - padding));
+    
+    // Constrain y position (prevent overflow on bottom edge, ensure not negative)
+    let constrainedY = Math.max(padding, Math.min(y, windowHeight - dialogHeight - padding));
+    
+    return { x: constrainedX, y: constrainedY };
+  }, []);
+
   // Handle component dialog dragging
   React.useEffect(() => {
     if (!isDraggingDialog) return;
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!dialogDragOffset) return;
-      const newPosition = {
+      const rawPosition = {
         x: e.clientX - dialogDragOffset.x,
         y: e.clientY - dialogDragOffset.y,
       };
+      // Constrain position to window boundaries
+      const newPosition = constrainDialogPosition(rawPosition.x, rawPosition.y, 250, window.innerHeight * 0.4);
       setComponentDialogPosition(newPosition);
       // Save position to localStorage
       localStorage.setItem('componentDialogPosition', JSON.stringify(newPosition));
@@ -5953,7 +5984,7 @@ function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingDialog, dialogDragOffset]);
+  }, [isDraggingDialog, dialogDragOffset, constrainDialogPosition]);
 
   // Handle detailed info dialog dragging
   React.useEffect(() => {
@@ -5961,10 +5992,12 @@ function App() {
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!detailedInfoDialogDragOffset) return;
-      const newPosition = {
+      const rawPosition = {
         x: e.clientX - detailedInfoDialogDragOffset.x,
         y: e.clientY - detailedInfoDialogDragOffset.y,
       };
+      // Constrain position to window boundaries
+      const newPosition = constrainDialogPosition(rawPosition.x, rawPosition.y, 400, window.innerHeight * 0.8);
       setDetailedInfoDialogPosition(newPosition);
       // Save position to localStorage
       localStorage.setItem('detailedInfoDialogPosition', JSON.stringify(newPosition));
@@ -5982,7 +6015,7 @@ function App() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDraggingDetailedInfoDialog, detailedInfoDialogDragOffset]);
+  }, [isDraggingDetailedInfoDialog, detailedInfoDialogDragOffset, constrainDialogPosition]);
 
   // Handle notes dialog dragging
   React.useEffect(() => {
@@ -6044,58 +6077,81 @@ function App() {
     if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
       // Try to load saved position from localStorage
       const saved = localStorage.getItem('componentDialogPosition');
+      let position: { x: number; y: number };
       if (saved) {
         try {
           const savedPosition = JSON.parse(saved);
-          setComponentDialogPosition(savedPosition);
+          // Constrain saved position to window boundaries
+          position = constrainDialogPosition(savedPosition.x, savedPosition.y, 250, window.innerHeight * 0.4);
+          setComponentDialogPosition(position);
         } catch {
-          // If parsing fails, use default center position
-          setComponentDialogPosition({
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2,
-          });
+          // If parsing fails, use default upper right position (to the right of canvas, below menu bar)
+          position = constrainDialogPosition(window.innerWidth - 280, 90, 250, window.innerHeight * 0.4);
+          setComponentDialogPosition(position);
         }
       } else {
-        // No saved position, use default center position
-        setComponentDialogPosition({
-          x: window.innerWidth / 2,
-          y: window.innerHeight / 2,
-        });
+        // No saved position, use default upper right position (to the right of canvas, below menu bar)
+        position = constrainDialogPosition(window.innerWidth - 280, 90, 250, window.innerHeight * 0.4);
+        setComponentDialogPosition(position);
       }
     } else if (!componentEditor || !componentEditor.visible) {
       // Don't reset position when dialog closes - keep it for next time
       // setComponentDialogPosition(null);
     }
-  }, [componentEditor, componentDialogPosition]);
+  }, [componentEditor, componentDialogPosition, constrainDialogPosition]);
 
   // Initialize detailed info dialog position when it opens (load from localStorage or default)
   React.useEffect(() => {
     if (debugDialog.visible && detailedInfoDialogPosition === null) {
       // Try to load saved position from localStorage
       const saved = localStorage.getItem('detailedInfoDialogPosition');
+      let position: { x: number; y: number };
       if (saved) {
         try {
           const savedPosition = JSON.parse(saved);
-          setDetailedInfoDialogPosition(savedPosition);
+          // Constrain saved position to window boundaries
+          position = constrainDialogPosition(savedPosition.x, savedPosition.y, 400, window.innerHeight * 0.8);
+          setDetailedInfoDialogPosition(position);
         } catch {
-          // If parsing fails, use default right side position
-          setDetailedInfoDialogPosition({
-            x: window.innerWidth - 450, // Right side, similar to current positioning
-            y: 80, // Top padding
-          });
+          // If parsing fails, use default upper right position (to the right of canvas, below menu bar)
+          position = constrainDialogPosition(window.innerWidth - 450, 90, 400, window.innerHeight * 0.8);
+          setDetailedInfoDialogPosition(position);
         }
       } else {
-        // No saved position, use default right side position
-        setDetailedInfoDialogPosition({
-          x: window.innerWidth - 450, // Right side, similar to current positioning
-          y: 80, // Top padding
-        });
+        // No saved position, use default upper right position (to the right of canvas, below menu bar)
+        position = constrainDialogPosition(window.innerWidth - 450, 90, 400, window.innerHeight * 0.8);
+        setDetailedInfoDialogPosition(position);
       }
     } else if (!debugDialog.visible) {
       // Don't reset position when dialog closes - keep it for next time
       // setDetailedInfoDialogPosition(null);
     }
-  }, [debugDialog.visible, detailedInfoDialogPosition]);
+  }, [debugDialog.visible, detailedInfoDialogPosition, constrainDialogPosition]);
+
+  // Constrain dialog positions when window is resized
+  React.useEffect(() => {
+    const handleResize = () => {
+      // Constrain component dialog position
+      if (componentDialogPosition) {
+        const constrained = constrainDialogPosition(componentDialogPosition.x, componentDialogPosition.y, 250, window.innerHeight * 0.4);
+        if (constrained.x !== componentDialogPosition.x || constrained.y !== componentDialogPosition.y) {
+          setComponentDialogPosition(constrained);
+          localStorage.setItem('componentDialogPosition', JSON.stringify(constrained));
+        }
+      }
+      // Constrain detailed info dialog position
+      if (detailedInfoDialogPosition) {
+        const constrained = constrainDialogPosition(detailedInfoDialogPosition.x, detailedInfoDialogPosition.y, 400, window.innerHeight * 0.8);
+        if (constrained.x !== detailedInfoDialogPosition.x || constrained.y !== detailedInfoDialogPosition.y) {
+          setDetailedInfoDialogPosition(constrained);
+          localStorage.setItem('detailedInfoDialogPosition', JSON.stringify(constrained));
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [componentDialogPosition, detailedInfoDialogPosition, constrainDialogPosition]);
 
   // Double-click reset function for sliders
   const handleSliderDoubleClick = useCallback((sliderType: string) => {
@@ -6879,9 +6935,10 @@ function App() {
         name: projectName,
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
+      savedCenterLocation, // Save the center location set by the Center tool
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, savedCenterLocation]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -7778,6 +7835,12 @@ function App() {
         if (project.view.viewPan) setViewPan(project.view.viewPan);
         if (project.view.showBothLayers != null) setShowBothLayers(project.view.showBothLayers);
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
+      }
+      // Restore saved center location
+      if (project.savedCenterLocation) {
+        setSavedCenterLocation(project.savedCenterLocation);
+      } else {
+        setSavedCenterLocation(null);
       }
       // Restore trace colors, sizes, and layer choice
       if (project.traceColors) {
@@ -8906,6 +8969,7 @@ function App() {
         setBottomPadSize={setBottomPadSize}
         setTopComponentSize={setTopComponentSize}
         setBottomComponentSize={setBottomComponentSize}
+        setComponentConnectionSize={setComponentConnectionSize}
         topTraceColor={topTraceColor}
         bottomTraceColor={bottomTraceColor}
         topPadColor={topPadColor}
@@ -8918,6 +8982,7 @@ function App() {
         setBottomPadColor={setBottomPadColor}
         setTopComponentColor={setTopComponentColor}
         setBottomComponentColor={setBottomComponentColor}
+        setComponentConnectionColor={setComponentConnectionColor}
         saveDefaultSize={saveDefaultSize}
         saveDefaultColor={saveDefaultColor}
         menuBarRef={menuBarRef}
@@ -9899,7 +9964,7 @@ function App() {
                                     color: '#333',
                                   }}
                                 >
-                                  {info.prefix.join(', ')} - {type} ({info.defaultPins} pins)
+                                  {info.prefix.join(', ')} - {type}
                                 </button>
                               );
                             })}

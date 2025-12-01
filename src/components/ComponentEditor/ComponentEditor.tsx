@@ -404,9 +404,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       }}
       style={{
         position: 'fixed',
-        top: componentDialogPosition ? `${componentDialogPosition.y}px` : '50%',
-        left: componentDialogPosition ? `${componentDialogPosition.x}px` : '50%',
-        transform: componentDialogPosition ? 'translate(-50%, -50%)' : 'translate(-50%, -50%)',
+        top: componentDialogPosition ? `${componentDialogPosition.y}px` : '90px',
+        left: componentDialogPosition ? `${componentDialogPosition.x}px` : `${window.innerWidth - 280}px`,
+        transform: 'none', // Position from top-left corner, not centered
         background: connectingPin && connectingPin.componentId === comp.id ? 'rgba(255, 255, 255, 0.95)' : '#fff',
         border: '1px solid #0b5fff',
         borderRadius: 4,

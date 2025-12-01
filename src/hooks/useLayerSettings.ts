@@ -17,6 +17,8 @@ interface PersistedDefaults {
   bottomComponentColor: string;
   topComponentSize: number;
   bottomComponentSize: number;
+  componentConnectionColor: string;
+  componentConnectionSize: number;
   powerSize: number;
   groundSize: number;
 }
@@ -44,6 +46,8 @@ export function useLayerSettings() {
       bottomComponentColor: localStorage.getItem('defaultBottomComponentColor') || '#9C755F',
       topComponentSize: parseInt(localStorage.getItem('defaultTopComponentSize') || '18', 10),
       bottomComponentSize: parseInt(localStorage.getItem('defaultBottomComponentSize') || '18', 10),
+      componentConnectionColor: localStorage.getItem('defaultComponentConnectionColor') || 'rgba(0, 150, 255, 0.6)',
+      componentConnectionSize: parseInt(localStorage.getItem('defaultComponentConnectionSize') || '3', 10),
       powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
       groundSize: parseInt(localStorage.getItem('defaultGroundSize') || '18', 10),
     };
@@ -65,9 +69,11 @@ export function useLayerSettings() {
   const [bottomComponentColor, setBottomComponentColor] = useState(persistedDefaults.bottomComponentColor);
   const [topComponentSize, setTopComponentSize] = useState(persistedDefaults.topComponentSize);
   const [bottomComponentSize, setBottomComponentSize] = useState(persistedDefaults.bottomComponentSize);
+  const [componentConnectionColor, setComponentConnectionColor] = useState(persistedDefaults.componentConnectionColor);
+  const [componentConnectionSize, setComponentConnectionSize] = useState(persistedDefaults.componentConnectionSize);
 
   // Save defaults to localStorage
-  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
+  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceSize', String(size));
@@ -86,6 +92,8 @@ export function useLayerSettings() {
       } else {
         localStorage.setItem('defaultBottomComponentSize', String(size));
       }
+    } else if (type === 'componentConnection') {
+      localStorage.setItem('defaultComponentConnectionSize', String(size));
     } else if (type === 'via') {
       localStorage.setItem('defaultViaSize', String(size));
     } else if (type === 'power') {
@@ -97,7 +105,7 @@ export function useLayerSettings() {
     }
   }, []);
 
-  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => {
+  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceColor', color);
@@ -116,6 +124,8 @@ export function useLayerSettings() {
       } else {
         localStorage.setItem('defaultBottomComponentColor', color);
       }
+    } else if (type === 'componentConnection') {
+      localStorage.setItem('defaultComponentConnectionColor', color);
     } else if (type === 'via') {
       localStorage.setItem('defaultViaColor', color);
     } else if (type === 'brush') {
@@ -153,6 +163,10 @@ export function useLayerSettings() {
     setTopComponentSize,
     bottomComponentSize,
     setBottomComponentSize,
+    componentConnectionColor,
+    setComponentConnectionColor,
+    componentConnectionSize,
+    setComponentConnectionSize,
     
     // Actions
     saveDefaultSize,

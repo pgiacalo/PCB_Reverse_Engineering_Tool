@@ -102,6 +102,7 @@ export type ComponentType =
   | 'Battery'           // B, BT
   | 'Capacitor'         // C (general)
   | 'Electrolytic Capacitor' // C (electrolytic - has polarity)
+  | 'Film Capacitor'    // C, CF (film - non-polarized)
   | 'Diode'             // D, CR (including Zener and LEDs)
   | 'Fuse'              // F
   | 'FerriteBead'       // FB
@@ -164,6 +165,19 @@ export interface ElectrolyticCapacitor extends PCBComponentBase {
   esr?: string; // value only, e.g., "50"
   esrUnit?: string; // unit, e.g., "mΩ"
   temperature?: string; // operating temperature range, e.g., "-40°C to +85°C"
+}
+
+/**
+ * Film Capacitor (C, CF) - Non-polarized film capacitor
+ */
+export interface FilmCapacitor extends PCBComponentBase {
+  componentType: 'Film Capacitor';
+  capacitance?: string; // value only, e.g., "100"
+  capacitanceUnit?: string; // unit, e.g., "nF", "µF"
+  voltage?: string; // value only, e.g., "50"
+  voltageUnit?: string; // unit, e.g., "V"
+  tolerance?: string; // e.g., "±10%"
+  filmType?: string; // e.g., "Polyester", "Polypropylene", "Polyethylene"
 }
 
 /**
@@ -420,6 +434,7 @@ export type PCBComponent =
   | Battery
   | Capacitor
   | ElectrolyticCapacitor
+  | FilmCapacitor
   | Diode
   | Fuse
   | FerriteBead

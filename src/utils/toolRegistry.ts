@@ -207,6 +207,21 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
     defaultLayer: 'top',
   });
   
+  registry.set('componentConnection', {
+    id: 'componentConnection',
+    name: 'Component Connections',
+    toolType: 'componentConnection',
+    icon: '─',
+    shortcut: '',
+    tooltip: 'Component connection lines',
+    colorReflective: false,
+    settings: loadToolSettings('componentConnection', 'rgba(0, 150, 255, 0.6)', 3),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('componentConnection', 'top', 'rgba(0, 150, 255, 0.6)', 3)],
+      ['bottom', loadToolLayerSettings('componentConnection', 'bottom', 'rgba(0, 150, 255, 0.6)', 3)],
+    ] as [Layer, ToolSettings][]),
+  });
+  
   registry.set('power', {
     id: 'power',
     name: 'Power',

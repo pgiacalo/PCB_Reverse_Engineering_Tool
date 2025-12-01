@@ -142,6 +142,53 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
         </>
       )}
 
+      {/* Film Capacitor */}
+      {comp.componentType === 'Film Capacitor' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
+            <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100" />
+            <select value={componentEditor.capacitanceUnit || getDefaultUnit('capacitance')} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+              {getPropertyUnits('capacitance').map(unit => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+            <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
+            <select value={componentEditor.voltageUnit || getDefaultUnit('voltage')} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+              {getPropertyUnits('voltage').map(unit => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-filmtype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Film Type:</label>
+            <select id={`component-filmtype-${comp.id}`} value={componentEditor.filmType || 'Polyester'} onChange={(e) => setComponentEditor({ ...componentEditor, filmType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="Polyester">Polyester</option>
+              <option value="Polypropylene">Polypropylene</option>
+              <option value="Polyethylene">Polyethylene</option>
+              <option value="Polystyrene">Polystyrene</option>
+              <option value="Polycarbonate">Polycarbonate</option>
+              <option value="PTFE">PTFE (Teflon)</option>
+              <option value="PPS">PPS (Polyphenylene Sulfide)</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="±0.5%">±0.5%</option>
+              <option value="±1%">±1%</option>
+              <option value="±2%">±2%</option>
+              <option value="±5%">±5%</option>
+              <option value="±10%">±10%</option>
+              <option value="±20%">±20%</option>
+            </select>
+          </div>
+        </>
+      )}
+
       {/* Electrolytic Capacitor */}
       {comp.componentType === 'Electrolytic Capacitor' && (
         <>

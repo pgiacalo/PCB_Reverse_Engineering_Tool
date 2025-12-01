@@ -133,6 +133,7 @@ export interface MenuBarProps {
   setBottomPadSize: (size: number) => void;
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
+  setComponentConnectionSize: (size: number) => void;
   
   // Layer-specific color getters (to get current color when updating size)
   topTraceColor: string;
@@ -149,10 +150,11 @@ export interface MenuBarProps {
   setBottomPadColor: (color: string) => void;
   setTopComponentColor: (color: string) => void;
   setBottomComponentColor: (color: string) => void;
+  setComponentConnectionColor: (color: string) => void;
   
   // Legacy save functions (used by +/- keys)
-  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
-  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
+  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
@@ -254,6 +256,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setBottomPadSize,
   setTopComponentSize,
   setBottomComponentSize,
+  setComponentConnectionSize,
   topTraceColor,
   bottomTraceColor,
   topPadColor,
@@ -266,6 +269,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setBottomPadColor,
   setTopComponentColor,
   setBottomComponentColor,
+  setComponentConnectionColor,
   saveDefaultSize,
   saveDefaultColor,
   menuBarRef,
@@ -1530,6 +1534,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setBottomPadSize={setBottomPadSize}
         setTopComponentSize={setTopComponentSize}
         setBottomComponentSize={setBottomComponentSize}
+        setComponentConnectionSize={setComponentConnectionSize}
         topTraceColor={topTraceColor}
         bottomTraceColor={bottomTraceColor}
         topPadColor={topPadColor}
@@ -1558,6 +1563,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setBottomPadColor={setBottomPadColor}
         setTopComponentColor={setTopComponentColor}
         setBottomComponentColor={setBottomComponentColor}
+        setComponentConnectionColor={setComponentConnectionColor}
         saveDefaultColor={saveDefaultColor}
         colorPalette={colorPalette}
         topTraceColor={topTraceColor}

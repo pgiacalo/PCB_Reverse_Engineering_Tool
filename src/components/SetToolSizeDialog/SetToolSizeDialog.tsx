@@ -54,6 +54,7 @@ export interface SetToolSizeDialogProps {
   setBottomPadSize: (size: number) => void;
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
+  setComponentConnectionSize: (size: number) => void;
   /** Layer-specific color getters */
   topTraceColor: string;
   bottomTraceColor: string;
@@ -62,7 +63,7 @@ export interface SetToolSizeDialogProps {
   topComponentColor: string;
   bottomComponentColor: string;
   /** Legacy save function */
-  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
   /** Callback to close the dialog */
   onClose: () => void;
 }
@@ -86,6 +87,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   setBottomPadSize,
   setTopComponentSize,
   setBottomComponentSize,
+  setComponentConnectionSize,
   topTraceColor,
   bottomTraceColor,
   topPadColor,
@@ -110,6 +112,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
     { id: 'trace', name: 'Trace', layer: 'bottom' },
     { id: 'component', name: 'Component', layer: 'top' },
     { id: 'component', name: 'Component', layer: 'bottom' },
+    { id: 'componentConnection', name: 'Component Connections' },
     { id: 'power', name: 'Power' },
     { id: 'ground', name: 'Ground' },
     { id: 'erase', name: 'Erase' },
@@ -184,6 +187,12 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
       };
       updateToolSettings(toolId, newSettings);
       saveToolSettings(toolId, toolDef.settings.color, newSize);
+      
+      // Handle component connections specially
+      if (toolId === 'componentConnection') {
+        setComponentConnectionSize(newSize);
+        saveDefaultSize('componentConnection', newSize);
+      }
       
       // If this tool is currently active, update brushSize immediately
       const isActiveTool = 

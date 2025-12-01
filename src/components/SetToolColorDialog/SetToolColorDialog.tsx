@@ -54,8 +54,9 @@ export interface SetToolColorDialogProps {
   setBottomPadColor: (color: string) => void;
   setTopComponentColor: (color: string) => void;
   setBottomComponentColor: (color: string) => void;
+  setComponentConnectionColor: (color: string) => void;
   /** Legacy save function */
-  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
+  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   /** Color palette */
   colorPalette: string[];
   /** Layer-specific color getters (for syncing registry with state) */
@@ -88,6 +89,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   setBottomPadColor,
   setTopComponentColor,
   setBottomComponentColor,
+  setComponentConnectionColor,
   saveDefaultColor,
   colorPalette,
   topTraceColor,
@@ -115,6 +117,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     { id: 'trace', name: 'Trace', layer: 'bottom' },
     { id: 'component', name: 'Component', layer: 'top' },
     { id: 'component', name: 'Component', layer: 'bottom' },
+    { id: 'componentConnection', name: 'Component Connections' },
     { id: 'power', name: 'Power' },
     { id: 'ground', name: 'Ground' },
     { id: 'erase', name: 'Erase' },
@@ -195,6 +198,12 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
       
       if (isActiveTool) {
         setBrushColor(color);
+      }
+      
+      // Handle component connections specially
+      if (toolId === 'componentConnection') {
+        setComponentConnectionColor(color);
+        saveDefaultColor('componentConnection', color);
       }
       
       // Save default color for legacy support
