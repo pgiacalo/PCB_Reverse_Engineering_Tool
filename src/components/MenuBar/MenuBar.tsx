@@ -348,7 +348,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
         <button 
           onClick={() => { 
-            setSelectedImageForTransform(imageType);
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click "Mode: Nudge", which would
+            // cause the submenu's imageType to change to 'both'.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            if (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') {
+              // Preserve the existing selection (top or bottom)
+              // Don't change it even if the submenu has switched to 'both'
+            } else {
+              // Use the submenu's imageType (for initial selection or 'both' case)
+              setSelectedImageForTransform(imageType);
+            }
             setTransformMode('nudge');
             setCurrentTool('transform');
             setOpenImageSubmenu(null);
@@ -361,7 +372,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button 
           onClick={() => { 
-            setSelectedImageForTransform(imageType);
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click "Mode: Scale", which would
+            // cause the submenu's imageType to change to 'both'.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            if (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') {
+              // Preserve the existing selection (top or bottom)
+              // Don't change it even if the submenu has switched to 'both'
+            } else {
+              // Use the submenu's imageType (for initial selection or 'both' case)
+              setSelectedImageForTransform(imageType);
+            }
             setTransformMode('scale');
             setCurrentTool('transform');
             setOpenImageSubmenu(null);
@@ -374,7 +396,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button 
           onClick={() => { 
-            setSelectedImageForTransform(imageType);
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click "Mode: Rotate", which would
+            // cause the submenu's imageType to change to 'both'.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            if (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') {
+              // Preserve the existing selection (top or bottom)
+              // Don't change it even if the submenu has switched to 'both'
+            } else {
+              // Use the submenu's imageType (for initial selection or 'both' case)
+              setSelectedImageForTransform(imageType);
+            }
             setTransformMode('rotate');
             setCurrentTool('transform');
             setOpenImageSubmenu(null);
@@ -387,7 +420,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button 
           onClick={() => { 
-            setSelectedImageForTransform(imageType);
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click "Mode: Slant", which would
+            // cause the submenu's imageType to change to 'both'.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            if (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') {
+              // Preserve the existing selection (top or bottom)
+              // Don't change it even if the submenu has switched to 'both'
+            } else {
+              // Use the submenu's imageType (for initial selection or 'both' case)
+              setSelectedImageForTransform(imageType);
+            }
             setTransformMode('slant');
             setCurrentTool('transform');
             setOpenImageSubmenu(null);
@@ -400,7 +444,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button 
           onClick={() => { 
-            setSelectedImageForTransform(imageType);
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click "Mode: Keystone", which would
+            // cause the submenu's imageType to change to 'both'.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            if (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') {
+              // Preserve the existing selection (top or bottom)
+              // Don't change it even if the submenu has switched to 'both'
+            } else {
+              // Use the submenu's imageType (for initial selection or 'both' case)
+              setSelectedImageForTransform(imageType);
+            }
             setTransformMode('keystone');
             setCurrentTool('transform');
             setOpenImageSubmenu(null);

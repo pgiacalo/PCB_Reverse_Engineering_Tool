@@ -2729,20 +2729,36 @@ function App() {
       const deltaX = x - transformStartPos.x;
       const deltaY = y - transformStartPos.y;
       
-      if (selectedImageForTransform === 'top' && topImage) {
-        setTopImage(prev => prev ? {
-          ...prev,
-          x: prev.x + deltaX,
-          y: prev.y + deltaY
-        } : null);
-      } else if (selectedImageForTransform === 'bottom' && bottomImage) {
-        setBottomImage(prev => prev ? {
-          ...prev,
-          x: prev.x + deltaX,
-          y: prev.y + deltaY
-        } : null);
-      } else if (selectedImageForTransform === 'both') {
-        // Apply transform to both images
+      // Explicitly check which image(s) to transform based on selectedImageForTransform
+      // Only transform the specifically selected image, not both
+      if (selectedImageForTransform === 'top') {
+        // Only move top image - do not move bottom
+        if (topImage) {
+          setTopImage(prev => prev ? {
+            ...prev,
+            x: prev.x + deltaX,
+            y: prev.y + deltaY
+          } : null);
+        }
+        setTransformStartPos({ x, y });
+        return;
+      }
+      
+      if (selectedImageForTransform === 'bottom') {
+        // Only move bottom image - do not move top
+        if (bottomImage) {
+          setBottomImage(prev => prev ? {
+            ...prev,
+            x: prev.x + deltaX,
+            y: prev.y + deltaY
+          } : null);
+        }
+        setTransformStartPos({ x, y });
+        return;
+      }
+      
+      if (selectedImageForTransform === 'both') {
+        // Apply transform to both images only when 'both' is explicitly selected
         if (topImage) {
           setTopImage(prev => prev ? {
             ...prev,
@@ -2757,9 +2773,9 @@ function App() {
             y: prev.y + deltaY
           } : null);
         }
+        setTransformStartPos({ x, y });
+        return;
       }
-      
-      setTransformStartPos({ x, y });
     }
   }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint]);
 
@@ -5170,18 +5186,32 @@ function App() {
             return;
         }
 
-        if (selectedImageForTransform === 'top' && topImage) {
-          setTopImage(prev => prev ? {
-            ...prev,
-            scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
-          } : null);
-        } else if (selectedImageForTransform === 'bottom' && bottomImage) {
-          setBottomImage(prev => prev ? {
-            ...prev,
-            scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
-          } : null);
-        } else if (selectedImageForTransform === 'both') {
-          // Apply to both images
+        // Explicitly check which image(s) to scale based on selectedImageForTransform
+        // Only scale the specifically selected image, not both
+        if (selectedImageForTransform === 'top') {
+          // Only scale top image - do not scale bottom
+          if (topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
+            } : null);
+          }
+          return;
+        }
+        
+        if (selectedImageForTransform === 'bottom') {
+          // Only scale bottom image - do not scale top
+          if (bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
+            } : null);
+          }
+          return;
+        }
+        
+        if (selectedImageForTransform === 'both') {
+          // Apply to both images only when 'both' is explicitly selected
           if (topImage) {
             setTopImage(prev => prev ? {
               ...prev,
@@ -5194,6 +5224,7 @@ function App() {
               scale: Math.max(0.1, Math.min(3, prev.scale + scaleDelta))
             } : null);
           }
+          return;
         }
       } else if (transformMode === 'rotate') {
         // Rotation: 1 degree for up/down, 0.1 degree for left/right
@@ -5216,18 +5247,34 @@ function App() {
             return;
         }
 
-        if (selectedImageForTransform === 'top' && topImage) {
-          setTopImage(prev => prev ? {
-            ...prev,
-            rotation: prev.rotation + rotationDelta
-          } : null);
-        } else if (selectedImageForTransform === 'bottom' && bottomImage) {
-          setBottomImage(prev => prev ? {
-            ...prev,
-            rotation: prev.rotation + rotationDelta
-          } : null);
-        } else if (selectedImageForTransform === 'both') {
-          // Apply to both images
+        // Explicitly check which image(s) to rotate based on selectedImageForTransform
+        // Only rotate the specifically selected image, not both
+        if (selectedImageForTransform === 'top') {
+          // Only rotate top image - do not rotate bottom
+          if (topImage) {
+            setTopImage(prev => prev ? {
+              ...prev,
+              rotation: prev.rotation + rotationDelta
+            } : null);
+          }
+          // Explicitly return to prevent any other rotation logic from executing
+          return;
+        }
+        
+        if (selectedImageForTransform === 'bottom') {
+          // Only rotate bottom image - do not rotate top
+          if (bottomImage) {
+            setBottomImage(prev => prev ? {
+              ...prev,
+              rotation: prev.rotation + rotationDelta
+            } : null);
+          }
+          // Explicitly return to prevent any other rotation logic from executing
+          return;
+        }
+        
+        if (selectedImageForTransform === 'both') {
+          // Apply to both images only when 'both' is explicitly selected
           if (topImage) {
             setTopImage(prev => prev ? {
               ...prev,
@@ -5240,7 +5287,9 @@ function App() {
               rotation: prev.rotation + rotationDelta
             } : null);
           }
+          return;
         }
+        // If selectedImageForTransform is null or doesn't match, do nothing
       } else if (transformMode === 'slant') {
         // Keystone (skew): Up/Down adjust vertical skew, Left/Right adjust horizontal; all at ±0.5°
         let skewXDeltaDeg = 0; // horizontal shear
@@ -5266,20 +5315,35 @@ function App() {
         if (skewXDeltaDeg !== 0 || skewYDeltaDeg !== 0) {
           const toRad = (deg: number) => (deg * Math.PI) / 180;
           const clamp = (v: number) => Math.max(-0.7, Math.min(0.7, v)); // clamp to ~±40° to avoid extremes
-          if (selectedImageForTransform === 'top' && topImage) {
-            setTopImage(prev => prev ? {
-              ...prev,
-              skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
-              skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
-            } : null);
-          } else if (selectedImageForTransform === 'bottom' && bottomImage) {
-            setBottomImage(prev => prev ? {
-              ...prev,
-              skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
-              skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
-            } : null);
-          } else if (selectedImageForTransform === 'both') {
-            // Apply to both images
+          
+          // Explicitly check which image(s) to skew based on selectedImageForTransform
+          // Only skew the specifically selected image, not both
+          if (selectedImageForTransform === 'top') {
+            // Only skew top image - do not skew bottom
+            if (topImage) {
+              setTopImage(prev => prev ? {
+                ...prev,
+                skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+                skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+              } : null);
+            }
+            return;
+          }
+          
+          if (selectedImageForTransform === 'bottom') {
+            // Only skew bottom image - do not skew top
+            if (bottomImage) {
+              setBottomImage(prev => prev ? {
+                ...prev,
+                skewX: clamp((prev.skewX || 0) + toRad(skewXDeltaDeg)),
+                skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
+              } : null);
+            }
+            return;
+          }
+          
+          if (selectedImageForTransform === 'both') {
+            // Apply to both images only when 'both' is explicitly selected
             if (topImage) {
               setTopImage(prev => prev ? {
                 ...prev,
@@ -5294,6 +5358,7 @@ function App() {
                 skewY: clamp((prev.skewY || 0) + toRad(skewYDeltaDeg)),
               } : null);
             }
+            return;
           }
         }
       } else if (transformMode === 'keystone') {
@@ -5321,20 +5386,35 @@ function App() {
         if (kHDeltaDeg !== 0 || kVDeltaDeg !== 0) {
           const toRad = (deg: number) => (deg * Math.PI) / 180;
           const clamp = (v: number) => Math.max(-0.35, Math.min(0.35, v)); // clamp to ~±20° to avoid extremes
-          if (selectedImageForTransform === 'top' && topImage) {
-            setTopImage(prev => prev ? {
-              ...prev,
-              keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
-              keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
-            } : null);
-          } else if (selectedImageForTransform === 'bottom' && bottomImage) {
-            setBottomImage(prev => prev ? {
-              ...prev,
-              keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
-              keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
-            } : null);
-          } else if (selectedImageForTransform === 'both') {
-            // Apply to both images
+          
+          // Explicitly check which image(s) to apply keystone based on selectedImageForTransform
+          // Only apply keystone to the specifically selected image, not both
+          if (selectedImageForTransform === 'top') {
+            // Only apply keystone to top image - do not apply to bottom
+            if (topImage) {
+              setTopImage(prev => prev ? {
+                ...prev,
+                keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+                keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+              } : null);
+            }
+            return;
+          }
+          
+          if (selectedImageForTransform === 'bottom') {
+            // Only apply keystone to bottom image - do not apply to top
+            if (bottomImage) {
+              setBottomImage(prev => prev ? {
+                ...prev,
+                keystoneH: clamp((prev.keystoneH || 0) + toRad(kHDeltaDeg)),
+                keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
+              } : null);
+            }
+            return;
+          }
+          
+          if (selectedImageForTransform === 'both') {
+            // Apply to both images only when 'both' is explicitly selected
             if (topImage) {
               setTopImage(prev => prev ? {
                 ...prev,
@@ -5349,6 +5429,7 @@ function App() {
                 keystoneV: clamp((prev.keystoneV || 0) + toRad(kVDeltaDeg)),
               } : null);
             }
+            return;
           }
         }
       }
@@ -6087,16 +6168,16 @@ function App() {
     }
   }, []);
 
-  // Transparency auto-cycle (0% → 100% → 0%) with 1s period while checked
+  // Transparency auto-cycle (0% → 100% → 0%) with 2s period while checked
   React.useEffect(() => {
     if (isTransparencyCycling) {
       transparencyCycleStartRef.current = performance.now();
       setTransparency(0);
       const tick = (now: number) => {
         const start = transparencyCycleStartRef.current || now;
-        const periodMs = 1000;
+        const periodMs = 2000;
         const phase = ((now - start) % periodMs) / periodMs; // 0..1
-        const tri = 1 - Math.abs(1 - 2 * phase); // 0→1→0 over 1s
+        const tri = 1 - Math.abs(1 - 2 * phase); // 0→1→0 over 2s
         setTransparency(Math.round(tri * 100));
         transparencyCycleRafRef.current = requestAnimationFrame(tick);
       };
