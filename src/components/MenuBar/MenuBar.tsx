@@ -49,10 +49,6 @@ export interface MenuBarProps {
   // Board dimensions
   onEnterBoardDimensions: () => void;
   
-  // Center location
-  isSettingCenterLocation: boolean;
-  setIsSettingCenterLocation: React.Dispatch<React.SetStateAction<boolean>>;
-  
   // File input refs
   fileInputTopRef: React.RefObject<HTMLInputElement | null>;
   fileInputBottomRef: React.RefObject<HTMLInputElement | null>;
@@ -193,8 +189,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   areImagesLocked,
   setAreImagesLocked,
   onEnterBoardDimensions,
-  isSettingCenterLocation,
-  setIsSettingCenterLocation,
   fileInputTopRef,
   fileInputBottomRef,
   openProjectRef: _openProjectRef,
@@ -319,12 +313,20 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       >
         <button 
           onClick={() => { 
-            if (imageType === 'both') {
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click the flip button.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            const targetImageType = (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') 
+              ? selectedImageForTransform 
+              : imageType;
+            
+            if (targetImageType === 'both') {
               const newFlipX = !(topImage?.flipX || false);
               updateImageTransform('both', { flipX: newFlipX });
             } else {
-              const currentFlipX = isTop ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
-              updateImageTransform(imageType, { flipX: !currentFlipX });
+              const currentFlipX = targetImageType === 'top' ? (topImage?.flipX || false) : (bottomImage?.flipX || false);
+              updateImageTransform(targetImageType, { flipX: !currentFlipX });
             }
             setOpenImageSubmenu(null);
             setOpenMenu(null);
@@ -332,16 +334,24 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           disabled={isDisabled}
           style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
         >
-          Toggle Horizontal Flip
+          Horizontal Flip
         </button>
         <button 
           onClick={() => { 
-            if (imageType === 'both') {
+            // Preserve the currently selected image if it's already set to 'top' or 'bottom'.
+            // This prevents the selection from changing to 'both' if the mouse accidentally
+            // passes over "Both Images" while moving to click the flip button.
+            // Only use the submenu's imageType if selectedImageForTransform is null or 'both'.
+            const targetImageType = (selectedImageForTransform === 'top' || selectedImageForTransform === 'bottom') 
+              ? selectedImageForTransform 
+              : imageType;
+            
+            if (targetImageType === 'both') {
               const newFlipY = !(topImage?.flipY || false);
               updateImageTransform('both', { flipY: newFlipY });
             } else {
-              const currentFlipY = isTop ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
-              updateImageTransform(imageType, { flipY: !currentFlipY });
+              const currentFlipY = targetImageType === 'top' ? (topImage?.flipY || false) : (bottomImage?.flipY || false);
+              updateImageTransform(targetImageType, { flipY: !currentFlipY });
             }
             setOpenImageSubmenu(null);
             setOpenMenu(null);
@@ -349,7 +359,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           disabled={isDisabled}
           style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isDisabled ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
         >
-          Toggle Vertical Flip
+          Vertical Flip
         </button>
         <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
         <button 
@@ -1062,15 +1072,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: areImagesLocked ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: areImagesLocked ? 'not-allowed' : 'pointer' }}
             >
               Enter PCB Dimensions…
-            </button>
-            <button 
-              onClick={() => { 
-                setIsSettingCenterLocation(true);
-                setOpenMenu(null);
-              }} 
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isSettingCenterLocation ? '#4a9eff' : '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              {isSettingCenterLocation ? '✓ ' : ''}Set Center Location
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>

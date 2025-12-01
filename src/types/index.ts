@@ -477,7 +477,8 @@ export type Tool =
   | 'pan' 
   | 'component' 
   | 'power'
-  | 'ground';
+  | 'ground'
+  | 'center';
 
 export type TransformMode = 'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone';
 

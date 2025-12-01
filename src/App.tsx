@@ -13,6 +13,7 @@ import {
   VIA,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
+import { generateCenterCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import type { ComponentType, PCBComponent } from './types';
@@ -718,7 +719,6 @@ function App() {
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Center location feature: allows user to set a custom center point that 'O' key returns to
-  const [isSettingCenterLocation, setIsSettingCenterLocation] = useState(false);
   const [savedCenterLocation, setSavedCenterLocation] = useState<{ x: number; y: number; zoom: number } | null>(null);
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
@@ -1203,16 +1203,26 @@ function App() {
     const y = (contentCanvasY - viewPan.y) / viewScale;
 
     // Handle setting center location
-    if (isSettingCenterLocation) {
-      // Save the clicked location and current zoom level as the center location
+    if (currentTool === 'center') {
+      // Calculate the center of the visible canvas in world coordinates
+      const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+      const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+      const canvasCenterContentX = contentWidth / 2;
+      const canvasCenterContentY = contentHeight / 2;
+      
+      // Convert canvas center to world coordinates
+      const centerWorldX = (canvasCenterContentX - viewPan.x) / viewScale;
+      const centerWorldY = (canvasCenterContentY - viewPan.y) / viewScale;
+      
+      // Save the center of the visible canvas and current zoom level
       setSavedCenterLocation({
-        x,
-        y,
+        x: centerWorldX,
+        y: centerWorldY,
         zoom: viewScale,
       });
-      setIsSettingCenterLocation(false);
-      // Switch back to select tool
+      // Switch back to select tool and reset cursor to default
       setCurrentTool('select');
+      setCanvasCursor(undefined); // Clear any custom cursor to return to default
       return;
     }
 
@@ -2794,7 +2804,7 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, isSettingCenterLocation, setSavedCenterLocation, setIsSettingCenterLocation, setCurrentTool]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setSavedCenterLocation, setCurrentTool]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -5095,6 +5105,11 @@ function App() {
             e.preventDefault();
             setCurrentTool('pan');
             return;
+          case 'x':
+          case 'X':
+            e.preventDefault();
+            setCurrentTool('center');
+            return;
           case 'z':
           case 'Z':
             // If not Ctrl+Z (handled above), select Zoom tool (default to zoom-in)
@@ -6216,6 +6231,10 @@ function App() {
 
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
+    if (currentTool === 'center') {
+      setCanvasCursor(generateCenterCursor());
+      return;
+    }
     const kind: 'trace' | 'via' | 'pad' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
       currentTool === 'erase'
         ? 'erase'
@@ -8938,8 +8957,6 @@ function App() {
         areImagesLocked={areImagesLocked}
         setAreImagesLocked={setAreImagesLocked}
         onEnterBoardDimensions={() => setShowBoardDimensionsDialog(true)}
-        isSettingCenterLocation={isSettingCenterLocation}
-        setIsSettingCenterLocation={setIsSettingCenterLocation}
         fileInputTopRef={fileInputTopRef}
         fileInputBottomRef={fileInputBottomRef}
         openProjectRef={openProjectRef}
@@ -9317,6 +9334,38 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>G</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size ?? 18}</span>
+              </div>
+            </button>
+            {/* Center tool */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('center'); }} 
+              disabled={isReadOnlyMode}
+              title="Set Center Location (X)" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
+                borderRadius: 6, 
+                border: currentTool === 'center' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'center' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              {/* Bold X crosshairs icon */}
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <line x1="12" y1="2" x2="12" y2="10" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="12" y1="14" x2="12" y2="22" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="2" y1="12" x2="10" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="14" y1="12" x2="22" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>X</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
               <button 
@@ -10127,7 +10176,7 @@ function App() {
               position: 'absolute',
               left: '234px', // Start after Layers panel (60 + 168 + 6 gap)
               top: '6px',
-              ...(isSettingCenterLocation ? { cursor: 'crosshair' } : (canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {}))),
+              ...(canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {})),
               width: `${canvasSize.width}px`,
               height: `${canvasSize.height}px`,
               maxHeight: 'none',

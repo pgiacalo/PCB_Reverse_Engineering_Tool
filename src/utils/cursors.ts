@@ -217,6 +217,43 @@ export function generateGroundCursor(color: string, size: number): string {
 }
 
 /**
+ * Generate a bold X crosshairs cursor for the center tool
+ */
+export function generateCenterCursor(): string {
+  const canvas = document.createElement('canvas');
+  const size = 24;
+  canvas.width = size;
+  canvas.height = size;
+  
+  const ctx = canvas.getContext('2d')!;
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  
+  const center = size / 2;
+  const length = 8;
+  
+  // Draw bold X crosshairs
+  ctx.beginPath();
+  // Vertical line (top)
+  ctx.moveTo(center, center - length);
+  ctx.lineTo(center, center - 2);
+  // Vertical line (bottom)
+  ctx.moveTo(center, center + 2);
+  ctx.lineTo(center, center + length);
+  // Horizontal line (left)
+  ctx.moveTo(center - length, center);
+  ctx.lineTo(center - 2, center);
+  // Horizontal line (right)
+  ctx.moveTo(center + 2, center);
+  ctx.lineTo(center + length, center);
+  ctx.stroke();
+  
+  const dataUrl = canvas.toDataURL();
+  return `url(${dataUrl}) ${center} ${center}, crosshair`;
+}
+
+/**
  * Get the appropriate cursor for the current tool and state
  */
 export function getCursorForTool(
@@ -247,6 +284,9 @@ export function getCursorForTool(
     
     case 'ground':
       return generateGroundCursor(brushColor, brushSize);
+    
+    case 'center':
+      return generateCenterCursor();
     
     case 'transform':
       return 'move';
