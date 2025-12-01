@@ -1377,6 +1377,33 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
+                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
+                      <div>
+                        <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                          <li><strong>Select</strong> — <code>S</code></li>
+                          <li><strong>Via</strong> — <code>V</code></li>
+                          <li><strong>Pad</strong> — <code>P</code></li>
+                          <li><strong>Trace</strong> — <code>T</code></li>
+                          <li><strong>Component</strong> — <code>C</code></li>
+                          <li><strong>Component Properties</strong> — double-click component</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                          <li><strong>Power</strong> — <code>B</code></li>
+                          <li><strong>Ground</strong> — <code>G</code></li>
+                          <li><strong>Erase</strong> — <code>E</code></li>
+                          <li><strong>Move (Pan)</strong> — <code>H</code></li>
+                          <li><strong>Zoom</strong> — <code>Z</code></li>
+                          <li><strong>Center</strong> — <code>X</code></li>
+                          <li><strong>Information Dialog</strong> — <code>Ctrl</code> + <code>I</code></li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
                     <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Layer Management</p>
                     <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Separate top and bottom layer support</li>
