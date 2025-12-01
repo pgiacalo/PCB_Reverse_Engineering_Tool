@@ -30,11 +30,13 @@ export interface SetToolSizeDialogProps {
   /** Current tool */
   currentTool: Tool;
   /** Current drawing mode */
-  drawingMode: 'trace' | 'via' | 'pad';
+  drawingMode: 'trace' | 'via' | 'pad' | 'testPoint';
   /** Trace tool layer */
   traceToolLayer: 'top' | 'bottom';
   /** Pad tool layer */
   padToolLayer: 'top' | 'bottom';
+  /** Test Point tool layer */
+  testPointToolLayer: 'top' | 'bottom';
   /** Component tool layer */
   componentToolLayer: 'top' | 'bottom';
   /** Callback to update tool settings */
@@ -52,11 +54,13 @@ export interface SetToolSizeDialogProps {
   setBottomTraceSize: (size: number) => void;
   setTopPadSize: (size: number) => void;
   setBottomPadSize: (size: number) => void;
+  setTopTestPointSize: (size: number) => void;
+  setBottomTestPointSize: (size: number) => void;
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
   setComponentConnectionSize: (size: number) => void;
   /** Legacy save function */
-  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  saveDefaultSize: (toolType: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
   /** Callback to close the dialog */
   onClose: () => void;
 }
@@ -68,6 +72,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   drawingMode,
   traceToolLayer,
   padToolLayer,
+  testPointToolLayer,
   componentToolLayer,
   updateToolSettings,
   updateToolLayerSettings,
@@ -78,6 +83,8 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   setBottomTraceSize,
   setTopPadSize,
   setBottomPadSize,
+  setTopTestPointSize,
+  setBottomTestPointSize,
   setTopComponentSize,
   setBottomComponentSize,
   setComponentConnectionSize,
@@ -95,6 +102,8 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
     { id: 'via', name: 'Via' },
     { id: 'pad', name: 'Pad', layer: 'top' },
     { id: 'pad', name: 'Pad', layer: 'bottom' },
+    { id: 'testPoint', name: 'Test Point', layer: 'top' },
+    { id: 'testPoint', name: 'Test Point', layer: 'bottom' },
     { id: 'trace', name: 'Trace', layer: 'top' },
     { id: 'trace', name: 'Trace', layer: 'bottom' },
     { id: 'component', name: 'Component', layer: 'top' },
@@ -109,8 +118,8 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
     const toolDef = toolRegistry.get(toolId);
     if (!toolDef) return;
 
-    // For layer-specific tools (trace, pad, component), update layer-specific settings
-    const layerTools = ['trace', 'pad', 'component'];
+    // For layer-specific tools (trace, pad, testPoint, component), update layer-specific settings
+    const layerTools = ['trace', 'pad', 'testPoint', 'component'];
     if (layerTools.includes(toolId) && layer) {
       // Update layer-specific settings
       const layerSettings = toolDef.layerSettings.get(layer);
@@ -132,6 +141,14 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
         } else {
           setBottomPadSize(newSize);
           saveDefaultSize('pad', newSize, 'bottom');
+        }
+      } else if (toolId === 'testPoint') {
+        if (layer === 'top') {
+          setTopTestPointSize(newSize);
+          saveDefaultSize('testPoint', newSize, 'top');
+        } else {
+          setBottomTestPointSize(newSize);
+          saveDefaultSize('testPoint', newSize, 'bottom');
         }
       } else if (toolId === 'component') {
         if (layer === 'top') {
@@ -156,11 +173,12 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
       const isActiveTool = 
         (toolId === 'trace' && currentTool === 'draw' && drawingMode === 'trace') ||
         (toolId === 'pad' && currentTool === 'draw' && drawingMode === 'pad') ||
+        (toolId === 'testPoint' && currentTool === 'draw' && drawingMode === 'testPoint') ||
         (toolId === 'component' && currentTool === 'component');
       
       if (isActiveTool) {
         const activeLayer = 
-          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : componentToolLayer) || 'top';
+          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : toolId === 'testPoint' ? testPointToolLayer : componentToolLayer) || 'top';
         if (activeLayer === layer) {
           // Update brushSize immediately so subsequent drawings use the new size
           setBrushSize(newSize);

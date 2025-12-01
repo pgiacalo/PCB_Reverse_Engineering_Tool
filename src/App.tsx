@@ -12,7 +12,7 @@ import {
   VIA,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
-import { generateCenterCursor } from './utils/cursors';
+import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import type { ComponentType, PCBComponent } from './types';
@@ -133,6 +133,14 @@ function App() {
     setTopPadSize,
     bottomPadSize,
     setBottomPadSize,
+    topTestPointColor,
+    setTopTestPointColor,
+    bottomTestPointColor,
+    setBottomTestPointColor,
+    topTestPointSize,
+    setTopTestPointSize,
+    bottomTestPointSize,
+    setBottomTestPointSize,
     topComponentColor,
     setTopComponentColor,
     bottomComponentColor,
@@ -198,6 +206,7 @@ function App() {
   // Tool-specific layer defaults (persist until tool re-selected)
   const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
   const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
+  const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom'>('top');
   const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
   
   // Tool registry hook
@@ -215,12 +224,17 @@ function App() {
     bottomPadColor,
     topPadSize,
     bottomPadSize,
+    topTestPointColor,
+    bottomTestPointColor,
+    topTestPointSize,
+    bottomTestPointSize,
     topComponentColor,
     bottomComponentColor,
     topComponentSize,
     bottomComponentSize,
     traceToolLayer,
     padToolLayer,
+    testPointToolLayer,
     componentToolLayer
   );
   const {
@@ -296,6 +310,24 @@ function App() {
             settings: { color: padColor, size: padSize },
             layerSettings 
           });
+        } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+          // Use layer-specific test point colors
+          const layer = testPointToolLayer || 'top';
+          const testPointColor = layer === 'top' ? topTestPointColor : bottomTestPointColor;
+          const testPointSize = layer === 'top' ? topTestPointSize : bottomTestPointSize;
+          setBrushColor(testPointColor);
+          setBrushSize(testPointSize);
+          prevBrushColorRef.current = testPointColor;
+          prevBrushSizeRef.current = testPointSize;
+          // Update toolRegistry to reflect current layer's color and size, and sync all layer settings
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set('top', { color: topTestPointColor, size: topTestPointSize });
+          layerSettings.set('bottom', { color: bottomTestPointColor, size: bottomTestPointSize });
+          updated.set('testPoint', { 
+            ...currentToolDef, 
+            settings: { color: testPointColor, size: testPointSize },
+            layerSettings 
+          });
         } else if (currentTool === 'component') {
           // Use layer-specific component colors
           const layer = componentToolLayer || 'top';
@@ -327,7 +359,7 @@ function App() {
       prevToolIdRef.current = currentToolId;
       return updated;
     });
-  }, [currentTool, drawingMode, getCurrentToolDef, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]); // Only depend on tool changes
+  }, [currentTool, drawingMode, getCurrentToolDef, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topTestPointColor, bottomTestPointColor, topTestPointSize, bottomTestPointSize, testPointToolLayer, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]); // Only depend on tool changes
   
   // Sync state variables with tool registry on mount (ensure single source of truth)
   React.useEffect(() => {
@@ -356,6 +388,20 @@ function App() {
       if (bottomPad) {
         setBottomPadColor(bottomPad.color);
         setBottomPadSize(bottomPad.size);
+      }
+    }
+    
+    const testPointDef = toolRegistry.get('testPoint');
+    if (testPointDef) {
+      const topTestPoint = testPointDef.layerSettings.get('top');
+      const bottomTestPoint = testPointDef.layerSettings.get('bottom');
+      if (topTestPoint) {
+        setTopTestPointColor(topTestPoint.color);
+        setTopTestPointSize(topTestPoint.size);
+      }
+      if (bottomTestPoint) {
+        setBottomTestPointColor(bottomTestPoint.color);
+        setBottomTestPointSize(bottomTestPoint.size);
       }
     }
     
@@ -399,6 +445,15 @@ function App() {
         updated.set('pad', { ...padDef, layerSettings });
       }
       
+      // Sync test point layer settings
+      const testPointDef = prev.get('testPoint');
+      if (testPointDef) {
+        const layerSettings = new Map(testPointDef.layerSettings);
+        layerSettings.set('top', { color: topTestPointColor, size: topTestPointSize });
+        layerSettings.set('bottom', { color: bottomTestPointColor, size: bottomTestPointSize });
+        updated.set('testPoint', { ...testPointDef, layerSettings });
+      }
+      
       // Sync component layer settings
       const componentDef = prev.get('component');
       if (componentDef) {
@@ -419,7 +474,7 @@ function App() {
       
       return updated;
     });
-  }, [topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, componentConnectionColor, componentConnectionSize, setToolRegistry]);
+  }, [topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topTestPointColor, bottomTestPointColor, topTestPointSize, bottomTestPointSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, componentConnectionColor, componentConnectionSize, setToolRegistry]);
   
   // Update tool-specific settings when color/size changes (for the active tool)
   // This persists to localStorage and updates the registry
@@ -458,19 +513,21 @@ function App() {
           prevBrushSizeRef.current = brushSize;
           return updated;
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
-          const layer = padToolLayer || 'top';
+          // Pad layer selection handled elsewhere
+        } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+          const layer = testPointToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
           // Update state and legacy defaults
           if (layer === 'top') {
-            setTopPadColor(brushColor);
-            setTopPadSize(brushSize);
-            saveDefaultColor('pad', brushColor, 'top');
-            saveDefaultSize('pad', brushSize, 'top');
+            setTopTestPointColor(brushColor);
+            setTopTestPointSize(brushSize);
+            saveDefaultColor('testPoint', brushColor, 'top');
+            saveDefaultSize('testPoint', brushSize, 'top');
           } else {
-            setBottomPadColor(brushColor);
-            setBottomPadSize(brushSize);
-            saveDefaultColor('pad', brushColor, 'bottom');
-            saveDefaultSize('pad', brushSize, 'bottom');
+            setBottomTestPointColor(brushColor);
+            setBottomTestPointSize(brushSize);
+            saveDefaultColor('testPoint', brushColor, 'bottom');
+            saveDefaultSize('testPoint', brushSize, 'bottom');
           }
           // Update registry with layer-specific settings
           const updated = new Map(prev);
@@ -567,6 +624,15 @@ function App() {
       setShowPadLayerChooser(false);
     }
   }, [currentTool, drawingMode]);
+
+  // Show test point layer chooser when test point tool is selected
+  React.useEffect(() => {
+    if (currentTool === 'draw' && drawingMode === 'testPoint') {
+      setShowTestPointLayerChooser(true);
+    } else {
+      setShowTestPointLayerChooser(false);
+    }
+  }, [currentTool, drawingMode]);
   
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
@@ -648,6 +714,8 @@ function App() {
     setAreViasLocked,
     arePadsLocked,
     setArePadsLocked,
+    areTestPointsLocked,
+    setAreTestPointsLocked,
     areTracesLocked,
     setAreTracesLocked,
     areComponentsLocked,
@@ -745,6 +813,8 @@ function App() {
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
   const [showTopPadsLayer, setShowTopPadsLayer] = useState(true);
   const [showBottomPadsLayer, setShowBottomPadsLayer] = useState(true);
+  const [showTopTestPointsLayer, setShowTopTestPointsLayer] = useState(true);
+  const [showBottomTestPointsLayer, setShowBottomTestPointsLayer] = useState(true);
   const [showTopComponents, setShowTopComponents] = useState(true);
   const [showBottomComponents, setShowBottomComponents] = useState(true);
   // Power layer
@@ -1096,7 +1166,9 @@ function App() {
   const traceChooserRef = useRef<HTMLDivElement>(null);
   // Pad layer chooser (like trace layer chooser)
   const [showPadLayerChooser, setShowPadLayerChooser] = useState(false);
+  const [showTestPointLayerChooser, setShowTestPointLayerChooser] = useState(false);
   const padChooserRef = useRef<HTMLDivElement>(null);
+  const testPointChooserRef = useRef<HTMLDivElement>(null);
   // Power Bus selector
   const powerBusSelectorRef = useRef<HTMLDivElement>(null);
   const groundBusSelectorRef = useRef<HTMLDivElement>(null);
@@ -1109,6 +1181,7 @@ function App() {
   const componentLayerChooserRef = useRef<HTMLDivElement>(null);
   const traceButtonRef = useRef<HTMLButtonElement>(null);
   const padButtonRef = useRef<HTMLButtonElement>(null);
+  const testPointButtonRef = useRef<HTMLButtonElement>(null);
   const componentButtonRef = useRef<HTMLButtonElement>(null);
   const powerButtonRef = useRef<HTMLButtonElement>(null);
   const groundButtonRef = useRef<HTMLButtonElement>(null);
@@ -1560,7 +1633,7 @@ function App() {
       
       let hitStroke: DrawingStroke | null = null;
       for (const s of drawingStrokes) {
-        if ((s.type === 'via' || s.type === 'pad') && s.points.length > 0) {
+        if ((s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') && s.points.length > 0) {
           // Check visibility based on type and layer
           let isVisible = false;
           if (s.type === 'via') {
@@ -1569,6 +1642,10 @@ function App() {
             // Pads have layer-specific visibility
             const padLayer = s.layer || 'top';
             isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
+          } else if (s.type === 'testPoint') {
+            // Test points have layer-specific visibility
+            const testPointLayer = s.layer || 'top';
+            isVisible = testPointLayer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
           }
           if (!isVisible) continue;
           
@@ -1813,7 +1890,7 @@ function App() {
             ? Math.max(baseThreshold, 0.001) // Ultra-fine: 0.001 world units (1 micron equivalent)
             : Math.max(baseThreshold, 0.01); // Normal: 0.01 world units minimum
           for (const s of drawingStrokes) {
-            if (s.type === 'via' || s.type === 'pad') {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
               const c = s.points[0];
               const d = Math.hypot(c.x - wx, c.y - wy);
               if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
@@ -1874,6 +1951,77 @@ function App() {
         return;
       }
 
+      if (drawingMode === 'testPoint') {
+        // Only place test point if a layer has been selected (like pad tool)
+        if (!testPointToolLayer) {
+          return; // Wait for user to select a layer
+        }
+        
+        // Snap to nearest via, pad, test point, power, or ground node unless Option/Alt key is held
+        const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          const SNAP_THRESHOLD_SCREEN = 10;
+          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
+          const SNAP_THRESHOLD_WORLD = viewScale > 10 
+            ? Math.max(baseThreshold, 0.001)
+            : Math.max(baseThreshold, 0.01);
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            }
+          }
+          for (const p of powers) {
+            if (p.pointId !== undefined) {
+              const d = Math.hypot(p.x - wx, p.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: p.x, y: p.y, id: p.pointId };
+              }
+            }
+          }
+          for (const g of grounds) {
+            if (g.pointId !== undefined) {
+              const d = Math.hypot(g.x - wx, g.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: g.x, y: g.y, id: g.pointId };
+              }
+            }
+          }
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        
+        const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        
+        // Add a diamond representing a test point at click location
+        const testPointColor = brushColor || (testPointToolLayer === 'top' ? topTestPointColor : bottomTestPointColor);
+        const testPointSize = brushSize || (testPointToolLayer === 'top' ? topTestPointSize : bottomTestPointSize);
+        
+        const testPointStroke: DrawingStroke = {
+          id: `${Date.now()}-testPoint`,
+          points: [{ id: nodeId, x: snapped.x, y: snapped.y }],
+          color: testPointColor,
+          size: testPointSize,
+          layer: testPointToolLayer,
+          type: 'testPoint',
+        };
+        setDrawingStrokes(prev => [...prev, testPointStroke]);
+        return;
+      }
+
       // Traces mode: connected segments by clicks, snapping to via centers unless Option/Alt key is held
       // All vias, pads, power nodes, and ground nodes can be snapped to from any layer (blind vias not supported yet)
       
@@ -1904,6 +2052,7 @@ function App() {
         s.layer === selectedDrawingLayer && (
           (s.type === 'via' && areViasLocked) ||
           (s.type === 'pad' && arePadsLocked) ||
+          (s.type === 'testPoint' && areTestPointsLocked) ||
           (s.type === 'trace' && areTracesLocked)
         )
       );
@@ -1911,6 +2060,7 @@ function App() {
         const lockedTypes: string[] = [];
         if (areViasLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'via')) lockedTypes.push('vias');
         if (arePadsLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'pad')) lockedTypes.push('pads');
+        if (areTestPointsLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'testPoint')) lockedTypes.push('test points');
         if (areTracesLocked && drawingStrokes.some(s => s.layer === selectedDrawingLayer && s.type === 'trace')) lockedTypes.push('traces');
         if (lockedTypes.length > 0) {
           alert(`Cannot erase: ${lockedTypes.join(', ')} are locked on the ${selectedDrawingLayer} layer. Unlock them to erase.`);
@@ -2603,6 +2753,7 @@ function App() {
             // Don't erase locked vias, pads, or traces
             if (stroke.type === 'via' && areViasLocked) return true;
             if (stroke.type === 'pad' && arePadsLocked) return true;
+            if (stroke.type === 'testPoint' && areTestPointsLocked) return true;
             if (stroke.type === 'trace' && areTracesLocked) return true;
             
             // Only check strokes on the selected drawing layer
@@ -2942,8 +3093,16 @@ function App() {
           for (const s of drawingStrokes) {
             // Check visibility before considering this stroke
             let isVisible = false;
-            if (s.type === 'via' || s.type === 'pad') {
+            if (s.type === 'via') {
               isVisible = showViasLayer;
+            } else if (s.type === 'pad') {
+              // Pads have layer-specific visibility
+              const padLayer = s.layer || 'top';
+              isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
+            } else if (s.type === 'testPoint') {
+              // Test points have layer-specific visibility
+              const testPointLayer = s.layer || 'top';
+              isVisible = testPointLayer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
             } else {
               // Trace or default type
               isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
@@ -2951,7 +3110,7 @@ function App() {
             if (!isVisible) continue;
             
             let dist = Infinity;
-            if (s.type === 'via' || s.type === 'pad') {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
               const c = s.points[0];
               const r = Math.max(1, s.size / 2);
               dist = Math.hypot(c.x - start.x, c.y - start.y);
@@ -3001,6 +3160,10 @@ function App() {
               // Pads have layer-specific visibility
               const padLayer = s.layer || 'top';
               isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
+            } else if (s.type === 'testPoint') {
+              // Test points have layer-specific visibility
+              const testPointLayer = s.layer || 'top';
+              isVisible = testPointLayer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
             } else {
               // Trace or default type
               isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
@@ -3008,7 +3171,7 @@ function App() {
             if (!isVisible) continue;
             
             let hit = false;
-            if (s.type === 'via' || s.type === 'pad') {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
               const c = s.points[0];
               hit = withinRect(c.x, c.y);
             } else {
@@ -3735,7 +3898,7 @@ function App() {
         
         // Check vias and pads
         for (const stroke of drawingStrokes) {
-          if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+          if ((stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') && stroke.points.length > 0) {
             const point = stroke.points[0];
             if (point.id === pointId) {
               return { x: point.x, y: point.y };
@@ -3854,7 +4017,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -3939,7 +4102,7 @@ function App() {
   const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
     // Pass 1: draw traces first (so vias and pads appear on top)
     drawingStrokes.forEach(stroke => {
-      if (stroke.type === 'via' || stroke.type === 'pad') return;
+      if (stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') return;
       let shouldShowStroke = false;
       if (stroke.layer === 'top') shouldShowStroke = showTopTracesLayer;
       else if (stroke.layer === 'bottom') shouldShowStroke = showBottomTracesLayer;
@@ -4001,7 +4164,7 @@ function App() {
       }
     });
 
-    // Pass 2: draw vias and pads on top of traces
+    // Pass 2: draw vias, pads, and test points on top of traces
     drawingStrokes.forEach(stroke => {
       if (stroke.type === 'via') {
         if (!showViasLayer) return;
@@ -4009,6 +4172,10 @@ function App() {
         // Check pad visibility based on layer
         if (stroke.layer === 'top' && !showTopPadsLayer) return;
         if (stroke.layer === 'bottom' && !showBottomPadsLayer) return;
+      } else if (stroke.type === 'testPoint') {
+        // Check test point visibility based on layer
+        if (stroke.layer === 'top' && !showTopTestPointsLayer) return;
+        if (stroke.layer === 'bottom' && !showBottomTestPointsLayer) return;
       } else {
         return;
       }
@@ -4031,6 +4198,19 @@ function App() {
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 3]);
           ctx.strokeRect(c.x - halfSize, c.y - halfSize, stroke.size + 6, stroke.size + 6);
+          ctx.setLineDash([]);
+        } else if (stroke.type === 'testPoint') {
+          const halfSize = Math.max(0.5, stroke.size / 2) + 3;
+          ctx.strokeStyle = '#00bfff';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(c.x, c.y - halfSize); // Top
+          ctx.lineTo(c.x + halfSize, c.y); // Right
+          ctx.lineTo(c.x, c.y + halfSize); // Bottom
+          ctx.lineTo(c.x - halfSize, c.y); // Left
+          ctx.closePath();
+          ctx.stroke();
           ctx.setLineDash([]);
         }
       }
@@ -4079,6 +4259,34 @@ function App() {
         // Inner square (creates the hole with even-odd fill rule)
         ctx.rect(c.x - innerSize / 2, c.y - innerSize / 2, innerSize, innerSize);
         ctx.fill('evenodd');
+        
+        // Draw medium gray crosshairs
+        ctx.strokeStyle = '#808080'; // Medium gray
+        ctx.lineWidth = 1;
+        // Horizontal line
+        ctx.beginPath();
+        ctx.moveTo(c.x - crosshairLength, c.y);
+        ctx.lineTo(c.x + crosshairLength, c.y);
+        ctx.stroke();
+        // Vertical line
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y - crosshairLength);
+        ctx.lineTo(c.x, c.y + crosshairLength);
+        ctx.stroke();
+      } else if (stroke.type === 'testPoint') {
+        // Draw test point as white-filled diamond shape
+        const halfSize = Math.max(0.5, stroke.size / 2);
+        const crosshairLength = halfSize * 0.7;
+        
+        // Draw white-filled diamond
+        ctx.fillStyle = stroke.color;
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y - halfSize); // Top
+        ctx.lineTo(c.x + halfSize, c.y); // Right
+        ctx.lineTo(c.x, c.y + halfSize); // Bottom
+        ctx.lineTo(c.x - halfSize, c.y); // Left
+        ctx.closePath();
+        ctx.fill();
         
         // Draw medium gray crosshairs
         ctx.strokeStyle = '#808080'; // Medium gray
@@ -4153,6 +4361,34 @@ function App() {
             // Inner square (creates the hole with even-odd fill rule)
             ctx.rect(center.x - innerSize / 2, center.y - innerSize / 2, innerSize, innerSize);
             ctx.fill('evenodd');
+            
+            // Draw medium gray crosshairs
+            ctx.strokeStyle = '#808080'; // Medium gray
+            ctx.lineWidth = 1;
+            // Horizontal line
+            ctx.beginPath();
+            ctx.moveTo(center.x - crosshairLength, center.y);
+            ctx.lineTo(center.x + crosshairLength, center.y);
+            ctx.stroke();
+            // Vertical line
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y - crosshairLength);
+            ctx.lineTo(center.x, center.y + crosshairLength);
+            ctx.stroke();
+          } else if (drawingMode === 'testPoint') {
+            const center = currentStroke[currentStroke.length - 1];
+            const halfSize = Math.max(0.5, brushSize / 2);
+            const crosshairLength = halfSize * 0.7;
+            
+            // Draw white-filled diamond shape
+            ctx.fillStyle = brushColor;
+            ctx.beginPath();
+            ctx.moveTo(center.x, center.y - halfSize); // Top
+            ctx.lineTo(center.x + halfSize, center.y); // Right
+            ctx.lineTo(center.x, center.y + halfSize); // Bottom
+            ctx.lineTo(center.x - halfSize, center.y); // Left
+            ctx.closePath();
+            ctx.fill();
             
             // Draw medium gray crosshairs
             ctx.strokeStyle = '#808080'; // Medium gray
@@ -4367,7 +4603,7 @@ function App() {
         return newSize;
       });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
 
   const decreaseSize = useCallback(() => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
@@ -4377,6 +4613,7 @@ function App() {
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
         const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+        const hasLockedTestPoints = areTestPointsLocked && selectedStrokes.some(s => s.type === 'testPoint');
         if (hasLockedVias) {
           alert('Cannot change size: Vias are locked. Unlock vias to change their size.');
           return;
@@ -4387,6 +4624,10 @@ function App() {
         }
         if (hasLockedPads) {
           alert('Cannot change size: Pads are locked. Unlock pads to change their size.');
+          return;
+        }
+        if (hasLockedTestPoints) {
+          alert('Cannot change size: Test Points are locked. Unlock test points to change their size.');
           return;
         }
       }
@@ -4411,7 +4652,9 @@ function App() {
           if (s.type === 'via') {
             saveDefaultSize('via', newSize);
           } else if (s.type === 'pad') {
-            saveDefaultSize('pad', newSize);
+            saveDefaultSize('pad', newSize, s.layer);
+          } else if (s.type === 'testPoint') {
+            saveDefaultSize('testPoint', newSize, s.layer);
           } else if (s.type === 'trace') {
             saveDefaultSize('trace', newSize, s.layer);
           }
@@ -4443,7 +4686,7 @@ function App() {
         return newSize;
       });
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
 
   // Handle applying size from Set Size dialog
   const handleSetSizeApply = useCallback(() => {
@@ -4456,7 +4699,8 @@ function App() {
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
-        if (hasLockedVias || hasLockedPads || hasLockedTraces) {
+        const hasLockedTestPoints = areTestPointsLocked && selectedStrokes.some(s => s.type === 'testPoint');
+        if (hasLockedVias || hasLockedPads || hasLockedTraces || hasLockedTestPoints) {
           alert('Cannot change size: selected items are locked.');
           return;
         }
@@ -4495,13 +4739,28 @@ function App() {
               return updated;
             });
           } else if (s.type === 'pad') {
-            saveDefaultSize('pad', sz);
+            saveDefaultSize('pad', sz, s.layer);
             // Update toolRegistry
             setToolRegistry(prev => {
               const updated = new Map(prev);
               const padDef = updated.get('pad');
               if (padDef) {
-                updated.set('pad', { ...padDef, settings: { ...padDef.settings, size: sz } });
+                const layerSettings = new Map(padDef.layerSettings);
+                layerSettings.set(s.layer, { ...layerSettings.get(s.layer) || { color: padDef.settings.color, size: sz }, size: sz });
+                updated.set('pad', { ...padDef, layerSettings });
+              }
+              return updated;
+            });
+          } else if (s.type === 'testPoint') {
+            saveDefaultSize('testPoint', sz, s.layer);
+            // Update toolRegistry
+            setToolRegistry(prev => {
+              const updated = new Map(prev);
+              const testPointDef = updated.get('testPoint');
+              if (testPointDef) {
+                const layerSettings = new Map(testPointDef.layerSettings);
+                layerSettings.set(s.layer, { ...layerSettings.get(s.layer) || { color: testPointDef.settings.color, size: sz }, size: sz });
+                updated.set('testPoint', { ...testPointDef, layerSettings });
               }
               return updated;
             });
@@ -4541,7 +4800,9 @@ function App() {
       } else if (currentTool === 'draw' && drawingMode === 'via') {
         saveDefaultSize('via', sz);
       } else if (currentTool === 'draw' && drawingMode === 'pad') {
-        saveDefaultSize('pad', sz);
+        saveDefaultSize('pad', sz, selectedDrawingLayer);
+      } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+        saveDefaultSize('testPoint', sz, selectedDrawingLayer);
       } else if (currentTool === 'component') {
         saveDefaultSize('component', sz);
       } else if (currentTool === 'power') {
@@ -4910,6 +5171,7 @@ function App() {
       // Close any open choosers/dialogs
       setShowTraceLayerChooser(false);
       setShowPadLayerChooser(false);
+      setShowTestPointLayerChooser(false);
       setShowComponentLayerChooser(false);
       setShowComponentTypeChooser(false);
       setShowPowerBusSelector(false);
@@ -4935,12 +5197,15 @@ function App() {
         const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
         const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
         const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+        const hasLockedTestPoints = areTestPointsLocked && selectedStrokes.some(s => s.type === 'testPoint');
         if (hasLockedVias) {
           alert('Cannot delete: Vias are locked. Unlock vias to delete them.');
         } else if (hasLockedTraces) {
           alert('Cannot delete: Traces are locked. Unlock traces to delete them.');
         } else if (hasLockedPads) {
           alert('Cannot delete: Pads are locked. Unlock pads to delete them.');
+        } else if (hasLockedTestPoints) {
+          alert('Cannot delete: Test points are locked. Unlock test points to delete them.');
         } else {
           // Delete the strokes (cleanup will happen automatically via useEffect)
           setDrawingStrokes(prev => prev.filter(s => !selectedIds.has(s.id)));
@@ -5060,7 +5325,7 @@ function App() {
         }
         
         // Remove the last stroke of the current type on the selected layer
-        if (currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'pad')) {
+        if (currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'pad' || drawingMode === 'testPoint')) {
           setDrawingStrokes(prev => {
             for (let i = prev.length - 1; i >= 0; i--) {
               const s = prev[i];
@@ -5120,6 +5385,16 @@ function App() {
             // Default to Top layer, but use last choice if available
             const padLayerToUse = padToolLayer || 'top';
             setSelectedDrawingLayer(padLayerToUse);
+            // The useEffect hook will automatically show the layer chooser
+            return;
+          case 'y':
+          case 'Y':
+            e.preventDefault();
+            setDrawingMode('testPoint');
+            setCurrentTool('draw');
+            // Default to Top layer, but use last choice if available
+            const testPointLayerToUse = testPointToolLayer || 'top';
+            setSelectedDrawingLayer(testPointLayerToUse);
             // The useEffect hook will automatically show the layer chooser
             return;
           case 't':
@@ -5834,6 +6109,19 @@ function App() {
     }
   }, []);
 
+  // Helper function to update test point chooser position
+  const updateTestPointChooserPosition = useCallback(() => {
+    if (testPointChooserRef.current && testPointButtonRef.current) {
+      requestAnimationFrame(() => {
+        if (testPointChooserRef.current && testPointButtonRef.current) {
+          const pos = getDialogPosition(testPointButtonRef as React.RefObject<HTMLButtonElement | null>);
+          testPointChooserRef.current.style.top = `${pos.top}px`;
+          testPointChooserRef.current.style.left = `${pos.left}px`;
+        }
+      });
+    }
+  }, []);
+
   // Update dialog positions when they are shown
   React.useEffect(() => {
     if (showTraceLayerChooser) {
@@ -5846,6 +6134,12 @@ function App() {
       updatePadChooserPosition();
     }
   }, [showPadLayerChooser, updatePadChooserPosition]);
+
+  React.useEffect(() => {
+    if (showTestPointLayerChooser) {
+      updateTestPointChooserPosition();
+    }
+  }, [showTestPointLayerChooser, updateTestPointChooserPosition]);
 
   React.useEffect(() => {
     if (showComponentLayerChooser && componentLayerChooserRef.current && componentButtonRef.current) {
@@ -6324,7 +6618,7 @@ function App() {
       setCanvasCursor(generateCenterCursor());
       return;
     }
-    const kind: 'trace' | 'via' | 'pad' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
+    const kind: 'trace' | 'via' | 'pad' | 'testPoint' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
       currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
@@ -6336,7 +6630,7 @@ function App() {
         : currentTool === 'component'
         ? 'component'
         : currentTool === 'draw'
-        ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : 'trace')
+        ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : drawingMode === 'testPoint' ? 'testPoint' : 'trace')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
     const scale = Math.max(1, viewScale);
@@ -6425,6 +6719,12 @@ function App() {
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
+    } else if (kind === 'testPoint') {
+      // Use test point cursor generator
+      const testPointDef = toolRegistry.get('testPoint');
+      const testPointSize = testPointDef?.settings.size || brushSize;
+      setCanvasCursor(generateTestPointCursor(testPointSize));
+      return;
     } else if (kind === 'erase') {
       // Draw tilted pink eraser matching toolbar icon shape
       const width = Math.max(brushSize * 0.75, 8); // Width of eraser
@@ -8858,7 +9158,7 @@ function App() {
   }, [currentStroke]);
 
   // Finalize in-progress trace when switching mode (not on layer change) to avoid unintended commits
-  const prevModeRef = React.useRef<'trace' | 'via' | 'pad'>(drawingMode);
+  const prevModeRef = React.useRef<'trace' | 'via' | 'pad' | 'testPoint'>(drawingMode);
   const prevLayerRef = React.useRef<'top' | 'bottom'>(selectedDrawingLayer);
   React.useEffect(() => {
     // Only react when mode actually changed; do NOT auto-finalize on layer change
@@ -9056,6 +9356,8 @@ function App() {
         setAreViasLocked={setAreViasLocked}
         arePadsLocked={arePadsLocked}
         setArePadsLocked={setArePadsLocked}
+        areTestPointsLocked={areTestPointsLocked}
+        setAreTestPointsLocked={setAreTestPointsLocked}
         areTracesLocked={areTracesLocked}
         setAreTracesLocked={setAreTracesLocked}
         areComponentsLocked={areComponentsLocked}
@@ -9092,11 +9394,14 @@ function App() {
         drawingMode={drawingMode}
         traceToolLayer={traceToolLayer}
         padToolLayer={padToolLayer}
+        testPointToolLayer={testPointToolLayer}
         componentToolLayer={componentToolLayer}
         setTopTraceSize={setTopTraceSize}
         setBottomTraceSize={setBottomTraceSize}
         setTopPadSize={setTopPadSize}
         setBottomPadSize={setBottomPadSize}
+        setTopTestPointSize={setTopTestPointSize}
+        setBottomTestPointSize={setBottomTestPointSize}
         setTopComponentSize={setTopComponentSize}
         setBottomComponentSize={setBottomComponentSize}
         setComponentConnectionSize={setComponentConnectionSize}
@@ -9104,12 +9409,16 @@ function App() {
         bottomTraceColor={bottomTraceColor}
         topPadColor={topPadColor}
         bottomPadColor={bottomPadColor}
+        topTestPointColor={topTestPointColor}
+        bottomTestPointColor={bottomTestPointColor}
         topComponentColor={topComponentColor}
         bottomComponentColor={bottomComponentColor}
         setTopTraceColor={setTopTraceColor}
         setBottomTraceColor={setBottomTraceColor}
         setTopPadColor={setTopPadColor}
         setBottomPadColor={setBottomPadColor}
+        setTopTestPointColor={setTopTestPointColor}
+        setBottomTestPointColor={setBottomTestPointColor}
         setTopComponentColor={setTopComponentColor}
         setBottomComponentColor={setBottomComponentColor}
         setComponentConnectionColor={setComponentConnectionColor}
@@ -9219,14 +9528,14 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   const padDef = toolRegistry.get('pad');
                   const padLayer = padToolLayer || 'top';
                   // Read from tool registry layerSettings (one source of truth)
                   const padColor = padDef?.layerSettings.get(padLayer)?.color ?? padDef?.settings.color ?? DEFAULT_PAD_COLOR;
-                  // Fixed icon size for toolbar (constant, regardless of actual pad size)
-                  const iconSize = 10;
+                  // Fixed icon size for toolbar (constant, regardless of actual pad size) - made larger
+                  const iconSize = 14;
                   const iconX = (24 - iconSize) / 2;
                   const iconY = (24 - iconSize) / 2;
                   return <rect x={iconX} y={iconY} width={iconSize} height={iconSize} fill={padColor} />;
@@ -9239,6 +9548,67 @@ function App() {
                   const padLayer = padToolLayer || 'top';
                   // Read from tool registry layerSettings (one source of truth)
                   return padDef?.layerSettings.get(padLayer)?.size ?? padDef?.settings.size ?? 18;
+                })()}</span>
+              </div>
+            </button>
+            <button 
+              ref={testPointButtonRef}
+              onClick={() => { 
+                if (!isReadOnlyMode) { 
+                  setDrawingMode('testPoint'); 
+                  setCurrentTool('draw'); 
+                  // Default to Top layer, but use last choice if available
+                  const testPointLayerToUse = testPointToolLayer || 'top';
+                  setSelectedDrawingLayer(testPointLayerToUse);
+                  // The useEffect hook will automatically show the layer chooser
+                  // Force position recalculation on every click, even if dialog is already visible
+                  setTimeout(() => updateTestPointChooserPosition(), 0);
+                } 
+              }} 
+              disabled={isReadOnlyMode}
+              title="Draw Test Points (Y)" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
+                borderRadius: 6, 
+                border: (currentTool === 'draw' && drawingMode === 'testPoint') ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'draw' && drawingMode === 'testPoint' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+                {(() => {
+                  const testPointDef = toolRegistry.get('testPoint');
+                  const testPointLayer = testPointToolLayer || 'top';
+                  // Read from tool registry layerSettings (one source of truth)
+                  const testPointColor = testPointDef?.layerSettings.get(testPointLayer)?.color ?? testPointDef?.settings.color ?? '#FFFFFF';
+                  // Draw diamond shape (white-filled with black border) - made larger
+                  const size = 14;
+                  const centerX = 12;
+                  const centerY = 12;
+                  return (
+                    <path
+                      d={`M ${centerX} ${centerY - size/2} L ${centerX + size/2} ${centerY} L ${centerX} ${centerY + size/2} L ${centerX - size/2} ${centerY} Z`}
+                      fill={testPointColor}
+                      stroke="#000"
+                      strokeWidth="1.5"
+                    />
+                  );
+                })()}
+              </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>Y</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  const testPointDef = toolRegistry.get('testPoint');
+                  const testPointLayer = testPointToolLayer || 'top';
+                  // Read from tool registry layerSettings (one source of truth)
+                  return testPointDef?.layerSettings.get(testPointLayer)?.size ?? testPointDef?.settings.size ?? 18;
                 })()}</span>
               </div>
             </button>
@@ -9805,6 +10175,53 @@ function App() {
               </label>
             </div>
           )}
+          {/* Active tool layer chooser for Test Point */}
+          {(currentTool === 'draw' && drawingMode === 'testPoint' && showTestPointLayerChooser) && (
+            <div ref={testPointChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
+              <label className="radio-label" style={{ marginRight: 6 }}>
+                <input type="radio" name="testPointToolLayer" checked={testPointToolLayer === 'top'} onChange={() => { 
+                  setTestPointToolLayer('top'); 
+                  setSelectedDrawingLayer('top'); 
+                  // Use layer-specific test point colors and sizes
+                  setBrushColor(topTestPointColor);
+                  setBrushSize(topTestPointSize);
+                  // Update toolRegistry to reflect current layer's color
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const testPointDef = updated.get('testPoint');
+                    if (testPointDef) {
+                      updated.set('testPoint', { ...testPointDef, settings: { color: topTestPointColor, size: topTestPointSize } });
+                    }
+                    return updated;
+                  });
+                  setShowTestPointLayerChooser(false); 
+                  setShowTopImage(true); 
+                }} />
+                <span>Top</span>
+              </label>
+              <label className="radio-label">
+                <input type="radio" name="testPointToolLayer" checked={testPointToolLayer === 'bottom'} onChange={() => { 
+                  setTestPointToolLayer('bottom'); 
+                  setSelectedDrawingLayer('bottom'); 
+                  // Use layer-specific test point colors and sizes
+                  setBrushColor(bottomTestPointColor);
+                  setBrushSize(bottomTestPointSize);
+                  // Update toolRegistry to reflect current layer's color
+                  setToolRegistry(prev => {
+                    const updated = new Map(prev);
+                    const testPointDef = updated.get('testPoint');
+                    if (testPointDef) {
+                      updated.set('testPoint', { ...testPointDef, settings: { color: bottomTestPointColor, size: bottomTestPointSize } });
+                    }
+                    return updated;
+                  });
+                  setShowTestPointLayerChooser(false); 
+                  setShowBottomImage(true); 
+                }} />
+                <span>Bottom</span>
+              </label>
+            </div>
+          )}
           {/* Power Bus Selector */}
           {showPowerBusSelector && currentTool === 'power' && (
             <div ref={powerBusSelectorRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25, minWidth: '200px' }}>
@@ -10151,6 +10568,10 @@ function App() {
               <span>Pads (Top)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showTopTestPointsLayer} onChange={(e) => setShowTopTestPointsLayer(e.target.checked)} />
+              <span>Test Points (Top)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopTracesLayer} onChange={(e) => setShowTopTracesLayer(e.target.checked)} />
               <span>Traces (Top)</span>
             </label>
@@ -10161,6 +10582,10 @@ function App() {
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
               <span>Pads (Bottom)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomTestPointsLayer} onChange={(e) => setShowBottomTestPointsLayer(e.target.checked)} />
+              <span>Test Points (Bottom)</span>
             </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
@@ -10186,12 +10611,14 @@ function App() {
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input 
                 type="checkbox" 
-                checked={showViasLayer && showTopPadsLayer && showBottomPadsLayer && showTopTracesLayer && showBottomTracesLayer && showTopComponents && showBottomComponents && showPowerLayer && showGroundLayer && showConnectionsLayer}
+                checked={showViasLayer && showTopPadsLayer && showBottomPadsLayer && showTopTestPointsLayer && showBottomTestPointsLayer && showTopTracesLayer && showBottomTracesLayer && showTopComponents && showBottomComponents && showPowerLayer && showGroundLayer && showConnectionsLayer}
                 onChange={(e) => {
                   const newValue = e.target.checked;
                   setShowViasLayer(newValue);
                   setShowTopPadsLayer(newValue);
                   setShowBottomPadsLayer(newValue);
+                  setShowTopTestPointsLayer(newValue);
+                  setShowBottomTestPointsLayer(newValue);
                   setShowTopTracesLayer(newValue);
                   setShowBottomTracesLayer(newValue);
                   setShowTopComponents(newValue);

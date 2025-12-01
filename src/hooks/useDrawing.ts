@@ -12,7 +12,7 @@ export interface DrawingStroke {
   color: string;
   size: number;
   layer: 'top' | 'bottom';
-  type?: 'trace' | 'via' | 'pad';
+  type?: 'trace' | 'via' | 'pad' | 'testPoint';
   viaType?: string;
   padType?: string;
   notes?: string | null; // Max 500 characters, null until user enters a value
@@ -26,7 +26,7 @@ export function useDrawing() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentStroke, setCurrentStroke] = useState<DrawingPoint[]>([]);
   const [tracePreviewMousePos, setTracePreviewMousePos] = useState<{ x: number; y: number } | null>(null);
-  const [drawingMode, setDrawingMode] = useState<'trace' | 'via' | 'pad'>('trace');
+  const [drawingMode, setDrawingMode] = useState<'trace' | 'via' | 'pad' | 'testPoint'>('trace');
   const [selectedDrawingLayer, setSelectedDrawingLayer] = useState<'top' | 'bottom'>('top');
   
   const currentStrokeRef = useRef<DrawingPoint[]>([]);

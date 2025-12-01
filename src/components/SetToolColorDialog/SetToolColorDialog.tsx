@@ -30,11 +30,13 @@ export interface SetToolColorDialogProps {
   /** Current tool */
   currentTool: Tool;
   /** Current drawing mode */
-  drawingMode: 'trace' | 'via' | 'pad';
+  drawingMode: 'trace' | 'via' | 'pad' | 'testPoint';
   /** Trace tool layer */
   traceToolLayer: 'top' | 'bottom';
   /** Pad tool layer */
   padToolLayer: 'top' | 'bottom';
+  /** Test Point tool layer */
+  testPointToolLayer: 'top' | 'bottom';
   /** Component tool layer */
   componentToolLayer: 'top' | 'bottom';
   /** Callback to update tool settings */
@@ -52,11 +54,13 @@ export interface SetToolColorDialogProps {
   setBottomTraceColor: (color: string) => void;
   setTopPadColor: (color: string) => void;
   setBottomPadColor: (color: string) => void;
+  setTopTestPointColor: (color: string) => void;
+  setBottomTestPointColor: (color: string) => void;
   setTopComponentColor: (color: string) => void;
   setBottomComponentColor: (color: string) => void;
   setComponentConnectionColor: (color: string) => void;
   /** Legacy save function */
-  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
+  saveDefaultColor: (type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   /** Color palette */
   colorPalette: string[];
   /** Callback to close the dialog */
@@ -70,6 +74,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   drawingMode,
   traceToolLayer,
   padToolLayer,
+  testPointToolLayer,
   componentToolLayer,
   updateToolSettings,
   updateToolLayerSettings,
@@ -80,6 +85,8 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   setBottomTraceColor,
   setTopPadColor,
   setBottomPadColor,
+  setTopTestPointColor,
+  setBottomTestPointColor,
   setTopComponentColor,
   setBottomComponentColor,
   setComponentConnectionColor,
@@ -92,7 +99,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   if (!visible) return null;
 
   // Tools that have layer-specific colors (Top/Bottom)
-  const layerTools = ['pad', 'trace', 'component'];
+    const layerTools = ['pad', 'testPoint', 'trace', 'component'];
   
   // Tool definitions - ordered to match toolbar order: Via, Pad, Trace, Component, Power, Ground, Erase
   // Layer-specific tools shown as separate entries (Top then Bottom)
@@ -100,6 +107,8 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     { id: 'via', name: 'Via' },
     { id: 'pad', name: 'Pad', layer: 'top' },
     { id: 'pad', name: 'Pad', layer: 'bottom' },
+    { id: 'testPoint', name: 'Test Point', layer: 'top' },
+    { id: 'testPoint', name: 'Test Point', layer: 'bottom' },
     { id: 'trace', name: 'Trace', layer: 'top' },
     { id: 'trace', name: 'Trace', layer: 'bottom' },
     { id: 'component', name: 'Component', layer: 'top' },
@@ -136,6 +145,14 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
           setBottomPadColor(color);
           saveDefaultColor('pad', color, 'bottom');
         }
+      } else if (toolId === 'testPoint') {
+        if (layer === 'top') {
+          setTopTestPointColor(color);
+          saveDefaultColor('testPoint', color, 'top');
+        } else {
+          setBottomTestPointColor(color);
+          saveDefaultColor('testPoint', color, 'bottom');
+        }
       } else if (toolId === 'component') {
         if (layer === 'top') {
           setTopComponentColor(color);
@@ -157,11 +174,12 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
       const isActiveTool = 
         (toolId === 'trace' && currentTool === 'draw' && drawingMode === 'trace') ||
         (toolId === 'pad' && currentTool === 'draw' && drawingMode === 'pad') ||
+        (toolId === 'testPoint' && currentTool === 'draw' && drawingMode === 'testPoint') ||
         (toolId === 'component' && currentTool === 'component');
       
       if (isActiveTool) {
         const activeLayer = 
-          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : componentToolLayer) || 'top';
+          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : toolId === 'testPoint' ? testPointToolLayer : componentToolLayer) || 'top';
         if (activeLayer === layer) {
           // Update brushColor immediately so subsequent drawings use the new color
           setBrushColor(color);

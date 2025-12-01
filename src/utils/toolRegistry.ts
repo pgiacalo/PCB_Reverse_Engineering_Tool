@@ -120,6 +120,8 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
   // Default layer-specific colors and sizes (from user requirements)
   const DEFAULT_PAD_COLORS = { top: '#0072B2', bottom: '#56B4E9' };
   const DEFAULT_PAD_SIZES = { top: 18, bottom: 18 };
+  const DEFAULT_TEST_POINT_COLORS = { top: '#FFFFFF', bottom: '#FFFFFF' };
+  const DEFAULT_TEST_POINT_SIZES = { top: 18, bottom: 18 };
   const DEFAULT_TRACE_COLORS = { top: '#AA4499', bottom: '#F781BF' };
   const DEFAULT_TRACE_SIZES = { top: 6, bottom: 6 };
   const DEFAULT_COMPONENT_COLORS = { top: '#6A3D9A', bottom: '#9467BD' };
@@ -170,6 +172,23 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
     layerSettings: new Map([
       ['top', loadToolLayerSettings('pad', 'top', DEFAULT_PAD_COLORS.top, DEFAULT_PAD_SIZES.top)],
       ['bottom', loadToolLayerSettings('pad', 'bottom', DEFAULT_PAD_COLORS.bottom, DEFAULT_PAD_SIZES.bottom)],
+    ] as [Layer, ToolSettings][]),
+    defaultLayer: 'top',
+  });
+  
+  registry.set('testPoint', {
+    id: 'testPoint',
+    name: 'Test Point',
+    toolType: 'draw',
+    drawingMode: 'testPoint',
+    icon: '◆',
+    shortcut: 'Y',
+    tooltip: 'Place test point',
+    colorReflective: true,
+    settings: loadToolSettings('testPoint', '#FFFFFF', 18),
+    layerSettings: new Map([
+      ['top', loadToolLayerSettings('testPoint', 'top', DEFAULT_TEST_POINT_COLORS.top, DEFAULT_TEST_POINT_SIZES.top)],
+      ['bottom', loadToolLayerSettings('testPoint', 'bottom', DEFAULT_TEST_POINT_COLORS.bottom, DEFAULT_TEST_POINT_SIZES.bottom)],
     ] as [Layer, ToolSettings][]),
     defaultLayer: 'top',
   });

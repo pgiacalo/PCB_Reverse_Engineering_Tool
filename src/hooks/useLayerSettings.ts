@@ -13,6 +13,10 @@ interface PersistedDefaults {
   bottomPadColor: string;
   topPadSize: number;
   bottomPadSize: number;
+  topTestPointColor: string;
+  bottomTestPointColor: string;
+  topTestPointSize: number;
+  bottomTestPointSize: number;
   topComponentColor: string;
   bottomComponentColor: string;
   topComponentSize: number;
@@ -42,6 +46,10 @@ export function useLayerSettings() {
       bottomPadColor: localStorage.getItem('defaultBottomPadColor') || '#56B4E9',
       topPadSize: parseInt(localStorage.getItem('defaultTopPadSize') || '18', 10),
       bottomPadSize: parseInt(localStorage.getItem('defaultBottomPadSize') || '18', 10),
+      topTestPointColor: localStorage.getItem('defaultTopTestPointColor') || '#FFFFFF',
+      bottomTestPointColor: localStorage.getItem('defaultBottomTestPointColor') || '#FFFFFF',
+      topTestPointSize: parseInt(localStorage.getItem('defaultTopTestPointSize') || '18', 10),
+      bottomTestPointSize: parseInt(localStorage.getItem('defaultBottomTestPointSize') || '18', 10),
       topComponentColor: localStorage.getItem('defaultTopComponentColor') || '#8C564B',
       bottomComponentColor: localStorage.getItem('defaultBottomComponentColor') || '#9C755F',
       topComponentSize: parseInt(localStorage.getItem('defaultTopComponentSize') || '18', 10),
@@ -65,6 +73,10 @@ export function useLayerSettings() {
   const [bottomPadColor, setBottomPadColor] = useState(persistedDefaults.bottomPadColor);
   const [topPadSize, setTopPadSize] = useState(persistedDefaults.topPadSize);
   const [bottomPadSize, setBottomPadSize] = useState(persistedDefaults.bottomPadSize);
+  const [topTestPointColor, setTopTestPointColor] = useState(persistedDefaults.topTestPointColor);
+  const [bottomTestPointColor, setBottomTestPointColor] = useState(persistedDefaults.bottomTestPointColor);
+  const [topTestPointSize, setTopTestPointSize] = useState(persistedDefaults.topTestPointSize);
+  const [bottomTestPointSize, setBottomTestPointSize] = useState(persistedDefaults.bottomTestPointSize);
   const [topComponentColor, setTopComponentColor] = useState(persistedDefaults.topComponentColor);
   const [bottomComponentColor, setBottomComponentColor] = useState(persistedDefaults.bottomComponentColor);
   const [topComponentSize, setTopComponentSize] = useState(persistedDefaults.topComponentSize);
@@ -73,7 +85,7 @@ export function useLayerSettings() {
   const [componentConnectionSize, setComponentConnectionSize] = useState(persistedDefaults.componentConnectionSize);
 
   // Save defaults to localStorage
-  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
+  const saveDefaultSize = useCallback((type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceSize', String(size));
@@ -85,6 +97,12 @@ export function useLayerSettings() {
         localStorage.setItem('defaultTopPadSize', String(size));
       } else {
         localStorage.setItem('defaultBottomPadSize', String(size));
+      }
+    } else if (type === 'testPoint' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopTestPointSize', String(size));
+      } else {
+        localStorage.setItem('defaultBottomTestPointSize', String(size));
       }
     } else if (type === 'component' && layer) {
       if (layer === 'top') {
@@ -105,7 +123,7 @@ export function useLayerSettings() {
     }
   }, []);
 
-  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => {
+  const saveDefaultColor = useCallback((type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => {
     if (type === 'trace' && layer) {
       if (layer === 'top') {
         localStorage.setItem('defaultTopTraceColor', color);
@@ -117,6 +135,12 @@ export function useLayerSettings() {
         localStorage.setItem('defaultTopPadColor', color);
       } else {
         localStorage.setItem('defaultBottomPadColor', color);
+      }
+    } else if (type === 'testPoint' && layer) {
+      if (layer === 'top') {
+        localStorage.setItem('defaultTopTestPointColor', color);
+      } else {
+        localStorage.setItem('defaultBottomTestPointColor', color);
       }
     } else if (type === 'component' && layer) {
       if (layer === 'top') {
@@ -155,6 +179,14 @@ export function useLayerSettings() {
     setTopPadSize,
     bottomPadSize,
     setBottomPadSize,
+    topTestPointColor,
+    setTopTestPointColor,
+    bottomTestPointColor,
+    setBottomTestPointColor,
+    topTestPointSize,
+    setTopTestPointSize,
+    bottomTestPointSize,
+    setBottomTestPointSize,
     topComponentColor,
     setTopComponentColor,
     bottomComponentColor,

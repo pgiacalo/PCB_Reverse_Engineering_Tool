@@ -7,6 +7,7 @@ export function useLocks() {
   const [areImagesLocked, setAreImagesLocked] = useState(false);
   const [areViasLocked, setAreViasLocked] = useState(false);
   const [arePadsLocked, setArePadsLocked] = useState(false);
+  const [areTestPointsLocked, setAreTestPointsLocked] = useState(false);
   const [areTracesLocked, setAreTracesLocked] = useState(false);
   const [areComponentsLocked, setAreComponentsLocked] = useState(false);
   const [areGroundNodesLocked, setAreGroundNodesLocked] = useState(false);
@@ -16,6 +17,7 @@ export function useLocks() {
     setAreImagesLocked(true);
     setAreViasLocked(true);
     setArePadsLocked(true);
+    setAreTestPointsLocked(true);
     setAreTracesLocked(true);
     setAreComponentsLocked(true);
     setAreGroundNodesLocked(true);
@@ -26,6 +28,7 @@ export function useLocks() {
     setAreImagesLocked(false);
     setAreViasLocked(false);
     setArePadsLocked(false);
+    setAreTestPointsLocked(false);
     setAreTracesLocked(false);
     setAreComponentsLocked(false);
     setAreGroundNodesLocked(false);
@@ -40,6 +43,8 @@ export function useLocks() {
     setAreViasLocked,
     arePadsLocked,
     setArePadsLocked,
+    areTestPointsLocked,
+    setAreTestPointsLocked,
     areTracesLocked,
     setAreTracesLocked,
     areComponentsLocked,

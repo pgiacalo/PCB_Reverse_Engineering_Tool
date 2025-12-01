@@ -260,7 +260,7 @@ export function hasConnections(component: PCBComponent): boolean {
 export function autoAssignPolarity(
   component: PCBComponent,
   pinConnections: string[],
-  drawingStrokes: Array<{ type?: 'trace' | 'via' | 'pad'; points: Array<{ x: number; y: number; id?: number }> }>
+  drawingStrokes: Array<{ type?: 'trace' | 'via' | 'pad' | 'testPoint'; points: Array<{ x: number; y: number; id?: number }> }>
 ): ('+' | '-' | '')[] | null {
   // Check if component has polarity
   const hasPolarity = component.componentType === 'Electrolytic Capacitor' || 

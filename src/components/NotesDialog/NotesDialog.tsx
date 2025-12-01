@@ -30,7 +30,7 @@ interface DrawingStroke {
   color: string;
   size: number;
   layer: 'top' | 'bottom';
-  type?: 'trace' | 'via' | 'pad';
+  type?: 'trace' | 'via' | 'pad' | 'testPoint';
   notes?: string | null;
   viaType?: string;
   padType?: string;

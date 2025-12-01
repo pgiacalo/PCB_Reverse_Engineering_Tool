@@ -40,7 +40,7 @@ export interface DrawingStroke {
   color: string;
   size: number;
   layer: 'top' | 'bottom';
-  type?: 'trace' | 'via' | 'pad';
+  type?: 'trace' | 'via' | 'pad' | 'testPoint';
   notes?: string | null; // Max 200 characters, null until user enters a value
 }
 

@@ -254,6 +254,41 @@ export function generateCenterCursor(): string {
 }
 
 /**
+ * Generate a custom cursor for test point tool
+ * Shows a white diamond with black border
+ */
+export function generateTestPointCursor(size: number): string {
+  const canvas = document.createElement('canvas');
+  const diameter = Math.max(12, Math.min(size, 32));
+  const padding = 4;
+  const canvasSize = diameter + padding * 2;
+  canvas.width = canvasSize;
+  canvas.height = canvasSize;
+  
+  const ctx = canvas.getContext('2d')!;
+  const centerX = canvasSize / 2;
+  const centerY = canvasSize / 2;
+  const halfSize = diameter / 2;
+  
+  // Draw white diamond with black border
+  ctx.fillStyle = '#FFFFFF';
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 2;
+  
+  ctx.beginPath();
+  ctx.moveTo(centerX, centerY - halfSize); // Top
+  ctx.lineTo(centerX + halfSize, centerY); // Right
+  ctx.lineTo(centerX, centerY + halfSize); // Bottom
+  ctx.lineTo(centerX - halfSize, centerY); // Left
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  
+  const dataUrl = canvas.toDataURL();
+  return `url(${dataUrl}) ${centerX} ${centerY}, crosshair`;
+}
+
+/**
  * Get the appropriate cursor for the current tool and state
  */
 export function getCursorForTool(

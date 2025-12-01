@@ -76,6 +76,8 @@ export interface MenuBarProps {
   setAreViasLocked: React.Dispatch<React.SetStateAction<boolean>>;
   arePadsLocked: boolean;
   setArePadsLocked: React.Dispatch<React.SetStateAction<boolean>>;
+  areTestPointsLocked: boolean;
+  setAreTestPointsLocked: React.Dispatch<React.SetStateAction<boolean>>;
   areTracesLocked: boolean;
   setAreTracesLocked: React.Dispatch<React.SetStateAction<boolean>>;
   areComponentsLocked: boolean;
@@ -121,9 +123,10 @@ export interface MenuBarProps {
   
   // Current tool state (to determine if size change should affect brushSize immediately)
   currentTool: Tool;
-  drawingMode: 'trace' | 'via' | 'pad';
+  drawingMode: 'trace' | 'via' | 'pad' | 'testPoint';
   traceToolLayer: 'top' | 'bottom';
   padToolLayer: 'top' | 'bottom';
+  testPointToolLayer: 'top' | 'bottom';
   componentToolLayer: 'top' | 'bottom';
   
   // Layer-specific size setters
@@ -131,6 +134,8 @@ export interface MenuBarProps {
   setBottomTraceSize: (size: number) => void;
   setTopPadSize: (size: number) => void;
   setBottomPadSize: (size: number) => void;
+  setTopTestPointSize: (size: number) => void;
+  setBottomTestPointSize: (size: number) => void;
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
   setComponentConnectionSize: (size: number) => void;
@@ -140,6 +145,8 @@ export interface MenuBarProps {
   bottomTraceColor: string;
   topPadColor: string;
   bottomPadColor: string;
+  topTestPointColor: string;
+  bottomTestPointColor: string;
   topComponentColor: string;
   bottomComponentColor: string;
   
@@ -148,6 +155,8 @@ export interface MenuBarProps {
   setBottomTraceColor: (color: string) => void;
   setTopPadColor: (color: string) => void;
   setBottomPadColor: (color: string) => void;
+  setTopTestPointColor: (color: string) => void;
+  setBottomTestPointColor: (color: string) => void;
   setTopComponentColor: (color: string) => void;
   setBottomComponentColor: (color: string) => void;
   setComponentConnectionColor: (color: string) => void;
@@ -197,7 +206,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   increaseSize,
   decreaseSize,
   brushSize: _brushSize,
-  drawingStrokes: _drawingStrokes,
+  drawingStrokes,
   selectedIds: _selectedIds,
   selectedComponentIds: _selectedComponentIds,
   selectedPowerIds: _selectedPowerIds,
@@ -213,6 +222,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setAreViasLocked,
   arePadsLocked,
   setArePadsLocked,
+  areTestPointsLocked,
+  setAreTestPointsLocked,
   areTracesLocked,
   setAreTracesLocked,
   areComponentsLocked,
@@ -249,11 +260,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   drawingMode,
   traceToolLayer,
   padToolLayer,
+  testPointToolLayer,
   componentToolLayer,
   setTopTraceSize,
   setBottomTraceSize,
   setTopPadSize,
   setBottomPadSize,
+  setTopTestPointSize,
+  setBottomTestPointSize,
   setTopComponentSize,
   setBottomComponentSize,
   setComponentConnectionSize,
@@ -261,12 +275,16 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   bottomTraceColor: _bottomTraceColor,
   topPadColor: _topPadColor,
   bottomPadColor: _bottomPadColor,
+  topTestPointColor: _topTestPointColor,
+  bottomTestPointColor: _bottomTestPointColor,
   topComponentColor: _topComponentColor,
   bottomComponentColor: _bottomComponentColor,
   setTopTraceColor,
   setBottomTraceColor,
   setTopPadColor,
   setBottomPadColor,
+  setTopTestPointColor,
+  setBottomTestPointColor,
   setTopComponentColor,
   setBottomComponentColor,
   setComponentConnectionColor,
@@ -720,6 +738,32 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         >
           <input
             type="checkbox"
+            checked={areTestPointsLocked}
+            onChange={() => { setAreTestPointsLocked(prev => !prev); }}
+            style={{
+              marginRight: '8px',
+              cursor: 'pointer',
+              width: '16px',
+              height: '16px',
+              accentColor: '#4a9eff',
+            }}
+          />
+          <span>Lock Test Points</span>
+        </label>
+        <label
+          onClick={(e) => { e.stopPropagation(); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            padding: '6px 10px',
+            color: '#f2f2f2',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
             checked={areTracesLocked}
             onChange={() => { setAreTracesLocked(prev => !prev); }}
             style={{
@@ -854,6 +898,17 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button onClick={() => { selectAllPads(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
           All Pads
+        </button>
+        <button onClick={() => { 
+            const testPointIds = new Set(drawingStrokes.filter(s => s.type === 'testPoint').map(s => s.id));
+            _setSelectedIds(testPointIds);
+            _setSelectedComponentIds(new Set());
+            _setSelectedPowerIds(new Set());
+            _setSelectedGroundIds(new Set());
+            setOpenToolsSubmenu(null);
+            setOpenMenu(null);
+          }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          All Test Points
         </button>
         <button onClick={() => { selectAllComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
           All Components
@@ -1345,7 +1400,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                  The PCB Reverse Engineering Tool is a modern browser-based single-page application (SPA) that enables users to reverse engineer printed circuit boards by tracing connections and placing components. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
+                  The PCB Reverse Engineering Tool is a modern browser-based single-page application that enables users to reverse engineer printed circuit boards by tracing connections and placing components. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 
@@ -1370,6 +1425,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Draw copper traces (top and bottom layers)</li>
                       <li>Place vias for layer connections</li>
                       <li>Place component pads (SMD and through-hole)</li>
+                      <li>Place test points for circuit testing</li>
                       <li>Place and annotate components</li>
                       <li>Place power and ground nodes</li>
                       <li>Erase tool for removing elements</li>
@@ -1384,6 +1440,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                           <li><strong>Select</strong> — <code>S</code></li>
                           <li><strong>Via</strong> — <code>V</code></li>
                           <li><strong>Pad</strong> — <code>P</code></li>
+                          <li><strong>Test Point</strong> — <code>Y</code></li>
                           <li><strong>Trace</strong> — <code>T</code></li>
                           <li><strong>Component</strong> — <code>C</code></li>
                           <li><strong>Component Properties</strong> — double-click component</li>
@@ -1524,6 +1581,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         drawingMode={drawingMode}
         traceToolLayer={traceToolLayer}
         padToolLayer={padToolLayer}
+        testPointToolLayer={testPointToolLayer}
         componentToolLayer={componentToolLayer}
         updateToolSettings={updateToolSettings}
         updateToolLayerSettings={updateToolLayerSettings}
@@ -1534,6 +1592,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setBottomTraceSize={setBottomTraceSize}
         setTopPadSize={setTopPadSize}
         setBottomPadSize={setBottomPadSize}
+        setTopTestPointSize={setTopTestPointSize}
+        setBottomTestPointSize={setBottomTestPointSize}
         setTopComponentSize={setTopComponentSize}
         setBottomComponentSize={setBottomComponentSize}
         setComponentConnectionSize={setComponentConnectionSize}
@@ -1547,6 +1607,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         drawingMode={drawingMode}
         traceToolLayer={traceToolLayer}
         padToolLayer={padToolLayer}
+        testPointToolLayer={testPointToolLayer}
         componentToolLayer={componentToolLayer}
         updateToolSettings={updateToolSettings}
         updateToolLayerSettings={updateToolLayerSettings}
@@ -1557,6 +1618,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setBottomTraceColor={setBottomTraceColor}
         setTopPadColor={setTopPadColor}
         setBottomPadColor={setBottomPadColor}
+        setTopTestPointColor={setTopTestPointColor}
+        setBottomTestPointColor={setBottomTestPointColor}
         setTopComponentColor={setTopComponentColor}
         setBottomComponentColor={setBottomComponentColor}
         setComponentConnectionColor={setComponentConnectionColor}

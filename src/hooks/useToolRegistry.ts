@@ -12,7 +12,7 @@ export interface ToolDefinition {
   id: string;
   name: string;
   toolType: Tool;
-  drawingMode?: 'trace' | 'via' | 'pad';
+  drawingMode?: 'trace' | 'via' | 'pad' | 'testPoint';
   icon?: string;
   shortcut?: string;
   tooltip?: string;
@@ -71,7 +71,7 @@ const _saveToolLayerSettings = (toolId: string, layer: Layer, color: string, siz
 export function useToolRegistry(
   createToolRegistry: () => Map<string, ToolDefinition>,
   currentTool: Tool,
-  drawingMode: 'trace' | 'via' | 'pad',
+  drawingMode: 'trace' | 'via' | 'pad' | 'testPoint',
   brushColor: string,
   brushSize: number,
   topTraceColor: string,
@@ -82,12 +82,17 @@ export function useToolRegistry(
   bottomPadColor: string,
   topPadSize: number,
   bottomPadSize: number,
+  topTestPointColor: string,
+  bottomTestPointColor: string,
+  topTestPointSize: number,
+  bottomTestPointSize: number,
   topComponentColor: string,
   bottomComponentColor: string,
   topComponentSize: number,
   bottomComponentSize: number,
   traceToolLayer: 'top' | 'bottom',
   padToolLayer: 'top' | 'bottom',
+  testPointToolLayer: 'top' | 'bottom',
   componentToolLayer: 'top' | 'bottom'
 ) {
   const [toolRegistry, setToolRegistry] = useState<Map<string, ToolDefinition>>(() => createToolRegistry());

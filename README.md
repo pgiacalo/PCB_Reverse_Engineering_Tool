@@ -180,7 +180,13 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 
 #### Drawing Operations
 - **Draw Tool**: Click and drag to draw lines
-- **Eraser Tool**: Click and drag to erase drawn lines
+- **Via Tool** (<code>V</code>): Place via connections between layers
+- **Pad Tool** (<code>P</code>): Place component pads (SMD and through-hole)
+- **Test Point Tool** (<code>Y</code>): Place test points for circuit testing
+- **Component Tool** (<code>C</code>): Place and annotate components
+- **Power Tool** (<code>B</code>): Place power nodes
+- **Ground Tool** (<code>G</code>): Place ground nodes
+- **Eraser Tool** (<code>E</code>): Click and drag to erase drawn lines
 - **Double-click Erase button**: Clear all drawings on the selected layer
 
 #### Color and Brush Controls
@@ -203,6 +209,22 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Erase Button**: Double-click to clear all drawings on the selected layer
 
 ### Keyboard Shortcuts
+
+**Tool Selection**
+- **Select** — <code>S</code>
+- **Via** — <code>V</code>
+- **Pad** — <code>P</code>
+- **Test Point** — <code>Y</code>
+- **Trace** — <code>T</code>
+- **Component** — <code>C</code>
+- **Power** — <code>B</code>
+- **Ground** — <code>G</code>
+- **Erase** — <code>E</code>
+- **Move (Pan)** — <code>H</code>
+- **Zoom** — <code>Z</code>
+- **Center** — <code>X</code>
+- **Information Dialog** — <code>Ctrl</code> + <code>I</code>
+- **Component Properties** — double-click component
 
 **Arrow Key Controls**
 - **On Sliders**: Click slider first, then use ← → arrows for precise adjustment
