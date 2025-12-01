@@ -1438,22 +1438,22 @@ function App() {
       })();
       if (hitComponent) {
         const { comp } = hitComponent;
-        // Determine the final selection state after this click
-        let finalSelectedIds: Set<string>;
         if (e.shiftKey) {
-          // Shift-click: add to selection (toggle)
-          const next = new Set(selectedComponentIds);
-          if (next.has(comp.id)) {
-            next.delete(comp.id);
-          } else {
-            next.add(comp.id);
-          }
-          finalSelectedIds = next;
-          setSelectedComponentIds(finalSelectedIds);
+          // Shift-click: add to selection (toggle) - preserve other selections
+          // Use functional update to ensure we work with latest state
+          setSelectedComponentIds(prev => {
+            const next = new Set(prev);
+            if (next.has(comp.id)) {
+              next.delete(comp.id);
+            } else {
+              next.add(comp.id);
+            }
+            return next;
+          });
+          // Keep other selections when Shift-clicking
         } else {
           // Regular click: select only this component (replace all selections)
-          finalSelectedIds = new Set([comp.id]);
-          setSelectedComponentIds(finalSelectedIds);
+          setSelectedComponentIds(new Set([comp.id]));
           // Clear other selections
           setSelectedIds(new Set());
           setSelectedPowerIds(new Set());
@@ -1480,27 +1480,27 @@ function App() {
         }
       }
       if (hitPower) {
-        // Determine the final selection state after this click
-        let finalSelectedPowerIds: Set<string>;
         if (e.shiftKey) {
-          // Shift-click: toggle selection
-          const next = new Set(selectedPowerIds);
-          if (next.has(hitPower.id)) {
-            next.delete(hitPower.id);
-          } else {
-            next.add(hitPower.id);
-          }
-          finalSelectedPowerIds = next;
-          setSelectedPowerIds(finalSelectedPowerIds);
+          // Shift-click: toggle selection - preserve other selections
+          // Use functional update to ensure we work with latest state
+          setSelectedPowerIds(prev => {
+            const next = new Set(prev);
+            if (next.has(hitPower.id)) {
+              next.delete(hitPower.id);
+            } else {
+              next.add(hitPower.id);
+            }
+            return next;
+          });
+          // Keep other selections when Shift-clicking
         } else {
           // Regular click: select only this power node
-          finalSelectedPowerIds = new Set([hitPower.id]);
-          setSelectedPowerIds(finalSelectedPowerIds);
+          setSelectedPowerIds(new Set([hitPower.id]));
+          // Clear other selections
+          setSelectedIds(new Set());
+          setSelectedComponentIds(new Set());
+          setSelectedGroundIds(new Set());
         }
-        // Clear other selections
-        setSelectedIds(new Set());
-        setSelectedComponentIds(new Set());
-        setSelectedGroundIds(new Set());
         
         // Power nodes are not moveable - only selectable
         return;
@@ -1523,23 +1523,22 @@ function App() {
         }
       }
       if (hitGround) {
-        // Determine the final selection state after this click
-        let finalSelectedGroundIds: Set<string>;
         if (e.shiftKey) {
-          // Shift-click: add to selection (toggle)
-          const next = new Set(selectedGroundIds);
-          if (next.has(hitGround.id)) {
-            next.delete(hitGround.id);
-          } else {
-            next.add(hitGround.id);
-          }
-          finalSelectedGroundIds = next;
-          setSelectedGroundIds(finalSelectedGroundIds);
+          // Shift-click: add to selection (toggle) - preserve other selections
+          // Use functional update to ensure we work with latest state
+          setSelectedGroundIds(prev => {
+            const next = new Set(prev);
+            if (next.has(hitGround.id)) {
+              next.delete(hitGround.id);
+            } else {
+              next.add(hitGround.id);
+            }
+            return next;
+          });
           // Keep other selections when Shift-clicking
         } else {
           // Regular click: select only this ground node (replace all selections)
-          finalSelectedGroundIds = new Set([hitGround.id]);
-          setSelectedGroundIds(finalSelectedGroundIds);
+          setSelectedGroundIds(new Set([hitGround.id]));
           // Clear other selections
           setSelectedIds(new Set());
           setSelectedComponentIds(new Set());
@@ -1587,22 +1586,23 @@ function App() {
       
       if (hitStroke) {
         // Handle via/pad selection directly (like components) - no rectangle selection
-        let finalSelectedIds: Set<string>;
         
         if (e.shiftKey) {
-          // Shift-click: toggle selection
-          const next = new Set(selectedIds);
-          if (next.has(hitStroke.id)) {
-            next.delete(hitStroke.id);
-          } else {
-            next.add(hitStroke.id);
-          }
-          finalSelectedIds = next;
-          setSelectedIds(finalSelectedIds);
+          // Shift-click: toggle selection - preserve other selections
+          // Use functional update to ensure we work with latest state
+          setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(hitStroke.id)) {
+              next.delete(hitStroke.id);
+            } else {
+              next.add(hitStroke.id);
+            }
+            return next;
+          });
+          // Keep other selections when Shift-clicking
         } else {
           // Regular click: select only this via/pad
-          finalSelectedIds = new Set([hitStroke.id]);
-          setSelectedIds(finalSelectedIds);
+          setSelectedIds(new Set([hitStroke.id]));
           // Clear other selections
           setSelectedComponentIds(new Set());
           setSelectedPowerIds(new Set());
@@ -2910,21 +2910,25 @@ function App() {
             }
             if (isVisible) {
               if (shiftWasPressed) {
-                // Toggle selection
-                if (next.has(hitStrokeId)) {
-                  next.delete(hitStrokeId);
-                } else {
-                  next.add(hitStrokeId);
-                }
+                // Toggle selection - use functional update to ensure we work with latest state
+                setSelectedIds(prev => {
+                  const next = new Set(prev);
+                  if (next.has(hitStrokeId)) {
+                    next.delete(hitStrokeId);
+                  } else {
+                    next.add(hitStrokeId);
+                  }
+                  return next;
+                });
+                // Keep other selections when Shift-clicking
               } else {
                 // Replace selection
-                next.clear();
-                next.add(hitStrokeId);
+                setSelectedIds(new Set([hitStrokeId]));
+                // Clear other selections
+                setSelectedComponentIds(new Set());
+                setSelectedPowerIds(new Set());
+                setSelectedGroundIds(new Set());
               }
-              setSelectedIds(next);
-              setSelectedComponentIds(nextComps);
-              setSelectedPowerIds(nextPowers);
-              setSelectedGroundIds(nextGrounds);
               return; // Early return - we're done
             }
           }
@@ -2974,7 +2978,17 @@ function App() {
           }
           // Only add the single best hit (or nothing if no hit)
           if (bestHit) {
-            next.add(bestHit.id);
+            if (shiftWasPressed) {
+              // Toggle selection
+              if (next.has(bestHit.id)) {
+                next.delete(bestHit.id);
+              } else {
+                next.add(bestHit.id);
+              }
+            } else {
+              // Replace selection
+              next.add(bestHit.id);
+            }
           }
         } else {
           // Rectangle selection: find all hits
@@ -3004,7 +3018,19 @@ function App() {
                     (withinRect(p1.x, p1.y) && withinRect(p2.x, p2.y))) { hit = true; break; }
               }
             }
-            if (hit) next.add(s.id);
+            if (hit) {
+              if (shiftWasPressed) {
+                // Toggle selection
+                if (next.has(s.id)) {
+                  next.delete(s.id);
+                } else {
+                  next.add(s.id);
+                }
+              } else {
+                // Add to selection
+                next.add(s.id);
+              }
+            }
           }
         }
         // Components hit-test (reuse minX/minY/maxX/maxY)
@@ -3020,17 +3046,73 @@ function App() {
             return (start.x >= c.x - half && start.x <= c.x + half && start.y >= c.y - half && start.y <= c.y + half);
           };
           if (showTopComponents) {
-            componentsTop.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+            componentsTop.forEach(c => {
+              if (clickInComp(c)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextComps.has(c.id)) {
+                    nextComps.delete(c.id);
+                  } else {
+                    nextComps.add(c.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextComps.add(c.id);
+                }
+              }
+            });
           }
           if (showBottomComponents) {
-            componentsBottom.forEach(c => { if (clickInComp(c)) nextComps.add(c.id); });
+            componentsBottom.forEach(c => {
+              if (clickInComp(c)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextComps.has(c.id)) {
+                    nextComps.delete(c.id);
+                  } else {
+                    nextComps.add(c.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextComps.add(c.id);
+                }
+              }
+            });
           }
         } else {
           if (showTopComponents) {
-            componentsTop.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+            componentsTop.forEach(c => {
+              if (compInRect(c)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextComps.has(c.id)) {
+                    nextComps.delete(c.id);
+                  } else {
+                    nextComps.add(c.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextComps.add(c.id);
+                }
+              }
+            });
           }
           if (showBottomComponents) {
-            componentsBottom.forEach(c => { if (compInRect(c)) nextComps.add(c.id); });
+            componentsBottom.forEach(c => {
+              if (compInRect(c)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextComps.has(c.id)) {
+                    nextComps.delete(c.id);
+                  } else {
+                    nextComps.add(c.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextComps.add(c.id);
+                }
+              }
+            });
           }
         }
         // Power nodes hit-test
@@ -3061,11 +3143,35 @@ function App() {
               }
             }
             if (bestPowerHit) {
-              nextPowers.add(bestPowerHit.id);
+              if (shiftWasPressed) {
+                // Toggle selection
+                if (nextPowers.has(bestPowerHit.id)) {
+                  nextPowers.delete(bestPowerHit.id);
+                } else {
+                  nextPowers.add(bestPowerHit.id);
+                }
+              } else {
+                // Add to selection
+                nextPowers.add(bestPowerHit.id);
+              }
             }
           } else {
             // Rectangle selection: find all power nodes in rect
-            powers.forEach(p => { if (powerInRect(p)) nextPowers.add(p.id); });
+            powers.forEach(p => {
+              if (powerInRect(p)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextPowers.has(p.id)) {
+                    nextPowers.delete(p.id);
+                  } else {
+                    nextPowers.add(p.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextPowers.add(p.id);
+                }
+              }
+            });
           }
         }
         // Ground nodes hit-test
@@ -3096,11 +3202,35 @@ function App() {
               }
             }
             if (bestGroundHit) {
-              nextGrounds.add(bestGroundHit.id);
+              if (shiftWasPressed) {
+                // Toggle selection
+                if (nextGrounds.has(bestGroundHit.id)) {
+                  nextGrounds.delete(bestGroundHit.id);
+                } else {
+                  nextGrounds.add(bestGroundHit.id);
+                }
+              } else {
+                // Add to selection
+                nextGrounds.add(bestGroundHit.id);
+              }
             }
           } else {
             // Rectangle selection: find all ground nodes in rect
-            grounds.forEach(g => { if (groundInRect(g)) nextGrounds.add(g.id); });
+            grounds.forEach(g => {
+              if (groundInRect(g)) {
+                if (shiftWasPressed) {
+                  // Toggle selection
+                  if (nextGrounds.has(g.id)) {
+                    nextGrounds.delete(g.id);
+                  } else {
+                    nextGrounds.add(g.id);
+                  }
+                } else {
+                  // Add to selection
+                  nextGrounds.add(g.id);
+                }
+              }
+            });
           }
         }
         // Always update selections - if Shift wasn't pressed and nothing was found,
