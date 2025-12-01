@@ -59,13 +59,6 @@ export interface SetToolColorDialogProps {
   saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   /** Color palette */
   colorPalette: string[];
-  /** Layer-specific color getters (for syncing registry with state) */
-  topTraceColor: string;
-  bottomTraceColor: string;
-  topPadColor: string;
-  bottomPadColor: string;
-  topComponentColor: string;
-  bottomComponentColor: string;
   /** Callback to close the dialog */
   onClose: () => void;
 }
@@ -92,12 +85,6 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   setComponentConnectionColor,
   saveDefaultColor,
   colorPalette,
-  topTraceColor,
-  bottomTraceColor,
-  topPadColor,
-  bottomPadColor,
-  topComponentColor,
-  bottomComponentColor,
   onClose,
 }) => {
   const [openColorPicker, setOpenColorPicker] = React.useState<{ toolId: string; layer?: 'top' | 'bottom' } | null>(null);

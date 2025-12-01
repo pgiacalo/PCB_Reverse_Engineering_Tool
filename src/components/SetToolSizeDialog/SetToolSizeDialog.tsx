@@ -55,13 +55,6 @@ export interface SetToolSizeDialogProps {
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
   setComponentConnectionSize: (size: number) => void;
-  /** Layer-specific color getters */
-  topTraceColor: string;
-  bottomTraceColor: string;
-  topPadColor: string;
-  bottomPadColor: string;
-  topComponentColor: string;
-  bottomComponentColor: string;
   /** Legacy save function */
   saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
   /** Callback to close the dialog */
@@ -88,12 +81,6 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   setTopComponentSize,
   setBottomComponentSize,
   setComponentConnectionSize,
-  topTraceColor,
-  bottomTraceColor,
-  topPadColor,
-  bottomPadColor,
-  topComponentColor,
-  bottomComponentColor,
   saveDefaultSize,
   onClose,
 }) => {

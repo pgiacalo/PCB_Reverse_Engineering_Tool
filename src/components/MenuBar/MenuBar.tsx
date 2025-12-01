@@ -196,19 +196,19 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   openProjectRef: _openProjectRef,
   increaseSize,
   decreaseSize,
-  brushSize,
-  drawingStrokes,
-  selectedIds,
-  selectedComponentIds,
-  selectedPowerIds,
-  selectedGroundIds,
-  componentsTop,
-  componentsBottom,
-  powers,
-  grounds,
+  brushSize: _brushSize,
+  drawingStrokes: _drawingStrokes,
+  selectedIds: _selectedIds,
+  selectedComponentIds: _selectedComponentIds,
+  selectedPowerIds: _selectedPowerIds,
+  selectedGroundIds: _selectedGroundIds,
+  componentsTop: _componentsTop,
+  componentsBottom: _componentsBottom,
+  powers: _powers,
+  grounds: _grounds,
   powerNodeNames,
   groundNodeNames,
-  setSetSizeDialog,
+  setSetSizeDialog: _setSetSizeDialog,
   areViasLocked,
   setAreViasLocked,
   arePadsLocked,
@@ -257,12 +257,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setTopComponentSize,
   setBottomComponentSize,
   setComponentConnectionSize,
-  topTraceColor,
-  bottomTraceColor,
-  topPadColor,
-  bottomPadColor,
-  topComponentColor,
-  bottomComponentColor,
+  topTraceColor: _topTraceColor,
+  bottomTraceColor: _bottomTraceColor,
+  topPadColor: _topPadColor,
+  bottomPadColor: _bottomPadColor,
+  topComponentColor: _topComponentColor,
+  bottomComponentColor: _bottomComponentColor,
   setTopTraceColor,
   setBottomTraceColor,
   setTopPadColor,
@@ -929,31 +929,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     );
   };
 
-  // Determine current size for Set Size dialog
-  const getCurrentSize = (): number => {
-    if (selectedIds.size > 0) {
-      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
-      if (selectedStrokes.length > 0) {
-        return selectedStrokes[0].size;
-      }
-    } else if (selectedComponentIds.size > 0) {
-      const selectedComp = [...componentsTop, ...componentsBottom].find(c => selectedComponentIds.has(c.id));
-      if (selectedComp) {
-        return selectedComp.size || 18;
-      }
-    } else if (selectedPowerIds.size > 0) {
-      const selectedPower = powers.find(p => selectedPowerIds.has(p.id));
-      if (selectedPower) {
-        return selectedPower.size;
-      }
-    } else if (selectedGroundIds.size > 0) {
-      const selectedGround = grounds.find(g => selectedGroundIds.has(g.id));
-      if (selectedGround) {
-        return selectedGround.size || 18;
-      }
-    }
-    return brushSize;
-  };
 
   return (
     <>
@@ -1535,12 +1510,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setTopComponentSize={setTopComponentSize}
         setBottomComponentSize={setBottomComponentSize}
         setComponentConnectionSize={setComponentConnectionSize}
-        topTraceColor={topTraceColor}
-        bottomTraceColor={bottomTraceColor}
-        topPadColor={topPadColor}
-        bottomPadColor={bottomPadColor}
-        topComponentColor={topComponentColor}
-        bottomComponentColor={bottomComponentColor}
         saveDefaultSize={saveDefaultSize}
         onClose={() => setSetToolSizeDialogVisible(false)}
       />
@@ -1566,12 +1535,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setComponentConnectionColor={setComponentConnectionColor}
         saveDefaultColor={saveDefaultColor}
         colorPalette={colorPalette}
-        topTraceColor={topTraceColor}
-        bottomTraceColor={bottomTraceColor}
-        topPadColor={topPadColor}
-        bottomPadColor={bottomPadColor}
-        topComponentColor={topComponentColor}
-        bottomComponentColor={bottomComponentColor}
         onClose={() => setSetToolColorDialogVisible(false)}
       />
     </>

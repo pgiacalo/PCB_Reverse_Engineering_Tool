@@ -493,7 +493,8 @@ export type Tool =
   | 'component' 
   | 'power'
   | 'ground'
-  | 'center';
+  | 'center'
+  | 'componentConnection';
 
 export type TransformMode = 'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone';
 
