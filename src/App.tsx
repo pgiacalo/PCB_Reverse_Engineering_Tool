@@ -717,6 +717,9 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
+  // Center location feature: allows user to set a custom center point that 'O' key returns to
+  const [isSettingCenterLocation, setIsSettingCenterLocation] = useState(false);
+  const [savedCenterLocation, setSavedCenterLocation] = useState<{ x: number; y: number; zoom: number } | null>(null);
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
@@ -1198,6 +1201,20 @@ function App() {
     const contentCanvasY = canvasY - CONTENT_BORDER;
     const x = (contentCanvasX - viewPan.x) / viewScale;
     const y = (contentCanvasY - viewPan.y) / viewScale;
+
+    // Handle setting center location
+    if (isSettingCenterLocation) {
+      // Save the clicked location and current zoom level as the center location
+      setSavedCenterLocation({
+        x,
+        y,
+        zoom: viewScale,
+      });
+      setIsSettingCenterLocation(false);
+      // Switch back to select tool
+      setCurrentTool('select');
+      return;
+    }
 
     if (currentTool === 'select') {
       // If in pin connection mode, connect the pin to the nearest via/pad
@@ -2777,7 +2794,7 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, isSettingCenterLocation, setSavedCenterLocation, setIsSettingCenterLocation, setCurrentTool]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -3792,11 +3809,14 @@ function App() {
       // ASPECT = width / height, so 1.6 means 1.6x wider than tall (e.g., 1600x1000)
       const ASPECT = 1.6;
       
-      // The toolbar and layers panel are absolutely positioned INSIDE the container,
-      // so we use the FULL container dimensions, but leave some padding
-      const PADDING = 24; // 12px on each side
-      const availableW = container.clientWidth - PADDING;
-      const availableH = container.clientHeight - PADDING;
+      // The toolbar and layers panel are absolutely positioned INSIDE the container
+      // Canvas starts at left: 234px (after Layers panel: 60 + 168 + 6 gap)
+      // Leave some padding on the right
+      const LEFT_OFFSET = 234; // Canvas left position
+      const RIGHT_PADDING = 12; // Right padding
+      const VERTICAL_PADDING = 12; // Top/bottom padding (6px top + 6px bottom)
+      const availableW = container.clientWidth - LEFT_OFFSET - RIGHT_PADDING;
+      const availableH = container.clientHeight - VERTICAL_PADDING;
       
       // Calculate dimensions based on aspect ratio
       // If we use full height, how wide would it be?
@@ -4741,69 +4761,72 @@ function App() {
       
       e.preventDefault();
       e.stopPropagation();
-      // Reset view settings
-      setViewScale(1);
-      // Don't reset image offsets - preserve their alignment
-      // Only reset the view pan to center the images in the visible area
-      // Center the image in the actual visible canvas area (excluding toolbar/layers overlay)
-      // Get the canvas element's actual visible size and position on screen
-      const canvas = canvasRef.current;
-      const container = canvasContainerRef.current;
-      let panX = 0;
-      let panY = 0;
-      if (canvas && container) {
-        // Get the actual visible bounding rectangles
-        const canvasRect = canvas.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-        const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+      
+      // If a center location has been saved, restore to that location
+      if (savedCenterLocation) {
+        // Restore to saved center location and zoom
+        setViewScale(savedCenterLocation.zoom);
         
-        // Toolbar and layers panel positions (absolute within container)
-        // Toolbar: left: 6, width: 44
-        // Layers panel: left: 60, width: 168
-        const LAYERS_LEFT = 60;
-        const LAYERS_WIDTH = 168;
-        const LEFT_OVERLAY = LAYERS_LEFT + LAYERS_WIDTH + 6; // End of layers panel + gap (234px)
+        // Calculate pan to center the saved world location in the visible canvas area
+        // Canvas is now positioned at left: 234px, so the entire canvas is visible
+        const canvas = canvasRef.current;
+        let panX = 0;
+        let panY = 0;
         
-        // Calculate the visible area (canvas area not covered by toolbar/layers)
-        // The canvas starts at the container's left edge, but the left portion is covered
-        const canvasLeftOffset = canvasRect.left - containerRect.left; // Canvas position relative to container
-        const visibleAreaStart = LEFT_OVERLAY - canvasLeftOffset; // Where visible area starts in canvas coordinates
-        const visibleAreaWidth = canvasRect.width - Math.max(0, visibleAreaStart); // Visible width
+        if (canvas) {
+          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+          
+          // Canvas center in content coordinates (entire canvas is visible now)
+          const canvasCenterContentX = contentWidth / 2;
+          const canvasCenterContentY = contentHeight / 2;
+          
+          // Convert saved world location to canvas content coordinates at the saved zoom level
+          const savedWorldX = savedCenterLocation.x;
+          const savedWorldY = savedCenterLocation.y;
+          const savedZoom = savedCenterLocation.zoom;
+          
+          // Pan to center the saved world location: pan = canvasCenter - (worldPos * zoom)
+          panX = canvasCenterContentX - (savedWorldX * savedZoom);
+          panY = canvasCenterContentY - (savedWorldY * savedZoom);
+        }
         
-        // The visible center is at: visibleAreaStart + visibleAreaWidth / 2 (in screen pixels)
-        // But we need it relative to the canvas element's top-left
-        const visibleCenterXScreen = visibleAreaStart + visibleAreaWidth / 2;
-        const visibleCenterYScreen = canvasRect.height / 2; // Vertical center of canvas
-        
-        // Image center in canvas content coordinates
-        const imageCenterX = contentWidth / 2;
-        const imageCenterY = contentHeight / 2;
-        
-        // Convert visible center from screen pixels to canvas content coordinates
-        const scaleX = canvasRect.width / canvas.width;
-        const scaleY = canvasRect.height / canvas.height;
-        
-        // Visible center in canvas pixels (relative to canvas top-left)
-        const visibleCenterXCanvas = visibleCenterXScreen / scaleX;
-        const visibleCenterYCanvas = visibleCenterYScreen / scaleY;
-        
-        // Convert to content coordinates (after CONTENT_BORDER offset)
-        const visibleCenterContentX = visibleCenterXCanvas - CONTENT_BORDER;
-        const visibleCenterContentY = visibleCenterYCanvas - CONTENT_BORDER;
-        
-        // Pan to align image center with visible center
-        panX = visibleCenterContentX - imageCenterX;
-        panY = visibleCenterContentY - imageCenterY;
+        setViewPan({ x: panX, y: panY });
+      } else {
+        // Default behavior: reset view settings
+        setViewScale(1);
+        // Don't reset image offsets - preserve their alignment
+        // Only reset the view pan to center the images in the visible area
+        // Canvas is now positioned at left: 234px, so the entire canvas is visible
+        const canvas = canvasRef.current;
+        let panX = 0;
+        let panY = 0;
+        if (canvas) {
+          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+          
+          // Canvas center in content coordinates (entire canvas is visible now)
+          const canvasCenterContentX = contentWidth / 2;
+          const canvasCenterContentY = contentHeight / 2;
+          
+          // Image center in canvas content coordinates (assuming images are centered at world origin)
+          // For default behavior, we want to center at world origin (0, 0)
+          const imageCenterWorldX = 0;
+          const imageCenterWorldY = 0;
+          
+          // Pan to align world origin with canvas center: pan = canvasCenter - (worldPos * zoom)
+          panX = canvasCenterContentX - (imageCenterWorldX * 1); // zoom is 1
+          panY = canvasCenterContentY - (imageCenterWorldY * 1);
+        }
+        // Reset browser zoom to 100%
+        if (document.body) {
+          document.body.style.zoom = '1';
+        }
+        if (document.documentElement) {
+          document.documentElement.style.zoom = '1';
+        }
+        setViewPan({ x: panX, y: panY });
       }
-      // Reset browser zoom to 100%
-      if (document.body) {
-        document.body.style.zoom = '1';
-      }
-      if (document.documentElement) {
-        document.documentElement.style.zoom = '1';
-      }
-      setViewPan({ x: panX, y: panY });
       setCurrentView('overlay');
       // Clear all selections
       setSelectedIds(new Set());
@@ -5485,7 +5508,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, areGroundNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool, selectedComponentIds, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, arePowerNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool, selectedComponentIds, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, savedCenterLocation]);
 
   // Consolidated initialization function - sets all application defaults
   // This is used on app startup, browser refresh, and when creating a new project
@@ -8915,6 +8938,8 @@ function App() {
         areImagesLocked={areImagesLocked}
         setAreImagesLocked={setAreImagesLocked}
         onEnterBoardDimensions={() => setShowBoardDimensionsDialog(true)}
+        isSettingCenterLocation={isSettingCenterLocation}
+        setIsSettingCenterLocation={setIsSettingCenterLocation}
         fileInputTopRef={fileInputTopRef}
         fileInputBottomRef={fileInputBottomRef}
         openProjectRef={openProjectRef}
@@ -10099,7 +10124,10 @@ function App() {
             onDoubleClick={handleCanvasDoubleClick}
             className={`pcb-canvas ${currentTool === 'transform' ? 'transform-cursor' : currentTool === 'draw' ? 'draw-cursor' : currentTool === 'erase' ? 'erase-cursor' : 'default-cursor'}`}
             style={{
-              ...(canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {})),
+              position: 'absolute',
+              left: '234px', // Start after Layers panel (60 + 168 + 6 gap)
+              top: '6px',
+              ...(isSettingCenterLocation ? { cursor: 'crosshair' } : (canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {}))),
               width: `${canvasSize.width}px`,
               height: `${canvasSize.height}px`,
               maxHeight: 'none',

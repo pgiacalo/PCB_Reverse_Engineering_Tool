@@ -49,6 +49,10 @@ export interface MenuBarProps {
   // Board dimensions
   onEnterBoardDimensions: () => void;
   
+  // Center location
+  isSettingCenterLocation: boolean;
+  setIsSettingCenterLocation: React.Dispatch<React.SetStateAction<boolean>>;
+  
   // File input refs
   fileInputTopRef: React.RefObject<HTMLInputElement | null>;
   fileInputBottomRef: React.RefObject<HTMLInputElement | null>;
@@ -189,6 +193,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   areImagesLocked,
   setAreImagesLocked,
   onEnterBoardDimensions,
+  isSettingCenterLocation,
+  setIsSettingCenterLocation,
   fileInputTopRef,
   fileInputBottomRef,
   openProjectRef: _openProjectRef,
@@ -1056,6 +1062,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: areImagesLocked ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: areImagesLocked ? 'not-allowed' : 'pointer' }}
             >
               Enter PCB Dimensions…
+            </button>
+            <button 
+              onClick={() => { 
+                setIsSettingCenterLocation(true);
+                setOpenMenu(null);
+              }} 
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isSettingCenterLocation ? '#4a9eff' : '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              {isSettingCenterLocation ? '✓ ' : ''}Set Center Location
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Select Image</div>
