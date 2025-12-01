@@ -1,6 +1,7 @@
 /* PCB Reverse Engineering Tool Styles */
 html, body {
   min-height: 100vh;
+  overflow: hidden; /* Eliminate scrollbars */
 }
 
 body {
@@ -431,40 +432,7 @@ button:disabled:hover {
   display: block;
 }
 
-/* Overlay scrollbars bound to viewPan */
-.scrollbar-horizontal {
-  position: absolute;
-  left: 1.5rem;
-  right: 1.5rem;
-  bottom: 0.75rem;
-  height: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background: rgba(0,0,0,0.06);
-  border-radius: 8px;
-}
-
-.scrollbar-horizontal-content {
-  width: 2000px; /* virtual content width to enable scrolling */
-  height: 1px;
-}
-
-.scrollbar-vertical {
-  position: absolute;
-  top: 1.5rem;
-  bottom: 1.5rem;
-  right: 0.75rem;
-  width: 16px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  background: rgba(0,0,0,0.06);
-  border-radius: 8px;
-}
-
-.scrollbar-vertical-content {
-  height: 2000px; /* virtual content height to enable scrolling */
-  width: 1px;
-}
+/* Scrollbars removed - no scrollbars in this single page application */
 
 /* Canvas cursors for different tools */
 .draw-cursor {
@@ -551,21 +519,4 @@ button:disabled:hover {
   transition: all 0.3s ease;
   }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-}
+/* Custom scrollbar styles removed - no scrollbars in this application */

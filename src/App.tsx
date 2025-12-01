@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { rectTransformedBounds, mergeBounds, type Bounds } from './utils/geometry';
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
 import { 
@@ -699,10 +698,6 @@ function App() {
     hasChangesSinceLastAutoSaveRef,
     prevAutoSaveEnabledRef,
   } = fileOperations;
-  const hScrollRef = useRef<HTMLDivElement>(null);
-  const vScrollRef = useRef<HTMLDivElement>(null);
-  const hScrollContentRef = useRef<HTMLDivElement>(null);
-  const vScrollContentRef = useRef<HTMLDivElement>(null);
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
   const performAutoSaveRef = useRef<(() => Promise<void>) | null>(null);
@@ -710,9 +705,6 @@ function App() {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const transparencyCycleRafRef = useRef<number | null>(null);
   const transparencyCycleStartRef = useRef<number | null>(null);
-  const isSyncingScrollRef = useRef<boolean>(false);
-  const contentOriginXRef = useRef<number>(0);
-  const contentOriginYRef = useRef<number>(0);
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
@@ -3720,95 +3712,6 @@ function App() {
     ctx.restore();
   }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked]);
 
-  // Resize scrollbar extents based on transformed image bounds
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    const container = canvasContainerRef.current;
-    const hContent = hScrollContentRef.current;
-    const vContent = vScrollContentRef.current;
-    if (!canvas || !container || !hContent || !vContent) return;
-
-    let bounds: Bounds | null = null;
-    const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-    const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-    const centerX = contentWidth / 2;
-    const centerY = contentHeight / 2;
-    const addImageBounds = (img: typeof topImage | typeof bottomImage) => {
-      if (!img || !img.bitmap) return;
-      const rawW = img.bitmap.width;
-      const rawH = img.bitmap.height;
-      // Keystone: approximate by scaling width/height by max edge scale
-      const tanV = img.keystoneV ? Math.tan(img.keystoneV) : 0;
-      const tanH = img.keystoneH ? Math.tan(img.keystoneH) : 0;
-      const topScale = Math.max(0.2, 1 - tanV);
-      const bottomScale = Math.max(0.2, 1 + tanV);
-      const leftScale = Math.max(0.2, 1 - tanH);
-      const rightScale = Math.max(0.2, 1 + tanH);
-      const kScaleW = Math.max(topScale, bottomScale);
-      const kScaleH = Math.max(leftScale, rightScale);
-      const wK = rawW * kScaleW;
-      const hK = rawH * kScaleH;
-
-      // Slant (skew) extents: shear before rotation
-      const sx = img.skewX ? Math.tan(img.skewX) : 0; // horizontal shear
-      const sy = img.skewY ? Math.tan(img.skewY) : 0; // vertical shear
-      const absScale = Math.abs(img.scale);
-      const wSheared = Math.abs(absScale) * wK + Math.abs(sx) * Math.abs(absScale) * hK;
-      const hSheared = Math.abs(sy) * Math.abs(absScale) * wK + Math.abs(absScale) * hK;
-
-      // Use unit scale in bounds since dimensions already include scale magnitude
-      const b = rectTransformedBounds(
-        wSheared,
-        hSheared,
-        centerX,
-        centerY,
-        img.x,
-        img.y,
-        1,
-        1,
-        img.rotation
-      );
-      bounds = mergeBounds(bounds, b);
-    };
-    addImageBounds(topImage);
-    addImageBounds(bottomImage);
-
-    if (!bounds) {
-      // No images; set minimal scroll extents
-      hContent.style.width = `${container.clientWidth}px`;
-      vContent.style.height = `${container.clientHeight}px`;
-      return;
-    }
-    const nb = bounds as Bounds;
-    const widthWorld = nb.maxX - nb.minX;
-    const heightWorld = nb.maxY - nb.minY;
-    const widthScreen = widthWorld * viewScale;
-    const heightScreen = heightWorld * viewScale;
-
-    const EDGE_PAD = 8; // small pad to ensure the very edges are reachable
-    const desiredW = Math.max(container.clientWidth, Math.ceil(widthScreen) + EDGE_PAD * 2);
-    const desiredH = Math.max(container.clientHeight, Math.ceil(heightScreen) + EDGE_PAD * 2);
-    hContent.style.width = `${desiredW}px`;
-    vContent.style.height = `${desiredH}px`;
-    // Update content origin (position of left/top edge in screen space when viewPan=0)
-    contentOriginXRef.current = nb.minX * viewScale - EDGE_PAD;
-    contentOriginYRef.current = nb.minY * viewScale - EDGE_PAD;
-    // After content size changes, sync scrollbars to current pan
-    const h = hScrollRef.current;
-    const v = vScrollRef.current;
-    isSyncingScrollRef.current = true;
-    if (h) {
-      const maxX = Math.max(0, h.scrollWidth - h.clientWidth);
-      const desired = Math.max(0, Math.min(maxX, -(viewPan.x + contentOriginXRef.current)));
-      h.scrollLeft = desired;
-    }
-    if (v) {
-      const maxY = Math.max(0, v.scrollHeight - v.clientHeight);
-      const desired = Math.max(0, Math.min(maxY, -(viewPan.y + contentOriginYRef.current)));
-      v.scrollTop = desired;
-    }
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
-  }, [topImage, bottomImage, viewScale, viewPan.x, viewPan.y, canvasSize.width, canvasSize.height]);
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
   React.useEffect(() => {
@@ -3820,9 +3723,9 @@ function App() {
       const ASPECT = 1.6;
       
       // The toolbar and layers panel are absolutely positioned INSIDE the container
-      // Canvas starts at left: 234px (after Layers panel: 60 + 168 + 6 gap)
+      // Canvas starts at left: 244px (after Layers panel: 60 + 168 + 6 gap + 10px)
       // Leave some padding on the right
-      const LEFT_OFFSET = 234; // Canvas left position
+      const LEFT_OFFSET = 244; // Canvas left position
       const RIGHT_PADDING = 12; // Right padding
       const VERTICAL_PADDING = 12; // Top/bottom padding (6px top + 6px bottom)
       const availableW = container.clientWidth - LEFT_OFFSET - RIGHT_PADDING;
@@ -4778,7 +4681,7 @@ function App() {
         setViewScale(savedCenterLocation.zoom);
         
         // Calculate pan to center the saved world location in the visible canvas area
-        // Canvas is now positioned at left: 234px, so the entire canvas is visible
+        // Canvas is now positioned at left: 244px, so the entire canvas is visible
         const canvas = canvasRef.current;
         let panX = 0;
         let panY = 0;
@@ -4807,7 +4710,7 @@ function App() {
         setViewScale(1);
         // Don't reset image offsets - preserve their alignment
         // Only reset the view pan to center the images in the visible area
-        // Canvas is now positioned at left: 234px, so the entire canvas is visible
+        // Canvas is now positioned at left: 244px, so the entire canvas is visible
         const canvas = canvasRef.current;
         let panX = 0;
         let panY = 0;
@@ -8836,25 +8739,6 @@ function App() {
     drawCanvas();
   }, [componentsTop, componentsBottom, grounds, showGroundLayer]);
 
-  // Keep scrollbars in sync with viewPan changes from other interactions
-  React.useEffect(() => {
-    const h = hScrollRef.current;
-    const v = vScrollRef.current;
-    isSyncingScrollRef.current = true;
-    if (h) {
-      const maxX = Math.max(0, h.scrollWidth - h.clientWidth);
-      const origin = contentOriginXRef.current;
-      const desired = Math.max(0, Math.min(maxX, -(viewPan.x + origin)));
-      if (Math.abs(h.scrollLeft - desired) > 0.5) h.scrollLeft = desired;
-    }
-    if (v) {
-      const maxY = Math.max(0, v.scrollHeight - v.clientHeight);
-      const origin = contentOriginYRef.current;
-      const desired = Math.max(0, Math.min(maxY, -(viewPan.y + origin)));
-      if (Math.abs(v.scrollTop - desired) > 0.5) v.scrollTop = desired;
-    }
-    requestAnimationFrame(() => { isSyncingScrollRef.current = false; });
-  }, [viewPan.x, viewPan.y]);
 
   // Determine if we're in read-only mode (viewing file history, not the most recent file)
   const isReadOnlyMode = currentFileIndex > 0;
@@ -10174,7 +10058,7 @@ function App() {
             className={`pcb-canvas ${currentTool === 'transform' ? 'transform-cursor' : currentTool === 'draw' ? 'draw-cursor' : currentTool === 'erase' ? 'erase-cursor' : 'default-cursor'}`}
             style={{
               position: 'absolute',
-              left: '234px', // Start after Layers panel (60 + 168 + 6 gap)
+              left: '244px', // Start after Layers panel (60 + 168 + 6 gap + 10px)
               top: '6px',
               ...(canvasCursor ? { cursor: canvasCursor } : (currentTool === 'pan' ? { cursor: isPanning ? 'grabbing' : 'grab' } : {})),
               width: `${canvasSize.width}px`,
@@ -10398,34 +10282,6 @@ function App() {
             </div>
           )}
 
-          {/* Horizontal scrollbar (bottom) */}
-          <div
-            ref={hScrollRef}
-            className="scrollbar-horizontal"
-            onScroll={(e) => {
-              if (isSyncingScrollRef.current) return;
-              const el = e.currentTarget;
-              const origin = contentOriginXRef.current;
-              setViewPan((p) => ({ x: -el.scrollLeft - origin, y: p.y }));
-            }}
-            aria-label="Horizontal pan"
-          >
-            <div className="scrollbar-horizontal-content" ref={hScrollContentRef} />
-          </div>
-
-          {/* Vertical scrollbar (right) */}
-          <div
-            ref={vScrollRef}
-            className="scrollbar-vertical"
-            onScroll={(e) => {
-              if (isSyncingScrollRef.current) return;
-              const el = e.currentTarget;
-              const origin = contentOriginYRef.current;
-              setViewPan((p) => ({ x: p.x, y: -el.scrollTop - origin }));
-            }}
-            aria-label="Vertical pan"
-          >
-          <div className="scrollbar-vertical-content" ref={vScrollContentRef} />
         </div>
       </div>
 
@@ -11728,7 +11584,6 @@ function App() {
       )}
 
     </div>
-  </div>
   );
 }
 
