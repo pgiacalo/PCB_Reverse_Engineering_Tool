@@ -34,6 +34,7 @@ interface DrawingStroke {
   notes?: string | null;
   viaType?: string;
   padType?: string;
+  testPointType?: string;
 }
 
 export interface NotesDialogProps {
@@ -75,6 +76,8 @@ export interface NotesDialogProps {
   determineViaType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Utility function to determine pad type */
   determinePadType: (nodeId: number, powerBuses: PowerBus[]) => string;
+  /** Utility function to determine test point type */
+  determineTestPointType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Dialog position for dragging */
   position: { x: number; y: number } | null;
   /** Whether the dialog is being dragged */
@@ -105,6 +108,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
   setGroundSymbols,
   determineViaType,
   determinePadType,
+  determineTestPointType,
   position,
   isDragging,
   onDragStart,
@@ -482,6 +486,58 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                           fontWeight: 500
                         }}>
                           {padType}
+                        </div>
+                      </div>
+                      <div style={{ padding: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
+                          {point.id && <div>Node ID: {point.id}</div>}
+                        </div>
+                        <textarea
+                          value={notes}
+                          onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
+                          placeholder="Enter notes (max 200 characters)..."
+                          maxLength={MAX_NOTES_LENGTH}
+                          style={{
+                            width: '100%',
+                            minHeight: '50px',
+                            padding: '8px',
+                            fontSize: '11px',
+                            fontFamily: 'sans-serif',
+                            backgroundColor: '#fff',
+                            color: '#000',
+                            border: '1px solid #ccc',
+                            borderRadius: 4,
+                            resize: 'vertical',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                        <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
+                          {charCount} / {MAX_NOTES_LENGTH}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Test Points */}
+              {drawingStrokes
+                .filter(s => selectedIds.has(s.id) && s.type === 'testPoint' && s.points.length > 0)
+                .map((stroke) => {
+                  const point = stroke.points[0];
+                  const testPointType = (stroke as any).testPointType || (point.id !== undefined ? determineTestPointType(point.id, powerBuses) : 'Test Point (Signal)');
+                  const notes = notesMap.get(stroke.id) || '';
+                  const charCount = notes.length;
+                  return (
+                    <div key={stroke.id} style={{ marginTop: '8px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                      <div style={{ backgroundColor: '#000', marginBottom: '8px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                        <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type: </label>
+                        <div style={{
+                          color: '#fff',
+                          padding: '4px 8px',
+                          fontSize: '12px',
+                          fontWeight: 500
+                        }}>
+                          {testPointType}
                         </div>
                       </div>
                       <div style={{ padding: '8px' }}>

@@ -926,6 +926,31 @@ function App() {
     return 'Pad (Signal)';
   }, [powers, grounds]);
 
+  // Helper function to determine test point type based on Node ID connections (same logic as pads)
+  // Rules:
+  // 1. If test point has no POWER or GROUND node at same Node ID → "Test Point (Signal)"
+  // 2. If test point has POWER node at same Node ID → "Test Point (+5VDC Power Node)" etc.
+  // 3. If test point has GROUND node at same Node ID → "Test Point (Ground)"
+  const determineTestPointType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
+    // Check for power node at this Node ID
+    const powerNode = powers.find(p => p.pointId === nodeId);
+    if (powerNode) {
+      const bus = powerBuses.find(b => b.id === powerNode.powerBusId);
+      const powerType = bus ? bus.voltage : (powerNode.type || 'Power Node');
+      return `Test Point (${powerType})`;
+    }
+    
+    // Check for ground node at this Node ID
+    const groundNode = grounds.find(g => g.pointId === nodeId);
+    if (groundNode) {
+      const groundType = groundNode.type || 'Ground';
+      return `Test Point (${groundType})`;
+    }
+    
+    // No power or ground connection → Test Point (Signal)
+    return 'Test Point (Signal)';
+  }, [powers, grounds]);
+
   // Selection functions for "Select All" menu items
   const selectAllVias = useCallback(() => {
     const viaIds = drawingStrokes
@@ -2009,6 +2034,7 @@ function App() {
         // Add a diamond representing a test point at click location
         const testPointColor = brushColor || (testPointToolLayer === 'top' ? topTestPointColor : bottomTestPointColor);
         const testPointSize = brushSize || (testPointToolLayer === 'top' ? topTestPointSize : bottomTestPointSize);
+        const testPointType = determineTestPointType(nodeId, powerBuses);
         
         const testPointStroke: DrawingStroke = {
           id: `${Date.now()}-testPoint`,
@@ -2017,6 +2043,7 @@ function App() {
           size: testPointSize,
           layer: testPointToolLayer,
           type: 'testPoint',
+          testPointType: testPointType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, testPointStroke]);
         return;
@@ -2237,11 +2264,14 @@ function App() {
         if (snapped.nodeId !== undefined) {
           const newViaType = determineViaType(snapped.nodeId, powerBuses);
           const newPadType = determinePadType(snapped.nodeId, powerBuses);
+          const newTestPointType = determineTestPointType(snapped.nodeId, powerBuses);
           setDrawingStrokes(prev => prev.map(s => {
             if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
               return { ...s, viaType: newViaType };
             } else if (s.type === 'pad' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
               return { ...s, padType: newPadType };
+            } else if (s.type === 'testPoint' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
+              return { ...s, testPointType: newTestPointType };
             }
             return s;
           }));
@@ -2358,7 +2388,7 @@ function App() {
       }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, powers, grounds, determineViaType, determinePadType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, testPointToolLayer, powers, grounds, determineViaType, determinePadType, determineTestPointType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -4274,12 +4304,14 @@ function App() {
         ctx.lineTo(c.x, c.y + crosshairLength);
         ctx.stroke();
       } else if (stroke.type === 'testPoint') {
-        // Draw test point as white-filled diamond shape
+        // Draw test point as bright yellow-filled diamond shape with black outline
         const halfSize = Math.max(0.5, stroke.size / 2);
         const crosshairLength = halfSize * 0.7;
         
-        // Draw white-filled diamond
-        ctx.fillStyle = stroke.color;
+        // Draw bright yellow-filled diamond with black border
+        ctx.fillStyle = stroke.color || '#FFFF00'; // Use stroke color or bright yellow default
+        ctx.strokeStyle = '#000000'; // Always black outline
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(c.x, c.y - halfSize); // Top
         ctx.lineTo(c.x + halfSize, c.y); // Right
@@ -4287,6 +4319,7 @@ function App() {
         ctx.lineTo(c.x - halfSize, c.y); // Left
         ctx.closePath();
         ctx.fill();
+        ctx.stroke(); // Draw black outline
         
         // Draw medium gray crosshairs
         ctx.strokeStyle = '#808080'; // Medium gray
@@ -6947,10 +6980,17 @@ function App() {
         if (stroke.padType !== newPadType) {
           return { ...stroke, padType: newPadType };
         }
+      } else if (stroke.type === 'testPoint' && stroke.points.length > 0 && stroke.points[0].id !== undefined) {
+        const nodeId = stroke.points[0].id;
+        const newTestPointType = determineTestPointType(nodeId, powerBuses);
+        // Only update if type changed to avoid unnecessary re-renders
+        if (stroke.testPointType !== newTestPointType) {
+          return { ...stroke, testPointType: newTestPointType };
+        }
       }
       return stroke;
     }));
-  }, [powers, grounds, powerBuses, determineViaType, determinePadType]);
+  }, [powers, grounds, powerBuses, determineViaType, determinePadType, determineTestPointType]);
 
   // Print function - prints only the canvas area
   const handlePrint = useCallback(() => {
@@ -7123,10 +7163,16 @@ function App() {
         if (s.padType !== newPadType) {
           return { ...s, padType: newPadType };
         }
+      } else if (s.type === 'testPoint' && s.points.length > 0 && s.points[0].id !== undefined) {
+        const nodeId = s.points[0].id;
+        const newTestPointType = determineTestPointType(nodeId, powerBuses);
+        if (s.testPointType !== newTestPointType) {
+          return { ...s, testPointType: newTestPointType };
+        }
       }
       return s;
     }));
-  }, [powers, grounds, powerBuses, determineViaType, determinePadType]);
+  }, [powers, grounds, powerBuses, determineViaType, determinePadType, determineTestPointType]);
 
   // Close menus when clicking outside
   React.useEffect(() => {
@@ -9587,8 +9633,8 @@ function App() {
                   const testPointDef = toolRegistry.get('testPoint');
                   const testPointLayer = testPointToolLayer || 'top';
                   // Read from tool registry layerSettings (one source of truth)
-                  const testPointColor = testPointDef?.layerSettings.get(testPointLayer)?.color ?? testPointDef?.settings.color ?? '#FFFFFF';
-                  // Draw diamond shape (white-filled with black border) - made larger
+                  const testPointColor = testPointDef?.layerSettings.get(testPointLayer)?.color ?? testPointDef?.settings.color ?? '#FFFF00'; // Bright yellow default
+                  // Draw diamond shape (bright yellow-filled with black border) - made larger
                   const size = 14;
                   const centerX = 12;
                   const centerY = 12;
@@ -11294,6 +11340,7 @@ function App() {
         setComponentsBottom={setComponentsBottom}
         determineViaType={determineViaType}
         determinePadType={determinePadType}
+        determineTestPointType={determineTestPointType}
         onFindComponent={findAndCenterComponent}
         position={detailedInfoDialogPosition}
         isDragging={isDraggingDetailedInfoDialog}
@@ -11333,6 +11380,7 @@ function App() {
         setGroundSymbols={setGroundSymbols}
         determineViaType={determineViaType}
         determinePadType={determinePadType}
+        determineTestPointType={determineTestPointType}
         position={notesDialogPosition}
         isDragging={isDraggingNotesDialog}
         onDragStart={(e) => {

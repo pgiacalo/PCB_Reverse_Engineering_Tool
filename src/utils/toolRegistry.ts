@@ -120,7 +120,7 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
   // Default layer-specific colors and sizes (from user requirements)
   const DEFAULT_PAD_COLORS = { top: '#0072B2', bottom: '#56B4E9' };
   const DEFAULT_PAD_SIZES = { top: 18, bottom: 18 };
-  const DEFAULT_TEST_POINT_COLORS = { top: '#FFFFFF', bottom: '#FFFFFF' };
+  const DEFAULT_TEST_POINT_COLORS = { top: '#FFFF00', bottom: '#FFFF00' }; // Bright yellow
   const DEFAULT_TEST_POINT_SIZES = { top: 18, bottom: 18 };
   const DEFAULT_TRACE_COLORS = { top: '#AA4499', bottom: '#F781BF' };
   const DEFAULT_TRACE_SIZES = { top: 6, bottom: 6 };
@@ -185,7 +185,7 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: 'Y',
     tooltip: 'Place test point',
     colorReflective: true,
-    settings: loadToolSettings('testPoint', '#FFFFFF', 18),
+    settings: loadToolSettings('testPoint', '#FFFF00', 18), // Bright yellow default
     layerSettings: new Map([
       ['top', loadToolLayerSettings('testPoint', 'top', DEFAULT_TEST_POINT_COLORS.top, DEFAULT_TEST_POINT_SIZES.top)],
       ['bottom', loadToolLayerSettings('testPoint', 'bottom', DEFAULT_TEST_POINT_COLORS.bottom, DEFAULT_TEST_POINT_SIZES.bottom)],

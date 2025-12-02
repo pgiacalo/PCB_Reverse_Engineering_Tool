@@ -46,8 +46,8 @@ export function useLayerSettings() {
       bottomPadColor: localStorage.getItem('defaultBottomPadColor') || '#56B4E9',
       topPadSize: parseInt(localStorage.getItem('defaultTopPadSize') || '18', 10),
       bottomPadSize: parseInt(localStorage.getItem('defaultBottomPadSize') || '18', 10),
-      topTestPointColor: localStorage.getItem('defaultTopTestPointColor') || '#FFFFFF',
-      bottomTestPointColor: localStorage.getItem('defaultBottomTestPointColor') || '#FFFFFF',
+      topTestPointColor: localStorage.getItem('defaultTopTestPointColor') || '#FFFF00', // Bright yellow
+      bottomTestPointColor: localStorage.getItem('defaultBottomTestPointColor') || '#FFFF00', // Bright yellow
       topTestPointSize: parseInt(localStorage.getItem('defaultTopTestPointSize') || '18', 10),
       bottomTestPointSize: parseInt(localStorage.getItem('defaultBottomTestPointSize') || '18', 10),
       topComponentColor: localStorage.getItem('defaultTopComponentColor') || '#8C564B',

@@ -34,6 +34,7 @@ interface DrawingStroke {
   type?: 'trace' | 'via' | 'pad' | 'testPoint';
   viaType?: string;
   padType?: string;
+  testPointType?: string;
 }
 
 export interface DetailedInfoDialogProps {
@@ -69,6 +70,8 @@ export interface DetailedInfoDialogProps {
   determineViaType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Utility function to determine pad type */
   determinePadType: (nodeId: number, powerBuses: PowerBus[]) => string;
+  /** Utility function to determine test point type */
+  determineTestPointType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Callback to find and center on a component */
   onFindComponent?: (componentId: string, x: number, y: number) => void;
   /** Dialog position for dragging */
@@ -96,6 +99,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   setComponentsBottom,
   determineViaType,
   determinePadType,
+  determineTestPointType,
   onFindComponent,
   position,
   isDragging,
@@ -733,6 +737,40 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     fontWeight: 500
                   }}>
                     {padType}
+                  </div>
+                </div>
+                <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                  {point.id && <div>Node ID: {point.id}</div>}
+                  <div>Layer: {stroke.layer}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>Color:</span>
+                    <div style={{ width: '16px', height: '16px', backgroundColor: stroke.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
+                    <span>{stroke.color}</span>
+                  </div>
+                  <div>Size: {stroke.size}</div>
+                  <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Test Points - Formatted UI */}
+          {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'testPoint' && s.points.length > 0).map((stroke) => {
+            const point = stroke.points[0];
+            // Determine test point type - test points belong to only one layer (top or bottom)
+            // Test points always have an id, so this is safe
+            const testPointType = (stroke as any).testPointType || (point.id !== undefined ? determineTestPointType(point.id, powerBuses) : 'Test Point (Signal)');
+            return (
+              <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
+                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                  <div style={{
+                    color: '#fff',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}>
+                    {testPointType}
                   </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>

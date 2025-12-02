@@ -270,9 +270,9 @@ export function generateTestPointCursor(size: number): string {
   const centerY = canvasSize / 2;
   const halfSize = diameter / 2;
   
-  // Draw white diamond with black border
-  ctx.fillStyle = '#FFFFFF';
-  ctx.strokeStyle = '#000000';
+  // Draw bright yellow diamond with black border
+  ctx.fillStyle = '#FFFF00'; // Bright yellow
+  ctx.strokeStyle = '#000000'; // Always black outline
   ctx.lineWidth = 2;
   
   ctx.beginPath();
