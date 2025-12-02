@@ -21,6 +21,7 @@
 
 import React from 'react';
 import type { Tool, ToolDefinition, ToolSettings } from '../../hooks/useToolRegistry';
+import { toolInstanceManager, getToolInstanceId } from '../../utils/toolInstances';
 
 export interface SetToolSizeDialogProps {
   /** Whether the dialog is visible */
@@ -125,49 +126,9 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
       const layerSettings = toolDef.layerSettings.get(layer);
       const currentColor = layerSettings?.color || toolDef.settings.color;
       
-      // Update layer-specific state immediately (following +/- keys pattern)
-      if (toolId === 'trace') {
-        if (layer === 'top') {
-          setTopTraceSize(newSize);
-          saveDefaultSize('trace', newSize, 'top');
-        } else {
-          setBottomTraceSize(newSize);
-          saveDefaultSize('trace', newSize, 'bottom');
-        }
-      } else if (toolId === 'pad') {
-        if (layer === 'top') {
-          setTopPadSize(newSize);
-          saveDefaultSize('pad', newSize, 'top');
-        } else {
-          setBottomPadSize(newSize);
-          saveDefaultSize('pad', newSize, 'bottom');
-        }
-      } else if (toolId === 'testPoint') {
-        if (layer === 'top') {
-          setTopTestPointSize(newSize);
-          saveDefaultSize('testPoint', newSize, 'top');
-        } else {
-          setBottomTestPointSize(newSize);
-          saveDefaultSize('testPoint', newSize, 'bottom');
-        }
-      } else if (toolId === 'component') {
-        if (layer === 'top') {
-          setTopComponentSize(newSize);
-          saveDefaultSize('component', newSize, 'top');
-        } else {
-          setBottomComponentSize(newSize);
-          saveDefaultSize('component', newSize, 'bottom');
-        }
-      }
-      
-      // Update layer-specific settings in registry
-      const newLayerSettings: ToolSettings = {
-        ...layerSettings,
-        color: currentColor,
-        size: newSize,
-      };
-      updateToolLayerSettings(toolId, layer, newLayerSettings);
-      saveToolLayerSettings(toolId, layer, currentColor, newSize);
+      // Update tool instance directly (single source of truth)
+      const toolInstanceId = getToolInstanceId(toolId as any, layer);
+      toolInstanceManager.setSize(toolInstanceId, newSize);
       
       // If this tool is currently active and this layer is selected, update brushSize immediately
       const isActiveTool = 
@@ -185,28 +146,30 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
         }
       }
     } else {
-      // For non-layer tools, just update general settings
-      const newSettings: ToolSettings = {
-        ...toolDef.settings,
-        size: newSize,
-      };
-      updateToolSettings(toolId, newSettings);
-      saveToolSettings(toolId, toolDef.settings.color, newSize);
+      // For non-layer tools, update tool instance directly
+      const toolInstanceId = getToolInstanceId(toolId as any);
+      if (toolInstanceId) {
+        toolInstanceManager.setSize(toolInstanceId, newSize);
+        
+        // If this tool is currently active, update brushSize immediately
+        const isActiveTool = 
+          (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
+          (toolId === 'power' && currentTool === 'power') ||
+          (toolId === 'ground' && currentTool === 'ground');
+        
+        if (isActiveTool) {
+          setBrushSize(newSize);
+        }
+      }
       
-      // Handle component connections specially
+      // Handle component connections specially (not a tool instance)
       if (toolId === 'componentConnection') {
         setComponentConnectionSize(newSize);
         saveDefaultSize('componentConnection', newSize);
       }
       
-      // If this tool is currently active, update brushSize immediately
-      const isActiveTool = 
-        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
-        (toolId === 'power' && currentTool === 'power') ||
-        (toolId === 'ground' && currentTool === 'ground') ||
-        (toolId === 'erase' && currentTool === 'erase');
-      
-      if (isActiveTool) {
+      // Handle erase tool (not a tool instance, uses toolRegistry)
+      if (toolId === 'erase' && currentTool === 'erase') {
         setBrushSize(newSize);
       }
     }

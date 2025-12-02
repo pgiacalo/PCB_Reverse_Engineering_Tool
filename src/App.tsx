@@ -15,6 +15,7 @@ import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } 
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
+import { toolInstanceManager, getToolInstanceId, type ToolInstanceId } from './utils/toolInstances';
 import type { ComponentType, PCBComponent } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
@@ -33,6 +34,7 @@ import {
   usePowerGround,
   useLayerSettings,
   useToolRegistry,
+  useToolState,
   useLocks,
   useDialogs,
   useFileOperations,
@@ -87,6 +89,9 @@ interface TraceSegment {
 
 function App() {
   const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
+  
+  // Tool instances are initialized at module load time (see toolInstances.ts)
+  // Re-initialize from project data if needed (handled in loadProject)
   
   // Initialize hooks
   const image = useImage();
@@ -208,6 +213,42 @@ function App() {
   const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
   const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom'>('top');
   const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
+  
+  // Refs to track current layer immediately (synchronously) for size/color updates
+  // These are updated immediately when layer chooser buttons are clicked, before React state updates
+  const traceToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const padToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const testPointToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const componentToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  
+  // Sync refs with state when state changes
+  React.useEffect(() => {
+    traceToolLayerRef.current = traceToolLayer;
+  }, [traceToolLayer]);
+  React.useEffect(() => {
+    padToolLayerRef.current = padToolLayer;
+  }, [padToolLayer]);
+  React.useEffect(() => {
+    testPointToolLayerRef.current = testPointToolLayer;
+  }, [testPointToolLayer]);
+  React.useEffect(() => {
+    componentToolLayerRef.current = componentToolLayer;
+  }, [componentToolLayer]);
+  
+  // Centralized tool state management - monitors toolbar actions and maintains active tool instance
+  // This hook begins the tool state management decision process whenever a tool is selected:
+  // Step 1: Which tool was selected? (monitored via currentTool, drawingMode)
+  // Step 2: Which layer was selected? (monitored via traceToolLayer, padToolLayer, etc.)
+  // Based on steps 1 and 2, the specific tool instance is determined and its attributes are used
+  const toolStateManager = useToolState({
+    currentTool,
+    drawingMode,
+    traceToolLayer,
+    padToolLayer,
+    testPointToolLayer,
+    componentToolLayer,
+  });
+  const { toolState, setColor: setToolColor, setSize: setToolSize, getCurrentToolInstanceId } = toolStateManager;
   
   // Tool registry hook
   const toolRegistryHook = useToolRegistry(
@@ -513,7 +554,32 @@ function App() {
           prevBrushSizeRef.current = brushSize;
           return updated;
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
-          // Pad layer selection handled elsewhere
+          const layer = padToolLayer || 'top';
+          // Tool settings are project-specific, saved in project file
+          // Update state and legacy defaults
+          if (layer === 'top') {
+            setTopPadColor(brushColor);
+            setTopPadSize(brushSize);
+            saveDefaultColor('pad', brushColor, 'top');
+            saveDefaultSize('pad', brushSize, 'top');
+          } else {
+            setBottomPadColor(brushColor);
+            setBottomPadSize(brushSize);
+            saveDefaultColor('pad', brushColor, 'bottom');
+            saveDefaultSize('pad', brushSize, 'bottom');
+          }
+          // Update registry with layer-specific settings
+          const updated = new Map(prev);
+          const layerSettings = new Map(currentToolDef.layerSettings);
+          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          updated.set(currentToolDef.id, {
+            ...currentToolDef,
+            layerSettings,
+            settings: { color: brushColor, size: brushSize }
+          });
+          prevBrushColorRef.current = brushColor;
+          prevBrushSizeRef.current = brushSize;
+          return updated;
         } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
           const layer = testPointToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
@@ -583,7 +649,7 @@ function App() {
       }
       return prev;
     });
-  }, [brushColor, brushSize, currentTool, drawingMode, traceToolLayer, padToolLayer, componentToolLayer, getCurrentToolDef, saveDefaultColor, saveDefaultSize, saveToolLayerSettings, setTopTraceColor, setBottomTraceColor, setTopTraceSize, setBottomTraceSize, setTopPadColor, setBottomPadColor, setTopPadSize, setBottomPadSize, setTopComponentColor, setBottomComponentColor, setTopComponentSize, setBottomComponentSize]);
+  }, [brushColor, brushSize, currentTool, drawingMode, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, getCurrentToolDef, saveDefaultColor, saveDefaultSize, saveToolLayerSettings, setTopTraceColor, setBottomTraceColor, setTopTraceSize, setBottomTraceSize, setTopPadColor, setBottomPadColor, setTopPadSize, setBottomPadSize, setTopTestPointColor, setBottomTestPointColor, setTopTestPointSize, setBottomTestPointSize, setTopComponentColor, setBottomComponentColor, setTopComponentSize, setBottomComponentSize]);
   
   // Show power bus selector when power tool is selected
   React.useEffect(() => {
@@ -608,6 +674,10 @@ function App() {
   }, [currentTool]);
 
   // Show trace layer chooser when trace tool is selected
+  // When a tool is clicked, this triggers the tool state management process:
+  // Step 1: Which tool was selected? (currentTool, drawingMode)
+  // Step 2: Which layer was selected? (traceToolLayer, defaults to 'top' if not yet selected)
+  // The layer chooser appears, and the tool state management determines the correct tool instance
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'trace') {
       setShowTraceLayerChooser(true);
@@ -617,6 +687,10 @@ function App() {
   }, [currentTool, drawingMode]);
 
   // Show pad layer chooser when pad tool is selected
+  // When a tool is clicked, this triggers the tool state management process:
+  // Step 1: Which tool was selected? (currentTool, drawingMode)
+  // Step 2: Which layer was selected? (padToolLayer, defaults to 'top' if not yet selected)
+  // The layer chooser appears, and the tool state management determines the correct tool instance
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'pad') {
       setShowPadLayerChooser(true);
@@ -626,6 +700,10 @@ function App() {
   }, [currentTool, drawingMode]);
 
   // Show test point layer chooser when test point tool is selected
+  // When a tool is clicked, this triggers the tool state management process:
+  // Step 1: Which tool was selected? (currentTool, drawingMode)
+  // Step 2: Which layer was selected? (testPointToolLayer, defaults to 'top' if not yet selected)
+  // The layer chooser appears, and the tool state management determines the correct tool instance
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'testPoint') {
       setShowTestPointLayerChooser(true);
@@ -633,6 +711,20 @@ function App() {
       setShowTestPointLayerChooser(false);
     }
   }, [currentTool, drawingMode]);
+
+  // Sync brushColor and brushSize with active tool instance (centralized state management)
+  // This ensures brushColor/brushSize always reflect the current tool's attributes
+  // This runs immediately when a tool is selected, beginning the tool state management process
+  React.useEffect(() => {
+    if (toolState.toolInstanceId) {
+      // Tool state management decision process complete:
+      // Step 1: Which tool was selected? ✓ (currentTool, drawingMode)
+      // Step 2: Which layer was selected? ✓ (defaults to 'top' if not yet selected)
+      // Result: Specific tool instance is known and its attributes are used
+      setBrushColor(toolState.color);
+      setBrushSize(toolState.size);
+    }
+  }, [toolState.toolInstanceId, toolState.color, toolState.size, setBrushColor, setBrushSize, currentTool, drawingMode]);
   
   const [canvasCursor, setCanvasCursor] = useState<string | undefined>(undefined);
   const [, setViaOrderTop] = useState<string[]>([]);
@@ -1977,7 +2069,7 @@ function App() {
       }
 
       if (drawingMode === 'testPoint') {
-        // Only place test point if a layer has been selected (like pad tool)
+        // Only place test point if a layer has been selected (like component tool)
         if (!testPointToolLayer) {
           return; // Wait for user to select a layer
         }
@@ -1986,11 +2078,7 @@ function App() {
         const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
           let bestDist = Infinity;
           let bestPoint: { x: number; y: number; id?: number } | null = null;
-          const SNAP_THRESHOLD_SCREEN = 10;
-          const baseThreshold = SNAP_THRESHOLD_SCREEN / viewScale;
-          const SNAP_THRESHOLD_WORLD = viewScale > 10 
-            ? Math.max(baseThreshold, 0.001)
-            : Math.max(baseThreshold, 0.01);
+          const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
           for (const s of drawingStrokes) {
             if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
               const c = s.points[0];
@@ -2030,22 +2118,25 @@ function App() {
         
         const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
         const nodeId = snapped.nodeId ?? generatePointId();
-        
-        // Add a diamond representing a test point at click location
-        const testPointColor = brushColor || (testPointToolLayer === 'top' ? topTestPointColor : bottomTestPointColor);
-        const testPointSize = brushSize || (testPointToolLayer === 'top' ? topTestPointSize : bottomTestPointSize);
         const testPointType = determineTestPointType(nodeId, powerBuses);
         
+        // Truncate coordinates to 3 decimal places for exact matching
+        const truncatedPos = truncatePoint({ x: snapped.x, y: snapped.y });
+        // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
+        const testPointColor = brushColor || (testPointToolLayer === 'top' ? topTestPointColor : bottomTestPointColor);
+        const testPointSize = brushSize || (testPointToolLayer === 'top' ? topTestPointSize : bottomTestPointSize);
         const testPointStroke: DrawingStroke = {
           id: `${Date.now()}-testPoint`,
-          points: [{ id: nodeId, x: snapped.x, y: snapped.y }],
+          points: [{ id: nodeId, x: truncatedPos.x, y: truncatedPos.y }],
           color: testPointColor,
           size: testPointSize,
-          layer: testPointToolLayer,
+          layer: testPointToolLayer, // Use testPointToolLayer instead of selectedDrawingLayer
           type: 'testPoint',
           testPointType: testPointType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, testPointStroke]);
+        
+        // Don't switch back to select tool - stay in test point tool for multiple placements
         return;
       }
 
@@ -2440,15 +2531,16 @@ function App() {
       }
       
       if (pts.length >= 1) {
-        // Use layer-specific colors and sizes for traces
+        // Use centralized tool state (single source of truth)
+        // Get tool instance ID from centralized state management
         const layer = traceToolLayer || 'top';
-        const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
-        const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
+        const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+        const traceInstance = toolInstanceManager.get(traceInstanceId);
         const newStroke: DrawingStroke = {
           id: `${Date.now()}-trace`,
           points: pts,
-          color: traceColor,
-          size: traceSize,
+          color: traceInstance.color,
+          size: traceInstance.size,
           layer: layer,
           type: 'trace',
         };
@@ -2559,15 +2651,16 @@ function App() {
         }
       }
       
-      // Use traceToolLayer and layer-specific colors
+      // Use centralized tool state (single source of truth)
+      // Get tool instance ID from centralized state management
       const layer = traceToolLayer || 'top';
-      const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
-      const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
+      const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+      const traceInstance = toolInstanceManager.get(traceInstanceId);
       const newStroke: DrawingStroke = {
         id: `${Date.now()}-trace`,
         points: deduplicated,
-        color: traceColor,
-        size: traceSize,
+        color: traceInstance.color,
+        size: traceInstance.size,
         layer: layer,
         type: 'trace',
       };
@@ -2582,15 +2675,15 @@ function App() {
     } else {
       // If only a single point was placed, treat it as a dot trace
       if (currentTool === 'draw' && drawingMode === 'trace' && pts.length === 1) {
-        // Use traceToolLayer and layer-specific colors
+        // Use centralized tool state (single source of truth)
         const layer = traceToolLayer || 'top';
-        const traceColor = layer === 'top' ? topTraceColor : bottomTraceColor;
-        const traceSize = layer === 'top' ? topTraceSize : bottomTraceSize;
+        const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+        const traceInstance = toolInstanceManager.get(traceInstanceId);
         const newStroke: DrawingStroke = {
           id: `${Date.now()}-trace-dot`,
           points: pts,
-          color: traceColor,
-          size: traceSize,
+          color: traceInstance.color,
+          size: traceInstance.size,
           layer: layer,
           type: 'trace',
         };
@@ -4629,14 +4722,43 @@ function App() {
         setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
       }
     } else {
-      setBrushSize(b => {
-        const newSize = Math.min(40, b + 1);
-        // Tool settings are project-specific and will be saved in the project file
-        // when brushSize changes, so we don't need to call saveDefaultSize here
-        return newSize;
-      });
+      // Update tool size using centralized tool state management
+      // Use refs as source of truth (updated synchronously in layer chooser buttons)
+      // to avoid stale state from async React state updates
+      let toolInstanceId: ToolInstanceId | null = null;
+      if (currentTool === 'draw' && drawingMode === 'via') {
+        toolInstanceId = 'via';
+      } else if (currentTool === 'draw' && drawingMode === 'pad') {
+        // Use ref for immediate synchronous access to current layer
+        const layer = padToolLayerRef.current;
+        toolInstanceId = layer === 'bottom' ? 'padBottom' : 'padTop';
+      } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+        // Use ref for immediate synchronous access to current layer
+        const layer = testPointToolLayerRef.current;
+        toolInstanceId = layer === 'bottom' ? 'testPointBottom' : 'testPointTop';
+      } else if (currentTool === 'draw' && drawingMode === 'trace') {
+        // Use ref for immediate synchronous access to current layer
+        const layer = traceToolLayerRef.current;
+        toolInstanceId = layer === 'bottom' ? 'traceBottom' : 'traceTop';
+      } else if (currentTool === 'component') {
+        // Use ref for immediate synchronous access to current layer
+        const layer = componentToolLayerRef.current;
+        toolInstanceId = layer === 'bottom' ? 'componentBottom' : 'componentTop';
+      } else if (currentTool === 'power') {
+        toolInstanceId = 'power';
+      } else if (currentTool === 'ground') {
+        toolInstanceId = 'ground';
+      }
+      
+      if (toolInstanceId) {
+        // Read current size directly from tool instance (source of truth) to avoid stale closure values
+        const currentInstance = toolInstanceManager.get(toolInstanceId);
+        const newSize = Math.min(40, currentInstance.size + 1);
+        toolInstanceManager.setSize(toolInstanceId, newSize);
+        // brushSize will be synced automatically via useEffect
+      }
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, saveDefaultSize]);
 
   const decreaseSize = useCallback(() => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
@@ -4712,14 +4834,43 @@ function App() {
         setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
       }
     } else {
-      setBrushSize(b => {
-        const newSize = Math.max(1, b - 1);
-        // Tool settings are project-specific and will be saved in the project file
-        // when brushSize changes, so we don't need to call saveDefaultSize here
-        return newSize;
-      });
+      // Update tool size using centralized tool state management
+      // Use selectedDrawingLayer as source of truth (set synchronously in layer chooser buttons)
+      // to avoid stale state from async React state updates
+      let toolInstanceId: ToolInstanceId | null = null;
+      if (currentTool === 'draw' && drawingMode === 'via') {
+        toolInstanceId = 'via';
+      } else if (currentTool === 'draw' && drawingMode === 'pad') {
+        // Use selectedDrawingLayer as source of truth, fallback to padToolLayer if not set
+        const layer = selectedDrawingLayer || padToolLayer || 'top';
+        toolInstanceId = layer === 'bottom' ? 'padBottom' : 'padTop';
+      } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+        // Use selectedDrawingLayer as source of truth, fallback to testPointToolLayer if not set
+        const layer = selectedDrawingLayer || testPointToolLayer || 'top';
+        toolInstanceId = layer === 'bottom' ? 'testPointBottom' : 'testPointTop';
+      } else if (currentTool === 'draw' && drawingMode === 'trace') {
+        // Use selectedDrawingLayer as source of truth, fallback to traceToolLayer if not set
+        const layer = selectedDrawingLayer || traceToolLayer || 'top';
+        toolInstanceId = layer === 'bottom' ? 'traceBottom' : 'traceTop';
+      } else if (currentTool === 'component') {
+        // Use selectedDrawingLayer as source of truth, fallback to componentToolLayer if not set
+        const layer = selectedDrawingLayer || componentToolLayer || 'top';
+        toolInstanceId = layer === 'bottom' ? 'componentBottom' : 'componentTop';
+      } else if (currentTool === 'power') {
+        toolInstanceId = 'power';
+      } else if (currentTool === 'ground') {
+        toolInstanceId = 'ground';
+      }
+      
+      if (toolInstanceId) {
+        // Read current size directly from tool instance (source of truth) to avoid stale closure values
+        const currentInstance = toolInstanceManager.get(toolInstanceId);
+        const newSize = Math.max(1, currentInstance.size - 1);
+        toolInstanceManager.setSize(toolInstanceId, newSize);
+        // brushSize will be synced automatically via useEffect
+      }
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, saveDefaultSize]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, padToolLayer, testPointToolLayer, traceToolLayer, componentToolLayer, saveDefaultSize]);
 
   // Handle applying size from Set Size dialog
   const handleSetSizeApply = useCallback(() => {
@@ -6686,9 +6837,9 @@ function App() {
       const rInner = r * 0.5;
       const crosshairLength = r * 0.7;
       
-      // Use via color from toolRegistry
-      const viaDef = toolRegistry.get('via');
-      const viaColor = viaDef?.settings.color || localStorage.getItem('defaultViaColor') || '#ff0000' || brushColor;
+      // Use tool instance directly (single source of truth)
+      const viaInstance = toolInstanceManager.get('via');
+      const viaColor = viaInstance.color;
       
       // Draw annulus using even-odd fill rule
       ctx.fillStyle = viaColor;
@@ -6713,20 +6864,24 @@ function App() {
       ctx.lineTo(cx, cy + crosshairLength);
       ctx.stroke();
     } else if (kind === 'pad') {
-      // Use pad color from toolRegistry (layer-specific colors are used when drawing)
-      const padDef = toolRegistry.get('pad');
-      const padColor = padDef?.settings.color || topPadColor || brushColor;
+      // Use tool instance directly (single source of truth)
+      const padInstanceId = padToolLayer === 'top' ? 'padTop' : 'padBottom';
+      const padInstance = toolInstanceManager.get(padInstanceId);
+      const padColor = padInstance.color;
+      // Recalculate diameterPx and r based on tool instance size
+      const padDiameterPx = Math.max(6, Math.round(padInstance.size * scale));
+      const padR = padDiameterPx / 2;
       
       // Draw pad as square annulus (square with square hole) - similar to via but square
-      const outerSize = r * 2;
+      const outerSize = padR * 2;
       const innerSize = outerSize * 0.5; // Inner square is half the size
-      const crosshairLength = r * 0.7;
+      const crosshairLength = padR * 0.7;
       
       // Draw square annulus using even-odd fill rule
       ctx.fillStyle = padColor;
       ctx.beginPath();
       // Outer square
-      ctx.rect(cx - r, cy - r, outerSize, outerSize);
+      ctx.rect(cx - padR, cy - padR, outerSize, outerSize);
       // Inner square (creates the hole with even-odd fill rule)
       ctx.rect(cx - innerSize / 2, cy - innerSize / 2, innerSize, innerSize);
       ctx.fill('evenodd');
@@ -6745,18 +6900,19 @@ function App() {
       ctx.lineTo(cx, cy + crosshairLength);
       ctx.stroke();
     } else if (kind === 'trace') {
-      // Use layer-specific trace colors (like pad pattern)
-      const traceDef = toolRegistry.get('trace');
-      const traceColor = traceDef?.settings.color || (traceToolLayer === 'top' ? topTraceColor : bottomTraceColor) || brushColor;
+      // Use tool instance directly (single source of truth)
+      const traceInstanceId = traceToolLayer === 'top' ? 'traceTop' : 'traceBottom';
+      const traceInstance = toolInstanceManager.get(traceInstanceId);
+      const traceColor = traceInstance.color;
       ctx.fillStyle = traceColor;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
       ctx.fill();
     } else if (kind === 'testPoint') {
-      // Use test point cursor generator
-      const testPointDef = toolRegistry.get('testPoint');
-      const testPointSize = testPointDef?.settings.size || brushSize;
-      setCanvasCursor(generateTestPointCursor(testPointSize));
+      // Use tool instance directly (single source of truth)
+      const testPointInstanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
+      const testPointInstance = toolInstanceManager.get(testPointInstanceId);
+      setCanvasCursor(generateTestPointCursor(testPointInstance.size));
       return;
     } else if (kind === 'erase') {
       // Draw tilted pink eraser matching toolbar icon shape
@@ -6827,7 +6983,9 @@ function App() {
       }
     } else if (kind === 'ground') {
       // Draw ground symbol cursor based on selected ground bus type
-      ctx.strokeStyle = '#000000'; // Ground symbols are always black
+      // Use tool instance directly (single source of truth)
+      const groundInstance = toolInstanceManager.get('ground');
+      ctx.strokeStyle = groundInstance.color;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       
@@ -6878,8 +7036,10 @@ function App() {
       ctx.stroke();
       }
     } else if (kind === 'power') {
-      // Draw power symbol cursor: empty red circle with extending vertical and horizontal lines
-      ctx.strokeStyle = '#ff0000'; // Power symbols are always red
+      // Draw power symbol cursor: empty circle with extending vertical and horizontal lines
+      // Use tool instance directly (single source of truth)
+      const powerInstance = toolInstanceManager.get('power');
+      ctx.strokeStyle = powerInstance.color;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       const lineExtension = r * 0.8; // Lines extend outside the circle
@@ -6902,12 +7062,11 @@ function App() {
       ctx.stroke();
     } else if (kind === 'component') {
       // Draw square component icon with abbreviation text
-      // Use layer-specific component colors based on componentToolLayer (like pad pattern)
-      // Priority: componentToolLayer -> toolRegistry -> fallback
+      // Use tool instance directly (single source of truth)
       const layer = componentToolLayer || 'top';
-      const componentDef = toolRegistry.get('component');
-      // Use layer-specific color based on componentToolLayer (this is the source of truth)
-      const componentColor = (layer === 'top' ? topComponentColor : bottomComponentColor) || componentDef?.settings.color || brushColor;
+      const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
+      const componentInstance = toolInstanceManager.get(componentInstanceId);
+      const componentColor = componentInstance.color;
       const compSize = diameterPx;
       const half = compSize / 2;
       // Draw square
@@ -6928,7 +7087,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, toolRegistry, traceToolLayer, topTraceColor, bottomTraceColor, componentToolLayer, topComponentColor, bottomComponentColor]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -7412,6 +7571,7 @@ function App() {
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
       savedCenterLocation, // Save the center location set by the Center tool
+      toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
   }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, savedCenterLocation]);
@@ -8290,6 +8450,14 @@ function App() {
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
+      // Restore tool instances from project data (single source of truth)
+      if (project.toolInstances) {
+        toolInstanceManager.initializeFromProject(project);
+      } else {
+        // Initialize with defaults if no tool instances in project (backward compatibility)
+        toolInstanceManager.initialize();
+      }
+      
       // Restore project info (name and directory) if present
       if (project.projectInfo) {
         if (project.projectInfo.name) {
@@ -9508,7 +9676,13 @@ function App() {
               </div>
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { setDrawingMode('via'); setCurrentTool('draw'); } }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) { 
+                  console.log('Via tool clicked');
+                  setDrawingMode('via'); 
+                  setCurrentTool('draw'); 
+                } 
+              }} 
               disabled={isReadOnlyMode}
               title="Draw Vias (V)" 
               style={{ 
@@ -9540,13 +9714,14 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>V</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('via')?.settings.size ?? 26}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('via').size}</span>
               </div>
             </button>
             <button 
               ref={padButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) { 
+                  console.log('Pad tool clicked');
                   setDrawingMode('pad'); 
                   setCurrentTool('draw'); 
                   // Default to Top layer, but use last choice if available
@@ -9590,10 +9765,8 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>P</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
-                  const padDef = toolRegistry.get('pad');
-                  const padLayer = padToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  return padDef?.layerSettings.get(padLayer)?.size ?? padDef?.settings.size ?? 18;
+                  const instanceId = padToolLayer === 'top' ? 'padTop' : 'padBottom';
+                  return toolInstanceManager.get(instanceId).size;
                 })()}</span>
               </div>
             </button>
@@ -9601,12 +9774,14 @@ function App() {
               ref={testPointButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) { 
+                  console.log('Test Point tool clicked');
                   setDrawingMode('testPoint'); 
                   setCurrentTool('draw'); 
+                  // Explicitly show the layer chooser on every click
+                  setShowTestPointLayerChooser(true);
                   // Default to Top layer, but use last choice if available
                   const testPointLayerToUse = testPointToolLayer || 'top';
                   setSelectedDrawingLayer(testPointLayerToUse);
-                  // The useEffect hook will automatically show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTestPointChooserPosition(), 0);
                 } 
@@ -9651,10 +9826,8 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>Y</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
-                  const testPointDef = toolRegistry.get('testPoint');
-                  const testPointLayer = testPointToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  return testPointDef?.layerSettings.get(testPointLayer)?.size ?? testPointDef?.settings.size ?? 18;
+                  const instanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
+                  return toolInstanceManager.get(instanceId).size;
                 })()}</span>
               </div>
             </button>
@@ -9662,12 +9835,14 @@ function App() {
               ref={traceButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) {
+                  console.log('Trace tool clicked');
                   setDrawingMode('trace'); 
                   setCurrentTool('draw'); 
+                  // Explicitly show the layer chooser on every click
+                  setShowTraceLayerChooser(true);
                   // Default to Top layer, but use last choice if available
                   const layerToUse = traceToolLayer || 'top';
                   setSelectedDrawingLayer(layerToUse);
-                  // The useEffect hook will automatically show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTraceChooserPosition(), 0);
                 }
@@ -9698,10 +9873,8 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>T</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
-                  const traceDef = toolRegistry.get('trace');
-                  const layer = traceToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  return traceDef?.layerSettings.get(layer)?.size ?? traceDef?.settings.size ?? 6;
+                  const instanceId = traceToolLayer === 'top' ? 'traceTop' : 'traceBottom';
+                  return toolInstanceManager.get(instanceId).size;
                 })()}</span>
               </div>
             </button>
@@ -9709,6 +9882,7 @@ function App() {
               ref={componentButtonRef}
               onClick={() => { 
                 if (!isReadOnlyMode) {
+                  console.log('Component tool clicked');
                   setCurrentTool('component');
                   // Use current global layer setting (selectedDrawingLayer is the source of truth)
                   // Show layer chooser first (like trace/pad pattern)
@@ -9761,17 +9935,20 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>C</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
-                  const componentDef = toolRegistry.get('component');
-                  const layer = componentToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  return componentDef?.layerSettings.get(layer)?.size ?? componentDef?.settings.size ?? 18;
+                  const instanceId = componentToolLayer === 'top' ? 'componentTop' : 'componentBottom';
+                  return toolInstanceManager.get(instanceId).size;
                 })()}</span>
               </div>
             </button>
             {/* Power tool */}
             <button 
               ref={powerButtonRef}
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('power'); }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  console.log('Power tool clicked');
+                  setCurrentTool('power');
+                }
+              }} 
               disabled={isReadOnlyMode}
               title="Draw Power (B)" 
               style={{ 
@@ -9793,13 +9970,18 @@ function App() {
               <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>B</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('power')?.settings.size ?? 18}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('power').size}</span>
               </div>
             </button>
             {/* Ground tool */}
             <button 
               ref={groundButtonRef}
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('ground'); }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  console.log('Ground tool clicked');
+                  setCurrentTool('ground');
+                }
+              }} 
               disabled={isReadOnlyMode}
               title="Draw Ground (G)" 
               style={{ 
@@ -9828,7 +10010,7 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>G</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('ground')?.settings.size ?? 18}</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('ground').size}</span>
               </div>
             </button>
             {/* Center tool */}
@@ -10132,6 +10314,9 @@ function App() {
             <div ref={traceChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'top'} onChange={() => { 
+                  console.log('Trace tool Top clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  traceToolLayerRef.current = 'top';
                   setTraceToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
                   // Use layer-specific trace colors and sizes
@@ -10153,6 +10338,9 @@ function App() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="traceToolLayer" checked={traceToolLayer === 'bottom'} onChange={() => { 
+                  console.log('Trace tool Bottom clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  traceToolLayerRef.current = 'bottom';
                   setTraceToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
                   // Use layer-specific trace colors and sizes
@@ -10179,6 +10367,9 @@ function App() {
             <div ref={padChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="padToolLayer" checked={padToolLayer === 'top'} onChange={() => { 
+                  console.log('Pad tool Top clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  padToolLayerRef.current = 'top';
                   setPadToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
                   // Use layer-specific pad colors and sizes
@@ -10200,6 +10391,9 @@ function App() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="padToolLayer" checked={padToolLayer === 'bottom'} onChange={() => { 
+                  console.log('Pad tool Bottom clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  padToolLayerRef.current = 'bottom';
                   setPadToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
                   // Use layer-specific pad colors and sizes
@@ -10226,6 +10420,9 @@ function App() {
             <div ref={testPointChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="testPointToolLayer" checked={testPointToolLayer === 'top'} onChange={() => { 
+                  console.log('Test Point tool Top clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  testPointToolLayerRef.current = 'top';
                   setTestPointToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
                   // Use layer-specific test point colors and sizes
@@ -10247,6 +10444,9 @@ function App() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="testPointToolLayer" checked={testPointToolLayer === 'bottom'} onChange={() => { 
+                  console.log('Test Point tool Bottom clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  testPointToolLayerRef.current = 'bottom';
                   setTestPointToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
                   // Use layer-specific test point colors and sizes
@@ -10438,6 +10638,9 @@ function App() {
             <div ref={componentLayerChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
                 <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'top'} onClick={() => { 
+                  console.log('Component tool Top clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  componentToolLayerRef.current = 'top';
                   setComponentToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
                   // Use layer-specific component colors and sizes
@@ -10461,6 +10664,9 @@ function App() {
               </label>
               <label className="radio-label">
                 <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'bottom'} onClick={() => { 
+                  console.log('Component tool Bottom clicked');
+                  // Update ref immediately (synchronously) so size/color updates use correct layer
+                  componentToolLayerRef.current = 'bottom';
                   setComponentToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
                   // Use layer-specific component colors and sizes

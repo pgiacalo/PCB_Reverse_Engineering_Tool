@@ -23,6 +23,9 @@ export { useLayerSettings } from './useLayerSettings';
 export { useToolRegistry } from './useToolRegistry';
 export type { Tool, Layer, ToolSettings, ToolDefinition } from './useToolRegistry';
 
+export { useToolState } from './useToolState';
+export type { ToolState, UseToolStateProps } from './useToolState';
+
 export { useLocks } from './useLocks';
 
 export { useDialogs } from './useDialogs';

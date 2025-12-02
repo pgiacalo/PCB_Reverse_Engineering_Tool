@@ -21,6 +21,7 @@
 
 import React from 'react';
 import type { Tool, ToolDefinition, ToolSettings } from '../../hooks/useToolRegistry';
+import { toolInstanceManager, getToolInstanceId } from '../../utils/toolInstances';
 
 export interface SetToolColorDialogProps {
   /** Whether the dialog is visible */
@@ -124,51 +125,9 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
     if (!toolDef) return;
 
     if (layer && layerTools.includes(toolId)) {
-      // Update layer-specific settings
-      const layerSettings = toolDef.layerSettings.get(layer);
-      const currentSize = layerSettings?.size || toolDef.settings.size;
-      
-      // Update layer-specific state immediately (following Set Tool Size pattern)
-      if (toolId === 'trace') {
-        if (layer === 'top') {
-          setTopTraceColor(color);
-          saveDefaultColor('trace', color, 'top');
-        } else {
-          setBottomTraceColor(color);
-          saveDefaultColor('trace', color, 'bottom');
-        }
-      } else if (toolId === 'pad') {
-        if (layer === 'top') {
-          setTopPadColor(color);
-          saveDefaultColor('pad', color, 'top');
-        } else {
-          setBottomPadColor(color);
-          saveDefaultColor('pad', color, 'bottom');
-        }
-      } else if (toolId === 'testPoint') {
-        if (layer === 'top') {
-          setTopTestPointColor(color);
-          saveDefaultColor('testPoint', color, 'top');
-        } else {
-          setBottomTestPointColor(color);
-          saveDefaultColor('testPoint', color, 'bottom');
-        }
-      } else if (toolId === 'component') {
-        if (layer === 'top') {
-          setTopComponentColor(color);
-          saveDefaultColor('component', color, 'top');
-        } else {
-          setBottomComponentColor(color);
-          saveDefaultColor('component', color, 'bottom');
-        }
-      }
-      
-      const newLayerSettings: ToolSettings = {
-        color,
-        size: currentSize,
-      };
-      updateToolLayerSettings(toolId, layer, newLayerSettings);
-      saveToolLayerSettings(toolId, layer, color, currentSize);
+      // Update tool instance directly (single source of truth)
+      const toolInstanceId = getToolInstanceId(toolId as any, layer);
+      toolInstanceManager.setColor(toolInstanceId, color);
       
       // If this tool is currently active and this layer is selected, update brushColor immediately
       const isActiveTool = 
@@ -186,38 +145,27 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
         }
       }
     } else {
-      // For non-layer tools, just update general settings
-      const newSettings: ToolSettings = {
-        ...toolDef.settings,
-        color,
-      };
-      updateToolSettings(toolId, newSettings);
-      saveToolSettings(toolId, color, toolDef.settings.size);
-      
-      // If this tool is currently active, update brushColor immediately
-      const isActiveTool = 
-        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
-        (toolId === 'power' && currentTool === 'power') ||
-        (toolId === 'ground' && currentTool === 'ground') ||
-        (toolId === 'erase' && currentTool === 'erase');
-      
-      if (isActiveTool) {
-        setBrushColor(color);
+      // For non-layer tools, update tool instance directly
+      const toolInstanceId = getToolInstanceId(toolId as any);
+      if (toolInstanceId) {
+        toolInstanceManager.setColor(toolInstanceId, color);
+        
+        // If this tool is currently active, update brushColor immediately
+        const isActiveTool = 
+          (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
+          (toolId === 'power' && currentTool === 'power') ||
+          (toolId === 'ground' && currentTool === 'ground');
+        
+        if (isActiveTool) {
+          setBrushColor(color);
+        }
       }
       
-      // Handle component connections specially
+      // Handle component connections specially (not a tool instance)
       if (toolId === 'componentConnection') {
         setComponentConnectionColor(color);
         saveDefaultColor('componentConnection', color);
       }
-      
-      // Save default color for legacy support
-      if (toolId === 'via') {
-        saveDefaultColor('via', color);
-      } else if (toolId === 'erase') {
-        saveDefaultColor('brush', color);
-      }
-      // Note: power and ground colors are saved via updateToolSettings above
     }
     
     setOpenColorPicker(null);

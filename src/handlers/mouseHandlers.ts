@@ -29,6 +29,7 @@ import type { DrawingStroke, DrawingPoint } from '../hooks/useDrawing';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../hooks/usePowerGround';
 import type { Layer, Tool } from '../hooks';
 import { autoAssignPolarity } from '../utils/components';
+import { toolInstanceManager, getToolInstanceId } from '../utils/toolInstances';
 
 export interface MouseHandlersProps {
   // Canvas and view
@@ -39,7 +40,7 @@ export interface MouseHandlersProps {
   
   // Tool state
   currentTool: Tool;
-  drawingMode: 'trace' | 'via' | 'pad';
+  drawingMode: 'trace' | 'via' | 'pad' | 'testPoint';
   selectedDrawingLayer: Layer;
   
   // Drawing state
@@ -73,6 +74,7 @@ export interface MouseHandlersProps {
   // Drawing strokes
   drawingStrokes: DrawingStroke[];
   padToolLayer: Layer | null;
+  testPointToolLayer: Layer | null;
   
   // Power and ground
   powers: PowerSymbol[];
@@ -108,6 +110,10 @@ export interface MouseHandlersProps {
   bottomTraceColor: string;
   topTraceSize: number;
   bottomTraceSize: number;
+  topTestPointColor: string;
+  bottomTestPointColor: string;
+  topTestPointSize: number;
+  bottomTestPointSize: number;
   isSnapDisabled: boolean;
   
   // Locks
@@ -125,6 +131,7 @@ export interface MouseHandlersProps {
   getDefaultAbbreviation: (type: any) => string;
   determineViaType: (nodeId: number, powerBuses: PowerBus[]) => string;
   determinePadType: (nodeId: number, powerBuses: PowerBus[]) => string;
+  determineTestPointType: (nodeId: number, powerBuses: PowerBus[]) => string;
   snapConstrainedPoint: (start: DrawingPoint, x: number, y: number) => { x: number; y: number };
   alert: (message: string) => void;
   
@@ -215,6 +222,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     traceToolLayer,
     drawingStrokes,
     padToolLayer,
+    testPointToolLayer,
     powers,
     grounds,
     selectedPowerBusId,
@@ -238,6 +246,10 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     bottomTraceColor: _bottomTraceColor,
     topTraceSize: _topTraceSize,
     bottomTraceSize: _bottomTraceSize,
+    topTestPointColor,
+    bottomTestPointColor,
+    topTestPointSize,
+    bottomTestPointSize,
     isSnapDisabled,
     areViasLocked,
     arePadsLocked,
@@ -249,6 +261,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     getDefaultAbbreviation,
     determineViaType,
     determinePadType,
+    determineTestPointType,
     snapConstrainedPoint: _snapConstrainedPoint,
     alert,
     setCurrentStroke,
@@ -757,11 +770,10 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Use brushSize and brushColor (which are synced with tool registry) for immediate updates
-        const viaDef = toolRegistry.get('via');
-        // Use brushSize and brushColor which are kept in sync with tool registry
-        const viaColor = brushColor || viaDef?.settings.color || defaultViaColor;
-        const viaSize = brushSize || viaDef?.settings.size || viaDefaultSize;
+        // Use tool instance directly (single source of truth)
+        const viaInstance = toolInstanceManager.get('via');
+        const viaColor = viaInstance.color;
+        const viaSize = viaInstance.size;
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x, y });
         const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
@@ -784,28 +796,152 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
       }
 
       if (drawingMode === 'pad') {
-        // Only place pad if a layer has been selected (like trace tool)
+        // Only place pad if a layer has been selected (like via tool, but with layer selection)
         if (!padToolLayer) {
           return; // Wait for user to select a layer
         }
         
         // Add a square representing a pad at click location
-        // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
-        const padColor = brushColor || (padToolLayer === 'top' ? topPadColor : bottomPadColor);
-        const padSize = brushSize || (padToolLayer === 'top' ? topPadSize : bottomPadSize);
+        // Use tool instance directly (single source of truth)
+        const padInstanceId = padToolLayer === 'top' ? 'padTop' : 'padBottom';
+        const padInstance = toolInstanceManager.get(padInstanceId);
+        const padColor = padInstance.color;
+        const padSize = padInstance.size;
+        
+        // Snap to nearest via, pad, test point, power, or ground node unless Option/Alt key is held
+        const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            }
+          }
+          for (const p of powers) {
+            if (p.pointId !== undefined) {
+              const d = Math.hypot(p.x - wx, p.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: p.x, y: p.y, id: p.pointId };
+              }
+            }
+          }
+          for (const g of grounds) {
+            if (g.pointId !== undefined) {
+              const d = Math.hypot(g.x - wx, g.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: g.x, y: g.y, id: g.pointId };
+              }
+            }
+          }
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        
+        const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        const padType = determinePadType(nodeId, powerBuses);
+        
         // Truncate coordinates to 3 decimal places for exact matching
-        const truncatedPos = truncatePoint({ x, y });
-        const center = { id: generatePointId(), x: truncatedPos.x, y: truncatedPos.y };
+        const truncatedPos = truncatePoint({ x: snapped.x, y: snapped.y });
+        const center = { id: nodeId, x: truncatedPos.x, y: truncatedPos.y };
         const padStroke: DrawingStroke = {
           id: `${Date.now()}-pad`,
           points: [center],
           color: padColor,
           size: padSize,
-          layer: padToolLayer, // Use padToolLayer instead of selectedDrawingLayer
+          layer: padToolLayer,
           type: 'pad',
-          padType: 'Pad (Signal)', // Default: Pad (Signal) (no power/ground connection)
+          padType: padType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, padStroke]);
+        return;
+      }
+
+      if (drawingMode === 'testPoint') {
+        // Only place test point if a layer has been selected (like via tool, but with layer selection)
+        if (!testPointToolLayer) {
+          return; // Wait for user to select a layer
+        }
+        
+        // Add a diamond representing a test point at click location
+        // Use tool instance directly (single source of truth)
+        const testPointInstanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
+        const testPointInstance = toolInstanceManager.get(testPointInstanceId);
+        const testPointColor = testPointInstance.color;
+        const testPointSize = testPointInstance.size;
+        
+        // Snap to nearest via, pad, test point, power, or ground node unless Option/Alt key is held
+        const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
+          let bestDist = Infinity;
+          let bestPoint: { x: number; y: number; id?: number } | null = null;
+          const SNAP_THRESHOLD_WORLD = 15; // Fixed world-space distance (not affected by zoom)
+          for (const s of drawingStrokes) {
+            if (s.type === 'via' || s.type === 'pad' || s.type === 'testPoint') {
+              const c = s.points[0];
+              const d = Math.hypot(c.x - wx, c.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = c;
+              }
+            }
+          }
+          for (const p of powers) {
+            if (p.pointId !== undefined) {
+              const d = Math.hypot(p.x - wx, p.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: p.x, y: p.y, id: p.pointId };
+              }
+            }
+          }
+          for (const g of grounds) {
+            if (g.pointId !== undefined) {
+              const d = Math.hypot(g.x - wx, g.y - wy);
+              if (d <= SNAP_THRESHOLD_WORLD && d < bestDist) {
+                bestDist = d;
+                bestPoint = { x: g.x, y: g.y, id: g.pointId };
+              }
+            }
+          }
+          const result = bestPoint ?? { x: wx, y: wy };
+          const truncated = truncatePoint(result);
+          return {
+            x: truncated.x,
+            y: truncated.y,
+            nodeId: bestPoint?.id
+          };
+        };
+        
+        const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
+        const nodeId = snapped.nodeId ?? generatePointId();
+        const testPointType = determineTestPointType(nodeId, powerBuses);
+        
+        // Truncate coordinates to 3 decimal places for exact matching
+        const truncatedPos = truncatePoint({ x: snapped.x, y: snapped.y });
+        const center = { id: nodeId, x: truncatedPos.x, y: truncatedPos.y };
+        const testPointStroke: DrawingStroke = {
+          id: `${Date.now()}-testPoint`,
+          points: [center],
+          color: testPointColor,
+          size: testPointSize,
+          layer: testPointToolLayer,
+          type: 'testPoint',
+          testPointType: testPointType, // Auto-detected type
+        };
+        setDrawingStrokes(prev => [...prev, testPointStroke]);
         return;
       }
 
@@ -870,9 +1006,11 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
-      const componentColor = brushColor || (componentToolLayer === 'top' ? topComponentColor : bottomComponentColor);
-      const componentSize = brushSize || (componentToolLayer === 'top' ? topComponentSize : bottomComponentSize);
+      // Use tool instance directly (single source of truth)
+      const componentInstanceId = componentToolLayer === 'top' ? 'componentTop' : 'componentBottom';
+      const componentInstance = toolInstanceManager.get(componentInstanceId);
+      const componentColor = componentInstance.color;
+      const componentSize = componentInstance.size;
       const comp = createComponent(
         selectedComponentType,
         componentToolLayer, // Use componentToolLayer instead of selectedDrawingLayer
@@ -958,12 +1096,14 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         }
         
         // Place power node immediately
+        // Use tool instance directly (single source of truth)
+        const powerInstance = toolInstanceManager.get('power');
         const p: PowerSymbol = {
           id: `power-${Date.now()}-${Math.random()}`,
           x: snapped.x,
           y: snapped.y,
-          color: '#ff0000', // Power symbols are always red
-          size: brushSize,
+          color: powerInstance.color,
+          size: powerInstance.size,
           powerBusId: bus.id,
           layer: selectedDrawingLayer,
           type: powerType, // Auto-populate type with voltage
@@ -1039,12 +1179,14 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
       }
       
       // If we snapped to an existing object, use its Node ID; otherwise generate a new one
+      // Use tool instance directly (single source of truth)
+      const groundInstance = toolInstanceManager.get('ground');
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         x: snapped.x,
         y: snapped.y,
-        color: '#000000', // Ground symbols are always black
-        size: brushSize || toolRegistry.get('ground')?.settings.size || 18,
+        color: groundInstance.color,
+        size: groundInstance.size,
         type: groundType, // Auto-populate type
         pointId: nodeId, // Use existing Node ID if snapped, otherwise generate new one
         layer: selectedDrawingLayer, // Set layer based on current drawing layer
@@ -1085,13 +1227,19 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     selectedComponentType,
     toolRegistry,
     padToolLayer,
+    testPointToolLayer,
     traceToolLayer,
     componentToolLayer,
     brushSize,
+    brushColor,
     topPadColor,
     bottomPadColor,
     topPadSize,
     bottomPadSize,
+    topTestPointColor,
+    bottomTestPointColor,
+    topTestPointSize,
+    bottomTestPointSize,
     topComponentColor,
     bottomComponentColor,
     topComponentSize,
@@ -1109,6 +1257,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
     getDefaultAbbreviation,
     determineViaType,
     determinePadType,
+    determineTestPointType,
     setCurrentStroke,
     setDrawingStrokes,
     setIsDrawing,
