@@ -11342,6 +11342,7 @@ function App() {
         determinePadType={determinePadType}
         determineTestPointType={determineTestPointType}
         onFindComponent={findAndCenterComponent}
+        onOpenNotesDialog={() => setNotesDialogVisible(true)}
         position={detailedInfoDialogPosition}
         isDragging={isDraggingDetailedInfoDialog}
         onDragStart={(e) => {

@@ -35,6 +35,7 @@ interface DrawingStroke {
   viaType?: string;
   padType?: string;
   testPointType?: string;
+  notes?: string | null;
 }
 
 export interface DetailedInfoDialogProps {
@@ -80,6 +81,8 @@ export interface DetailedInfoDialogProps {
   isDragging: boolean;
   /** Callback when drag starts */
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
+  /** Callback to open the Notes dialog */
+  onOpenNotesDialog?: () => void;
 }
 
 export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
@@ -104,6 +107,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   position,
   isDragging,
   onDragStart,
+  onOpenNotesDialog,
 }) => {
   if (!visible) return null;
 
@@ -681,6 +685,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee', fontSize: '10px', color: '#999' }}>
                     <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
                   </div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={comp.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             ));
@@ -715,6 +746,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   </div>
                   <div>Size: {stroke.size}</div>
                   <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={stroke.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -749,6 +807,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   </div>
                   <div>Size: {stroke.size}</div>
                   <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={stroke.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -783,6 +868,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   </div>
                   <div>Size: {stroke.size}</div>
                   <div>Position: x={point.x.toFixed(2)}, y={point.y.toFixed(2)}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={stroke.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -841,6 +953,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     <span>{stroke.color}</span>
                   </div>
                   <div>Size: {stroke.size}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={stroke.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -873,6 +1012,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   <div>Layer: {power.layer}</div>
                   <div>Power Bus: {bus?.name || power.powerBusId || '(unknown)'}</div>
                   <div>Position: x={power.x.toFixed(2)}, y={power.y.toFixed(2)}</div>
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={power.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             );
@@ -901,6 +1067,33 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                 </div>
                 <div>Size: {ground.size}</div>
                 <div>Position: x={ground.x.toFixed(2)}, y={ground.y.toFixed(2)}</div>
+                <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={ground.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                </div>
               </div>
             </div>
           ))}
