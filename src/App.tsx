@@ -9821,7 +9821,6 @@ function App() {
           // Check if getParent() method exists (browser support varies)
           if (typeof (handle as any).getParent === 'function') {
             projectDirHandle = await (handle as any).getParent();
-            console.log(`✓ Got directory handle via getParent(): "${projectDirHandle.name}"`);
           } else {
             // getParent() is not available - we need to prompt for directory access
             console.warn('getParent() not available. Prompting user for directory access...');
@@ -9832,7 +9831,6 @@ function App() {
               projectDirHandle = await w.showDirectoryPicker({
                 startIn: 'documents', // Suggest documents folder
               });
-              console.log(`✓ Got directory handle via showDirectoryPicker(): "${projectDirHandle.name}"`);
             } else {
               throw new Error('Directory picker not available in this browser');
             }
@@ -9847,29 +9845,17 @@ function App() {
             if (verifyFile.name !== file.name) {
               throw new Error(`Directory verification failed: file name mismatch`);
             }
-            console.log(`✓ Verified: Opened file "${file.name}" exists in directory "${projectDirHandle.name}"`);
           } catch (verifyError) {
-            console.error(`✗ Directory verification failed:`, verifyError);
-            console.error(`  - The selected directory might not contain the opened file`);
+            console.error(`Directory verification failed:`, verifyError);
+            console.error(`The selected directory might not contain the opened file`);
             // Don't continue - we need the correct directory
             throw new Error('Directory verification failed - selected directory does not contain the opened file');
           }
           
-          // Log directory handle information
-          const dirName = projectDirHandle.name || 'unnamed';
-          console.log(`Opened project file: ${file.name}`);
-          console.log(`  - Directory handle: "${dirName}"`);
-          console.log(`  - Previous projectDirHandleRef.current: ${projectDirHandleRef.current?.name || 'null'}`);
-          console.log(`  - Are handles the same object reference? ${projectDirHandle === projectDirHandleRef.current}`);
-          
           // CRITICAL FIX: Always update the ref with the NEW handle
           // We MUST use this handle, not any cached/stale handle from a previous project
-          const previousDirName = projectDirHandleRef.current?.name || 'null';
           setProjectDirHandle(projectDirHandle);
           projectDirHandleRef.current = projectDirHandle;
-          
-          console.log(`  - Updated projectDirHandleRef.current from "${previousDirName}" to "${projectDirHandleRef.current?.name || 'null'}"`);
-          console.log(`  - Auto-save will use directory: "${dirName}"`);
         } catch (e) {
           console.error('Failed to get directory handle from file handle:', e);
           alert('Failed to get directory access. Auto-save will not work until you enable it manually via File -> Auto Save.');
@@ -9910,18 +9896,12 @@ function App() {
         // The issue is that performAutoSave uses projectDirHandleRef.current, not autoSaveDirHandle
         // Also, loadProject restores the old baseName from the file, which might be from a different project
         if (wasAutoSaveEnabledInFile && projectDirHandle) {
-          console.log(`Auto save: Opening project with auto-save enabled. Updating directory to "${projectDirHandle.name}"`);
-          
           // CRITICAL: Update base name to match the CURRENT project name, not the one from the file
           // The file might have an old baseName from when it was last saved (e.g., PROJ_2)
           // but we're opening it as PROJ_1, so we need to use PROJ_1 as the baseName
           const projectNameWithoutExt = projectNameToUse.replace(/\.json$/i, '');
           const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
           const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
-          
-          console.log(`  - Project name from file: ${projectNameToUse}`);
-          console.log(`  - Base name from file (old): ${project.autoSave?.baseName || 'none'}`);
-          console.log(`  - New base name (current project): ${cleanBaseName}`);
           
           // Update autoSaveDirHandle state (for the useEffect dependency)
           setAutoSaveDirHandle(projectDirHandle);
@@ -9937,15 +9917,9 @@ function App() {
           // CRITICAL: Force restart the interval by clearing it and letting the useEffect recreate it
           // This ensures the interval callback uses the updated projectDirHandleRef
           if (autoSaveIntervalRef.current) {
-            console.log('Auto save: Clearing existing interval to restart with new directory and baseName');
             clearInterval(autoSaveIntervalRef.current);
             autoSaveIntervalRef.current = null;
           }
-          
-          console.log(`Auto save: Updated to use directory "${projectDirHandle.name}" with base name "${cleanBaseName}"`);
-          console.log(`  - projectDirHandleRef.current: ${projectDirHandleRef.current?.name || 'missing'}`);
-          console.log(`  - autoSaveDirHandleRef.current: ${autoSaveDirHandleRef.current?.name || 'missing'}`);
-          console.log(`  - autoSaveBaseNameRef.current: ${autoSaveBaseNameRef.current || 'missing'}`);
           // Note: The useEffect at line 8296 will automatically restart the interval
           // when autoSaveDirHandle or autoSaveBaseName changes
         }
