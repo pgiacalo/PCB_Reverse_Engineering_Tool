@@ -781,7 +781,40 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
-            <input id={`component-datasheet-${comp.id}`} type="text" value={componentEditor.datasheet || ''} onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }} placeholder="URL" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
+              <input id={`component-datasheet-${comp.id}`} type="text" value={componentEditor.datasheet || ''} onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="URL" />
+              {componentEditor.datasheet && componentEditor.datasheet.trim() && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const url = componentEditor.datasheet.trim();
+                    // Ensure URL has a protocol
+                    const urlWithProtocol = url.match(/^https?:\/\//) ? url : `https://${url}`;
+                    window.open(urlWithProtocol, '_blank', 'noopener,noreferrer');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: areComponentsLocked ? 0.4 : 1,
+                    flexShrink: 0,
+                  }}
+                  title="Open URL in new tab"
+                  disabled={areComponentsLocked}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#4a9eff' }}>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
