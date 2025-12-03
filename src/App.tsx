@@ -9802,11 +9802,17 @@ function App() {
         try {
           projectDirHandle = await handle.getParent();
           setProjectDirHandle(projectDirHandle);
+          // Update ref immediately so performAutoSave can use it right away
+          projectDirHandleRef.current = projectDirHandle;
           console.log(`Opened project file: ${file.name} in directory (auto-save will use this directory)`);
         } catch (e) {
           console.warn('Could not get directory handle from file handle:', e);
           // Continue without directory handle (fallback will prompt if needed)
         }
+        
+        // Check if auto-save was enabled in the project file BEFORE calling loadProject
+        // This ensures we can update the directory handle immediately if needed
+        const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
         
         await loadProject(project);
         
@@ -9825,11 +9831,13 @@ function App() {
           localStorage.setItem('pcb_project_name', projectNameToUse);
         }
         
-        // Option 3: If auto-save is enabled, update autoSaveDirHandle to match projectDirHandle
+        // Option 3: If auto-save was enabled in the file, update autoSaveDirHandle to match projectDirHandle
         // This ensures auto-save uses the correct directory for the opened project
+        // We check the project file directly, not the state variable, because loadProject
+        // might not have finished updating the state yet
         // Option 1: The useEffect at line 8296 will automatically restart the interval
         // when autoSaveDirHandle or autoSaveBaseName changes
-        if (autoSaveEnabled && projectDirHandle) {
+        if (wasAutoSaveEnabledInFile && projectDirHandle) {
           console.log('Auto save: Updating directory handle to match opened project directory');
           setAutoSaveDirHandle(projectDirHandle);
           
@@ -9840,6 +9848,7 @@ function App() {
           setAutoSaveBaseName(cleanBaseName);
           
           // Update refs immediately so performAutoSave can use them
+          // Note: projectDirHandleRef was already updated above, but update autoSaveDirHandleRef too
           autoSaveDirHandleRef.current = projectDirHandle;
           autoSaveBaseNameRef.current = cleanBaseName;
           
