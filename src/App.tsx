@@ -917,10 +917,12 @@ function App() {
   const powers = powerSymbols;
   const grounds = groundSymbols;
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
+  const [editingPowerBusId, setEditingPowerBusId] = useState<string | null>(null);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground bus management (similar to power buses)
   const [showGroundBusManager, setShowGroundBusManager] = useState(false);
+  const [editingGroundBusId, setEditingGroundBusId] = useState<string | null>(null);
   const [showGroundBusSelector, setShowGroundBusSelector] = useState(false);
   const [selectedGroundBusId, setSelectedGroundBusId] = useState<string | null>(null);
   // Designator management
@@ -3458,12 +3460,15 @@ function App() {
               const padLayer = s.layer || 'top';
               isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
             } else if (s.type === 'testPoint') {
-              // Test points have layer-specific visibility
+              // Test points have layer-specific visibility - check their own layer, not trace layer
               const testPointLayer = s.layer || 'top';
               isVisible = testPointLayer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
-            } else {
-              // Trace or default type
+            } else if (s.type === 'trace') {
+              // Traces have layer-specific visibility
               isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+            } else {
+              // Unknown type or default - don't show
+              isVisible = false;
             }
             if (!isVisible) continue;
             
@@ -3519,12 +3524,15 @@ function App() {
               const padLayer = s.layer || 'top';
               isVisible = padLayer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
             } else if (s.type === 'testPoint') {
-              // Test points have layer-specific visibility
+              // Test points have layer-specific visibility - check their own layer, not trace layer
               const testPointLayer = s.layer || 'top';
               isVisible = testPointLayer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
-            } else {
-              // Trace or default type
+            } else if (s.type === 'trace') {
+              // Traces have layer-specific visibility
               isVisible = s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+            } else {
+              // Unknown type or default - don't show
+              isVisible = false;
             }
             if (!isVisible) continue;
             
@@ -4527,14 +4535,16 @@ function App() {
       if (stroke.type === 'via') {
         if (!showViasLayer) return;
       } else if (stroke.type === 'pad') {
-        // Check pad visibility based on layer
+        // Check pad visibility based on layer - ONLY use pad visibility flags
         if (stroke.layer === 'top' && !showTopPadsLayer) return;
         if (stroke.layer === 'bottom' && !showBottomPadsLayer) return;
       } else if (stroke.type === 'testPoint') {
-        // Check test point visibility based on layer
-        if (stroke.layer === 'top' && !showTopTestPointsLayer) return;
-        if (stroke.layer === 'bottom' && !showBottomTestPointsLayer) return;
+        // Check test point visibility based on layer - ONLY use test point visibility flags, NOT trace or pad flags
+        const testPointLayer = stroke.layer || 'top';
+        if (testPointLayer === 'top' && !showTopTestPointsLayer) return;
+        if (testPointLayer === 'bottom' && !showBottomTestPointsLayer) return;
       } else {
+        // Not a via, pad, or test point - skip (these are drawn in Pass 1)
         return;
       }
       const c = stroke.points[0];
@@ -11553,33 +11563,44 @@ function App() {
             <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
           <div style={{ marginBottom: '12px' }}>
-            {[...powerBuses].sort((a, b) => {
-              // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
-              const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
-                const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
-                if (match) {
-                  const sign = match[1] || '+';
-                  const numValue = parseFloat(match[2]);
-                  const absValue = Math.abs(numValue);
-                  const isNegative = sign === '-';
-                  return { absValue, isNegative, original: voltage };
+            {(() => {
+              // Separate buses into existing (sorted) and editing (at bottom)
+              const existingBuses = powerBuses.filter(b => b.id !== editingPowerBusId);
+              const editingBus = powerBuses.find(b => b.id === editingPowerBusId);
+              
+              // Sort existing buses
+              const sortedExisting = [...existingBuses].sort((a, b) => {
+                // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
+                const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
+                  const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
+                  if (match) {
+                    const sign = match[1] || '+';
+                    const numValue = parseFloat(match[2]);
+                    const absValue = Math.abs(numValue);
+                    const isNegative = sign === '-';
+                    return { absValue, isNegative, original: voltage };
+                  }
+                  return { absValue: Infinity, isNegative: false, original: voltage };
+                };
+                
+                const aParsed = parseVoltage(a.voltage);
+                const bParsed = parseVoltage(b.voltage);
+                
+                if (aParsed.absValue !== bParsed.absValue) {
+                  return aParsed.absValue - bParsed.absValue;
                 }
-                return { absValue: Infinity, isNegative: false, original: voltage };
-              };
+                
+                if (aParsed.isNegative !== bParsed.isNegative) {
+                  return aParsed.isNegative ? -1 : 1;
+                }
+                
+                return 0;
+              });
               
-              const aParsed = parseVoltage(a.voltage);
-              const bParsed = parseVoltage(b.voltage);
+              // Combine: sorted existing buses first, then editing bus at bottom
+              const allBuses = editingBus ? [...sortedExisting, editingBus] : sortedExisting;
               
-              if (aParsed.absValue !== bParsed.absValue) {
-                return aParsed.absValue - bParsed.absValue;
-              }
-              
-              if (aParsed.isNegative !== bParsed.isNegative) {
-                return aParsed.isNegative ? -1 : 1;
-              }
-              
-              return 0;
-            }).map((bus) => {
+              return allBuses.map((bus) => {
               // Find the original index for state updates
               const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
               // Check for duplicate names within Power Buses only (excluding current bus)
@@ -11599,6 +11620,10 @@ function App() {
                       const updated = [...powerBuses];
                       updated[originalIndex] = { ...bus, name: e.target.value };
                       setPowerBuses(updated);
+                    }}
+                    onFocus={() => {
+                      // Set as editing when user focuses on input
+                      setEditingPowerBusId(bus.id);
                     }}
                       placeholder="e.g., +3V3, -3V3"
                       style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
@@ -11623,6 +11648,10 @@ function App() {
                         // Validate and format on blur: ensure it's a valid float
                         const inputValue = e.target.value.trim();
                         if (inputValue === '') {
+                          // Clear editing state when user finishes editing (blur)
+                          if (editingPowerBusId === bus.id) {
+                            setEditingPowerBusId(null);
+                          }
                           return; // Allow empty
                         }
                         // Try to parse as float
@@ -11635,7 +11664,15 @@ function App() {
                           const updated = [...powerBuses];
                           updated[originalIndex] = { ...bus, voltage: formatted };
                           setPowerBuses(updated);
+                          // Clear editing state when user finishes editing (blur)
+                          if (editingPowerBusId === bus.id) {
+                            setEditingPowerBusId(null);
+                          }
                         }
+                      }}
+                      onFocus={() => {
+                        // Set as editing when user focuses on input
+                        setEditingPowerBusId(bus.id);
                       }}
                       placeholder="e.g., +3.3, -3.3"
                       style={{ flex: 1, padding: '2px 4px', border: valueIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
@@ -11668,7 +11705,8 @@ function App() {
                 </button>
               </div>
             );
-            })}
+            });
+            })()}
           </div>
           <button
             onClick={() => {
@@ -11679,6 +11717,7 @@ function App() {
                 color: '#ff0000',
               };
               setPowerBuses(prev => [...prev, newBus]);
+              setEditingPowerBusId(newBus.id);
             }}
             style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
           >
@@ -11701,7 +11740,18 @@ function App() {
             <button onClick={() => setShowGroundBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
           <div style={{ marginBottom: '12px' }}>
-            {[...groundBuses].sort((a, b) => a.name.localeCompare(b.name)).map((bus) => {
+            {(() => {
+              // Separate buses into existing (sorted) and editing (at bottom)
+              const existingBuses = groundBuses.filter(b => b.id !== editingGroundBusId);
+              const editingBus = groundBuses.find(b => b.id === editingGroundBusId);
+              
+              // Sort existing buses
+              const sortedExisting = [...existingBuses].sort((a, b) => a.name.localeCompare(b.name));
+              
+              // Combine: sorted existing buses first, then editing bus at bottom
+              const allBuses = editingBus ? [...sortedExisting, editingBus] : sortedExisting;
+              
+              return allBuses.map((bus) => {
               // Find the original index for state updates
               const originalIndex = groundBuses.findIndex(b => b.id === bus.id);
               // Check for duplicate names within Ground Buses only (excluding current bus)
@@ -11719,6 +11769,16 @@ function App() {
                         const updated = [...groundBuses];
                         updated[originalIndex] = { ...bus, name: e.target.value };
                         setGroundBuses(updated);
+                      }}
+                      onFocus={() => {
+                        // Set as editing when user focuses on input
+                        setEditingGroundBusId(bus.id);
+                      }}
+                      onBlur={() => {
+                        // Clear editing state when user finishes editing (blur)
+                        if (editingGroundBusId === bus.id) {
+                          setEditingGroundBusId(null);
+                        }
                       }}
                       placeholder="e.g., GND, Earth"
                       style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
@@ -11751,7 +11811,8 @@ function App() {
                 </button>
               </div>
             );
-            })}
+            });
+            })()}
           </div>
           <button
             onClick={() => {
@@ -11761,6 +11822,7 @@ function App() {
                 color: '#000000',
               };
               setGroundBuses(prev => [...prev, newBus]);
+              setEditingGroundBusId(newBus.id);
             }}
             style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
           >
