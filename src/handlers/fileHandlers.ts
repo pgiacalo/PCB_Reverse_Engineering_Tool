@@ -396,6 +396,20 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
           return;
         }
         setCurrentProjectFilePath(file.name);
+        
+        // Get the directory handle from the opened file (this is the project directory)
+        // This ensures Auto Save always uses the same directory as the opened file
+        // Store and persist this directory path so it's always used for this project
+        let projectDirHandle: FileSystemDirectoryHandle | null = null;
+        try {
+          projectDirHandle = await handle.getParent();
+          setProjectDirHandle(projectDirHandle);
+          console.log(`Project opened from directory: ${projectDirHandle.name || 'unknown'}`);
+        } catch (e) {
+          console.error('Failed to get directory handle from opened file:', e);
+          // Continue without directory handle - user may need to set it manually
+        }
+        
         const text = await file.text();
         const project = JSON.parse(text);
         

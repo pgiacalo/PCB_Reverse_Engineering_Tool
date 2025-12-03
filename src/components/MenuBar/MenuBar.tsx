@@ -1529,9 +1529,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Create, open, and save projects</li>
                       <li>Auto-save with configurable intervals</li>
+                      <li>File history automatically saved in history subdirectory when Auto Save is enabled</li>
                       <li>Project file format (JSON)</li>
                       <li>Print functionality</li>
-                      <li>Export to KiCad schematic format</li>
+                      <li>Export to KiCad schematic format (future feature, not yet implemented)</li>
                     </ul>
                   </div>
 

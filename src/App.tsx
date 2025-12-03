@@ -1277,6 +1277,184 @@ function App() {
     }
     return null;
   }, []);
+
+  // Get detailed component information for hover tooltip
+  const getComponentDetails = useCallback((comp: PCBComponent): string[] => {
+    const details: string[] = [];
+    
+    switch (comp.componentType) {
+      case 'Capacitor':
+      case 'ElectrolyticCapacitor':
+      case 'FilmCapacitor':
+        if ('capacitance' in comp && comp.capacitance && 'capacitanceUnit' in comp && comp.capacitanceUnit) {
+          details.push(`Capacitance: ${comp.capacitance} ${comp.capacitanceUnit}`);
+        }
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        if ('dielectric' in comp && comp.dielectric) {
+          details.push(`Dielectric: ${comp.dielectric}`);
+        }
+        break;
+        
+      case 'Resistor':
+      case 'ResistorNetwork':
+      case 'Thermistor':
+        if ('resistance' in comp && comp.resistance && 'resistanceUnit' in comp && comp.resistanceUnit) {
+          details.push(`Resistance: ${comp.resistance} ${comp.resistanceUnit}`);
+        }
+        if ('power' in comp && comp.power) {
+          details.push(`Power: ${comp.power}`);
+        }
+        if ('tolerance' in comp && comp.tolerance) {
+          details.push(`Tolerance: ${comp.tolerance}`);
+        }
+        break;
+        
+      case 'VariableResistor':
+        if ('resistance' in comp && comp.resistance && 'resistanceUnit' in comp && comp.resistanceUnit) {
+          details.push(`Resistance: ${comp.resistance} ${comp.resistanceUnit}`);
+        }
+        if ('vrType' in comp && comp.vrType) {
+          details.push(`Type: ${comp.vrType}`);
+        }
+        if ('power' in comp && comp.power) {
+          details.push(`Power: ${comp.power}`);
+        }
+        if ('taper' in comp && comp.taper) {
+          details.push(`Taper: ${comp.taper}`);
+        }
+        break;
+        
+      case 'Inductor':
+        if ('inductance' in comp && comp.inductance && 'inductanceUnit' in comp && comp.inductanceUnit) {
+          details.push(`Inductance: ${comp.inductance} ${comp.inductanceUnit}`);
+        }
+        if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
+          details.push(`Current: ${comp.current} ${comp.currentUnit}`);
+        }
+        if ('tolerance' in comp && comp.tolerance) {
+          details.push(`Tolerance: ${comp.tolerance}`);
+        }
+        break;
+        
+      case 'Battery':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        if ('capacity' in comp && comp.capacity && 'capacityUnit' in comp && comp.capacityUnit) {
+          details.push(`Capacity: ${comp.capacity} ${comp.capacityUnit}`);
+        }
+        break;
+        
+      case 'Diode':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
+          details.push(`Current: ${comp.current} ${comp.currentUnit}`);
+        }
+        break;
+        
+      case 'ZenerDiode':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        if ('power' in comp && comp.power) {
+          details.push(`Power: ${comp.power}`);
+        }
+        if ('tolerance' in comp && comp.tolerance) {
+          details.push(`Tolerance: ${comp.tolerance}`);
+        }
+        break;
+        
+      case 'Fuse':
+        if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
+          details.push(`Current: ${comp.current} ${comp.currentUnit}`);
+        }
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        break;
+        
+      case 'FerriteBead':
+        if ('impedance' in comp && comp.impedance && 'impedanceUnit' in comp && comp.impedanceUnit) {
+          details.push(`Impedance: ${comp.impedance} ${comp.impedanceUnit}`);
+        }
+        if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
+          details.push(`Current: ${comp.current} ${comp.currentUnit}`);
+        }
+        break;
+        
+      case 'Relay':
+        if ('coilVoltage' in comp && comp.coilVoltage && 'coilVoltageUnit' in comp && comp.coilVoltageUnit) {
+          details.push(`Coil Voltage: ${comp.coilVoltage} ${comp.coilVoltageUnit}`);
+        }
+        if ('contactRating' in comp && comp.contactRating) {
+          details.push(`Contact Rating: ${comp.contactRating}`);
+        }
+        break;
+        
+      case 'Speaker':
+        if ('impedance' in comp && comp.impedance && 'impedanceUnit' in comp && comp.impedanceUnit) {
+          details.push(`Impedance: ${comp.impedance} ${comp.impedanceUnit}`);
+        }
+        if ('power' in comp && comp.power) {
+          details.push(`Power: ${comp.power}`);
+        }
+        break;
+        
+      case 'Motor':
+        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
+          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
+        }
+        if ('speed' in comp && comp.speed && 'speedUnit' in comp && comp.speedUnit) {
+          details.push(`Speed: ${comp.speed} ${comp.speedUnit}`);
+        }
+        break;
+        
+      case 'PowerSupply':
+        if ('outputVoltage' in comp && comp.outputVoltage && 'outputVoltageUnit' in comp && comp.outputVoltageUnit) {
+          details.push(`Output Voltage: ${comp.outputVoltage} ${comp.outputVoltageUnit}`);
+        }
+        if ('outputCurrent' in comp && comp.outputCurrent && 'outputCurrentUnit' in comp && comp.outputCurrentUnit) {
+          details.push(`Output Current: ${comp.outputCurrent} ${comp.outputCurrentUnit}`);
+        }
+        break;
+        
+      case 'Transistor':
+        if ('partNumber' in comp && comp.partNumber) {
+          details.push(`Part Number: ${comp.partNumber}`);
+        }
+        if ('transistorType' in comp && comp.transistorType) {
+          details.push(`Type: ${comp.transistorType}`);
+        }
+        break;
+        
+      case 'Crystal':
+        if ('frequency' in comp && comp.frequency) {
+          details.push(`Frequency: ${comp.frequency}`);
+        }
+        if ('loadCapacitance' in comp && comp.loadCapacitance) {
+          details.push(`Load Capacitance: ${comp.loadCapacitance}`);
+        }
+        if ('tolerance' in comp && comp.tolerance) {
+          details.push(`Tolerance: ${comp.tolerance}`);
+        }
+        break;
+        
+      case 'VacuumTube':
+        if ('tubeType' in comp && comp.tubeType) {
+          details.push(`Tube Type: ${comp.tubeType}`);
+        }
+        if ('partNumber' in comp && comp.partNumber) {
+          details.push(`Part Number: ${comp.partNumber}`);
+        }
+        break;
+    }
+    
+    return details;
+  }, []);
   
   // Tool-specific layer defaults are now declared above (before useToolRegistry hook)
   // Show chooser popovers only when tool is (re)selected
@@ -5116,6 +5294,8 @@ function App() {
     }
     
     // Use project directory for auto-save (same directory as project.json)
+    // Note: performAutoSave uses projectDirHandle directly via projectDirHandleRef
+    // We still set autoSaveDirHandle for backward compatibility, but it's not used by performAutoSave
     setAutoSaveDirHandle(dirHandleToUse);
     // Use project name as base name for auto-save files, removing any existing timestamp
     const projectNameWithoutExt = projectName.replace(/\.json$/i, '');
@@ -5124,6 +5304,7 @@ function App() {
     setAutoSaveBaseName(cleanBaseName);
     
     // Update refs immediately so performAutoSave can use them
+    // Note: projectDirHandleRef is updated automatically when projectDirHandle changes (see above)
     autoSaveDirHandleRef.current = dirHandleToUse;
     autoSaveBaseNameRef.current = cleanBaseName;
     
@@ -6685,8 +6866,8 @@ function App() {
         x: e.clientX - detailedInfoDialogDragOffset.x,
         y: e.clientY - detailedInfoDialogDragOffset.y,
       };
-      // Constrain position to window boundaries
-      const newPosition = constrainDialogPosition(rawPosition.x, rawPosition.y, 400, window.innerHeight * 0.8);
+      // Constrain position to window boundaries (same constraints as Component Properties dialog)
+      const newPosition = constrainDialogPosition(rawPosition.x, rawPosition.y, 250, window.innerHeight * 0.4);
       setDetailedInfoDialogPosition(newPosition);
       // Save position to localStorage
       localStorage.setItem('detailedInfoDialogPosition', JSON.stringify(newPosition));
@@ -7677,24 +7858,28 @@ function App() {
   autoSaveFileHistoryRef.current = autoSaveFileHistory;
   const currentFileIndexRef = useRef<number>(-1);
   currentFileIndexRef.current = currentFileIndex;
+  // Ref to access projectDirHandle in performAutoSave callback
+  // This ensures Auto Save ALWAYS uses the directory from which the project was created or opened
+  const projectDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  projectDirHandleRef.current = projectDirHandle;
 
   // Auto Save function - saves to a file handle with timestamped filename
   // Use refs to avoid recreating this function on every state change
+  // ALWAYS uses projectDirHandle (the directory from which the project was created or opened)
   const performAutoSave = useCallback(async () => {
     console.log('Auto save: performAutoSave called');
-    let dirHandle = autoSaveDirHandleRef.current;
+    
+    // ALWAYS use projectDirHandle - the directory from which the project was created or opened
+    // This ensures Auto Save always saves to the same directory as the project file
+    let dirHandle = projectDirHandleRef.current;
     let baseName = autoSaveBaseNameRef.current;
     
-    console.log(`Auto save: dirHandle=${dirHandle ? 'set' : 'missing'}, baseName=${baseName || 'missing'}`);
+    console.log(`Auto save: projectDirHandle=${dirHandle ? 'set' : 'missing'}, baseName=${baseName || 'missing'}`);
     
-    // If directory handle is missing but we have a current project file, try to get directory
-    const currentFilePath = currentProjectFilePathRef.current;
-    console.log(`Auto save: currentFilePath=${currentFilePath || 'none'}`);
-    
-    // Don't prompt for directory here - it requires a user gesture
-    // Directory should be set when file is opened (which is a user gesture)
+    // If directory handle is missing, we cannot save
+    // Directory should be set when project is created or opened (which is a user gesture)
     if (!dirHandle || !baseName) {
-      console.warn(`Auto save: Missing directory handle (${!dirHandle}) or base name (${!baseName}). Please use File -> Auto Save -> Enable to set up auto save.`);
+      console.warn(`Auto save: Missing project directory handle (${!dirHandle}) or base name (${!baseName}). Please create a new project or open an existing project first.`);
       // Disable auto save if configuration is incomplete
       setAutoSaveEnabled(false);
       if (autoSaveIntervalRef.current) {
@@ -11108,8 +11293,14 @@ function App() {
           {/* Component Hover Tooltip (only shown when Option key is held) */}
           {hoverComponent && isOptionPressed && (() => {
             const comp = hoverComponent.component;
-            const contextualValue = getComponentContextualValue(comp);
+            const layer = hoverComponent.layer;
             if (!comp) return null;
+            // Always show component type (required field)
+            const componentType = comp.componentType || 'Component';
+            // Get IC type for IntegratedCircuit components
+            const icType = comp.componentType === 'IntegratedCircuit' && 'icType' in comp ? comp.icType : null;
+            // Get detailed component information
+            const componentDetails = getComponentDetails(comp);
             return (
               <div
                 style={{
@@ -11133,11 +11324,28 @@ function App() {
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                  {comp.componentType}
+                  {componentType}
                 </div>
-                {contextualValue && (
-                  <div style={{ marginBottom: '4px', color: '#e0e0e0' }}>
-                    {contextualValue}
+                <div style={{ marginBottom: '4px', color: '#e0e0e0', fontSize: '11px' }}>
+                  Layer: {layer === 'top' ? 'Top' : 'Bottom'}
+                </div>
+                {icType && (
+                  <div style={{ marginBottom: '4px', color: '#e0e0e0', fontSize: '11px' }}>
+                    IC Type: {icType}
+                  </div>
+                )}
+                {componentDetails.length > 0 && (
+                  <div style={{ marginBottom: '4px' }}>
+                    {componentDetails.map((detail, index) => (
+                      <div key={index} style={{ color: '#e0e0e0', fontSize: '11px', marginBottom: '2px' }}>
+                        {detail}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {comp.description && (
+                  <div style={{ marginBottom: '4px', color: '#e0e0e0', fontSize: '11px' }}>
+                    {comp.description}
                   </div>
                 )}
                 {comp.notes && (
