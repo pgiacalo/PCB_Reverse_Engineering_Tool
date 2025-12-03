@@ -265,6 +265,16 @@ export function useComponents() {
       editor.esr = esr.value;
       editor.esrUnit = esr.unit;
       editor.temperature = c.temperature || '';
+    } else if (component.componentType === 'Film Capacitor') {
+      const c = component as any;
+      const capacitance = readValueAndUnit(c, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      editor.capacitance = capacitance.value;
+      editor.capacitanceUnit = capacitance.unit;
+      const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
+      editor.voltage = voltage.value;
+      editor.voltageUnit = voltage.unit;
+      editor.tolerance = c.tolerance || '±10%';
+      editor.filmType = c.filmType || 'Polyester';
     } else if (component.componentType === 'Diode') {
       const d = component as any;
       editor.diodeType = d.diodeType || 'Standard';

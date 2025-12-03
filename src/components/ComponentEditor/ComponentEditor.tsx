@@ -137,10 +137,10 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     const abbreviation = designator.length > 0 ? designator.charAt(0).toUpperCase() : getDefaultAbbreviation(comp.componentType);
     (updated as any).abbreviation = abbreviation;
     if ('manufacturer' in updated) {
-      (updated as any).manufacturer = componentEditor.manufacturer;
+      (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
     }
     if ('partNumber' in updated) {
-      (updated as any).partNumber = componentEditor.partNumber;
+      (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
     }
     // Update pin count if changed
     if (componentEditor.pinCount !== comp.pinCount) {
@@ -191,6 +191,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).esr = componentEditor.esr || undefined;
       (updated as any).esrUnit = componentEditor.esrUnit || undefined;
       (updated as any).temperature = componentEditor.temperature || undefined;
+    } else if (comp.componentType === 'Film Capacitor') {
+      (updated as any).capacitance = componentEditor.capacitance || undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
+      (updated as any).voltage = componentEditor.voltage || undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).filmType = componentEditor.filmType || undefined;
     } else if (comp.componentType === 'Diode') {
       (updated as any).diodeType = componentEditor.diodeType || undefined;
       (updated as any).voltage = componentEditor.voltage || undefined;
@@ -283,10 +290,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).turns = componentEditor.turns || undefined;
     } else if (comp.componentType === 'TestPoint') {
       (updated as any).signal = componentEditor.signal || undefined;
+    } else if (comp.componentType === 'Film Capacitor') {
+      (updated as any).capacitance = componentEditor.capacitance || undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
+      (updated as any).voltage = componentEditor.voltage || undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).filmType = componentEditor.filmType || undefined;
     } else if (comp.componentType === 'IntegratedCircuit') {
       // For ICs, save description from the Description field
       (updated as any).description = componentEditor.description?.trim() || undefined;
-      (updated as any).datasheet = componentEditor.datasheet || undefined;
+      (updated as any).datasheet = componentEditor.datasheet?.trim() || undefined;
       (updated as any).icType = componentEditor.icType || undefined;
     } else {
       // For non-IC components, save description from the Description field
