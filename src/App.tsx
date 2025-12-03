@@ -9798,9 +9798,10 @@ function App() {
         // Get the directory handle from the file handle (parent directory)
         // This sets the project directory so that when auto-save is enabled,
         // it will automatically use this directory (no need to prompt user)
+        let projectDirHandle: FileSystemDirectoryHandle | null = null;
         try {
-          const dirHandle = await handle.getParent();
-          setProjectDirHandle(dirHandle);
+          projectDirHandle = await handle.getParent();
+          setProjectDirHandle(projectDirHandle);
           console.log(`Opened project file: ${file.name} in directory (auto-save will use this directory)`);
         } catch (e) {
           console.warn('Could not get directory handle from file handle:', e);
@@ -9824,6 +9825,29 @@ function App() {
           localStorage.setItem('pcb_project_name', projectNameToUse);
         }
         
+        // Option 3: If auto-save is enabled, update autoSaveDirHandle to match projectDirHandle
+        // This ensures auto-save uses the correct directory for the opened project
+        // Option 1: The useEffect at line 8296 will automatically restart the interval
+        // when autoSaveDirHandle or autoSaveBaseName changes
+        if (autoSaveEnabled && projectDirHandle) {
+          console.log('Auto save: Updating directory handle to match opened project directory');
+          setAutoSaveDirHandle(projectDirHandle);
+          
+          // Also update base name to match project name
+          const projectNameWithoutExt = projectNameToUse.replace(/\.json$/i, '');
+          const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
+          const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
+          setAutoSaveBaseName(cleanBaseName);
+          
+          // Update refs immediately so performAutoSave can use them
+          autoSaveDirHandleRef.current = projectDirHandle;
+          autoSaveBaseNameRef.current = cleanBaseName;
+          
+          console.log(`Auto save: Updated to use directory "${projectDirHandle.name}" with base name "${cleanBaseName}"`);
+          // Note: The useEffect at line 8296 will automatically restart the interval
+          // when autoSaveDirHandle or autoSaveBaseName changes
+        }
+        
         setTimeout(() => {
           // Always show auto-save prompt dialog after opening a project
           setAutoSavePromptDialog({ visible: true, source: 'open', interval: 5 });
@@ -9836,7 +9860,7 @@ function App() {
     } else {
       openProjectRef.current?.click();
     }
-  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog]);
+  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName]);
 
   return (
     <div className="app">
