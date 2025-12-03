@@ -1393,19 +1393,54 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>About</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images. This application supports typical 4-layer PCBs and enables comprehensive PCB analysis and documentation.
+                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
+                </p>
+                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  This tool can also be used to assist in troubleshooting electronics by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
                 </p>
               </div>
 
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                  The PCB Reverse Engineering Tool is a modern browser-based single-page application that enables users to reverse engineer printed circuit boards by tracing connections and placing components. The application runs entirely client-side in the browser, leveraging modern web technologies to provide a responsive, interactive drawing experience with no backend server requirements.
+                  The application runs entirely client-side in the browser, to provide a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Features</h3>
+                
+                {/* Tools & Shortcuts - Full Width */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
+                    <div>
+                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                        <li><strong>Select</strong> — <code>S</code></li>
+                        <li><strong>Via</strong> — <code>V</code></li>
+                        <li><strong>Pad</strong> — <code>P</code></li>
+                        <li><strong>Test Point</strong> — <code>Y</code></li>
+                        <li><strong>Trace</strong> — <code>T</code></li>
+                        <li><strong>Component</strong> — <code>C</code></li>
+                        <li><strong>Component Properties</strong> — double-click component</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                        <li><strong>Power</strong> — <code>B</code></li>
+                        <li><strong>Ground</strong> — <code>G</code></li>
+                        <li><strong>Erase</strong> — <code>E</code></li>
+                        <li><strong>Move (Pan)</strong> — <code>H</code></li>
+                        <li><strong>Zoom</strong> — <code>Z</code></li>
+                        <li><strong>Center</strong> — <code>X</code></li>
+                        <li><strong>Information Dialog</strong> — <code>I</code></li>
+                        <li><strong>Notes Dialog</strong> — <code>N</code></li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Other Features - 2 Column Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
                   <div>
                     <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Image Management</p>
@@ -1430,34 +1465,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Place power and ground nodes</li>
                       <li>Erase tool for removing elements</li>
                     </ul>
-                  </div>
-
-                  <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
-                      <div>
-                        <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                          <li><strong>Select</strong> — <code>S</code></li>
-                          <li><strong>Via</strong> — <code>V</code></li>
-                          <li><strong>Pad</strong> — <code>P</code></li>
-                          <li><strong>Test Point</strong> — <code>Y</code></li>
-                          <li><strong>Trace</strong> — <code>T</code></li>
-                          <li><strong>Component</strong> — <code>C</code></li>
-                          <li><strong>Component Properties</strong> — double-click component</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                          <li><strong>Power</strong> — <code>B</code></li>
-                          <li><strong>Ground</strong> — <code>G</code></li>
-                          <li><strong>Erase</strong> — <code>E</code></li>
-                          <li><strong>Move (Pan)</strong> — <code>H</code></li>
-                          <li><strong>Zoom</strong> — <code>Z</code></li>
-                          <li><strong>Center</strong> — <code>X</code></li>
-                          <li><strong>Information Dialog</strong> — <code>Ctrl</code> + <code>I</code></li>
-                        </ul>
-                      </div>
-                    </div>
                   </div>
 
                   <div>

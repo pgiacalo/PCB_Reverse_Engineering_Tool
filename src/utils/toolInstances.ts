@@ -33,7 +33,7 @@ export interface ToolInstance {
  * Default values for each tool instance
  */
 const DEFAULT_VALUES: Record<ToolInstanceId, { color: string; size: number }> = {
-  via: { color: '#ff0000', size: 18 },
+  via: { color: '#2CA02C', size: 18 },
   padTop: { color: '#0072B2', size: 18 },
   padBottom: { color: '#56B4E9', size: 18 },
   testPointTop: { color: '#FFFF00', size: 18 },

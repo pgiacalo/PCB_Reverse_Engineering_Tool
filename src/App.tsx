@@ -887,6 +887,7 @@ function App() {
   const [savedCenterLocation, setSavedCenterLocation] = useState<{ x: number; y: number; zoom: number } | null>(null);
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
+  const [hoverTestPoint, setHoverTestPoint] = useState<{ stroke: DrawingStroke; x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const setSizeInputRef = useRef<HTMLInputElement>(null);
@@ -1907,11 +1908,10 @@ function App() {
 
       if (drawingMode === 'via') {
         // Add a filled circle representing a via at click location
-        // Use brushSize and brushColor (which are synced with tool registry) for immediate updates
-        const viaDef = toolRegistry.get('via');
-        // Use brushSize and brushColor which are kept in sync with tool registry
-        const viaColor = brushColor || viaDef?.settings.color || DEFAULT_VIA_COLOR;
-        const viaSize = brushSize || viaDef?.settings.size || VIA.DEFAULT_SIZE;
+        // Use tool instance directly (single source of truth) to match toolbar and cursor colors
+        const viaInstance = toolInstanceManager.get('via');
+        const viaColor = viaInstance.color;
+        const viaSize = viaInstance.size;
         
         // Snap to nearest via, pad, power, or ground node unless Option/Alt key is held
         const snapToNearestNode = (wx: number, wy: number): { x: number; y: number; nodeId?: number } => {
@@ -2560,25 +2560,54 @@ function App() {
       }
     }
     
+    // Handle test point double-click to open Notes dialog
+    // Works in any tool mode
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dprX = canvas.width / rect.width;
+    const dprY = canvas.height / rect.height;
+    const offX = (e.nativeEvent as any).offsetX as number | undefined;
+    const offY = (e.nativeEvent as any).offsetY as number | undefined;
+    const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
+    const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
+    const canvasX = cssX * dprX;
+    const canvasY = cssY * dprY;
+    const contentCanvasX = canvasX - CONTENT_BORDER;
+    const contentCanvasY = canvasY - CONTENT_BORDER;
+    const x = (contentCanvasX - viewPan.x) / viewScale;
+    const y = (contentCanvasY - viewPan.y) / viewScale;
+    
+    // Check for test point hit
+    const hitTolerance = Math.max(8 / viewScale, 4); // Zoom-aware hit tolerance
+    const hitTestPoint = (() => {
+      for (const stroke of drawingStrokes) {
+        if (stroke.type === 'testPoint' && stroke.points.length > 0) {
+          const point = stroke.points[0];
+          const d = Math.hypot(point.x - x, point.y - y);
+          // Test points are diamond-shaped, so use size-based tolerance
+          const testPointRadius = (stroke.size || 18) / 2;
+          if (d <= testPointRadius + hitTolerance) {
+            return stroke;
+          }
+        }
+      }
+      return null;
+    })();
+    
+    if (hitTestPoint) {
+      // Select the test point and open Notes dialog
+      setSelectedIds(new Set([hitTestPoint.id]));
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
+      setNotesDialogVisible(true);
+      return;
+    }
+    
     // Handle component double-click to open properties editor
     // Works in both select tool and component tool
     if (currentTool === 'select' || currentTool === 'component') {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const dprX = canvas.width / rect.width;
-      const dprY = canvas.height / rect.height;
-      const offX = (e.nativeEvent as any).offsetX as number | undefined;
-      const offY = (e.nativeEvent as any).offsetY as number | undefined;
-      const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
-      const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
-      const canvasX = cssX * dprX;
-      const canvasY = cssY * dprY;
-      const contentCanvasX = canvasX - CONTENT_BORDER;
-      const contentCanvasY = canvasY - CONTENT_BORDER;
-      const x = (contentCanvasX - viewPan.x) / viewScale;
-      const y = (contentCanvasY - viewPan.y) / viewScale;
-      
       const hitSize = 10;
       const hitComponent = (() => {
         for (const c of componentsTop) {
@@ -2595,7 +2624,7 @@ function App() {
       })();
       
       // Check for power node hit
-      const hitTolerance = Math.max(6 / viewScale, 4);
+      const powerHitTolerance = Math.max(6 / viewScale, 4);
       let hitPower: PowerSymbol | null = null;
       for (const p of powers) {
         const radius = Math.max(6, p.size / 2);
@@ -2603,9 +2632,9 @@ function App() {
         const hitRadius = radius + lineExtension; // Include extended lines in hit detection
         const d = Math.hypot(p.x - x, p.y - y);
         // Check if click is within circle or on extended lines (vertical or horizontal)
-        const onVerticalLine = Math.abs(x - p.x) <= hitTolerance && Math.abs(y - p.y) <= hitRadius;
-        const onHorizontalLine = Math.abs(y - p.y) <= hitTolerance && Math.abs(x - p.x) <= hitRadius;
-        const inCircle = d <= Math.max(radius, hitTolerance);
+        const onVerticalLine = Math.abs(x - p.x) <= powerHitTolerance && Math.abs(y - p.y) <= hitRadius;
+        const onHorizontalLine = Math.abs(y - p.y) <= powerHitTolerance && Math.abs(x - p.x) <= hitRadius;
+        const inCircle = d <= Math.max(radius, powerHitTolerance);
         if (inCircle || onVerticalLine || onHorizontalLine) {
           hitPower = p;
           break;
@@ -2634,7 +2663,7 @@ function App() {
         openComponentEditor(comp, layer);
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setNotesDialogVisible, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, openComponentEditor]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -2837,11 +2866,39 @@ function App() {
           x: e.clientX,
           y: e.clientY
         });
+        setHoverTestPoint(null); // Clear test point hover when component is hovered
       } else {
         setHoverComponent(null);
+        
+        // Test Point hover detection (only when Option key is held and no component is hovered)
+        const hitTolerance = Math.max(8 / viewScale, 4); // Zoom-aware hit tolerance
+        const hitTestPoint = (() => {
+          for (const stroke of drawingStrokes) {
+            if (stroke.type === 'testPoint' && stroke.points.length > 0) {
+              const point = stroke.points[0];
+              const d = Math.hypot(point.x - x, point.y - y);
+              // Test points are diamond-shaped, so use size-based tolerance
+              const testPointRadius = (stroke.size || 18) / 2;
+              if (d <= testPointRadius + hitTolerance) {
+                return stroke;
+              }
+            }
+          }
+          return null;
+        })();
+        if (hitTestPoint) {
+          setHoverTestPoint({
+            stroke: hitTestPoint,
+            x: e.clientX,
+            y: e.clientY
+          });
+        } else {
+          setHoverTestPoint(null);
+        }
       }
     } else {
       setHoverComponent(null);
+      setHoverTestPoint(null);
     }
 
     // Component dragging is started immediately on click-and-hold, so no threshold check needed
@@ -5205,9 +5262,21 @@ function App() {
       return;
     }
     
-    // Detailed Information: Display properties of selected objects (Ctrl+I)
+    // Detailed Information: Display properties of selected objects (I)
     if (e.key === 'I' || e.key === 'i') {
-      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+      if (!e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Ignore if user is typing in an input field, textarea, or contenteditable
+        const active = document.activeElement as HTMLElement | null;
+        const isEditing =
+          !!active &&
+          ((active.tagName === 'INPUT' && 
+            (active as HTMLInputElement).type !== 'range' &&
+            (active as HTMLInputElement).type !== 'checkbox' &&
+            (active as HTMLInputElement).type !== 'radio') ||
+           active.tagName === 'TEXTAREA' ||
+           active.isContentEditable);
+        if (isEditing) return;
+        
         e.preventDefault();
         e.stopPropagation();
         
@@ -5234,9 +5303,21 @@ function App() {
       }
     }
     
-    // Notes Dialog: Open notes editor for selected objects (Ctrl+N)
+    // Notes Dialog: Open notes editor for selected objects (N)
     if (e.key === 'N' || e.key === 'n') {
-      if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+      if (!e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Ignore if user is typing in an input field, textarea, or contenteditable
+        const active = document.activeElement as HTMLElement | null;
+        const isEditing =
+          !!active &&
+          ((active.tagName === 'INPUT' && 
+            (active as HTMLInputElement).type !== 'range' &&
+            (active as HTMLInputElement).type !== 'checkbox' &&
+            (active as HTMLInputElement).type !== 'radio') ||
+           active.tagName === 'TEXTAREA' ||
+           active.isContentEditable);
+        if (isEditing) return;
+        
         e.preventDefault();
         e.stopPropagation();
         setNotesDialogVisible(true);
@@ -9702,8 +9783,8 @@ function App() {
             >
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
-                  const viaDef = toolRegistry.get('via');
-                  const viaColor = viaDef?.settings.color || DEFAULT_VIA_COLOR;
+                  // Use tool instance directly (single source of truth) to match cursor color
+                  const viaColor = toolInstanceManager.get('via').color;
                   return (
                     <>
                       <circle cx="12" cy="12" r="8" fill="none" stroke={viaColor} strokeWidth="3" />
@@ -9724,10 +9805,11 @@ function App() {
                   console.log('Pad tool clicked');
                   setDrawingMode('pad'); 
                   setCurrentTool('draw'); 
+                  // Explicitly show the layer chooser on every click
+                  setShowPadLayerChooser(true);
                   // Default to Top layer, but use last choice if available
                   const padLayerToUse = padToolLayer || 'top';
                   setSelectedDrawingLayer(padLayerToUse);
-                  // The useEffect hook will automatically show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updatePadChooserPosition(), 0);
                 } 
@@ -9751,10 +9833,10 @@ function App() {
             >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
-                  const padDef = toolRegistry.get('pad');
+                  // Use tool instance directly (single source of truth) to match cursor color
                   const padLayer = padToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  const padColor = padDef?.layerSettings.get(padLayer)?.color ?? padDef?.settings.color ?? DEFAULT_PAD_COLOR;
+                  const padInstanceId = padLayer === 'top' ? 'padTop' : 'padBottom';
+                  const padColor = toolInstanceManager.get(padInstanceId).color;
                   // Fixed icon size for toolbar (constant, regardless of actual pad size) - made larger
                   const iconSize = 14;
                   const iconX = (24 - iconSize) / 2;
@@ -9765,6 +9847,11 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>P</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  // Use toolState.size when Pad tool is active (reactive to tool instance changes)
+                  // Otherwise read directly from tool instance
+                  if (currentTool === 'draw' && drawingMode === 'pad' && toolState.toolInstanceId && (toolState.toolInstanceId === 'padTop' || toolState.toolInstanceId === 'padBottom')) {
+                    return toolState.size;
+                  }
                   const instanceId = padToolLayer === 'top' ? 'padTop' : 'padBottom';
                   return toolInstanceManager.get(instanceId).size;
                 })()}</span>
@@ -9805,10 +9892,10 @@ function App() {
             >
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
-                  const testPointDef = toolRegistry.get('testPoint');
+                  // Use tool instance directly (single source of truth) to match cursor color
                   const testPointLayer = testPointToolLayer || 'top';
-                  // Read from tool registry layerSettings (one source of truth)
-                  const testPointColor = testPointDef?.layerSettings.get(testPointLayer)?.color ?? testPointDef?.settings.color ?? '#FFFF00'; // Bright yellow default
+                  const testPointInstanceId = testPointLayer === 'top' ? 'testPointTop' : 'testPointBottom';
+                  const testPointColor = toolInstanceManager.get(testPointInstanceId).color;
                   // Draw diamond shape (bright yellow-filled with black border) - made larger
                   const size = 14;
                   const centerX = 12;
@@ -9826,6 +9913,11 @@ function App() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>Y</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{(() => {
+                  // Use toolState.size when Test Point tool is active (reactive to tool instance changes)
+                  // Otherwise read directly from tool instance
+                  if (currentTool === 'draw' && drawingMode === 'testPoint' && toolState.toolInstanceId && (toolState.toolInstanceId === 'testPointTop' || toolState.toolInstanceId === 'testPointBottom')) {
+                    return toolState.size;
+                  }
                   const instanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
                   return toolInstanceManager.get(instanceId).size;
                 })()}</span>
@@ -9865,10 +9957,10 @@ function App() {
               }}
             >
               <PenLine size={14} color={(() => {
-                const traceDef = toolRegistry.get('trace');
+                // Use tool instance directly (single source of truth) to match cursor color
                 const layer = traceToolLayer || 'top';
-                // Read from tool registry layerSettings (one source of truth)
-                return traceDef?.layerSettings.get(layer)?.color ?? traceDef?.settings.color ?? DEFAULT_TRACE_COLOR;
+                const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+                return toolInstanceManager.get(traceInstanceId).color;
               })()} />
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>T</span>
@@ -9909,11 +10001,10 @@ function App() {
               }}
             >
               {(() => {
-                // Use layer-specific component colors based on componentToolLayer (like pad pattern)
+                // Use tool instance directly (single source of truth) to match cursor color
                 const layer = componentToolLayer || 'top';
-                const componentDef = toolRegistry.get('component');
-                // Read from tool registry layerSettings (one source of truth)
-                const componentColor = componentDef?.layerSettings.get(layer)?.color ?? componentDef?.settings.color ?? DEFAULT_COMPONENT_COLOR;
+                const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
+                const componentColor = toolInstanceManager.get(componentInstanceId).color;
                 return selectedComponentType ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                     {/* Square icon with text - show default abbreviation based on component type */}
@@ -9966,8 +10057,8 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Power symbol icon - use tool-specific color */}
-              <span style={{ color: toolRegistry.get('power')?.settings.color || DEFAULT_POWER_COLOR, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
+              {/* Power symbol icon - use tool instance directly (single source of truth) to match cursor color */}
+              <span style={{ color: toolInstanceManager.get('power').color, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>B</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('power').size}</span>
@@ -9999,9 +10090,9 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Ground symbol icon */}
+              {/* Ground symbol icon - use tool instance directly (single source of truth) to match cursor color */}
               <svg width="14" height="14" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible', flexShrink: 0 }}>
-                <g stroke={toolRegistry.get('ground')?.settings.color || '#000000'} strokeWidth="2" strokeLinecap="round">
+                <g stroke={toolInstanceManager.get('ground').color} strokeWidth="2" strokeLinecap="round">
                   <line x1="12" y1="2" x2="12" y2="10" />
                   <line x1="5" y1="10" x2="19" y2="10" />
                   <line x1="7" y1="13" x2="17" y2="13" />
@@ -10017,7 +10108,7 @@ function App() {
             <button 
               onClick={() => { if (!isReadOnlyMode) setCurrentTool('center'); }} 
               disabled={isReadOnlyMode}
-              title="Set Center Location (X)" 
+              title="Set Home View (X)" 
               style={{ 
                 width: '100%', 
                 height: 32, 
@@ -10195,6 +10286,40 @@ function App() {
                       onClick={() => { 
                         setBrushColor(c);
                         setShowColorPicker(false);
+                        
+                        // Update tool instance color (equivalent to Tools -> Set Tool Color)
+                        try {
+                          let toolInstanceId: ToolInstanceId | null = null;
+                          
+                          // Determine tool instance ID based on current tool and layer
+                          if (currentTool === 'draw' && drawingMode === 'via') {
+                            toolInstanceId = 'via';
+                          } else if (currentTool === 'draw' && drawingMode === 'pad') {
+                            const layer = padToolLayer || 'top';
+                            toolInstanceId = layer === 'bottom' ? 'padBottom' : 'padTop';
+                          } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+                            const layer = testPointToolLayer || 'top';
+                            toolInstanceId = layer === 'bottom' ? 'testPointBottom' : 'testPointTop';
+                          } else if (currentTool === 'draw' && drawingMode === 'trace') {
+                            const layer = traceToolLayer || 'top';
+                            toolInstanceId = layer === 'bottom' ? 'traceBottom' : 'traceTop';
+                          } else if (currentTool === 'component') {
+                            const layer = componentToolLayer || 'top';
+                            toolInstanceId = layer === 'bottom' ? 'componentBottom' : 'componentTop';
+                          } else if (currentTool === 'power') {
+                            toolInstanceId = 'power';
+                          } else if (currentTool === 'ground') {
+                            toolInstanceId = 'ground';
+                          }
+                          
+                          // Update tool instance color if we have a valid tool instance
+                          if (toolInstanceId) {
+                            toolInstanceManager.setColor(toolInstanceId, c);
+                          }
+                        } catch (error) {
+                          console.error('Error updating tool instance color:', error);
+                        }
+                        
                         // Save color for the current tool using the new per-tool system
                         const currentToolDef = getCurrentToolDef(toolRegistry);
                         if (currentToolDef) {
@@ -10226,6 +10351,20 @@ function App() {
                             } else {
                               setBottomPadColor(c);
                               saveDefaultColor('pad', c, 'bottom');
+                            }
+                          } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+                            const layer = testPointToolLayer || 'top';
+                            const layerSettings = currentToolDef.layerSettings.get(layer);
+                            const currentSize = layerSettings?.size || currentToolDef.settings.size;
+                            const newLayerSettings = { color: c, size: currentSize };
+                            updateToolLayerSettings(currentToolDef.id, layer, newLayerSettings);
+                            saveToolLayerSettings(currentToolDef.id, layer, c, currentSize);
+                            if (layer === 'top') {
+                              setTopTestPointColor(c);
+                              saveDefaultColor('testPoint', c, 'top');
+                            } else {
+                              setBottomTestPointColor(c);
+                              saveDefaultColor('testPoint', c, 'bottom');
                             }
                           } else if (currentTool === 'component') {
                             const layer = componentToolLayer || 'top';
@@ -10372,15 +10511,16 @@ function App() {
                   padToolLayerRef.current = 'top';
                   setPadToolLayer('top'); 
                   setSelectedDrawingLayer('top'); 
-                  // Use layer-specific pad colors and sizes
-                  setBrushColor(topPadColor);
-                  setBrushSize(topPadSize);
-                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  // Use tool instance directly (single source of truth)
+                  const padTopInstance = toolInstanceManager.get('padTop');
+                  setBrushColor(padTopInstance.color);
+                  setBrushSize(padTopInstance.size);
+                  // Update toolRegistry to reflect current layer's color
                   setToolRegistry(prev => {
                     const updated = new Map(prev);
                     const padDef = updated.get('pad');
                     if (padDef) {
-                      updated.set('pad', { ...padDef, settings: { color: topPadColor, size: topPadSize } });
+                      updated.set('pad', { ...padDef, settings: { color: padTopInstance.color, size: padTopInstance.size } });
                     }
                     return updated;
                   });
@@ -10396,15 +10536,16 @@ function App() {
                   padToolLayerRef.current = 'bottom';
                   setPadToolLayer('bottom'); 
                   setSelectedDrawingLayer('bottom'); 
-                  // Use layer-specific pad colors and sizes
-                  setBrushColor(bottomPadColor);
-                  setBrushSize(bottomPadSize);
-                  // Update toolRegistry to reflect current layer's color (like pad pattern)
+                  // Use tool instance directly (single source of truth)
+                  const padBottomInstance = toolInstanceManager.get('padBottom');
+                  setBrushColor(padBottomInstance.color);
+                  setBrushSize(padBottomInstance.size);
+                  // Update toolRegistry to reflect current layer's color
                   setToolRegistry(prev => {
                     const updated = new Map(prev);
                     const padDef = updated.get('pad');
                     if (padDef) {
-                      updated.set('pad', { ...padDef, settings: { color: bottomPadColor, size: bottomPadSize } });
+                      updated.set('pad', { ...padDef, settings: { color: padBottomInstance.color, size: padBottomInstance.size } });
                     }
                     return updated;
                   });
@@ -11004,6 +11145,43 @@ function App() {
                     {comp.notes}
                   </div>
                 )}
+              </div>
+            );
+          })()}
+
+          {/* Test Point Hover Tooltip (only shown when Option key is held) */}
+          {hoverTestPoint && isOptionPressed && (() => {
+            const stroke = hoverTestPoint.stroke;
+            // Only show popup if test point has notes
+            if (!stroke.notes) return null;
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  left: `${hoverTestPoint.x + 10}px`,
+                  top: `${hoverTestPoint.y + 10}px`,
+                  background: 'rgba(0, 0, 0, 0.85)',
+                  color: '#fff',
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                  fontSize: '12px',
+                  lineHeight: '1.4',
+                  zIndex: 10000,
+                  pointerEvents: 'none',
+                  width: 'max-content',
+                  maxWidth: '400px',
+                  minWidth: '150px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                  Test Point
+                </div>
+                <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid rgba(255,255,255,0.2)', fontSize: '11px', color: '#d0d0d0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {stroke.notes}
+                </div>
               </div>
             );
           })()}

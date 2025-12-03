@@ -21,7 +21,7 @@
 
 import React from 'react';
 import type { Tool, ToolDefinition, ToolSettings } from '../../hooks/useToolRegistry';
-import { toolInstanceManager, getToolInstanceId } from '../../utils/toolInstances';
+import { toolInstanceManager, getToolInstanceId, type ToolInstanceId } from '../../utils/toolInstances';
 
 export interface SetToolColorDialogProps {
   /** Whether the dialog is visible */
@@ -96,6 +96,43 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   onClose,
 }) => {
   const [openColorPicker, setOpenColorPicker] = React.useState<{ toolId: string; layer?: 'top' | 'bottom' } | null>(null);
+  const [colorUpdateTrigger, setColorUpdateTrigger] = React.useState(0);
+
+  // Subscribe to tool instance changes to trigger re-renders when colors change
+  React.useEffect(() => {
+    const unsubscribeCallbacks: (() => void)[] = [];
+    
+    // Subscribe to all tool instances that are shown in the dialog
+    const toolIds: Array<{ id: string; layer?: 'top' | 'bottom' }> = [
+      { id: 'via' },
+      { id: 'pad', layer: 'top' },
+      { id: 'pad', layer: 'bottom' },
+      { id: 'testPoint', layer: 'top' },
+      { id: 'testPoint', layer: 'bottom' },
+      { id: 'trace', layer: 'top' },
+      { id: 'trace', layer: 'bottom' },
+      { id: 'component', layer: 'top' },
+      { id: 'component', layer: 'bottom' },
+      { id: 'power' },
+      { id: 'ground' },
+    ];
+    
+    toolIds.forEach(({ id, layer }) => {
+      try {
+        const toolInstanceId = getToolInstanceId(id as any, layer);
+        const unsubscribe = toolInstanceManager.subscribe(toolInstanceId, () => {
+          setColorUpdateTrigger(prev => prev + 1);
+        });
+        unsubscribeCallbacks.push(unsubscribe);
+      } catch {
+        // Tool doesn't have a tool instance, skip
+      }
+    });
+    
+    return () => {
+      unsubscribeCallbacks.forEach(unsubscribe => unsubscribe());
+    };
+  }, []);
 
   if (!visible) return null;
 
@@ -121,50 +158,75 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   ];
 
   const handleColorChange = (toolId: string, color: string, layer?: 'top' | 'bottom') => {
-    const toolDef = toolRegistry.get(toolId);
-    if (!toolDef) return;
+    // Handle component connections specially (not a tool instance)
+    if (toolId === 'componentConnection') {
+      setComponentConnectionColor(color);
+      saveDefaultColor('componentConnection', color);
+      setOpenColorPicker(null);
+      return;
+    }
+    
+    // Handle erase tool (not a tool instance, uses toolRegistry)
+    if (toolId === 'erase') {
+      const toolDef = toolRegistry.get(toolId);
+      if (toolDef) {
+        updateToolSettings(toolId, { ...toolDef.settings, color });
+        saveToolSettings(toolId, color, toolDef.settings.size);
+      }
+      setOpenColorPicker(null);
+      return;
+    }
 
-    if (layer && layerTools.includes(toolId)) {
-      // Update tool instance directly (single source of truth)
-      const toolInstanceId = getToolInstanceId(toolId as any, layer);
+    // For tools with tool instances, update the tool instance (single source of truth)
+    try {
+      let toolInstanceId: ToolInstanceId;
+      
+      if (layer && layerTools.includes(toolId)) {
+        // Layer-specific tools
+        toolInstanceId = getToolInstanceId(toolId as any, layer);
+      } else {
+        // Non-layer tools (via, power, ground)
+        toolInstanceId = getToolInstanceId(toolId as any);
+      }
+      
+      // Update tool instance color
       toolInstanceManager.setColor(toolInstanceId, color);
       
-      // If this tool is currently active and this layer is selected, update brushColor immediately
+      // If this tool is currently active, update brushColor immediately
       const isActiveTool = 
+        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
         (toolId === 'trace' && currentTool === 'draw' && drawingMode === 'trace') ||
         (toolId === 'pad' && currentTool === 'draw' && drawingMode === 'pad') ||
         (toolId === 'testPoint' && currentTool === 'draw' && drawingMode === 'testPoint') ||
-        (toolId === 'component' && currentTool === 'component');
+        (toolId === 'component' && currentTool === 'component') ||
+        (toolId === 'power' && currentTool === 'power') ||
+        (toolId === 'ground' && currentTool === 'ground');
       
       if (isActiveTool) {
-        const activeLayer = 
-          (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : toolId === 'testPoint' ? testPointToolLayer : componentToolLayer) || 'top';
-        if (activeLayer === layer) {
-          // Update brushColor immediately so subsequent drawings use the new color
+        // For layer-specific tools, only update brushColor if the active layer matches
+        if (layer && layerTools.includes(toolId)) {
+          const activeLayer = 
+            (toolId === 'trace' ? traceToolLayer : toolId === 'pad' ? padToolLayer : toolId === 'testPoint' ? testPointToolLayer : componentToolLayer) || 'top';
+          if (activeLayer === layer) {
+            setBrushColor(color);
+          }
+        } else {
+          // For non-layer tools, always update brushColor if active
           setBrushColor(color);
         }
       }
-    } else {
-      // For non-layer tools, update tool instance directly
-      const toolInstanceId = getToolInstanceId(toolId as any);
-      if (toolInstanceId) {
-        toolInstanceManager.setColor(toolInstanceId, color);
-        
-        // If this tool is currently active, update brushColor immediately
-        const isActiveTool = 
-          (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
-          (toolId === 'power' && currentTool === 'power') ||
-          (toolId === 'ground' && currentTool === 'ground');
-        
-        if (isActiveTool) {
-          setBrushColor(color);
+    } catch (error) {
+      console.error(`Error updating color for tool ${toolId}:`, error);
+      // Fall back to toolRegistry for tools without tool instances
+      const toolDef = toolRegistry.get(toolId);
+      if (toolDef) {
+        if (layer && layerTools.includes(toolId)) {
+          updateToolLayerSettings(toolId, layer, { ...toolDef.layerSettings.get(layer)!, color });
+          saveToolLayerSettings(toolId, layer, color, toolDef.layerSettings.get(layer)?.size || toolDef.settings.size);
+        } else {
+          updateToolSettings(toolId, { ...toolDef.settings, color });
+          saveToolSettings(toolId, color, toolDef.settings.size);
         }
-      }
-      
-      // Handle component connections specially (not a tool instance)
-      if (toolId === 'componentConnection') {
-        setComponentConnectionColor(color);
-        saveDefaultColor('componentConnection', color);
       }
     }
     
@@ -172,22 +234,27 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   };
 
   const renderColorPicker = (toolId: string, layer?: 'top' | 'bottom') => {
-    const toolDef = toolRegistry.get(toolId);
-    if (!toolDef) return null;
-    
-    // Get current color from tool registry (one source of truth)
-    // For layer-specific tools, read from layerSettings, fallback to settings.color
-    const currentColor = layer && layerTools.includes(toolId)
-      ? toolDef.layerSettings.get(layer)?.color ?? toolDef.settings.color ?? '#000000'
-      : toolDef.settings.color ?? '#000000';
+    // Get current color from tool instance manager (single source of truth) to match toolbar
+    // For tools without tool instances (componentConnection, erase), fall back to toolRegistry
+    let currentColor: string;
+    try {
+      const toolInstanceId = getToolInstanceId(toolId as any, layer);
+      const toolInstance = toolInstanceManager.get(toolInstanceId);
+      currentColor = toolInstance.color;
+    } catch {
+      // Fall back to toolRegistry for tools without tool instances (componentConnection, erase)
+      const toolDef = toolRegistry.get(toolId);
+      if (!toolDef) return null;
+      currentColor = toolDef.settings.color ?? '#000000';
+    }
     
     const pickerKey = layer ? `${toolId}-${layer}` : toolId;
     const isOpen = openColorPicker?.toolId === toolId && openColorPicker?.layer === layer;
 
     return (
-      <div key={`${pickerKey}-${currentColor}`} style={{ position: 'relative', display: 'inline-block', zIndex: 10005 }}>
+      <div key={`${pickerKey}-${currentColor}-${colorUpdateTrigger}`} style={{ position: 'relative', display: 'inline-block', zIndex: 10005 }}>
         <button
-          key={`${pickerKey}-button-${currentColor}`}
+          key={`${pickerKey}-button-${currentColor}-${colorUpdateTrigger}`}
           className="color-swatch-button"
           onClick={(e) => {
             e.stopPropagation();

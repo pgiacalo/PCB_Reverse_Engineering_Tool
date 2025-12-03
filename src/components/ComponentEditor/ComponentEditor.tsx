@@ -284,19 +284,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     } else if (comp.componentType === 'TestPoint') {
       (updated as any).signal = componentEditor.signal || undefined;
     } else if (comp.componentType === 'IntegratedCircuit') {
-      // For ICs, description and designator should be synced
-      // Designator is the source of truth - sync description to designator
-      const designator = componentEditor.designator?.trim() || '';
-      (updated as any).description = designator || componentEditor.description || undefined;
+      // For ICs, save description from the Description field
+      (updated as any).description = componentEditor.description?.trim() || undefined;
       (updated as any).datasheet = componentEditor.datasheet || undefined;
       (updated as any).icType = componentEditor.icType || undefined;
-      // Ensure designator is set (it should already be set above, but ensure it's not lost)
-      updated.designator = designator;
     } else {
-      // For non-IC components, save description separately (if it exists)
-      if (componentEditor.description !== undefined) {
-        (updated as any).description = componentEditor.description?.trim() || undefined;
-      }
+      // For non-IC components, save description from the Description field
+      (updated as any).description = componentEditor.description?.trim() || undefined;
     }
     
     if (comp.componentType === 'VacuumTube') {
@@ -594,13 +588,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             type="text"
             value={componentEditor.description || ''}
             onChange={(e) => {
-              if (comp.componentType === 'IntegratedCircuit') {
-                // For ICs, description and designator are synced
-                setComponentEditor({ ...componentEditor, description: e.target.value, designator: e.target.value });
-              } else {
-                // For non-ICs, description is separate from designator
-                setComponentEditor({ ...componentEditor, description: e.target.value });
-              }
+              // Description is always separate from designator for all component types
+              setComponentEditor({ ...componentEditor, description: e.target.value });
             }}
             disabled={areComponentsLocked}
             style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}

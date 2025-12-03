@@ -54,7 +54,7 @@ export function useLayerSettings() {
       bottomComponentColor: localStorage.getItem('defaultBottomComponentColor') || '#9C755F',
       topComponentSize: parseInt(localStorage.getItem('defaultTopComponentSize') || '18', 10),
       bottomComponentSize: parseInt(localStorage.getItem('defaultBottomComponentSize') || '18', 10),
-      componentConnectionColor: localStorage.getItem('defaultComponentConnectionColor') || 'rgba(0, 150, 255, 0.6)',
+      componentConnectionColor: localStorage.getItem('defaultComponentConnectionColor') || '#E69F00',
       componentConnectionSize: parseInt(localStorage.getItem('defaultComponentConnectionSize') || '3', 10),
       powerSize: parseInt(localStorage.getItem('defaultPowerSize') || '18', 10),
       groundSize: parseInt(localStorage.getItem('defaultGroundSize') || '18', 10),

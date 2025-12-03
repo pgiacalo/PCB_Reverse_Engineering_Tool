@@ -178,7 +178,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
           flexShrink: 0,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Information (Ctrl+I)</h2>
+        <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Information (I)</h2>
         <button
           onClick={onClose}
           style={{
@@ -282,6 +282,39 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   <div>Layer: {comp.layer}</div>
+                  {comp.componentType === 'IntegratedCircuit' && (
+                    <>
+                      {(comp as any).description && <div>Description: {(comp as any).description}</div>}
+                      {(comp as any).icType && <div>IC Type: {(comp as any).icType}</div>}
+                    </>
+                  )}
+                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
+                    <input
+                      type="text"
+                      value={comp.notes || ''}
+                      readOnly
+                      onClick={onOpenNotesDialog}
+                      placeholder="Click to edit notes..."
+                      maxLength={200}
+                      style={{
+                        flex: 1,
+                        padding: '4px 6px',
+                        fontSize: '11px',
+                        fontFamily: 'sans-serif',
+                        backgroundColor: '#f9f9f9',
+                        color: '#333',
+                        border: '1px solid #ddd',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        minWidth: 0,
+                      }}
+                    />
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span>Designator: {comp.designator || '(empty)'}</span>
                     {hasViasOrPads && (
@@ -447,10 +480,6 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       {(comp as any).esr && <div>ESR: {(comp as any).esr}</div>}
                       {(comp as any).temperature && <div>Temperature: {(comp as any).temperature}</div>}
                     </>
-                  )}
-                  
-                  {comp.orientation !== undefined && comp.orientation !== null && (
-                    <div>Orientation: {comp.orientation}°</div>
                   )}
                   
                   {comp.pinConnections && comp.pinConnections.length > 0 && (() => {
@@ -644,8 +673,6 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   
                   {comp.componentType === 'IntegratedCircuit' && (
                     <>
-                      {(comp as any).description && <div>Description: {(comp as any).description}</div>}
-                      {(comp as any).icType && <div>IC Type: {(comp as any).icType}</div>}
                       {(comp as any).datasheet && <div>Datasheet: <a href={(comp as any).datasheet} target="_blank" rel="noopener noreferrer">{(comp as any).datasheet}</a></div>}
                     </>
                   )}
@@ -684,33 +711,6 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   {/* Less important details shown at the end */}
                   <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee', fontSize: '10px', color: '#999' }}>
                     <div>Position: x={comp.x.toFixed(2)}, y={comp.y.toFixed(2)}</div>
-                  </div>
-                  <div style={{ marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <label style={{ fontSize: '11px', color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>Notes:</label>
-                    <input
-                      type="text"
-                      value={comp.notes || ''}
-                      readOnly
-                      onClick={onOpenNotesDialog}
-                      placeholder="Click to edit notes..."
-                      maxLength={200}
-                      style={{
-                        flex: 1,
-                        padding: '4px 6px',
-                        fontSize: '11px',
-                        fontFamily: 'sans-serif',
-                        backgroundColor: '#f9f9f9',
-                        color: '#333',
-                        border: '1px solid #ddd',
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        boxSizing: 'border-box',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        minWidth: 0,
-                      }}
-                    />
                   </div>
                 </div>
               </div>

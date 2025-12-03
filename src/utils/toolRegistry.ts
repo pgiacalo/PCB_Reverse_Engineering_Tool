@@ -234,10 +234,10 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
     shortcut: '',
     tooltip: 'Component connection lines',
     colorReflective: false,
-    settings: loadToolSettings('componentConnection', 'rgba(0, 150, 255, 0.6)', 3),
+    settings: loadToolSettings('componentConnection', '#E69F00', 3),
     layerSettings: new Map([
-      ['top', loadToolLayerSettings('componentConnection', 'top', 'rgba(0, 150, 255, 0.6)', 3)],
-      ['bottom', loadToolLayerSettings('componentConnection', 'bottom', 'rgba(0, 150, 255, 0.6)', 3)],
+      ['top', loadToolLayerSettings('componentConnection', 'top', '#E69F00', 3)],
+      ['bottom', loadToolLayerSettings('componentConnection', 'bottom', '#E69F00', 3)],
     ] as [Layer, ToolSettings][]),
   });
   
