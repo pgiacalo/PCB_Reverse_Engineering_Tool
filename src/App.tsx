@@ -4466,9 +4466,14 @@ function App() {
   }, [areImagesLocked, isTransforming, setIsTransforming, setTransformStartPos, setSelectedImageForTransform]);
 
   const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
-    // Pass 1: draw traces first (so vias and pads appear on top)
+    // Pass 1: draw traces first (so vias, pads, and test points appear on top)
+    // IMPORTANT: Skip vias, pads, and test points here - they are drawn in Pass 2 with their own visibility controls
     drawingStrokes.forEach(stroke => {
-      if (stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') return;
+      // Explicitly skip vias, pads, and test points - they are drawn in Pass 2
+      // Check for test points by type property AND by testPointType property to be defensive
+      if (stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint' || (stroke as any).testPointType !== undefined) return;
+      // Only draw traces in Pass 1 - check that it's actually a trace
+      if (stroke.type !== 'trace') return;
       let shouldShowStroke = false;
       if (stroke.layer === 'top') shouldShowStroke = showTopTracesLayer;
       else if (stroke.layer === 'bottom') shouldShowStroke = showBottomTracesLayer;
@@ -4531,20 +4536,23 @@ function App() {
     });
 
     // Pass 2: draw vias, pads, and test points on top of traces
+    // IMPORTANT: Each type uses ONLY its own visibility flags - no cross-contamination
     drawingStrokes.forEach(stroke => {
       if (stroke.type === 'via') {
+        // Vias use ONLY showViasLayer - not affected by trace, pad, or test point flags
         if (!showViasLayer) return;
       } else if (stroke.type === 'pad') {
-        // Check pad visibility based on layer - ONLY use pad visibility flags
-        if (stroke.layer === 'top' && !showTopPadsLayer) return;
-        if (stroke.layer === 'bottom' && !showBottomPadsLayer) return;
+        // Pads use ONLY pad visibility flags - not affected by trace, via, or test point flags
+        const padLayer = stroke.layer || 'top';
+        if (padLayer === 'top' && !showTopPadsLayer) return;
+        if (padLayer === 'bottom' && !showBottomPadsLayer) return;
       } else if (stroke.type === 'testPoint') {
-        // Check test point visibility based on layer - ONLY use test point visibility flags, NOT trace or pad flags
+        // Test points use ONLY test point visibility flags - not affected by trace, pad, or via flags
         const testPointLayer = stroke.layer || 'top';
         if (testPointLayer === 'top' && !showTopTestPointsLayer) return;
         if (testPointLayer === 'bottom' && !showBottomTestPointsLayer) return;
       } else {
-        // Not a via, pad, or test point - skip (these are drawn in Pass 1)
+        // Not a via, pad, or test point - skip (traces are drawn in Pass 1)
         return;
       }
       const c = stroke.points[0];
