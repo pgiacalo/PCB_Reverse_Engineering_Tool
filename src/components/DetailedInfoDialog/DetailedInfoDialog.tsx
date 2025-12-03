@@ -35,7 +35,7 @@ interface DrawingStroke {
   type?: 'trace' | 'via' | 'pad' | 'testPoint';
   viaType?: string;
   padType?: string;
-  testPointType?: string;
+  testPointType?: 'power' | 'ground' | 'signal' | 'unknown';
   notes?: string | null;
 }
 

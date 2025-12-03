@@ -162,8 +162,8 @@ export interface MenuBarProps {
   setComponentConnectionColor: (color: string) => void;
   
   // Legacy save functions (used by +/- keys)
-  saveDefaultSize: (toolType: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
-  saveDefaultColor: (type: 'via' | 'pad' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
+  saveDefaultSize: (toolType: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
+  saveDefaultColor: (type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;

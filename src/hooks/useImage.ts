@@ -6,6 +6,7 @@ export interface PCBImage {
   width: number;
   height: number;
   dataUrl?: string;
+  filePath?: string; // File path relative to project directory (preferred for new projects)
   x: number;
   y: number;
   scale: number;

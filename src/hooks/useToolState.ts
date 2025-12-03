@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { toolInstanceManager, getToolInstanceId, type ToolInstanceId } from '../utils/toolInstances';
+import { toolInstanceManager, type ToolInstanceId } from '../utils/toolInstances';
 import type { Tool } from '../types';
 
 export interface ToolState {
@@ -59,6 +59,8 @@ export function useToolState(props: UseToolStateProps) {
   } = props;
 
   // State to trigger re-renders when tool instances change
+  // Note: Only setToolInstanceUpdateTrigger is used, the value itself is unused
+  // @ts-ignore - toolInstanceUpdateTrigger is intentionally unused (only setter is used)
   const [toolInstanceUpdateTrigger, setToolInstanceUpdateTrigger] = useState(0);
 
   // Determine current tool instance ID based on tool and layer selection

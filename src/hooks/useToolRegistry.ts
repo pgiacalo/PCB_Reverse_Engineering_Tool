@@ -82,6 +82,7 @@ export function useToolRegistry(
   bottomPadColor: string,
   topPadSize: number,
   bottomPadSize: number,
+  // Legacy props - kept for compatibility but not used
   topTestPointColor: string,
   bottomTestPointColor: string,
   topTestPointSize: number,
@@ -95,6 +96,20 @@ export function useToolRegistry(
   testPointToolLayer: 'top' | 'bottom',
   componentToolLayer: 'top' | 'bottom'
 ) {
+  // Suppress unused parameter warnings for legacy props
+  void topTestPointColor;
+  void bottomTestPointColor;
+  void topTestPointSize;
+  void bottomTestPointSize;
+  void topComponentColor;
+  void bottomComponentColor;
+  void topComponentSize;
+  void bottomComponentSize;
+  void traceToolLayer;
+  void padToolLayer;
+  void testPointToolLayer;
+  void componentToolLayer;
+  
   const [toolRegistry, setToolRegistry] = useState<Map<string, ToolDefinition>>(() => createToolRegistry());
   const prevToolIdRef = useRef<string | null>(null);
   const prevBrushColorRef = useRef<string>(brushColor);

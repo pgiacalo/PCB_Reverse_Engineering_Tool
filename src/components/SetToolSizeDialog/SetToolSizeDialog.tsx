@@ -75,19 +75,20 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   padToolLayer,
   testPointToolLayer,
   componentToolLayer,
-  updateToolSettings,
-  updateToolLayerSettings,
+  // Legacy props - kept for compatibility but not used
+  updateToolSettings: _updateToolSettings,
+  updateToolLayerSettings: _updateToolLayerSettings,
   setBrushSize,
-  saveToolSettings,
-  saveToolLayerSettings,
-  setTopTraceSize,
-  setBottomTraceSize,
-  setTopPadSize,
-  setBottomPadSize,
-  setTopTestPointSize,
-  setBottomTestPointSize,
-  setTopComponentSize,
-  setBottomComponentSize,
+  saveToolSettings: _saveToolSettings,
+  saveToolLayerSettings: _saveToolLayerSettings,
+  setTopTraceSize: _setTopTraceSize,
+  setBottomTraceSize: _setBottomTraceSize,
+  setTopPadSize: _setTopPadSize,
+  setBottomPadSize: _setBottomPadSize,
+  setTopTestPointSize: _setTopTestPointSize,
+  setBottomTestPointSize: _setBottomTestPointSize,
+  setTopComponentSize: _setTopComponentSize,
+  setBottomComponentSize: _setBottomComponentSize,
   setComponentConnectionSize,
   saveDefaultSize,
   onClose,
@@ -123,8 +124,9 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
     const layerTools = ['trace', 'pad', 'testPoint', 'component'];
     if (layerTools.includes(toolId) && layer) {
       // Update layer-specific settings
+      // @ts-ignore - layerSettings is intentionally unused
       const layerSettings = toolDef.layerSettings.get(layer);
-      const currentColor = layerSettings?.color || toolDef.settings.color;
+      // const currentColor = layerSettings?.color || toolDef.settings.color; // Unused
       
       // Update tool instance directly (single source of truth)
       const toolInstanceId = getToolInstanceId(toolId as any, layer);

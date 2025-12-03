@@ -404,7 +404,9 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
         try {
           projectDirHandle = await handle.getParent();
           setProjectDirHandle(projectDirHandle);
-          console.log(`Project opened from directory: ${projectDirHandle.name || 'unknown'}`);
+          if (projectDirHandle) {
+            console.log(`Project opened from directory: ${projectDirHandle.name || 'unknown'}`);
+          }
         } catch (e) {
           console.error('Failed to get directory handle from opened file:', e);
           // Continue without directory handle - user may need to set it manually

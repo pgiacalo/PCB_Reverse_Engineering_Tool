@@ -5,18 +5,12 @@ import {
   COMPONENT_TYPE_INFO,
   formatComponentTypeName,
   COMPONENT_CATEGORIES,
-  DEFAULT_VIA_COLOR, 
-  DEFAULT_TRACE_COLOR, 
-  DEFAULT_COMPONENT_COLOR, 
-  DEFAULT_PAD_COLOR,
-  DEFAULT_POWER_COLOR,
-  VIA,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
-import { toolInstanceManager, getToolInstanceId, type ToolInstanceId } from './utils/toolInstances';
+import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
 import type { ComponentType, PCBComponent } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
@@ -249,7 +243,7 @@ function App() {
     testPointToolLayer,
     componentToolLayer,
   });
-  const { toolState, setColor: setToolColor, setSize: setToolSize, getCurrentToolInstanceId } = toolStateManager;
+  const { toolState } = toolStateManager;
   
   // Tool registry hook
   const toolRegistryHook = useToolRegistry(
@@ -1203,7 +1197,8 @@ function App() {
     setSelectedPowerIds(new Set());
   }, [groundBuses, grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
 
-  // Utility function to get contextual value for a component
+  // Utility function to get contextual value for a component (currently unused)
+  // @ts-ignore - getComponentContextualValue is intentionally unused
   const getComponentContextualValue = useCallback((comp: PCBComponent): string | null => {
     switch (comp.componentType) {
       case 'Resistor':
@@ -1287,8 +1282,8 @@ function App() {
     
     switch (comp.componentType) {
       case 'Capacitor':
-      case 'ElectrolyticCapacitor':
-      case 'FilmCapacitor':
+      case 'Electrolytic Capacitor':
+      case 'Film Capacitor':
         if ('capacitance' in comp && comp.capacitance && 'capacitanceUnit' in comp && comp.capacitanceUnit) {
           details.push(`Capacitance: ${comp.capacitance} ${comp.capacitanceUnit}`);
         }
@@ -2304,7 +2299,13 @@ function App() {
         
         const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
         const nodeId = snapped.nodeId ?? generatePointId();
-        const testPointType = determineTestPointType(nodeId, powerBuses);
+        const testPointTypeString = determineTestPointType(nodeId, powerBuses);
+        // Map descriptive string to union type
+        const testPointType: 'power' | 'ground' | 'signal' | 'unknown' = 
+          testPointTypeString.includes('Power') ? 'power' :
+          testPointTypeString.includes('Ground') ? 'ground' :
+          testPointTypeString.includes('Signal') ? 'signal' :
+          'unknown';
         
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x: snapped.x, y: snapped.y });
@@ -2541,7 +2542,12 @@ function App() {
         if (snapped.nodeId !== undefined) {
           const newViaType = determineViaType(snapped.nodeId, powerBuses);
           const newPadType = determinePadType(snapped.nodeId, powerBuses);
-          const newTestPointType = determineTestPointType(snapped.nodeId, powerBuses);
+          const newTestPointTypeString = determineTestPointType(snapped.nodeId, powerBuses);
+          const newTestPointType: 'power' | 'ground' | 'signal' | 'unknown' = 
+            newTestPointTypeString.includes('Power') ? 'power' :
+            newTestPointTypeString.includes('Ground') ? 'ground' :
+            newTestPointTypeString.includes('Signal') ? 'signal' :
+            'unknown';
           setDrawingStrokes(prev => prev.map(s => {
             if (s.type === 'via' && s.points.length > 0 && s.points[0].id === snapped.nodeId) {
               return { ...s, viaType: newViaType };
@@ -2748,22 +2754,22 @@ function App() {
     
     // Handle test point double-click to open Notes dialog
     // Works in any tool mode
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const dprX = canvas.width / rect.width;
-    const dprY = canvas.height / rect.height;
-    const offX = (e.nativeEvent as any).offsetX as number | undefined;
-    const offY = (e.nativeEvent as any).offsetY as number | undefined;
-    const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
-    const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
-    const canvasX = cssX * dprX;
-    const canvasY = cssY * dprY;
-    const contentCanvasX = canvasX - CONTENT_BORDER;
-    const contentCanvasY = canvasY - CONTENT_BORDER;
-    const x = (contentCanvasX - viewPan.x) / viewScale;
-    const y = (contentCanvasY - viewPan.y) / viewScale;
-    
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const dprX = canvas.width / rect.width;
+      const dprY = canvas.height / rect.height;
+      const offX = (e.nativeEvent as any).offsetX as number | undefined;
+      const offY = (e.nativeEvent as any).offsetY as number | undefined;
+      const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
+      const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
+      const canvasX = cssX * dprX;
+      const canvasY = cssY * dprY;
+      const contentCanvasX = canvasX - CONTENT_BORDER;
+      const contentCanvasY = canvasY - CONTENT_BORDER;
+      const x = (contentCanvasX - viewPan.x) / viewScale;
+      const y = (contentCanvasY - viewPan.y) / viewScale;
+      
     // Check for test point hit
     const hitTolerance = Math.max(8 / viewScale, 4); // Zoom-aware hit tolerance
     const hitTestPoint = (() => {
@@ -7427,7 +7433,12 @@ function App() {
         }
       } else if (stroke.type === 'testPoint' && stroke.points.length > 0 && stroke.points[0].id !== undefined) {
         const nodeId = stroke.points[0].id;
-        const newTestPointType = determineTestPointType(nodeId, powerBuses);
+        const newTestPointTypeString = determineTestPointType(nodeId, powerBuses);
+        const newTestPointType: 'power' | 'ground' | 'signal' | 'unknown' = 
+          newTestPointTypeString.includes('Power') ? 'power' :
+          newTestPointTypeString.includes('Ground') ? 'ground' :
+          newTestPointTypeString.includes('Signal') ? 'signal' :
+          'unknown';
         // Only update if type changed to avoid unnecessary re-renders
         if (stroke.testPointType !== newTestPointType) {
           return { ...stroke, testPointType: newTestPointType };
@@ -7610,7 +7621,12 @@ function App() {
         }
       } else if (s.type === 'testPoint' && s.points.length > 0 && s.points[0].id !== undefined) {
         const nodeId = s.points[0].id;
-        const newTestPointType = determineTestPointType(nodeId, powerBuses);
+        const newTestPointTypeString = determineTestPointType(nodeId, powerBuses);
+        const newTestPointType: 'power' | 'ground' | 'signal' | 'unknown' = 
+          newTestPointTypeString.includes('Power') ? 'power' :
+          newTestPointTypeString.includes('Ground') ? 'ground' :
+          newTestPointTypeString.includes('Signal') ? 'signal' :
+          'unknown';
         if (s.testPointType !== newTestPointType) {
           return { ...s, testPointType: newTestPointType };
         }
@@ -9070,8 +9086,8 @@ function App() {
         // Fall back to dataUrl if file path loading failed or not available
         if (!bitmap && img.dataUrl) {
           try {
-            const blob = await (await fetch(img.dataUrl)).blob();
-            bitmap = await createImageBitmap(blob);
+          const blob = await (await fetch(img.dataUrl)).blob();
+          bitmap = await createImageBitmap(blob);
             url = img.dataUrl;
             console.log(`Loaded image from dataUrl (backward compatibility)`);
           } catch (e) {
@@ -9839,17 +9855,19 @@ function App() {
           // CRITICAL VERIFICATION: Verify the directory handle is correct by checking
           // that the file we just opened actually exists in this directory
           // This ensures we're not using a stale/cached directory handle
-          try {
-            const verifyFileHandle = await projectDirHandle.getFileHandle(file.name);
-            const verifyFile = await verifyFileHandle.getFile();
-            if (verifyFile.name !== file.name) {
-              throw new Error(`Directory verification failed: file name mismatch`);
+          if (projectDirHandle) {
+            try {
+              const verifyFileHandle = await projectDirHandle.getFileHandle(file.name);
+              const verifyFile = await verifyFileHandle.getFile();
+              if (verifyFile.name !== file.name) {
+                throw new Error(`Directory verification failed: file name mismatch`);
+              }
+            } catch (verifyError) {
+              console.error(`Directory verification failed:`, verifyError);
+              console.error(`The selected directory might not contain the opened file`);
+              // Don't continue - we need the correct directory
+              throw new Error('Directory verification failed - selected directory does not contain the opened file');
             }
-          } catch (verifyError) {
-            console.error(`Directory verification failed:`, verifyError);
-            console.error(`The selected directory might not contain the opened file`);
-            // Don't continue - we need the correct directory
-            throw new Error('Directory verification failed - selected directory does not contain the opened file');
           }
           
           // CRITICAL FIX: Always update the ref with the NEW handle
@@ -11722,31 +11740,31 @@ function App() {
               
               // Sort existing buses
               const sortedExisting = [...existingBuses].sort((a, b) => {
-                // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
-                const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
-                  const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
-                  if (match) {
-                    const sign = match[1] || '+';
-                    const numValue = parseFloat(match[2]);
-                    const absValue = Math.abs(numValue);
-                    const isNegative = sign === '-';
-                    return { absValue, isNegative, original: voltage };
-                  }
-                  return { absValue: Infinity, isNegative: false, original: voltage };
-                };
-                
-                const aParsed = parseVoltage(a.voltage);
-                const bParsed = parseVoltage(b.voltage);
-                
-                if (aParsed.absValue !== bParsed.absValue) {
-                  return aParsed.absValue - bParsed.absValue;
+              // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
+              const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
+                const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
+                if (match) {
+                  const sign = match[1] || '+';
+                  const numValue = parseFloat(match[2]);
+                  const absValue = Math.abs(numValue);
+                  const isNegative = sign === '-';
+                  return { absValue, isNegative, original: voltage };
                 }
-                
-                if (aParsed.isNegative !== bParsed.isNegative) {
-                  return aParsed.isNegative ? -1 : 1;
-                }
-                
-                return 0;
+                return { absValue: Infinity, isNegative: false, original: voltage };
+              };
+              
+              const aParsed = parseVoltage(a.voltage);
+              const bParsed = parseVoltage(b.voltage);
+              
+              if (aParsed.absValue !== bParsed.absValue) {
+                return aParsed.absValue - bParsed.absValue;
+              }
+              
+              if (aParsed.isNegative !== bParsed.isNegative) {
+                return aParsed.isNegative ? -1 : 1;
+              }
+              
+              return 0;
               });
               
               // Combine: sorted existing buses first, then editing bus at bottom

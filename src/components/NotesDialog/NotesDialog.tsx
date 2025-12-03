@@ -35,7 +35,7 @@ interface DrawingStroke {
   notes?: string | null;
   viaType?: string;
   padType?: string;
-  testPointType?: string;
+  testPointType?: 'power' | 'ground' | 'signal' | 'unknown';
 }
 
 export interface NotesDialogProps {

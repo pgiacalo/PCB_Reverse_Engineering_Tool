@@ -44,6 +44,7 @@ export interface DrawingStroke {
   layer: 'top' | 'bottom';
   type?: 'trace' | 'via' | 'pad' | 'testPoint';
   notes?: string | null; // Max 200 characters, null until user enters a value
+  testPointType?: 'power' | 'ground' | 'signal' | 'unknown'; // For test points only
 }
 
 // ============================================================================
@@ -95,6 +96,7 @@ export interface PCBComponentBase {
   pinPolarities?: ('+' | '-' | '')[]; // Array of pin polarities (size = pinCount), only for components with polarity (electrolytic caps, diodes, batteries, etc.)
   notes?: string | null; // Max 200 characters, null until user enters a value
   orientation?: number; // Rotation in degrees: 0, 90, 180, 270 (for components with required orientation like electrolytic caps, ICs with PIN #1)
+  description?: string; // Component description
 }
 
 /**

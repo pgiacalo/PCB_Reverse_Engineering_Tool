@@ -15,6 +15,7 @@ export interface DrawingStroke {
   type?: 'trace' | 'via' | 'pad' | 'testPoint';
   viaType?: string;
   padType?: string;
+  testPointType?: 'power' | 'ground' | 'signal' | 'unknown'; // For test points only
   notes?: string | null; // Max 500 characters, null until user enters a value
 }
 

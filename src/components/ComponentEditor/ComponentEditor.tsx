@@ -290,7 +290,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).turns = componentEditor.turns || undefined;
     } else if (comp.componentType === 'TestPoint') {
       (updated as any).signal = componentEditor.signal || undefined;
-    } else if (comp.componentType === 'Film Capacitor') {
+    } else if ((comp.componentType as string) === 'Film Capacitor') {
       (updated as any).capacitance = componentEditor.capacitance || undefined;
       (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
       (updated as any).voltage = componentEditor.voltage || undefined;

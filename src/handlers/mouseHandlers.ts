@@ -29,7 +29,7 @@ import type { DrawingStroke, DrawingPoint } from '../hooks/useDrawing';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../hooks/usePowerGround';
 import type { Layer, Tool } from '../hooks';
 import { autoAssignPolarity } from '../utils/components';
-import { toolInstanceManager, getToolInstanceId } from '../utils/toolInstances';
+import { toolInstanceManager } from '../utils/toolInstances';
 
 export interface MouseHandlersProps {
   // Canvas and view
@@ -927,7 +927,13 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
         
         const snapped = !isSnapDisabled ? snapToNearestNode(x, y) : { x: truncatePoint({ x, y }).x, y: truncatePoint({ x, y }).y };
         const nodeId = snapped.nodeId ?? generatePointId();
-        const testPointType = determineTestPointType(nodeId, powerBuses);
+        const testPointTypeString = determineTestPointType(nodeId, powerBuses);
+        // Map descriptive string to union type
+        const testPointType: 'power' | 'ground' | 'signal' | 'unknown' = 
+          testPointTypeString.includes('Power') ? 'power' :
+          testPointTypeString.includes('Ground') ? 'ground' :
+          testPointTypeString.includes('Signal') ? 'signal' :
+          'unknown';
         
         // Truncate coordinates to 3 decimal places for exact matching
         const truncatedPos = truncatePoint({ x: snapped.x, y: snapped.y });
