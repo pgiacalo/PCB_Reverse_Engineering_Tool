@@ -11337,6 +11337,7 @@ function App() {
               <input type="checkbox" checked={showTopComponents} onChange={(e) => setShowTopComponents(e.target.checked)} />
               <span>Components (Top)</span>
             </label>
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
               <span>Pads (Bottom)</span>
@@ -11353,6 +11354,7 @@ function App() {
               <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
               <span>Components (Bottom)</span>
             </label>
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showPowerLayer} onChange={(e) => setShowPowerLayer(e.target.checked)} />
               <span>Power</span>

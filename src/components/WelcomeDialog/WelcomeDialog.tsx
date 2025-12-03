@@ -59,6 +59,9 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
         3) Use the tools to draw vias, pads, traces, etc.
       </div>
+      <div style={{ fontSize: '13px', color: '#555', marginTop: '16px', lineHeight: '1.5', textAlign: 'left', fontWeight: 'bold' }}>
+        Best viewed in browser's Full Screen Mode
+      </div>
     </div>
   );
 };
