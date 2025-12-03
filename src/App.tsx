@@ -7772,7 +7772,9 @@ function App() {
       // Store project directory name for future saves and auto-saves
       // Note: FileSystemDirectoryHandle doesn't expose full file system paths for security reasons
       // We store the directory name and use the directory handle to access files
-      projectDirectoryName: projectDirHandle ? projectDirHandle.name || null : null,
+      // CRITICAL: Use projectDirHandleRef.current for auto-save to ensure we use the correct directory
+      // The ref is updated immediately when opening a project, while state updates are async
+      projectDirectoryName: projectDirHandleRef.current ? projectDirHandleRef.current.name || null : (projectDirHandle ? projectDirHandle.name || null : null),
       drawing: {
         // Filter out single-point traces (traces must have at least 2 points to form a line)
         // Keep vias (which are single points by design) and traces with 2+ points
@@ -7892,7 +7894,17 @@ function App() {
   // Ref to access projectDirHandle in performAutoSave callback
   // This ensures Auto Save ALWAYS uses the directory from which the project was created or opened
   const projectDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
-  projectDirHandleRef.current = projectDirHandle;
+  // Flag to track if we're in the middle of opening a project
+  // This prevents the useEffect from overwriting the ref with stale state
+  const isOpeningProjectRef = useRef<boolean>(false);
+  // Use useEffect to sync ref with state, but only if we're not explicitly setting it
+  React.useEffect(() => {
+    // Only sync if we're not in the middle of opening a project
+    // When opening a project, we set the ref explicitly and don't want it overwritten
+    if (!isOpeningProjectRef.current) {
+      projectDirHandleRef.current = projectDirHandle;
+    }
+  }, [projectDirHandle]);
 
   // Auto Save function - saves to a file handle with timestamped filename
   // Use refs to avoid recreating this function on every state change
@@ -7905,7 +7917,7 @@ function App() {
     let dirHandle = projectDirHandleRef.current;
     let baseName = autoSaveBaseNameRef.current;
     
-    console.log(`Auto save: projectDirHandle=${dirHandle ? 'set' : 'missing'}, baseName=${baseName || 'missing'}`);
+    console.log(`Auto save: projectDirHandle=${dirHandle ? `set (${dirHandle.name})` : 'missing'}, baseName=${baseName || 'missing'}`);
     
     // If directory handle is missing, we cannot save
     // Directory should be set when project is created or opened (which is a user gesture)
@@ -9798,16 +9810,76 @@ function App() {
         // Get the directory handle from the file handle (parent directory)
         // This sets the project directory so that when auto-save is enabled,
         // it will automatically use this directory (no need to prompt user)
+        // CRITICAL: getParent() returns a handle to the parent directory, but the browser
+        // may reuse permissions from previous sessions. We MUST verify the handle is correct
+        // by checking that the opened file actually exists in that directory.
+        // Set flag to prevent useEffect from overwriting the ref during async operations
+        isOpeningProjectRef.current = true;
+        
         let projectDirHandle: FileSystemDirectoryHandle | null = null;
         try {
-          projectDirHandle = await handle.getParent();
+          // Check if getParent() method exists (browser support varies)
+          if (typeof (handle as any).getParent === 'function') {
+            projectDirHandle = await (handle as any).getParent();
+            console.log(`✓ Got directory handle via getParent(): "${projectDirHandle.name}"`);
+          } else {
+            // getParent() is not available - we need to prompt for directory access
+            console.warn('getParent() not available. Prompting user for directory access...');
+            const w = window as any;
+            if (typeof w.showDirectoryPicker === 'function') {
+              // Prompt user to select the directory containing the opened file
+              // This ensures we get the correct directory handle with proper permissions
+              projectDirHandle = await w.showDirectoryPicker({
+                startIn: 'documents', // Suggest documents folder
+              });
+              console.log(`✓ Got directory handle via showDirectoryPicker(): "${projectDirHandle.name}"`);
+            } else {
+              throw new Error('Directory picker not available in this browser');
+            }
+          }
+          
+          // CRITICAL VERIFICATION: Verify the directory handle is correct by checking
+          // that the file we just opened actually exists in this directory
+          // This ensures we're not using a stale/cached directory handle
+          try {
+            const verifyFileHandle = await projectDirHandle.getFileHandle(file.name);
+            const verifyFile = await verifyFileHandle.getFile();
+            if (verifyFile.name !== file.name) {
+              throw new Error(`Directory verification failed: file name mismatch`);
+            }
+            console.log(`✓ Verified: Opened file "${file.name}" exists in directory "${projectDirHandle.name}"`);
+          } catch (verifyError) {
+            console.error(`✗ Directory verification failed:`, verifyError);
+            console.error(`  - The selected directory might not contain the opened file`);
+            // Don't continue - we need the correct directory
+            throw new Error('Directory verification failed - selected directory does not contain the opened file');
+          }
+          
+          // Log directory handle information
+          const dirName = projectDirHandle.name || 'unnamed';
+          console.log(`Opened project file: ${file.name}`);
+          console.log(`  - Directory handle: "${dirName}"`);
+          console.log(`  - Previous projectDirHandleRef.current: ${projectDirHandleRef.current?.name || 'null'}`);
+          console.log(`  - Are handles the same object reference? ${projectDirHandle === projectDirHandleRef.current}`);
+          
+          // CRITICAL FIX: Always update the ref with the NEW handle
+          // We MUST use this handle, not any cached/stale handle from a previous project
+          const previousDirName = projectDirHandleRef.current?.name || 'null';
           setProjectDirHandle(projectDirHandle);
-          // Update ref immediately so performAutoSave can use it right away
           projectDirHandleRef.current = projectDirHandle;
-          console.log(`Opened project file: ${file.name} in directory (auto-save will use this directory)`);
+          
+          console.log(`  - Updated projectDirHandleRef.current from "${previousDirName}" to "${projectDirHandleRef.current?.name || 'null'}"`);
+          console.log(`  - Auto-save will use directory: "${dirName}"`);
         } catch (e) {
-          console.warn('Could not get directory handle from file handle:', e);
-          // Continue without directory handle (fallback will prompt if needed)
+          console.error('Failed to get directory handle from file handle:', e);
+          alert('Failed to get directory access. Auto-save will not work until you enable it manually via File -> Auto Save.');
+          // Continue without directory handle - user will need to set it manually
+        } finally {
+          // Clear the flag after a short delay to allow state updates to complete
+          // This ensures the useEffect can sync the ref once state is stable
+          setTimeout(() => {
+            isOpeningProjectRef.current = false;
+          }, 1000);
         }
         
         // Check if auto-save was enabled in the project file BEFORE calling loadProject
@@ -9831,20 +9903,30 @@ function App() {
           localStorage.setItem('pcb_project_name', projectNameToUse);
         }
         
-        // Option 3: If auto-save was enabled in the file, update autoSaveDirHandle to match projectDirHandle
-        // This ensures auto-save uses the correct directory for the opened project
-        // We check the project file directly, not the state variable, because loadProject
-        // might not have finished updating the state yet
-        // Option 1: The useEffect at line 8296 will automatically restart the interval
-        // when autoSaveDirHandle or autoSaveBaseName changes
+        // CRITICAL FIX: When opening a project with auto-save enabled, we MUST:
+        // 1. Update projectDirHandleRef immediately (already done above)
+        // 2. Update baseName to match the OPENED project, NOT the baseName from the file
+        // 3. Force restart the auto-save interval to ensure it uses the new directory
+        // The issue is that performAutoSave uses projectDirHandleRef.current, not autoSaveDirHandle
+        // Also, loadProject restores the old baseName from the file, which might be from a different project
         if (wasAutoSaveEnabledInFile && projectDirHandle) {
-          console.log('Auto save: Updating directory handle to match opened project directory');
-          setAutoSaveDirHandle(projectDirHandle);
+          console.log(`Auto save: Opening project with auto-save enabled. Updating directory to "${projectDirHandle.name}"`);
           
-          // Also update base name to match project name
+          // CRITICAL: Update base name to match the CURRENT project name, not the one from the file
+          // The file might have an old baseName from when it was last saved (e.g., PROJ_2)
+          // but we're opening it as PROJ_1, so we need to use PROJ_1 as the baseName
           const projectNameWithoutExt = projectNameToUse.replace(/\.json$/i, '');
           const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
           const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
+          
+          console.log(`  - Project name from file: ${projectNameToUse}`);
+          console.log(`  - Base name from file (old): ${project.autoSave?.baseName || 'none'}`);
+          console.log(`  - New base name (current project): ${cleanBaseName}`);
+          
+          // Update autoSaveDirHandle state (for the useEffect dependency)
+          setAutoSaveDirHandle(projectDirHandle);
+          
+          // Update base name to match CURRENT project name, not the one from the file
           setAutoSaveBaseName(cleanBaseName);
           
           // Update refs immediately so performAutoSave can use them
@@ -9852,7 +9934,18 @@ function App() {
           autoSaveDirHandleRef.current = projectDirHandle;
           autoSaveBaseNameRef.current = cleanBaseName;
           
+          // CRITICAL: Force restart the interval by clearing it and letting the useEffect recreate it
+          // This ensures the interval callback uses the updated projectDirHandleRef
+          if (autoSaveIntervalRef.current) {
+            console.log('Auto save: Clearing existing interval to restart with new directory and baseName');
+            clearInterval(autoSaveIntervalRef.current);
+            autoSaveIntervalRef.current = null;
+          }
+          
           console.log(`Auto save: Updated to use directory "${projectDirHandle.name}" with base name "${cleanBaseName}"`);
+          console.log(`  - projectDirHandleRef.current: ${projectDirHandleRef.current?.name || 'missing'}`);
+          console.log(`  - autoSaveDirHandleRef.current: ${autoSaveDirHandleRef.current?.name || 'missing'}`);
+          console.log(`  - autoSaveBaseNameRef.current: ${autoSaveBaseNameRef.current || 'missing'}`);
           // Note: The useEffect at line 8296 will automatically restart the interval
           // when autoSaveDirHandle or autoSaveBaseName changes
         }
