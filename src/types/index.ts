@@ -7,8 +7,10 @@ export interface PCBImage {
   name: string;
   width: number;
   height: number;
-  // Persistable image content for Save/Load (data URL)
+  // Persistable image content for Save/Load (data URL) - kept for backward compatibility
   dataUrl?: string;
+  // File path relative to project directory (preferred for new projects)
+  filePath?: string;
   x: number;
   y: number;
   scale: number;

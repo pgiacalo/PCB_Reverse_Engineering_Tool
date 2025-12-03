@@ -1522,12 +1522,17 @@ function App() {
         initialWorldY = (centerY - viewPan.y) / viewScale;
       }
       
+      // Try to get file path - File objects don't expose full path, so we'll store filename
+      // and construct full path from project directory on save/load
+      const filePath = file.name; // Store filename; full path will be constructed from project directory
+      
       const imageData: PCBImage = {
         url,
         name: file.name,
         width: bitmap.width,
         height: bitmap.height,
-        dataUrl,
+        dataUrl, // Keep for backward compatibility
+        filePath, // Store filename (full path constructed from project directory)
         // Store images in world coordinates from the start
         // This ensures they stay aligned with drawn items when canvas resizes
         x: initialWorldX,
@@ -7738,10 +7743,11 @@ function App() {
           name: topImage.name,
           width: topImage.width,
           height: topImage.height,
-          dataUrl: topImage.dataUrl ?? topImage.url, // prefer embedded content
+          // Save filePath instead of dataUrl to keep JSON files small and readable
+          // dataUrl is kept for backward compatibility with old project files
+          filePath: topImage.filePath || topImage.name, // Use filePath if available, fallback to name
+          dataUrl: topImage.dataUrl, // Keep for backward compatibility, but prefer filePath
           x: topImage.x, y: topImage.y, // World coordinates - saved as-is
-          // Debug: Log image position when saving
-          // console.log('Saving topImage position:', { x: topImage.x, y: topImage.y });
           scale: topImage.scale,
           rotation: topImage.rotation,
           flipX: topImage.flipX, flipY: topImage.flipY,
@@ -7752,7 +7758,9 @@ function App() {
           name: bottomImage.name,
           width: bottomImage.width,
           height: bottomImage.height,
-          dataUrl: bottomImage.dataUrl ?? bottomImage.url,
+          // Save filePath instead of dataUrl to keep JSON files small and readable
+          filePath: bottomImage.filePath || bottomImage.name, // Use filePath if available, fallback to name
+          dataUrl: bottomImage.dataUrl, // Keep for backward compatibility, but prefer filePath
           x: bottomImage.x, y: bottomImage.y,
           scale: bottomImage.scale,
           rotation: bottomImage.rotation,
@@ -7761,6 +7769,10 @@ function App() {
           keystoneV: bottomImage.keystoneV, keystoneH: bottomImage.keystoneH,
         } : null,
       },
+      // Store project directory name for future saves and auto-saves
+      // Note: FileSystemDirectoryHandle doesn't expose full file system paths for security reasons
+      // We store the directory name and use the directory handle to access files
+      projectDirectoryName: projectDirHandle ? projectDirHandle.name || null : null,
       drawing: {
         // Filter out single-point traces (traces must have at least 2 points to form a line)
         // Keep vias (which are single points by design) and traces with 2+ points
@@ -9021,23 +9033,54 @@ function App() {
         });
       }
       // Helper to build PCBImage from saved data
-      const buildImage = async (img: any): Promise<PCBImage | null> => {
+      // Tries to load from file path first, falls back to dataUrl for backward compatibility
+      const buildImage = async (img: any, dirHandle: FileSystemDirectoryHandle | null): Promise<PCBImage | null> => {
         if (!img) return null;
         let bitmap: ImageBitmap | null = null;
-        if (img.dataUrl) {
-          const blob = await (await fetch(img.dataUrl)).blob();
-          bitmap = await createImageBitmap(blob);
+        let url = '';
+        let filePath = img.filePath || img.name;
+        
+        // Try to load from file path if we have a project directory handle
+        if (filePath && dirHandle) {
+          try {
+            // Try to get file from project directory
+            const fileHandle = await dirHandle.getFileHandle(filePath);
+            const file = await fileHandle.getFile();
+            bitmap = await createImageBitmap(file);
+            url = URL.createObjectURL(file);
+            console.log(`Loaded image from file path: ${filePath}`);
+          } catch (e) {
+            console.warn(`Failed to load image from file path ${filePath}, falling back to dataUrl:`, e);
+            // Fall through to dataUrl loading
+          }
         }
+        
+        // Fall back to dataUrl if file path loading failed or not available
+        if (!bitmap && img.dataUrl) {
+          try {
+            const blob = await (await fetch(img.dataUrl)).blob();
+            bitmap = await createImageBitmap(blob);
+            url = img.dataUrl;
+            console.log(`Loaded image from dataUrl (backward compatibility)`);
+          } catch (e) {
+            console.error(`Failed to load image from dataUrl:`, e);
+          }
+        }
+        
+        if (!bitmap) {
+          console.warn('Could not load image bitmap');
+          return null;
+        }
+        
         return {
-          url: img.dataUrl ?? '',
+          url,
           name: img.name ?? 'image',
-          width: img.width ?? (bitmap ? bitmap.width : 0),
-          height: img.height ?? (bitmap ? bitmap.height : 0),
-          dataUrl: img.dataUrl,
+          width: img.width ?? bitmap.width,
+          height: img.height ?? bitmap.height,
+          dataUrl: img.dataUrl, // Keep for backward compatibility
+          filePath, // Store file path for future saves
           x: img.x ?? 0, // World coordinates - loaded as-is
           y: img.y ?? 0, // World coordinates - loaded as-is
-          // Debug: Log image position when loading
-          // console.log('Loading image position:', { x: img.x ?? 0, y: img.y ?? 0, name: img.name });
           scale: img.scale ?? 1,
           rotation: img.rotation ?? 0,
           flipX: !!img.flipX,
@@ -9049,8 +9092,8 @@ function App() {
           bitmap,
         };
       };
-      const newTop = await buildImage(project.images?.top);
-      const newBottom = await buildImage(project.images?.bottom);
+      const newTop = await buildImage(project.images?.top, projectDirHandle);
+      const newBottom = await buildImage(project.images?.bottom, projectDirHandle);
       setTopImage(newTop);
       setBottomImage(newBottom);
 
@@ -9446,7 +9489,7 @@ function App() {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
     }
-  }, [currentTool, drawingMode]);
+  }, [currentTool, drawingMode, projectDirHandle, setTopImage, setBottomImage, setPointIdCounter, setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTracesLocked, setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked, setShowViasLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setDrawingStrokes, setComponentsTop, setComponentsBottom, setGroundSymbols, setPowerBuses, setGroundBuses, setPowerSymbols, generatePointId, truncatePoint, getDefaultPrefix, saveDesignatorCounters, loadDesignatorCounters, setAutoAssignDesignators, setUseGlobalDesignatorCounters]);
 
   // Function to get list of auto-saved files from history subdirectory, sorted by timestamp
   // COMMENTED OUT: File history navigation is disabled
