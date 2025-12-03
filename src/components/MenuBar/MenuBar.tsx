@@ -1423,6 +1423,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Trace</strong> — <code>T</code></li>
                         <li><strong>Component</strong> — <code>C</code></li>
                         <li><strong>Component Properties</strong> — double-click component</li>
+                        <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code></li>
                       </ul>
                     </div>
                     <div>
@@ -1437,6 +1438,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Notes Dialog</strong> — <code>N</code></li>
                       </ul>
                     </div>
+                  </div>
+                  <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
+                    <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                      <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
+                      <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components</li>
+                    </ul>
                   </div>
                 </div>
 
