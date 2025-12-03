@@ -343,3 +343,17 @@ export function isValidUnit(propertyName: keyof typeof COMPONENT_PROPERTY_UNITS,
   return (property.validUnits as readonly string[]).includes(unit);
 }
 
+/**
+ * Format component type name for display by adding spaces between words
+ * Examples: IntegratedCircuit -> "Integrated Circuit", VariableResistor -> "Variable Resistor"
+ * Types that already have spaces (e.g., "Electrolytic Capacitor") are returned as-is
+ */
+export function formatComponentTypeName(componentType: string): string {
+  // If it already contains a space, return as-is
+  if (componentType.includes(' ')) {
+    return componentType;
+  }
+  // Insert space before capital letters (except the first one)
+  return componentType.replace(/([a-z])([A-Z])/g, '$1 $2');
+}
+

@@ -3,6 +3,7 @@ import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
 import { 
   COMPONENT_TYPE_INFO,
+  formatComponentTypeName,
   COMPONENT_CATEGORIES,
   DEFAULT_VIA_COLOR, 
   DEFAULT_TRACE_COLOR, 
@@ -11107,7 +11108,7 @@ function App() {
                                     color: '#333',
                                   }}
                                 >
-                                  {info.prefix.join(', ')} - {type}
+                                  {info.prefix.join(', ')} - {formatComponentTypeName(type)}
                                 </button>
                               );
                             })}
@@ -11342,7 +11343,7 @@ function App() {
                 }}
               >
                 <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                  {componentType}
+                  {formatComponentTypeName(componentType)}
                 </div>
                 <div style={{ marginBottom: '4px', color: '#e0e0e0', fontSize: '11px' }}>
                   Layer: {layer === 'top' ? 'Top' : 'Bottom'}

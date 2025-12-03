@@ -22,6 +22,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { PCBComponent } from '../../types';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
+import { formatComponentTypeName } from '../../constants';
 
 // DrawingStroke type matches App.tsx's local interface
 interface DrawingStroke {
@@ -384,7 +385,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                           fontSize: '12px',
                           fontWeight: 500
                         }}>
-                          {comp.componentType}{comp.designator && comp.designator.trim() ? ` (${comp.designator.trim()})` : ''}
+                          {formatComponentTypeName(comp.componentType)}{comp.designator && comp.designator.trim() ? ` (${comp.designator.trim()})` : ''}
                         </div>
                       </div>
                       <div style={{ padding: '8px' }}>

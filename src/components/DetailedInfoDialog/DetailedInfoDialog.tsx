@@ -23,6 +23,7 @@ import React from 'react';
 import type { PCBComponent } from '../../types';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
 import { autoAssignPolarity } from '../../utils/components';
+import { formatComponentTypeName } from '../../constants';
 
 // DrawingStroke type matches App.tsx's local interface
 interface DrawingStroke {
@@ -249,7 +250,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       fontSize: '12px',
                       fontWeight: 500
                     }}>
-                      {comp.componentType}
+                      {formatComponentTypeName(comp.componentType)}
                     </div>
                   </div>
                   {onFindComponent && (

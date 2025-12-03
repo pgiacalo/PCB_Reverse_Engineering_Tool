@@ -21,7 +21,7 @@
 
 import React from 'react';
 import type { PCBComponent } from '../../types';
-import { COMPONENT_TYPE_INFO } from '../../constants';
+import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 
 // Helper function to get default abbreviation from component type
@@ -498,7 +498,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             Type:
           </label>
           <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
-            {comp.componentType}
+            {formatComponentTypeName(comp.componentType)}
           </div>
         </div>
         
