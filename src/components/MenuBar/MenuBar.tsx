@@ -1554,6 +1554,16 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   Use the <strong>File</strong> menu to manage projects, the <strong>Images</strong> menu for image loading and transformation, and the <strong>Tools</strong> menu for selection, locking, and customization options.
                 </p>
               </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Future / TODO List</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                  <li>A searchable list of common components</li>
+                  <li>Output schematics (perhaps as KiCad files)</li>
+                  <li>Multiple shortcuts to different views</li>
+                  <li>Dynamic layers</li>
+                </ul>
+              </div>
             </div>
           </div>
         )}
