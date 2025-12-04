@@ -168,7 +168,9 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
 
     if (projectDirHandle && projectName) {
       try {
-        const filename = 'project.json';
+        // Use project name for filename instead of hardcoded 'project.json'
+        const cleanProjectName = projectName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const filename = `${cleanProjectName}.json`;
         const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);

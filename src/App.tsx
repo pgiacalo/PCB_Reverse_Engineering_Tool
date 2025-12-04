@@ -12615,7 +12615,16 @@ function App() {
               }}>
                 <div style={{ marginBottom: '4px', color: '#888' }}>Project will be created at:</div>
                 <div style={{ color: '#4CAF50' }}>
-                  {newProjectSetupDialog.locationPath}/{newProjectSetupDialog.projectName}/project.json
+                  {(() => {
+                    if (!newProjectSetupDialog.projectName || !newProjectSetupDialog.locationPath) {
+                      return '';
+                    }
+                    // Sanitize the project name the same way handleNewProjectCreate does
+                    const projectNameInput = newProjectSetupDialog.projectName.trim();
+                    const cleanName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
+                    const filename = `${cleanName}.json`;
+                    return `${newProjectSetupDialog.locationPath}/${cleanName}/${filename}`;
+                  })()}
                 </div>
               </div>
             )}
