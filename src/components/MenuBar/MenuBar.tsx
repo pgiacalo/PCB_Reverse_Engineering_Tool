@@ -1147,9 +1147,11 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Erase</strong> — <code>E</code></li>
                         <li><strong>Move (Pan)</strong> — <code>H</code></li>
                         <li><strong>Zoom</strong> — <code>Z</code></li>
-                        <li><strong>Center</strong> — <code>X</code></li>
+                        <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
+                        <li><strong>Recall View</strong> — <code>0-9</code> to recall saved view</li>
                         <li><strong>Information Dialog</strong> — <code>I</code></li>
                         <li><strong>Notes Dialog</strong> — <code>N</code></li>
+                        <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
                       </ul>
                     </div>
                   </div>
@@ -1252,6 +1254,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Create, open, and save projects</li>
                       <li>Auto-save with configurable intervals</li>
                       <li>File history automatically saved in history subdirectory when Auto Save is enabled</li>
+                      <li>Project Notes / TODO list with spreadsheet-like editing</li>
                       <li>Project file format (JSON)</li>
                       <li>Print functionality</li>
                       <li>Export to KiCad schematic format (future feature, not yet implemented)</li>
@@ -1265,6 +1268,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Pan view with hand tool</li>
                       <li>Zoom to fit</li>
                       <li>View mode switching (top/bottom/overlay)</li>
+                      <li>Save up to 10 view locations (X + 0-9)</li>
+                      <li>Recall saved views instantly (0-9 keys)</li>
                       <li>Detailed information dialog</li>
                     </ul>
                   </div>
@@ -1282,7 +1287,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
                   <li>A searchable list of common components</li>
                   <li>Output schematics (perhaps as KiCad files)</li>
-                  <li>Multiple shortcuts to different views</li>
                   <li>Dynamic layers</li>
                 </ul>
               </div>
