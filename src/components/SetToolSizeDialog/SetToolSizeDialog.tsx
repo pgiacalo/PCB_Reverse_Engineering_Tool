@@ -19,9 +19,9 @@
  * Dialog for setting tool sizes with separate Top/Bottom options for layer-specific tools
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { Tool, ToolDefinition, ToolSettings } from '../../hooks/useToolRegistry';
-import { toolInstanceManager, getToolInstanceId } from '../../utils/toolInstances';
+import { toolInstanceManager, type ToolInstanceId } from '../../utils/toolInstances';
 
 export interface SetToolSizeDialogProps {
   /** Whether the dialog is visible */
@@ -93,44 +93,71 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   saveDefaultSize,
   onClose,
 }) => {
-  if (!visible) return null;
-
-  // Generate size options (1-50)
-  const sizeOptions = Array.from({ length: 50 }, (_, i) => i + 1);
-
+  // State to track tool sizes - forces re-render when sizes change
+  const [toolSizes, setToolSizes] = useState<Record<string, number>>({});
+  
   // Tool definitions - ordered to match toolbar order: Via, Pad, Trace, Component, Power, Ground, Erase
   // Layer-specific tools shown as separate entries (Top then Bottom)
-  const toolEntries: Array<{ id: string; name: string; layer?: 'top' | 'bottom' }> = [
-    { id: 'via', name: 'Via' },
-    { id: 'pad', name: 'Pad', layer: 'top' },
-    { id: 'pad', name: 'Pad', layer: 'bottom' },
-    { id: 'testPoint', name: 'Test Point', layer: 'top' },
-    { id: 'testPoint', name: 'Test Point', layer: 'bottom' },
-    { id: 'trace', name: 'Trace', layer: 'top' },
-    { id: 'trace', name: 'Trace', layer: 'bottom' },
-    { id: 'component', name: 'Component', layer: 'top' },
-    { id: 'component', name: 'Component', layer: 'bottom' },
+  const toolEntries: Array<{ id: string; name: string; layer?: 'top' | 'bottom'; instanceId?: ToolInstanceId }> = [
+    { id: 'via', name: 'Via', instanceId: 'via' },
+    { id: 'pad', name: 'Pad', layer: 'top', instanceId: 'padTop' },
+    { id: 'pad', name: 'Pad', layer: 'bottom', instanceId: 'padBottom' },
+    { id: 'testPoint', name: 'Test Point', layer: 'top', instanceId: 'testPointTop' },
+    { id: 'testPoint', name: 'Test Point', layer: 'bottom', instanceId: 'testPointBottom' },
+    { id: 'trace', name: 'Trace', layer: 'top', instanceId: 'traceTop' },
+    { id: 'trace', name: 'Trace', layer: 'bottom', instanceId: 'traceBottom' },
+    { id: 'component', name: 'Component', layer: 'top', instanceId: 'componentTop' },
+    { id: 'component', name: 'Component', layer: 'bottom', instanceId: 'componentBottom' },
     { id: 'componentConnection', name: 'Component Connections' },
-    { id: 'power', name: 'Power' },
-    { id: 'ground', name: 'Ground' },
+    { id: 'power', name: 'Power', instanceId: 'power' },
+    { id: 'ground', name: 'Ground', instanceId: 'ground' },
     { id: 'erase', name: 'Erase' },
   ];
 
-  const handleSizeChange = (toolId: string, newSize: number, layer?: 'top' | 'bottom') => {
+  // Load current sizes from toolInstanceManager when dialog becomes visible
+  useEffect(() => {
+    if (visible) {
+      const sizes: Record<string, number> = {};
+      for (const entry of toolEntries) {
+        const key = entry.instanceId || entry.id;
+        if (entry.instanceId) {
+          try {
+            const instance = toolInstanceManager.get(entry.instanceId);
+            sizes[key] = instance.size;
+          } catch {
+            // Fall back to toolRegistry if instance not found
+            const toolDef = toolRegistry.get(entry.id);
+            if (toolDef) {
+              sizes[key] = entry.layer
+                ? toolDef.layerSettings.get(entry.layer)?.size ?? toolDef.settings.size ?? 10
+                : toolDef.settings.size ?? 10;
+            }
+          }
+        } else {
+          // For non-instance tools (componentConnection, erase), use toolRegistry
+          const toolDef = toolRegistry.get(entry.id);
+          if (toolDef) {
+            sizes[key] = toolDef.settings.size ?? 10;
+          }
+        }
+      }
+      setToolSizes(sizes);
+    }
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSizeChange = useCallback((toolId: string, newSize: number, layer?: 'top' | 'bottom', instanceId?: ToolInstanceId) => {
     const toolDef = toolRegistry.get(toolId);
-    if (!toolDef) return;
+    if (!toolDef && toolId !== 'componentConnection') return;
+
+    // Update local state immediately for UI responsiveness
+    const key = instanceId || toolId;
+    setToolSizes(prev => ({ ...prev, [key]: newSize }));
 
     // For layer-specific tools (trace, pad, testPoint, component), update layer-specific settings
     const layerTools = ['trace', 'pad', 'testPoint', 'component'];
-    if (layerTools.includes(toolId) && layer) {
-      // Update layer-specific settings
-      // @ts-ignore - layerSettings is intentionally unused
-      const layerSettings = toolDef.layerSettings.get(layer);
-      // const currentColor = layerSettings?.color || toolDef.settings.color; // Unused
-      
+    if (layerTools.includes(toolId) && layer && instanceId) {
       // Update tool instance directly (single source of truth)
-      const toolInstanceId = getToolInstanceId(toolId as any, layer);
-      toolInstanceManager.setSize(toolInstanceId, newSize);
+      toolInstanceManager.setSize(instanceId, newSize);
       
       // If this tool is currently active and this layer is selected, update brushSize immediately
       const isActiveTool = 
@@ -147,23 +174,20 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
           setBrushSize(newSize);
         }
       }
-    } else {
-      // For non-layer tools, update tool instance directly
-      const toolInstanceId = getToolInstanceId(toolId as any);
-      if (toolInstanceId) {
-        toolInstanceManager.setSize(toolInstanceId, newSize);
-        
-        // If this tool is currently active, update brushSize immediately
-        const isActiveTool = 
-          (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
-          (toolId === 'power' && currentTool === 'power') ||
-          (toolId === 'ground' && currentTool === 'ground');
-        
-        if (isActiveTool) {
-          setBrushSize(newSize);
-        }
-      }
+    } else if (instanceId) {
+      // For non-layer tools with instances, update tool instance directly
+      toolInstanceManager.setSize(instanceId, newSize);
       
+      // If this tool is currently active, update brushSize immediately
+      const isActiveTool = 
+        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
+        (toolId === 'power' && currentTool === 'power') ||
+        (toolId === 'ground' && currentTool === 'ground');
+      
+      if (isActiveTool) {
+        setBrushSize(newSize);
+      }
+    } else {
       // Handle component connections specially (not a tool instance)
       if (toolId === 'componentConnection') {
         setComponentConnectionSize(newSize);
@@ -175,7 +199,12 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
         setBrushSize(newSize);
       }
     }
-  };
+  }, [toolRegistry, currentTool, drawingMode, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, setBrushSize, setComponentConnectionSize, saveDefaultSize]);
+
+  if (!visible) return null;
+
+  // Generate size options (1-50)
+  const sizeOptions = Array.from({ length: 50 }, (_, i) => i + 1);
 
   return (
     <div
@@ -218,13 +247,12 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {toolEntries.map((entry, index) => {
             const toolDef = toolRegistry.get(entry.id);
-            if (!toolDef) return null;
+            if (!toolDef && entry.id !== 'componentConnection') return null;
             
             const displayName = entry.layer ? `${entry.name} (${entry.layer === 'top' ? 'Top' : 'Bottom'})` : entry.name;
-            // Get current size from tool registry (one source of truth)
-            const currentSize = entry.layer
-              ? toolDef.layerSettings.get(entry.layer)?.size ?? toolDef.settings.size ?? 10
-              : toolDef.settings.size ?? 10;
+            // Get current size from local state (which is synced from toolInstanceManager)
+            const key = entry.instanceId || entry.id;
+            const currentSize = toolSizes[key] ?? 10;
             
             return (
               <div
@@ -253,7 +281,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
                     value={currentSize}
                     onChange={(e) => {
                       const newSize = parseInt(e.target.value, 10);
-                      handleSizeChange(entry.id, newSize, entry.layer);
+                      handleSizeChange(entry.id, newSize, entry.layer, entry.instanceId);
                     }}
                     style={{
                       width: '50px',
