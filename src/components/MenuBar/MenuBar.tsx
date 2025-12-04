@@ -15,6 +15,9 @@ export interface MenuBarProps {
   isReadOnlyMode: boolean;
   currentProjectFilePath: string;
   
+  // Project active state - true when a project has been created or opened
+  isProjectActive: boolean;
+  
   // File operations
   onNewProject: () => void;
   onOpenProject: () => Promise<void>;
@@ -167,6 +170,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setOpenMenu,
   isReadOnlyMode,
   currentProjectFilePath,
+  isProjectActive,
   onNewProject,
   onOpenProject,
   onSaveProject,
@@ -287,6 +291,17 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
   const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
+  
+  // Helper function to check if project is active before allowing menu actions
+  // Returns true if action should proceed, false if blocked
+  const requireProject = (action: () => void): void => {
+    if (!isProjectActive) {
+      alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+      setOpenMenu(null);
+      return;
+    }
+    action();
+  };
 
   const renderSelectNodesSubmenu = (type: 'power' | 'ground') => {
     const names = type === 'power' ? powerNodeNames : groundNodeNames;
@@ -774,34 +789,36 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
-              onClick={() => { if (!isReadOnlyMode) { void onSaveProject(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode) { requireProject(() => { void onSaveProject(); setOpenMenu(null); }); } }} 
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Save Project…
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { onSaveAs(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode) { requireProject(() => { onSaveAs(); setOpenMenu(null); }); } }} 
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Save As…
             </button>
             <button 
               onClick={() => { 
                 if (!isReadOnlyMode) { 
-                  setAutoSaveDialog({ visible: true, interval: 5 });
-                  setOpenMenu(null);
+                  requireProject(() => {
+                    setAutoSaveDialog({ visible: true, interval: 5 });
+                    setOpenMenu(null);
+                  });
                 }
               }} 
-              disabled={isReadOnlyMode}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: isReadOnlyMode ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: isReadOnlyMode ? 'not-allowed' : 'pointer' }}
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Auto Save…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { onPrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Print…</button>
-            <button onClick={() => { onPrint(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>Printer Settings…</button>
+            <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>
+            <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Printer Settings…</button>
           </div>
         )}
       </div>
@@ -809,17 +826,26 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       {/* Images menu - simplified for now, full implementation would include all transform options */}
       <div style={{ position: 'relative' }}>
         <button 
-          onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'transform' ? null : 'transform'); } }} 
-          disabled={isReadOnlyMode}
+          onClick={(e) => { 
+            if (!isReadOnlyMode) { 
+              if (!isProjectActive) {
+                alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                return;
+              }
+              e.stopPropagation(); 
+              setOpenMenu(m => m === 'transform' ? null : 'transform'); 
+            } 
+          }} 
+          disabled={isReadOnlyMode || !isProjectActive}
           style={{ 
             padding: '6px 10px', 
             borderRadius: 6, 
             border: '1px solid #ddd', 
             background: openMenu === 'transform' ? '#eef3ff' : '#fff', 
             fontWeight: 600, 
-            color: isReadOnlyMode ? '#999' : '#222',
-            cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-            opacity: isReadOnlyMode ? 0.5 : 1
+            color: (isReadOnlyMode || !isProjectActive) ? '#999' : '#222',
+            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
+            opacity: (isReadOnlyMode || !isProjectActive) ? 0.5 : 1
           }}
         >
           Images ▾
@@ -878,17 +904,26 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       {/* Tools menu */}
       <div style={{ position: 'relative' }}>
         <button 
-          onClick={(e) => { if (!isReadOnlyMode) { e.stopPropagation(); setOpenMenu(m => m === 'tools' ? null : 'tools'); } }} 
-          disabled={isReadOnlyMode}
+          onClick={(e) => { 
+            if (!isReadOnlyMode) { 
+              if (!isProjectActive) {
+                alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                return;
+              }
+              e.stopPropagation(); 
+              setOpenMenu(m => m === 'tools' ? null : 'tools'); 
+            } 
+          }} 
+          disabled={isReadOnlyMode || !isProjectActive}
           style={{ 
             padding: '6px 10px', 
             borderRadius: 6, 
             border: '1px solid #ddd', 
             background: openMenu === 'tools' ? '#eef3ff' : '#fff', 
             fontWeight: 600, 
-            color: isReadOnlyMode ? '#999' : '#222',
-            cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-            opacity: isReadOnlyMode ? 0.5 : 1
+            color: (isReadOnlyMode || !isProjectActive) ? '#999' : '#222',
+            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
+            opacity: (isReadOnlyMode || !isProjectActive) ? 0.5 : 1
           }}
         >
           Tools ▾

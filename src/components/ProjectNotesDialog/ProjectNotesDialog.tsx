@@ -154,43 +154,60 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, index: number, field: 'name' | 'value') => {
+    // CRITICAL: Stop propagation to prevent App.tsx keyboard shortcuts from firing
+    // This allows typing in cells without triggering tool shortcuts (S, V, T, etc.)
+    e.stopPropagation();
+    
+    const textarea = e.currentTarget;
+    const cursorPos = textarea.selectionStart;
+    const textLength = textarea.value.length;
+    const hasSelection = textarea.selectionStart !== textarea.selectionEnd;
+    
     // Alt+Enter: Insert line break (Excel behavior)
     if (e.key === 'Enter' && e.altKey) {
       // Allow default behavior (line break in textarea)
       return;
     }
     
-    // Arrow Keys: Navigate between cells
+    // Arrow Right: Only navigate to next cell if cursor is at end of text and no selection
     if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-      e.preventDefault();
-      if (field === 'name') {
-        // Move to value in same row
-        const valueKey = `${index}-value`;
-        const valueInput = inputRefs.current.get(valueKey);
-        if (valueInput) {
-          valueInput.focus();
-          setEditingIndex(index);
-          setEditingField('value');
+      if (cursorPos === textLength && !hasSelection) {
+        if (field === 'name') {
+          e.preventDefault();
+          // Move to value in same row
+          const valueKey = `${index}-value`;
+          const valueInput = inputRefs.current.get(valueKey);
+          if (valueInput) {
+            valueInput.focus();
+            valueInput.setSelectionRange(0, 0); // Cursor at start
+          }
         }
+        // If in value field, don't navigate (stay in cell)
       }
+      // Otherwise, allow default cursor movement within cell
       return;
     }
     
+    // Arrow Left: Only navigate to previous cell if cursor is at start of text and no selection
     if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-      e.preventDefault();
-      if (field === 'value') {
-        // Move to name in same row
-        const nameKey = `${index}-name`;
-        const nameInput = inputRefs.current.get(nameKey);
-        if (nameInput) {
-          nameInput.focus();
-          setEditingIndex(index);
-          setEditingField('name');
+      if (cursorPos === 0 && !hasSelection) {
+        if (field === 'value') {
+          e.preventDefault();
+          // Move to name in same row
+          const nameKey = `${index}-name`;
+          const nameInput = inputRefs.current.get(nameKey);
+          if (nameInput) {
+            nameInput.focus();
+            nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length); // Cursor at end
+          }
         }
+        // If in name field, don't navigate (stay in cell)
       }
+      // Otherwise, allow default cursor movement within cell
       return;
     }
     
+    // Arrow Down: Navigate to same field in next row
     if (e.key === 'ArrowDown' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
       // Move to same field in next row, or create new row if at end
@@ -199,23 +216,27 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         const nextInput = inputRefs.current.get(nextKey);
         if (nextInput) {
           nextInput.focus();
-          setEditingIndex(index + 1);
-          setEditingField(field);
+          // Try to preserve cursor position
+          const newPos = Math.min(cursorPos, nextInput.value.length);
+          nextInput.setSelectionRange(newPos, newPos);
         }
       } else {
         // At last row, create new row and focus on same field
+        const newIndex = localNotes.length;
         handleAddNote();
         setTimeout(() => {
-          const newKey = `${localNotes.length}-${field}`;
+          const newKey = `${newIndex}-${field}`;
           const newInput = inputRefs.current.get(newKey);
           if (newInput) {
             newInput.focus();
+            newInput.setSelectionRange(0, 0);
           }
         }, 0);
       }
       return;
     }
     
+    // Arrow Up: Navigate to same field in previous row
     if (e.key === 'ArrowUp' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       e.preventDefault();
       // Move to same field in previous row
@@ -224,8 +245,9 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         const prevInput = inputRefs.current.get(prevKey);
         if (prevInput) {
           prevInput.focus();
-          setEditingIndex(index - 1);
-          setEditingField(field);
+          // Try to preserve cursor position
+          const newPos = Math.min(cursorPos, prevInput.value.length);
+          prevInput.setSelectionRange(newPos, newPos);
         }
       }
       return;
@@ -240,8 +262,7 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         const valueInput = inputRefs.current.get(valueKey);
         if (valueInput) {
           valueInput.focus();
-          setEditingIndex(index);
-          setEditingField('value');
+          valueInput.setSelectionRange(0, 0);
         }
       } else if (field === 'value') {
         // Move to name in next row, or create new row if at end
@@ -250,14 +271,51 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
           const nextNameInput = inputRefs.current.get(nextNameKey);
           if (nextNameInput) {
             nextNameInput.focus();
-            setEditingIndex(index + 1);
-            setEditingField('name');
+            nextNameInput.setSelectionRange(0, 0);
           }
         } else {
           // At last row, create new row and focus on its name
+          const newIndex = localNotes.length;
           handleAddNote();
           setTimeout(() => {
-            const newNameKey = `${localNotes.length}-name`;
+            const newNameKey = `${newIndex}-name`;
+            const newNameInput = inputRefs.current.get(newNameKey);
+            if (newNameInput) {
+              newNameInput.focus();
+              newNameInput.setSelectionRange(0, 0);
+            }
+          }, 0);
+        }
+      }
+      return;
+    }
+    
+    // Tab: Move to next field (name -> value -> next row's name)
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      if (field === 'name') {
+        // Move to value in same row
+        const valueKey = `${index}-value`;
+        const valueInput = inputRefs.current.get(valueKey);
+        if (valueInput) {
+          valueInput.focus();
+          valueInput.select(); // Select all text in next cell
+        }
+      } else if (field === 'value') {
+        // Move to name in next row, or create new row if at end
+        if (index < localNotes.length - 1) {
+          const nextNameKey = `${index + 1}-name`;
+          const nextNameInput = inputRefs.current.get(nextNameKey);
+          if (nextNameInput) {
+            nextNameInput.focus();
+            nextNameInput.select(); // Select all text in next cell
+          }
+        } else {
+          // At last row, create new row and focus on its name
+          const newIndex = localNotes.length;
+          handleAddNote();
+          setTimeout(() => {
+            const newNameKey = `${newIndex}-name`;
             const newNameInput = inputRefs.current.get(newNameKey);
             if (newNameInput) {
               newNameInput.focus();
@@ -268,51 +326,41 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
       return;
     }
     
-    // Tab: Move to next field (name -> value -> next row's name -> next row's value, etc.)
-    if (e.key === 'Tab' && !e.shiftKey) {
+    // Shift+Tab: Move to previous field (value -> name -> previous row's value)
+    if (e.key === 'Tab' && e.shiftKey) {
       e.preventDefault();
-      if (field === 'name') {
-        // Move to value in same row
-        const valueKey = `${index}-value`;
-        const valueInput = inputRefs.current.get(valueKey);
-        if (valueInput) {
-          valueInput.focus();
-          setEditingIndex(index);
-          setEditingField('value');
+      if (field === 'value') {
+        // Move to name in same row
+        const nameKey = `${index}-name`;
+        const nameInput = inputRefs.current.get(nameKey);
+        if (nameInput) {
+          nameInput.focus();
+          nameInput.select(); // Select all text in previous cell
         }
-      } else if (field === 'value') {
-        // Move to name in next row, or create new row if at end
-        if (index < localNotes.length - 1) {
-          const nextNameKey = `${index + 1}-name`;
-          const nextNameInput = inputRefs.current.get(nextNameKey);
-          if (nextNameInput) {
-            nextNameInput.focus();
-            setEditingIndex(index + 1);
-            setEditingField('name');
+      } else if (field === 'name') {
+        // Move to value in previous row
+        if (index > 0) {
+          const prevValueKey = `${index - 1}-value`;
+          const prevValueInput = inputRefs.current.get(prevValueKey);
+          if (prevValueInput) {
+            prevValueInput.focus();
+            prevValueInput.select(); // Select all text in previous cell
           }
-        } else {
-          // At last row, create new row and focus on its name
-          handleAddNote();
-          setTimeout(() => {
-            const newNameKey = `${localNotes.length}-name`;
-            const newNameInput = inputRefs.current.get(newNameKey);
-            if (newNameInput) {
-              newNameInput.focus();
-            }
-          }, 0);
         }
       }
+      return;
     }
   };
 
-  const handleFieldBlur = () => {
-    setEditingIndex(null);
-    setEditingField(null);
-  };
-
-  const handleFieldClick = (index: number, field: 'name' | 'value') => {
+  // Track which cell has focus for styling purposes
+  const handleFieldFocus = (index: number, field: 'name' | 'value') => {
     setEditingIndex(index);
     setEditingField(field);
+  };
+
+  const handleFieldBlur = () => {
+    // Don't clear editing state on blur - cells are always editable
+    // This allows navigation to work properly
   };
 
   const dialogStyle: React.CSSProperties = {
@@ -335,26 +383,21 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   return (
     <div
       style={dialogStyle}
-      onMouseDown={(e) => {
-        // Only start dragging if clicking on the header area, not the resize handle
-        const target = e.target as HTMLElement;
-        if (target.closest('[title="Drag to resize"]')) {
-          return; // Don't drag when clicking resize handle
-        }
-        onDragStart(e);
-      }}
     >
-      {/* Header */}
-      <div style={{
-        padding: '8px 12px',
-        borderBottom: '1px solid #e0e0e0',
-        background: '#888',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        cursor: 'move',
-        userSelect: 'none',
-      }}>
+      {/* Header - Only this area is draggable */}
+      <div 
+        style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid #e0e0e0',
+          background: '#888',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'move',
+          userSelect: 'none',
+        }}
+        onMouseDown={onDragStart}
+      >
         <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Project Notes / TODO List (L)</h2>
         <button
           onClick={handleCancel}
@@ -457,112 +500,82 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                     </label>
                   </div>
 
-                  {/* Name Column */}
-                  <div style={{ padding: '8px 12px', borderRight: '1px solid #ccc' }}>
-                    {editingIndex === index && editingField === 'name' ? (
-                      <textarea
-                        ref={(el) => {
-                          if (el) inputRefs.current.set(`${index}-name`, el);
-                          else inputRefs.current.delete(`${index}-name`);
-                        }}
-                        value={note.name}
-                        onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
-                        onBlur={handleFieldBlur}
-                        onKeyDown={(e) => handleKeyDown(e, index, 'name')}
-                        autoFocus
-                        rows={1}
-                        style={{
-                          width: '100%',
-                          padding: '4px 6px',
-                          border: '1px solid #ccc',
-                          borderRadius: 3,
-                          fontSize: '12px',
-                          backgroundColor: '#fff',
-                          color: '#000',
-                          fontFamily: 'inherit',
-                          resize: 'vertical',
-                          minHeight: '20px',
-                          lineHeight: '1.4',
-                          overflow: 'hidden',
-                        }}
-                        onInput={(e) => {
-                          // Auto-resize textarea to fit content
-                          const target = e.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = `${target.scrollHeight}px`;
-                        }}
-                      />
-                    ) : (
-                      <div
-                        onClick={() => handleFieldClick(index, 'name')}
-                        style={{
-                          padding: '4px 6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          minHeight: '20px',
-                          color: note.name.trim() ? '#000' : '#999',
-                          whiteSpace: 'pre-wrap',
-                          wordWrap: 'break-word',
-                        }}
-                        title="Click to edit"
-                      >
-                        {note.name.trim() || '(empty)'}
-                      </div>
-                    )}
+                  {/* Name Column - Always editable textarea */}
+                  <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
+                    <textarea
+                      ref={(el) => {
+                        if (el) inputRefs.current.set(`${index}-name`, el);
+                        else inputRefs.current.delete(`${index}-name`);
+                      }}
+                      value={note.name}
+                      onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
+                      onFocus={() => handleFieldFocus(index, 'name')}
+                      onBlur={handleFieldBlur}
+                      onKeyDown={(e) => handleKeyDown(e, index, 'name')}
+                      placeholder="Item name..."
+                      rows={1}
+                      style={{
+                        width: '100%',
+                        padding: '4px 6px',
+                        border: editingIndex === index && editingField === 'name' ? '2px solid #0b5fff' : '1px solid transparent',
+                        borderRadius: 3,
+                        fontSize: '12px',
+                        backgroundColor: '#fff',
+                        color: '#000',
+                        fontFamily: 'inherit',
+                        resize: 'none',
+                        minHeight: '24px',
+                        lineHeight: '1.4',
+                        overflow: 'hidden',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                      onInput={(e) => {
+                        // Auto-resize textarea to fit content
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = `${target.scrollHeight}px`;
+                      }}
+                    />
                   </div>
 
-                  {/* Value Column */}
-                  <div style={{ padding: '8px 12px', borderRight: '1px solid #ccc' }}>
-                    {editingIndex === index && editingField === 'value' ? (
-                      <textarea
-                        ref={(el) => {
-                          if (el) inputRefs.current.set(`${index}-value`, el);
-                          else inputRefs.current.delete(`${index}-value`);
-                        }}
-                        value={note.value}
-                        onChange={(e) => handleFieldChange(index, 'value', e.target.value)}
-                        onBlur={handleFieldBlur}
-                        onKeyDown={(e) => handleKeyDown(e, index, 'value')}
-                        autoFocus
-                        rows={1}
-                        style={{
-                          width: '100%',
-                          padding: '4px 6px',
-                          border: '1px solid #ccc',
-                          borderRadius: 3,
-                          fontSize: '12px',
-                          backgroundColor: '#fff',
-                          color: '#000',
-                          fontFamily: 'inherit',
-                          resize: 'vertical',
-                          minHeight: '20px',
-                          lineHeight: '1.4',
-                          overflow: 'hidden',
-                        }}
-                        onInput={(e) => {
-                          // Auto-resize textarea to fit content
-                          const target = e.target as HTMLTextAreaElement;
-                          target.style.height = 'auto';
-                          target.style.height = `${target.scrollHeight}px`;
-                        }}
-                      />
-                    ) : (
-                      <div
-                        onClick={() => handleFieldClick(index, 'value')}
-                        style={{
-                          padding: '4px 6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          minHeight: '20px',
-                          color: note.value.trim() ? '#000' : '#999',
-                          whiteSpace: 'pre-wrap',
-                          wordWrap: 'break-word',
-                        }}
-                        title="Click to edit"
-                      >
-                        {note.value.trim() || '(empty)'}
-                      </div>
-                    )}
+                  {/* Value Column - Always editable textarea */}
+                  <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
+                    <textarea
+                      ref={(el) => {
+                        if (el) inputRefs.current.set(`${index}-value`, el);
+                        else inputRefs.current.delete(`${index}-value`);
+                      }}
+                      value={note.value}
+                      onChange={(e) => handleFieldChange(index, 'value', e.target.value)}
+                      onFocus={() => handleFieldFocus(index, 'value')}
+                      onBlur={handleFieldBlur}
+                      onKeyDown={(e) => handleKeyDown(e, index, 'value')}
+                      placeholder="Notes..."
+                      rows={1}
+                      style={{
+                        width: '100%',
+                        padding: '4px 6px',
+                        border: editingIndex === index && editingField === 'value' ? '2px solid #0b5fff' : '1px solid transparent',
+                        borderRadius: 3,
+                        fontSize: '12px',
+                        backgroundColor: '#fff',
+                        color: '#000',
+                        fontFamily: 'inherit',
+                        resize: 'none',
+                        minHeight: '24px',
+                        lineHeight: '1.4',
+                        overflow: 'hidden',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                      onInput={(e) => {
+                        // Auto-resize textarea to fit content
+                        const target = e.target as HTMLTextAreaElement;
+                        target.style.height = 'auto';
+                        target.style.height = `${target.scrollHeight}px`;
+                      }}
+                    />
                   </div>
 
                   {/* Actions Column */}

@@ -503,6 +503,20 @@ export type Tool =
 export type TransformMode = 'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone';
 
 // ============================================================================
+// Home View Types
+// ============================================================================
+
+/** A saved view location with position and zoom level */
+export interface HomeView {
+  x: number;      // World X coordinate of view center
+  y: number;      // World Y coordinate of view center
+  zoom: number;   // Zoom level (viewScale)
+}
+
+/** Map of home view slots (0-9) to their saved view locations */
+export type HomeViews = Record<number, HomeView>;
+
+// ============================================================================
 // Layer Visibility Types
 // ============================================================================
 

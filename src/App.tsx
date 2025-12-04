@@ -886,8 +886,11 @@ function App() {
   const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
-  // Center location feature: allows user to set a custom center point that 'O' key returns to
-  const [savedCenterLocation, setSavedCenterLocation] = useState<{ x: number; y: number; zoom: number } | null>(null);
+  // Home Views feature: allows user to set up to 10 custom view locations (0-9) that can be recalled
+  const [homeViews, setHomeViews] = useState<Record<number, { x: number; y: number; zoom: number }>>({});
+  // Track when center tool is waiting for a number key press (with 2-second timeout)
+  const [isWaitingForHomeViewKey, setIsWaitingForHomeViewKey] = useState(false);
+  const homeViewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
   const [hoverTestPoint, setHoverTestPoint] = useState<{ stroke: DrawingStroke; x: number; y: number } | null>(null);
@@ -1584,27 +1587,21 @@ function App() {
     const x = (contentCanvasX - viewPan.x) / viewScale;
     const y = (contentCanvasY - viewPan.y) / viewScale;
 
-    // Handle setting center location
+    // Handle setting home view location - when center tool is active and user clicks,
+    // start waiting for a number key (0-9) to assign this view to that slot
     if (currentTool === 'center') {
-      // Calculate the center of the visible canvas in world coordinates
-      const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-      const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-      const canvasCenterContentX = contentWidth / 2;
-      const canvasCenterContentY = contentHeight / 2;
-      
-      // Convert canvas center to world coordinates
-      const centerWorldX = (canvasCenterContentX - viewPan.x) / viewScale;
-      const centerWorldY = (canvasCenterContentY - viewPan.y) / viewScale;
-      
-      // Save the center of the visible canvas and current zoom level
-      setSavedCenterLocation({
-        x: centerWorldX,
-        y: centerWorldY,
-        zoom: viewScale,
-      });
-      // Switch back to select tool and reset cursor to default
-      setCurrentTool('select');
-      setCanvasCursor(undefined); // Clear any custom cursor to return to default
+      // Start waiting for number key with 2-second timeout
+      setIsWaitingForHomeViewKey(true);
+      // Clear any existing timeout
+      if (homeViewTimeoutRef.current) {
+        clearTimeout(homeViewTimeoutRef.current);
+      }
+      // Set 2-second timeout to return to select tool if no number is pressed
+      homeViewTimeoutRef.current = setTimeout(() => {
+        setIsWaitingForHomeViewKey(false);
+        setCurrentTool('select');
+        setCanvasCursor(undefined);
+      }, 2000);
       return;
     }
 
@@ -3337,7 +3334,7 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setSavedCenterLocation, setCurrentTool]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -5431,6 +5428,79 @@ function App() {
       return;
     }
     
+    // Number keys (0-9): Handle home view setting/recall
+    const numKey = parseInt(e.key);
+    if (!isNaN(numKey) && numKey >= 0 && numKey <= 9) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // If center tool is active and waiting for a number key, save current view to that slot
+      if (currentTool === 'center' && isWaitingForHomeViewKey) {
+        // Clear the timeout
+        if (homeViewTimeoutRef.current) {
+          clearTimeout(homeViewTimeoutRef.current);
+          homeViewTimeoutRef.current = null;
+        }
+        
+        // Calculate the center of the visible canvas in world coordinates
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+          const canvasCenterContentX = contentWidth / 2;
+          const canvasCenterContentY = contentHeight / 2;
+          
+          // Convert canvas center to world coordinates
+          const centerWorldX = (canvasCenterContentX - viewPan.x) / viewScale;
+          const centerWorldY = (canvasCenterContentY - viewPan.y) / viewScale;
+          
+          // Save the view to the specified slot
+          setHomeViews(prev => ({
+            ...prev,
+            [numKey]: {
+              x: centerWorldX,
+              y: centerWorldY,
+              zoom: viewScale,
+            }
+          }));
+        }
+        
+        // Reset state and return to select tool
+        setIsWaitingForHomeViewKey(false);
+        setCurrentTool('select');
+        setCanvasCursor(undefined);
+        return;
+      }
+      
+      // If not in center tool mode, recall the home view for this number (if it exists)
+      const homeView = homeViews[numKey];
+      if (homeView) {
+        // Restore to saved home view location and zoom
+        setViewScale(homeView.zoom);
+        
+        // Calculate pan to center the saved world location in the visible canvas area
+        const canvas = canvasRef.current;
+        let panX = 0;
+        let panY = 0;
+        
+        if (canvas) {
+          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+          
+          // Canvas center in content coordinates
+          const canvasCenterContentX = contentWidth / 2;
+          const canvasCenterContentY = contentHeight / 2;
+          
+          // Pan to center the saved world location: pan = canvasCenter - (worldPos * zoom)
+          panX = canvasCenterContentX - (homeView.x * homeView.zoom);
+          panY = canvasCenterContentY - (homeView.y * homeView.zoom);
+        }
+        
+        setViewPan({ x: panX, y: panY });
+      }
+      return;
+    }
+    
     // Size change shortcuts: + and - keys
     if (e.key === '+' || e.key === '=') {
       // + key (or = key on keyboards where + requires Shift)
@@ -5599,13 +5669,13 @@ function App() {
       e.preventDefault();
       e.stopPropagation();
       
-      // If a center location has been saved, restore to that location
-      if (savedCenterLocation) {
-        // Restore to saved center location and zoom
-        setViewScale(savedCenterLocation.zoom);
+      // 'O' key recalls home view 0 (the default home view)
+      const homeView = homeViews[0];
+      if (homeView) {
+        // Restore to saved home view location and zoom
+        setViewScale(homeView.zoom);
         
         // Calculate pan to center the saved world location in the visible canvas area
-        // Canvas is now positioned at left: 244px, so the entire canvas is visible
         const canvas = canvasRef.current;
         let panX = 0;
         let panY = 0;
@@ -5614,27 +5684,19 @@ function App() {
           const contentWidth = canvas.width - 2 * CONTENT_BORDER;
           const contentHeight = canvas.height - 2 * CONTENT_BORDER;
           
-          // Canvas center in content coordinates (entire canvas is visible now)
+          // Canvas center in content coordinates
           const canvasCenterContentX = contentWidth / 2;
           const canvasCenterContentY = contentHeight / 2;
           
-          // Convert saved world location to canvas content coordinates at the saved zoom level
-          const savedWorldX = savedCenterLocation.x;
-          const savedWorldY = savedCenterLocation.y;
-          const savedZoom = savedCenterLocation.zoom;
-          
           // Pan to center the saved world location: pan = canvasCenter - (worldPos * zoom)
-          panX = canvasCenterContentX - (savedWorldX * savedZoom);
-          panY = canvasCenterContentY - (savedWorldY * savedZoom);
+          panX = canvasCenterContentX - (homeView.x * homeView.zoom);
+          panY = canvasCenterContentY - (homeView.y * homeView.zoom);
         }
         
         setViewPan({ x: panX, y: panY });
       } else {
-        // Default behavior: reset view settings
+        // Default behavior: reset view settings (no home view 0 saved)
         setViewScale(1);
-        // Don't reset image offsets - preserve their alignment
-        // Only reset the view pan to center the images in the visible area
-        // Canvas is now positioned at left: 244px, so the entire canvas is visible
         const canvas = canvasRef.current;
         let panX = 0;
         let panY = 0;
@@ -5642,18 +5704,13 @@ function App() {
           const contentWidth = canvas.width - 2 * CONTENT_BORDER;
           const contentHeight = canvas.height - 2 * CONTENT_BORDER;
           
-          // Canvas center in content coordinates (entire canvas is visible now)
+          // Canvas center in content coordinates
           const canvasCenterContentX = contentWidth / 2;
           const canvasCenterContentY = contentHeight / 2;
           
-          // Image center in canvas content coordinates (assuming images are centered at world origin)
-          // For default behavior, we want to center at world origin (0, 0)
-          const imageCenterWorldX = 0;
-          const imageCenterWorldY = 0;
-          
-          // Pan to align world origin with canvas center: pan = canvasCenter - (worldPos * zoom)
-          panX = canvasCenterContentX - (imageCenterWorldX * 1); // zoom is 1
-          panY = canvasCenterContentY - (imageCenterWorldY * 1);
+          // Pan to align world origin with canvas center
+          panX = canvasCenterContentX;
+          panY = canvasCenterContentY;
         }
         // Reset browser zoom to 100%
         if (document.body) {
@@ -5950,6 +6007,18 @@ function App() {
           case 'X':
             e.preventDefault();
             setCurrentTool('center');
+            // Start waiting for number key with 2-second timeout
+            setIsWaitingForHomeViewKey(true);
+            // Clear any existing timeout
+            if (homeViewTimeoutRef.current) {
+              clearTimeout(homeViewTimeoutRef.current);
+            }
+            // Set 2-second timeout to return to select tool if no number is pressed
+            homeViewTimeoutRef.current = setTimeout(() => {
+              setIsWaitingForHomeViewKey(false);
+              setCurrentTool('select');
+              setCanvasCursor(undefined);
+            }, 2000);
             return;
           case 'z':
           case 'Z':
@@ -6364,7 +6433,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
     };
-  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, arePowerNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool, selectedComponentIds, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, savedCenterLocation]);
+  }, [handleKeyDown, selectedPowerIds, selectedGroundIds, arePowerNodesLocked, arePowerNodesLocked, powers, grounds, increaseSize, decreaseSize, switchToSelectTool, selectedComponentIds, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, homeViews, isWaitingForHomeViewKey, currentTool]);
 
   // Consolidated initialization function - sets all application defaults
   // This is used on app startup, browser refresh, and when creating a new project
@@ -6530,7 +6599,12 @@ function App() {
     setViewPan({ x: 0, y: 0 });
     setShowBothLayers(true);
     setSelectedDrawingLayer('top');
-    setSavedCenterLocation(null);
+    setHomeViews({}); // Clear all home views
+    setIsWaitingForHomeViewKey(false);
+    if (homeViewTimeoutRef.current) {
+      clearTimeout(homeViewTimeoutRef.current);
+      homeViewTimeoutRef.current = null;
+    }
     
     // === STEP 7: Reset transform state ===
     setSelectedImageForTransform(null);
@@ -6651,7 +6725,7 @@ function App() {
     // Project notes setter
     setProjectNotes,
     // View setters
-    setCurrentView, setViewScale, setViewPan, setShowBothLayers, setSelectedDrawingLayer, setSavedCenterLocation,
+    setCurrentView, setViewScale, setViewPan, setShowBothLayers, setSelectedDrawingLayer, setHomeViews, setIsWaitingForHomeViewKey,
     // Transform setters
     setSelectedImageForTransform, setIsTransforming, setTransformStartPos, setTransformMode,
     // Image filter setters
@@ -8234,11 +8308,11 @@ function App() {
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
       projectNotes, // Save project notes (Name, Value pairs)
-      savedCenterLocation, // Save the center location set by the Center tool
+      homeViews, // Save all home view locations (0-9)
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, savedCenterLocation]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -9134,11 +9208,14 @@ function App() {
         if (project.view.showBothLayers != null) setShowBothLayers(project.view.showBothLayers);
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
       }
-      // Restore saved center location
-      if (project.savedCenterLocation) {
-        setSavedCenterLocation(project.savedCenterLocation);
+      // Restore home views (multiple saved view locations)
+      if (project.homeViews) {
+        setHomeViews(project.homeViews);
+      } else if (project.savedCenterLocation) {
+        // Backward compatibility: migrate old savedCenterLocation to homeViews[0]
+        setHomeViews({ 0: project.savedCenterLocation });
       } else {
-        setSavedCenterLocation(null);
+        setHomeViews({});
       }
       // Restore project notes
       if (project.projectNotes && Array.isArray(project.projectNotes)) {
@@ -10355,6 +10432,7 @@ function App() {
         setOpenMenu={setOpenMenu}
         isReadOnlyMode={isReadOnlyMode}
         currentProjectFilePath={currentProjectFilePath}
+        isProjectActive={!!projectDirHandle}
         onNewProject={newProject}
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}
@@ -10918,11 +10996,25 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
-            {/* Set Home tool (X) */}
+            {/* Set Home tool (X) - click then press 0-9 to save current view */}
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('center'); }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  setCurrentTool('center');
+                  // Start waiting for number key with 2-second timeout
+                  setIsWaitingForHomeViewKey(true);
+                  if (homeViewTimeoutRef.current) {
+                    clearTimeout(homeViewTimeoutRef.current);
+                  }
+                  homeViewTimeoutRef.current = setTimeout(() => {
+                    setIsWaitingForHomeViewKey(false);
+                    setCurrentTool('select');
+                    setCanvasCursor(undefined);
+                  }, 2000);
+                }
+              }} 
               disabled={isReadOnlyMode}
-              title="Set Home View (X)" 
+              title="Set View (X) - Press 0-9 to Set View" 
               style={{ 
                 width: '100%', 
                 height: 32, 
