@@ -319,6 +319,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     const image = isTop ? topImage : (isBottom ? bottomImage : null);
     const hasImage = isBoth ? (topImage && bottomImage) : (image !== null);
     const isDisabled = !hasImage || areImagesLocked;
+    // Get current brightness/contrast values for display
+    const currentBrightness = isBoth ? (topImage?.brightness ?? 100) : (image?.brightness ?? 100);
+    const currentContrast = isBoth ? (topImage?.contrast ?? 100) : (image?.contrast ?? 100);
 
     return (
       <div 
@@ -507,6 +510,59 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         >
           {transformMode === 'keystone' && selectedImageForTransform === imageType ? '✓ ' : ''}Mode: Keystone
         </button>
+        <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+        {/* Brightness Control */}
+        <div style={{ padding: '8px 10px', borderBottom: '1px solid #444' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <label style={{ color: '#f2f2f2', fontSize: '12px', fontWeight: 500 }}>Brightness</label>
+            <span style={{ color: '#aaa', fontSize: '11px', minWidth: '40px', textAlign: 'right' }}>
+              {currentBrightness}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="200"
+            step="1"
+            value={currentBrightness}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (isBoth) {
+                updateImageTransform('both', { brightness: value });
+              } else {
+                updateImageTransform(imageType, { brightness: value });
+              }
+            }}
+            disabled={isDisabled}
+            style={{ width: '100%', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+          />
+        </div>
+        {/* Contrast Control */}
+        <div style={{ padding: '8px 10px', borderBottom: '1px solid #444' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <label style={{ color: '#f2f2f2', fontSize: '12px', fontWeight: 500 }}>Contrast</label>
+            <span style={{ color: '#aaa', fontSize: '11px', minWidth: '40px', textAlign: 'right' }}>
+              {currentContrast}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="200"
+            step="1"
+            value={currentContrast}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (isBoth) {
+                updateImageTransform('both', { contrast: value });
+              } else {
+                updateImageTransform(imageType, { contrast: value });
+              }
+            }}
+            disabled={isDisabled}
+            style={{ width: '100%', cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+          />
+        </div>
         <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
         <button 
           onClick={() => {
@@ -1294,25 +1350,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Set Tool Color…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button
-              onClick={() => {
-                onOpenProjectNotes();
-                setOpenMenu(null);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                color: '#f2f2f2',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Project Notes…
-            </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
@@ -1377,6 +1414,25 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </button>
               {openToolsSubmenu === 'select' && renderSelectSubmenu()}
             </div>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button
+              onClick={() => {
+                onOpenProjectNotes();
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Project Notes…
+            </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Power Buses…

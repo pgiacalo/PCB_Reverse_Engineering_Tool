@@ -18,6 +18,8 @@ export interface PCBImage {
   keystoneV?: number;
   keystoneH?: number;
   bitmap?: ImageBitmap | null;
+  brightness?: number; // Brightness adjustment: 0-200 (100 = normal)
+  contrast?: number; // Contrast adjustment: 0-200 (100 = normal)
 }
 
 export type ViewMode = 'top' | 'bottom' | 'overlay';

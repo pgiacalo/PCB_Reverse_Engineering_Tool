@@ -4015,12 +4015,19 @@ function App() {
       const bmp = topImage.bitmap;
       ctx.save();
       ctx.globalAlpha = 1;
+      // Build filter string with brightness, contrast, and grayscale
+      const filters: string[] = [];
+      if (topImage.brightness !== undefined && topImage.brightness !== 100) {
+        filters.push(`brightness(${topImage.brightness}%)`);
+      }
+      if (topImage.contrast !== undefined && topImage.contrast !== 100) {
+        filters.push(`contrast(${topImage.contrast}%)`);
+      }
       // Apply grayscale filter if enabled and not in edge mode
       if (isGrayscale && !isBlackAndWhiteEdges) {
-        ctx.filter = 'grayscale(100%)';
-      } else {
-        ctx.filter = 'none';
+        filters.push('grayscale(100%)');
       }
+      ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       // Apply per-image transformations
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
@@ -4048,11 +4055,19 @@ function App() {
       const bmp = bottomImage.bitmap;
       ctx.save();
       ctx.globalAlpha = overlayMode ? (transparency / 100) : 1;
-      if (isGrayscale && !isBlackAndWhiteEdges) {
-        ctx.filter = 'grayscale(100%)';
-      } else {
-        ctx.filter = 'none';
+      // Build filter string with brightness, contrast, and grayscale
+      const filters: string[] = [];
+      if (bottomImage.brightness !== undefined && bottomImage.brightness !== 100) {
+        filters.push(`brightness(${bottomImage.brightness}%)`);
       }
+      if (bottomImage.contrast !== undefined && bottomImage.contrast !== 100) {
+        filters.push(`contrast(${bottomImage.contrast}%)`);
+      }
+      // Apply grayscale filter if enabled and not in edge mode
+      if (isGrayscale && !isBlackAndWhiteEdges) {
+        filters.push('grayscale(100%)');
+      }
+      ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
       // Apply per-image transformations
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
@@ -4913,6 +4928,8 @@ function App() {
       skewY: 0,
       keystoneV: 0,
       keystoneH: 0,
+      brightness: 100,
+      contrast: 100,
     });
     // Also restore color mode (global)
     setIsGrayscale(false);
@@ -7858,6 +7875,8 @@ function App() {
           flipX: topImage.flipX, flipY: topImage.flipY,
           skewX: topImage.skewX, skewY: topImage.skewY,
           keystoneV: topImage.keystoneV, keystoneH: topImage.keystoneH,
+          brightness: topImage.brightness ?? 100, // Default to 100 if not set
+          contrast: topImage.contrast ?? 100, // Default to 100 if not set
         } : null,
         bottom: bottomImage ? {
           name: bottomImage.name,
@@ -7872,6 +7891,8 @@ function App() {
           flipX: bottomImage.flipX, flipY: bottomImage.flipY,
           skewX: bottomImage.skewX, skewY: bottomImage.skewY,
           keystoneV: bottomImage.keystoneV, keystoneH: bottomImage.keystoneH,
+          brightness: bottomImage.brightness ?? 100, // Default to 100 if not set
+          contrast: bottomImage.contrast ?? 100, // Default to 100 if not set
         } : null,
       },
       // Store project directory name for future saves and auto-saves
@@ -9215,6 +9236,8 @@ function App() {
           skewY: img.skewY ?? 0,
           keystoneV: img.keystoneV ?? 0,
           keystoneH: img.keystoneH ?? 0,
+          brightness: img.brightness ?? 100, // Default to 100 if not present (backward compatibility)
+          contrast: img.contrast ?? 100, // Default to 100 if not present (backward compatibility)
           bitmap,
         };
       };
