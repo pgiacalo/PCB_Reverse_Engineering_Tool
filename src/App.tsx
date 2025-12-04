@@ -11799,6 +11799,8 @@ function App() {
                 style={{ width: '100%', marginTop: 3 }}
               />
               {/* Cycle Speed slider - only visible when Cycle is enabled */}
+              {/* Slider is reversed: left = fast (500ms), right = slow (8000ms) */}
+              {/* We invert by using (8500 - value) so moving right increases speed */}
               {isTransparencyCycling && (
                 <div style={{ marginTop: 6 }}>
                   <label style={{ fontSize: 10, color: '#333' }}>
@@ -11809,8 +11811,9 @@ function App() {
                     min="500"
                     max="8000"
                     step="100"
-                    value={transparencyCycleSpeed}
-                    onChange={(e) => setTransparencyCycleSpeed(Number(e.target.value))}
+                    value={8500 - transparencyCycleSpeed}
+                    onChange={(e) => setTransparencyCycleSpeed(8500 - Number(e.target.value))}
+                    onDoubleClick={() => setTransparencyCycleSpeed(2000)}
                     className="slider"
                     style={{ width: '100%', marginTop: 3 }}
                   />
