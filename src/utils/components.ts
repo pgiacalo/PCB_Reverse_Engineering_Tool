@@ -363,35 +363,36 @@ export function validateComponent(component: PCBComponent): string[] {
 /**
  * Designator counter management
  * Tracks the last used number for each designator prefix (C, R, Q, U, etc.)
+ * 
+ * Note: Counters are now stored in memory only and saved/loaded from project files.
+ * No localStorage is used - every new project starts with empty counters.
+ * The counters are passed in from App.tsx which manages them via sessionDesignatorCountersRef.
  */
 export type DesignatorCounters = Record<string, number>; // prefix -> last number
 
-const DESIGNATOR_COUNTERS_STORAGE_KEY = 'designatorCounters';
-
 /**
- * Load designator counters from localStorage
+ * Get empty/default designator counters
+ * Called when creating a new project or when no counters are available
  */
-export function loadDesignatorCounters(): DesignatorCounters {
-  try {
-    const stored = localStorage.getItem(DESIGNATOR_COUNTERS_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.warn('Failed to load designator counters from localStorage:', e);
-  }
+export function getDefaultDesignatorCounters(): DesignatorCounters {
   return {};
 }
 
 /**
- * Save designator counters to localStorage
+ * @deprecated - No longer uses localStorage. Counters are managed in memory by App.tsx
+ * Kept for backward compatibility but always returns empty object
  */
-export function saveDesignatorCounters(counters: DesignatorCounters): void {
-  try {
-    localStorage.setItem(DESIGNATOR_COUNTERS_STORAGE_KEY, JSON.stringify(counters));
-  } catch (e) {
-    console.warn('Failed to save designator counters to localStorage:', e);
-  }
+export function loadDesignatorCounters(): DesignatorCounters {
+  return {};
+}
+
+/**
+ * @deprecated - No longer uses localStorage. Counters are managed in memory by App.tsx
+ * Kept for backward compatibility but does nothing
+ */
+export function saveDesignatorCounters(_counters: DesignatorCounters): void {
+  // No-op: localStorage is no longer used for designator counters
+  // Counters are saved as part of the project file
 }
 
 /**

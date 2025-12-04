@@ -11,6 +11,7 @@ export function useDialogs() {
   const [debugDialog, setDebugDialog] = useState<{ visible: boolean; text: string }>({ visible: false, text: '' });
   const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
   const [newProjectDialog, setNewProjectDialog] = useState<{ visible: boolean }>({ visible: false });
+  const [openProjectDialog, setOpenProjectDialog] = useState<{ visible: boolean }>({ visible: false });
   const [newProjectSetupDialog, setNewProjectSetupDialog] = useState<{ 
     visible: boolean; 
     projectName: string; 
@@ -35,6 +36,7 @@ export function useDialogs() {
   });
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(true);
+  const [transformImagesDialogVisible, setTransformImagesDialogVisible] = useState(false);
 
   return {
     // Menu state
@@ -54,6 +56,8 @@ export function useDialogs() {
     setErrorDialog,
     newProjectDialog,
     setNewProjectDialog,
+    openProjectDialog,
+    setOpenProjectDialog,
     newProjectSetupDialog,
     setNewProjectSetupDialog,
     saveAsDialog,
@@ -62,6 +66,8 @@ export function useDialogs() {
     setShowColorPicker,
     showWelcomeDialog,
     setShowWelcomeDialog,
+    transformImagesDialogVisible,
+    setTransformImagesDialogVisible,
   };
 }
 

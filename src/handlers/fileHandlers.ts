@@ -233,7 +233,7 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
         const projectNameFromFile = filenameFromHandle.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
         if (projectNameFromFile) {
           setProjectName(projectNameFromFile);
-          localStorage.setItem('pcb_project_name', projectNameFromFile);
+          // Note: Project name is saved in project file, not localStorage
         }
         
         const baseName = handle.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -426,12 +426,12 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
           const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
           projectNameToUse = projectNameFromFile || 'pcb_project';
           setProjectName(projectNameToUse);
-          localStorage.setItem('pcb_project_name', projectNameToUse);
+          // Note: Project name is saved in project file, not localStorage
         }
         
         if (!projectName) {
           setProjectName(projectNameToUse);
-          localStorage.setItem('pcb_project_name', projectNameToUse);
+          // Note: Project name is saved in project file, not localStorage
         }
         
         setTimeout(() => {

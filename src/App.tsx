@@ -19,6 +19,7 @@ import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
+import { TransformImagesDialog } from './components/TransformImagesDialog';
 import { ComponentEditor } from './components/ComponentEditor';
 import {
   useDrawing,
@@ -831,6 +832,8 @@ function App() {
     setErrorDialog,
     newProjectDialog,
     setNewProjectDialog,
+    openProjectDialog,
+    setOpenProjectDialog,
     newProjectSetupDialog,
     setNewProjectSetupDialog,
     saveAsDialog,
@@ -840,6 +843,8 @@ function App() {
     // showWelcomeDialog and setShowWelcomeDialog are available but not currently used
     // showWelcomeDialog,
     // setShowWelcomeDialog,
+    transformImagesDialogVisible,
+    setTransformImagesDialogVisible,
   } = dialogs;
   
   // File operations hook
@@ -888,6 +893,7 @@ function App() {
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const setSizeInputRef = useRef<HTMLInputElement>(null);
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
+  const openProjectYesButtonRef = useRef<HTMLButtonElement>(null);
   const newProjectNameInputRef = useRef<HTMLInputElement>(null);
   const saveAsFilenameInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -922,10 +928,8 @@ function App() {
   const [showGroundBusSelector, setShowGroundBusSelector] = useState(false);
   const [selectedGroundBusId, setSelectedGroundBusId] = useState<string | null>(null);
   // Designator management
-  const [autoAssignDesignators, setAutoAssignDesignators] = useState<boolean>(() => {
-    const saved = localStorage.getItem('autoAssignDesignators');
-    return saved !== null ? saved === 'true' : true; // Default to true
-  });
+  // Default to true for new projects - value is loaded from project file when opening existing projects
+  const [autoAssignDesignators, setAutoAssignDesignators] = useState<boolean>(true);
   const [useGlobalDesignatorCounters, setUseGlobalDesignatorCounters] = useState<boolean>(false); // Default to OFF (project-local)
   const [showDesignatorManager, setShowDesignatorManager] = useState(false);
   // Session-level counters for project-local mode (tracks designators created in this session)
@@ -950,17 +954,8 @@ function App() {
   const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
   const [projectNotesDialogDragOffset, setProjectNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Board dimensions for coordinate scaling
-  const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
-    const saved = localStorage.getItem('boardDimensions');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  // Default to null for new projects - value is loaded from project file when opening existing projects
+  const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(null);
   const [showBoardDimensionsDialog, setShowBoardDimensionsDialog] = useState(false);
   
   // Initialize power buses with defaults if empty
@@ -6439,6 +6434,244 @@ function App() {
     setPointIdCounter(1);
   }, [saveDefaultColor, saveDefaultSize]);
 
+  // Close the current project and release all browser permissions
+  // This function clears ALL project state to ensure a clean slate before opening/creating a new project
+  // CRITICAL: This prevents state leakage between projects (directory permissions, file paths, project notes, etc.)
+  const closeProject = useCallback(() => {
+    // === STEP 1: Release browser file system permissions ===
+    // Clear directory handles to release browser permissions
+    // Note: Browser permissions are automatically released when handles are garbage collected,
+    // but explicitly clearing them ensures immediate release
+    setProjectDirHandle(null);
+    setAutoSaveDirHandle(null);
+    
+    // Clear refs that hold directory handles
+    if (projectDirHandleRef) {
+      projectDirHandleRef.current = null;
+    }
+    if (autoSaveDirHandleRef) {
+      autoSaveDirHandleRef.current = null;
+    }
+    
+    // === STEP 2: Clear file operation state ===
+    setCurrentProjectFilePath('');
+    setProjectName('pcb_project');
+    setAutoSaveEnabled(false);
+    setAutoSaveInterval(null);
+    setAutoSaveBaseName('');
+    setAutoSaveFileHistory([]);
+    setCurrentFileIndex(-1);
+    // Note: No localStorage to clear - all project data is stored in project file only
+    
+    // Clear auto-save refs
+    if (autoSaveBaseNameRef) {
+      autoSaveBaseNameRef.current = '';
+    }
+    hasChangesSinceLastAutoSaveRef.current = false;
+    
+    // Clear auto-save interval timer
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
+    }
+    
+    // === STEP 3: Clear all project data ===
+    // Clear images
+    setTopImage(null);
+    setBottomImage(null);
+    
+    // Clear drawing data
+    setDrawingStrokes([]);
+    setVias([]);
+    setPads([]);
+    setTracesTop([]);
+    setTracesBottom([]);
+    setCurrentStroke([]);
+    currentStrokeRef.current = [];
+    
+    // Clear components
+    setComponentsTop([]);
+    setComponentsBottom([]);
+    setComponentEditor(null);
+    setConnectingPin(null);
+    
+    // Clear power and ground symbols
+    setPowerSymbols([]);
+    setGroundSymbols([]);
+    setPowerEditor(null);
+    
+    // Reset power buses to defaults
+    setPowerBuses([
+      { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
+      { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+    ]);
+    
+    // Reset ground buses to defaults
+    setGroundBuses([
+      { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
+      { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
+    ]);
+    
+    // === STEP 4: Clear selections ===
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+    setIsSelecting(false);
+    
+    // === STEP 5: Clear project notes ===
+    setProjectNotes([]);
+    
+    // === STEP 6: Reset view state ===
+    setCurrentView('overlay');
+    setViewScale(1);
+    setViewPan({ x: 0, y: 0 });
+    setShowBothLayers(true);
+    setSelectedDrawingLayer('top');
+    setSavedCenterLocation(null);
+    
+    // === STEP 7: Reset transform state ===
+    setSelectedImageForTransform(null);
+    setIsTransforming(false);
+    setTransformStartPos(null);
+    setTransformMode('nudge');
+    
+    // === STEP 8: Reset image filters ===
+    setIsGrayscale(false);
+    setIsBlackAndWhiteEdges(false);
+    setIsBlackAndWhiteInverted(false);
+    setTransparency(50);
+    setIsTransparencyCycling(false);
+    
+    // === STEP 9: Reset lock states ===
+    setAreImagesLocked(false);
+    setAreViasLocked(false);
+    setArePadsLocked(false);
+    setAreTestPointsLocked(false);
+    setAreTracesLocked(false);
+    setAreComponentsLocked(false);
+    setAreGroundNodesLocked(false);
+    setArePowerNodesLocked(false);
+    
+    // === STEP 10: Reset visibility states ===
+    setShowTopImage(true);
+    setShowBottomImage(true);
+    setShowViasLayer(true);
+    setShowTopTracesLayer(true);
+    setShowBottomTracesLayer(true);
+    setShowTopPadsLayer(true);
+    setShowBottomPadsLayer(true);
+    setShowTopTestPointsLayer(true);
+    setShowBottomTestPointsLayer(true);
+    setShowTopComponents(true);
+    setShowBottomComponents(true);
+    setShowPowerLayer(true);
+    setShowGroundLayer(true);
+    setShowConnectionsLayer(true);
+    
+    // === STEP 11: Reset tool state ===
+    setCurrentTool('select');
+    setDrawingMode('trace');
+    setTraceToolLayer('top');
+    setPadToolLayer('top');
+    setTestPointToolLayer('top');
+    setComponentToolLayer('top');
+    
+    // Reset tool layer refs
+    traceToolLayerRef.current = 'top';
+    padToolLayerRef.current = 'top';
+    testPointToolLayerRef.current = 'top';
+    componentToolLayerRef.current = 'top';
+    
+    // === STEP 12: Reset designator counters ===
+    sessionDesignatorCountersRef.current = {};
+    setAutoAssignDesignators(true);
+    setUseGlobalDesignatorCounters(false);
+    // Note: No localStorage to clear - all project data is stored in project file only
+    
+    // === STEP 13: Reset point ID counter ===
+    setPointIdCounter(1);
+    
+    // === STEP 14: Close all dialogs ===
+    setOpenMenu(null);
+    setDebugDialog({ visible: false, text: '' });
+    setErrorDialog({ visible: false, title: '', message: '' });
+    setNewProjectDialog({ visible: false });
+    setOpenProjectDialog({ visible: false });
+    setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
+    setSaveAsDialog({ visible: false, filename: '', locationPath: '', locationHandle: null });
+    setAutoSaveDialog({ visible: false, interval: null });
+    setAutoSavePromptDialog({ visible: false, source: 'new', interval: 5 });
+    setShowColorPicker(false);
+    setShowPowerBusManager(false);
+    setShowGroundBusManager(false);
+    setShowDesignatorManager(false);
+    setShowBoardDimensionsDialog(false);
+    setNotesDialogVisible(false);
+    setProjectNotesDialogVisible(false);
+    setTransformImagesDialogVisible(false);
+    
+    // === STEP 15: Reset board dimensions ===
+    setBoardDimensions(null);
+    // Note: No localStorage to clear - board dimensions are stored in project file only
+    
+    // === STEP 16: Clear hover states ===
+    setHoverComponent(null);
+    setHoverTestPoint(null);
+    
+    // === STEP 17: Reset panning state ===
+    setIsPanning(false);
+    panStartRef.current = null;
+    panClientStartRef.current = null;
+    
+    // === STEP 18: Reset drawing state ===
+    setIsDrawing(false);
+    setTracePreviewMousePos(null);
+    lastTraceClickTimeRef.current = 0;
+    isDoubleClickingTraceRef.current = false;
+    
+    console.log('Project closed: All state cleared and browser permissions released');
+  }, [
+    // File operation setters
+    setProjectDirHandle, setAutoSaveDirHandle, setCurrentProjectFilePath, setProjectName,
+    setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveBaseName, setAutoSaveFileHistory, setCurrentFileIndex,
+    // Image setters
+    setTopImage, setBottomImage,
+    // Drawing setters
+    setDrawingStrokes, setCurrentStroke, setVias, setPads, setTracesTop, setTracesBottom,
+    // Component setters
+    setComponentsTop, setComponentsBottom, setComponentEditor, setConnectingPin,
+    // Power/Ground setters
+    setPowerSymbols, setGroundSymbols, setPowerEditor, setPowerBuses, setGroundBuses,
+    // Selection setters
+    setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setIsSelecting,
+    // Project notes setter
+    setProjectNotes,
+    // View setters
+    setCurrentView, setViewScale, setViewPan, setShowBothLayers, setSelectedDrawingLayer, setSavedCenterLocation,
+    // Transform setters
+    setSelectedImageForTransform, setIsTransforming, setTransformStartPos, setTransformMode,
+    // Image filter setters
+    setIsGrayscale, setIsBlackAndWhiteEdges, setIsBlackAndWhiteInverted, setTransparency, setIsTransparencyCycling,
+    // Lock setters
+    setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTestPointsLocked, setAreTracesLocked,
+    setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked,
+    // Visibility setters
+    setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer,
+    setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer,
+    setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer,
+    // Tool setters
+    setCurrentTool, setDrawingMode, setTraceToolLayer, setPadToolLayer, setTestPointToolLayer, setComponentToolLayer,
+    // Designator setters
+    setAutoAssignDesignators, setUseGlobalDesignatorCounters,
+    // Dialog setters
+    setOpenMenu, setDebugDialog, setErrorDialog, setNewProjectDialog, setNewProjectSetupDialog, setSaveAsDialog,
+    setAutoSaveDialog, setAutoSavePromptDialog, setShowColorPicker, setShowPowerBusManager, setShowGroundBusManager,
+    setShowDesignatorManager, setShowBoardDimensionsDialog, setNotesDialogVisible, setProjectNotesDialogVisible,
+    // Other setters
+    setBoardDimensions, setHoverComponent, setHoverTestPoint, setIsPanning, setIsDrawing, setTracePreviewMousePos,
+  ]);
+
   // Initialize application with default keyboard shortcuts (o and s)
   // This function performs the same initialization as when the app first loads
   const initializeApplication = useCallback(() => {
@@ -8368,12 +8601,11 @@ function App() {
           setCurrentProjectFilePath(savedFilename);
         }
         
-        // Extract project name from filename and store it
+        // Extract project name from filename and store it in state (no localStorage)
         const filenameFromHandle = savedFilename;
         const projectNameFromFile = filenameFromHandle.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
         if (projectNameFromFile) {
           setProjectName(projectNameFromFile);
-          localStorage.setItem('pcb_project_name', projectNameFromFile);
         }
         
         // Note: We can't get the directory handle from FileSystemFileHandle directly
@@ -8595,13 +8827,8 @@ function App() {
     );
   }, [topImage, bottomImage, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
 
-  // Load project name from localStorage on startup
-  React.useEffect(() => {
-    const savedProjectName = localStorage.getItem('pcb_project_name');
-    if (savedProjectName) {
-      setProjectName(savedProjectName);
-    }
-  }, []);
+  // Note: Project name is now loaded from project file only, not from localStorage
+  // This prevents project name leakage between projects
 
   // Create a new project (reset all state)
   // This function opens a dialog following standard IDE pattern
@@ -8627,7 +8854,7 @@ function App() {
           locationHandle,
           locationPath: locationHandle.name || 'Selected folder',
         }));
-        localStorage.setItem('pcb_project_location_path', locationHandle.name || '');
+        // Note: Location path is stored in project file, not localStorage
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') {
           console.error('Failed to get directory:', e);
@@ -8653,55 +8880,42 @@ function App() {
       return;
     }
     
-    const parentDirHandle = newProjectSetupDialog.locationHandle;
+    const selectedDirHandle = newProjectSetupDialog.locationHandle;
     
-    // Create project folder inside the selected location (standard IDE pattern)
+    // Smart folder handling: If the selected folder name matches the project name,
+    // use it directly instead of creating a redundant subfolder.
+    // This prevents paths like "My_Project/My_Project/My_Project.json"
     let projectDirHandle: FileSystemDirectoryHandle;
-    try {
-      projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
-    } catch (e) {
-      console.error('Failed to create project folder:', e);
-      alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
-      return;
+    let parentDirHandle: FileSystemDirectoryHandle;
+    
+    if (selectedDirHandle.name === cleanProjectName) {
+      // User already selected/created a folder with the project name - use it directly
+      projectDirHandle = selectedDirHandle;
+      parentDirHandle = selectedDirHandle; // For localStorage, we'll just use the same name
+    } else {
+      // Create project folder inside the selected location (standard IDE pattern)
+      parentDirHandle = selectedDirHandle;
+      try {
+        projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
+      } catch (e) {
+        console.error('Failed to create project folder:', e);
+        alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
+        return;
+      }
     }
     
-    // Close the dialog
+    // CRITICAL: Close current project first to release all browser permissions and clear all state
+    // This prevents state leakage from the previous project into the new project
+    closeProject();
+    
+    // Close the dialog (already closed by closeProject, but set again for clarity)
     setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
     
     // Store project name and project directory handle (not parent)
+    // Note: Project name and location are stored in project file, not localStorage
     setProjectName(cleanProjectName);
     setProjectDirHandle(projectDirHandle);
-    localStorage.setItem('pcb_project_name', cleanProjectName);
-    localStorage.setItem('pcb_project_location_path', parentDirHandle.name || '');
     
-    // Reset all state
-    setTopImage(null);
-    setBottomImage(null);
-    setDrawingStrokes([]);
-    setComponentsTop([]);
-    setComponentsBottom([]);
-    setPowerSymbols([]);
-    setGroundSymbols([]);
-    setSelectedIds(new Set());
-    setSelectedComponentIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedGroundIds(new Set());
-    setCurrentView('overlay');
-    setViewScale(1);
-    setViewPan({ x: 0, y: 0 });
-    // Reset change tracking for auto save
-    hasChangesSinceLastAutoSaveRef.current = false;
-    // Clear current project file path
-    setCurrentProjectFilePath('');
-    // Disable auto save for new project
-    setAutoSaveEnabled(false);
-    setAutoSaveInterval(null);
-    setAutoSaveDirHandle(null);
-    setAutoSaveBaseName('');
-    if (autoSaveIntervalRef.current) {
-      clearInterval(autoSaveIntervalRef.current);
-      autoSaveIntervalRef.current = null;
-    }
     // Use consolidated initialization function for all defaults
     initializeApplicationDefaults();
     
@@ -8729,7 +8943,7 @@ function App() {
       console.error('Failed to save new project:', e);
       alert('Failed to save new project file. See console for details.');
     }
-  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog]);
+  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject]);
 
   // Handle canceling new project setup
   const handleNewProjectSetupCancel = useCallback(() => {
@@ -8812,11 +9026,10 @@ function App() {
       // Update current project file path
       setCurrentProjectFilePath(cleanFilename);
       
-      // Extract project name from filename and store it
+      // Extract project name from filename and store it in state (not localStorage)
       const projectNameFromFile = cleanFilename.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
       if (projectNameFromFile) {
         setProjectName(projectNameFromFile);
-        localStorage.setItem('pcb_project_name', projectNameFromFile);
       }
       
       // Update project directory handle
@@ -8900,15 +9113,9 @@ function App() {
       if (project.projectInfo) {
         if (project.projectInfo.name) {
           setProjectName(project.projectInfo.name);
-          localStorage.setItem('pcb_project_name', project.projectInfo.name);
-        }
-      } else {
-        // If no project info, try to extract name from filename if available
-        const savedName = localStorage.getItem('pcb_project_name');
-        if (savedName) {
-          setProjectName(savedName);
         }
       }
+      // Note: Project name is only loaded from project file, not localStorage
 
       // Restore view state
       if (project.view) {
@@ -9523,18 +9730,13 @@ function App() {
             }
           }
         }
-        // Merge with any existing localStorage counters (take the max)
-        const existingCounters = loadDesignatorCounters();
-        for (const [prefix, num] of Object.entries(counters)) {
-          counters[prefix] = Math.max(num, existingCounters[prefix] || 0);
-        }
-        saveDesignatorCounters(counters);
+        // Store counters in session ref (no localStorage)
+        sessionDesignatorCountersRef.current = counters;
       }
       
-      // Restore auto-designator assignment setting
+      // Restore auto-designator assignment setting (no localStorage)
       if (typeof project.autoAssignDesignators === 'boolean') {
         setAutoAssignDesignators(project.autoAssignDesignators);
-        localStorage.setItem('autoAssignDesignators', String(project.autoAssignDesignators));
       }
       
       // Restore global designator counter setting (default to false/OFF)
@@ -9927,8 +10129,8 @@ function App() {
   // Determine if we're in read-only mode (viewing file history, not the most recent file)
   const isReadOnlyMode = currentFileIndex > 0;
 
-  // Handler for opening a project file
-  const handleOpenProject = useCallback(async () => {
+  // Internal function to perform the actual project opening (called after user confirms or has no unsaved changes)
+  const performOpenProject = useCallback(async () => {
     const w = window as any;
     if (typeof w.showOpenFilePicker === 'function') {
       try {
@@ -9940,6 +10142,11 @@ function App() {
           alert('Please select a .json project file.');
           return;
         }
+        
+        // CRITICAL: Close current project first to release all browser permissions and clear all state
+        // This prevents state leakage from the previous project into the newly opened project
+        closeProject();
+        
         setCurrentProjectFilePath(file.name);
         const text = await file.text();
         const project = JSON.parse(text);
@@ -9997,8 +10204,8 @@ function App() {
           projectDirHandleRef.current = projectDirHandle;
         } catch (e) {
           console.error('Failed to get directory handle from file handle:', e);
-          alert('Failed to get directory access. Auto-save will not work until you enable it manually via File -> Auto Save.');
-          // Continue without directory handle - user will need to set it manually
+          // No alert needed - the auto-save prompt dialog will be shown shortly,
+          // allowing the user to set up auto-save with a directory at that time
         } finally {
           // Clear the flag after a short delay to allow state updates to complete
           // This ensures the useEffect can sync the ref once state is stable
@@ -10020,12 +10227,10 @@ function App() {
           const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
           projectNameToUse = projectNameFromFile || 'pcb_project';
           setProjectName(projectNameToUse);
-          localStorage.setItem('pcb_project_name', projectNameToUse);
         }
         
         if (!projectName) {
           setProjectName(projectNameToUse);
-          localStorage.setItem('pcb_project_name', projectNameToUse);
         }
         
         // CRITICAL FIX: When opening a project with auto-save enabled, we MUST:
@@ -10075,7 +10280,59 @@ function App() {
     } else {
       openProjectRef.current?.click();
     }
-  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName]);
+  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName, closeProject]);
+
+  // Handler functions for open project dialog (defined after performOpenProject)
+  const handleOpenProjectYes = useCallback(async () => {
+    setOpenProjectDialog({ visible: false });
+    await saveProject();
+    await performOpenProject();
+  }, [saveProject, performOpenProject]);
+
+  const handleOpenProjectNo = useCallback(async () => {
+    setOpenProjectDialog({ visible: false });
+    await performOpenProject();
+  }, [performOpenProject]);
+
+  const handleOpenProjectCancel = useCallback(() => {
+    setOpenProjectDialog({ visible: false });
+  }, []);
+
+  // Focus Yes button when open project dialog opens and handle keyboard
+  React.useEffect(() => {
+    if (openProjectDialog.visible) {
+      // Focus Yes button after a short delay to ensure it's rendered
+      setTimeout(() => {
+        openProjectYesButtonRef.current?.focus();
+      }, 0);
+      
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          // Yes - save and open project
+          handleOpenProjectYes();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          // Cancel - close dialog
+          setOpenProjectDialog({ visible: false });
+        }
+      };
+      
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [openProjectDialog.visible, handleOpenProjectYes]);
+
+  // Public handler for opening a project file (checks for unsaved changes first)
+  const handleOpenProject = useCallback(async () => {
+    if (hasUnsavedChanges()) {
+      setOpenProjectDialog({ visible: true });
+    } else {
+      await performOpenProject();
+    }
+  }, [hasUnsavedChanges, performOpenProject]);
 
   return (
     <div className="app">
@@ -10099,19 +10356,8 @@ function App() {
         setAutoSaveDialog={setAutoSaveDialog}
         topImage={topImage}
         bottomImage={bottomImage}
-        selectedImageForTransform={selectedImageForTransform}
-        setSelectedImageForTransform={setSelectedImageForTransform}
         setCurrentTool={setCurrentTool}
-        transformMode={transformMode}
-        setTransformMode={setTransformMode}
-        updateImageTransform={updateImageTransform}
         resetImageTransform={resetImageTransform}
-        isGrayscale={isGrayscale}
-        setIsGrayscale={setIsGrayscale}
-        isBlackAndWhiteEdges={isBlackAndWhiteEdges}
-        setIsBlackAndWhiteEdges={setIsBlackAndWhiteEdges}
-        isBlackAndWhiteInverted={isBlackAndWhiteInverted}
-        setIsBlackAndWhiteInverted={setIsBlackAndWhiteInverted}
         areImagesLocked={areImagesLocked}
         setAreImagesLocked={setAreImagesLocked}
         onEnterBoardDimensions={() => setShowBoardDimensionsDialog(true)}
@@ -10207,6 +10453,7 @@ function App() {
         saveDefaultColor={saveDefaultColor}
         menuBarRef={menuBarRef}
         onOpenProjectNotes={handleOpenProjectNotes}
+        onOpenTransformImages={() => setTransformImagesDialogVisible(true)}
       />
 
       <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
@@ -12146,7 +12393,7 @@ function App() {
                 onChange={(e) => {
                   const newValue = e.target.checked;
                   setAutoAssignDesignators(newValue);
-                  localStorage.setItem('autoAssignDesignators', String(newValue));
+                  // Note: Setting is saved in project file, not localStorage
                 }}
                 style={{ width: '16px', height: '16px', cursor: 'pointer' }}
               />
@@ -12235,7 +12482,7 @@ function App() {
               const project = JSON.parse(text);
               await loadProject(project);
               
-              // Extract project name from project data or filename
+              // Extract project name from project data or filename (no localStorage)
               let projectNameToUse: string;
               if (project.projectInfo?.name) {
                 projectNameToUse = project.projectInfo.name;
@@ -12244,13 +12491,11 @@ function App() {
                 const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
                 projectNameToUse = projectNameFromFile || 'pcb_project';
                 setProjectName(projectNameToUse);
-                localStorage.setItem('pcb_project_name', projectNameToUse);
               }
               
               // Ensure project name is set (loadProject may have set it, but verify)
               if (!projectName) {
                 setProjectName(projectNameToUse);
-                localStorage.setItem('pcb_project_name', projectNameToUse);
               }
               
               // Always show auto-save prompt dialog after opening a project
@@ -12466,6 +12711,99 @@ function App() {
         </div>
       )}
 
+      {/* Open Project Confirmation Dialog */}
+      {openProjectDialog.visible && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10001,
+          }}
+          onClick={(e) => {
+            // Close dialog if clicking on backdrop
+            if (e.target === e.currentTarget) {
+              handleOpenProjectCancel();
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '500px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
+              Open Project
+            </h2>
+            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
+              You have unsaved changes. Do you want to save your project before opening another one?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={handleOpenProjectCancel}
+                style={{
+                  padding: '8px 16px',
+                  background: '#444',
+                  color: '#f2f2f2',
+                  border: '1px solid #555',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOpenProjectNo}
+                style={{
+                  padding: '8px 16px',
+                  background: '#555',
+                  color: '#f2f2f2',
+                  border: '1px solid #666',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                No
+              </button>
+              <button
+                ref={openProjectYesButtonRef}
+                onClick={handleOpenProjectYes}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+                autoFocus
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* New Project Setup Dialog */}
       {newProjectSetupDialog.visible && (
         <div 
@@ -12623,6 +12961,10 @@ function App() {
                     const projectNameInput = newProjectSetupDialog.projectName.trim();
                     const cleanName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
                     const filename = `${cleanName}.json`;
+                    // Smart path preview: If selected folder matches project name, don't show redundant subfolder
+                    if (newProjectSetupDialog.locationPath === cleanName) {
+                      return `${newProjectSetupDialog.locationPath}/${filename}`;
+                    }
                     return `${newProjectSetupDialog.locationPath}/${cleanName}/${filename}`;
                   })()}
                 </div>
@@ -12848,9 +13190,30 @@ function App() {
         dimensions={boardDimensions}
         onSave={(dimensions) => {
           setBoardDimensions(dimensions);
-          localStorage.setItem('boardDimensions', JSON.stringify(dimensions));
+          // Note: Dimensions are saved in project file, not localStorage
         }}
         onClose={() => setShowBoardDimensionsDialog(false)}
+      />
+
+      <TransformImagesDialog
+        visible={transformImagesDialogVisible}
+        onClose={() => setTransformImagesDialogVisible(false)}
+        topImage={topImage}
+        bottomImage={bottomImage}
+        selectedImageForTransform={selectedImageForTransform}
+        setSelectedImageForTransform={setSelectedImageForTransform}
+        transformMode={transformMode}
+        setTransformMode={setTransformMode}
+        updateImageTransform={updateImageTransform}
+        resetImageTransform={resetImageTransform}
+        setCurrentTool={setCurrentTool}
+        isGrayscale={isGrayscale}
+        setIsGrayscale={setIsGrayscale}
+        isBlackAndWhiteEdges={isBlackAndWhiteEdges}
+        setIsBlackAndWhiteEdges={setIsBlackAndWhiteEdges}
+        isBlackAndWhiteInverted={isBlackAndWhiteInverted}
+        setIsBlackAndWhiteInverted={setIsBlackAndWhiteInverted}
+        areImagesLocked={areImagesLocked}
       />
 
       {/* Set Size Dialog */}

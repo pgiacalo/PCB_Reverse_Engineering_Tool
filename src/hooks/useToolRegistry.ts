@@ -22,51 +22,13 @@ export interface ToolDefinition {
   defaultLayer?: 'top' | 'bottom';
 }
 
-// Helper functions to load/save per-tool settings from localStorage
-// These are currently unused but may be needed if createToolRegistry is moved here
-// @ts-expect-error - intentionally unused for now
-const _loadToolSettings = (toolId: string, defaultColor: string, defaultSize: number): ToolSettings => {
-  const colorKey = `tool_${toolId}_color`;
-  const sizeKey = `tool_${toolId}_size`;
-  const savedColor = localStorage.getItem(colorKey);
-  const savedSize = localStorage.getItem(sizeKey);
-  return {
-    color: savedColor || defaultColor,
-    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
-  };
-};
-
-// @ts-expect-error - intentionally unused for now
-const _loadToolLayerSettings = (toolId: string, layer: Layer, defaultColor: string, defaultSize: number): ToolSettings => {
-  const colorKey = `tool_${toolId}_${layer}_color`;
-  const sizeKey = `tool_${toolId}_${layer}_size`;
-  const savedColor = localStorage.getItem(colorKey);
-  const savedSize = localStorage.getItem(sizeKey);
-  return {
-    color: savedColor || defaultColor,
-    size: savedSize ? parseInt(savedSize, 10) : defaultSize,
-  };
-};
-
-const saveToolSettings = (toolId: string, color: string, size: number) => {
-  const colorKey = `tool_${toolId}_color`;
-  const sizeKey = `tool_${toolId}_size`;
-  localStorage.setItem(colorKey, color);
-  localStorage.setItem(sizeKey, String(size));
-};
-
-// @ts-expect-error - intentionally unused for now
-const _saveToolLayerSettings = (toolId: string, layer: Layer, color: string, size: number) => {
-  const colorKey = `tool_${toolId}_${layer}_color`;
-  const sizeKey = `tool_${toolId}_${layer}_size`;
-  localStorage.setItem(colorKey, color);
-  localStorage.setItem(sizeKey, String(size));
-};
-
 /**
  * Custom hook for managing tool registry and tool state
  * Note: This hook requires the createToolRegistry function to be passed in
  * since it depends on constants that may not be available in this module
+ * 
+ * All tool settings are stored in memory only and saved/loaded from project files.
+ * No localStorage is used - every new project starts with default settings.
  */
 export function useToolRegistry(
   createToolRegistry: () => Map<string, ToolDefinition>,
@@ -127,6 +89,7 @@ export function useToolRegistry(
   }, [currentTool, drawingMode]);
 
   // Update tool registry when tool changes or settings change
+  // Tool settings are stored in memory only (no localStorage)
   useEffect(() => {
     setToolRegistry(prev => {
       const currentToolDef = getCurrentToolDef(prev);
@@ -134,11 +97,10 @@ export function useToolRegistry(
       const prevToolId = prevToolIdRef.current;
       const updated = new Map(prev);
       
-      // Save previous tool's settings to localStorage before switching
+      // Save previous tool's settings to the registry (in memory only)
       if (prevToolId && prevToolId !== currentToolId) {
         const prevToolDef = prev.get(prevToolId);
         if (prevToolDef) {
-          saveToolSettings(prevToolId, prevBrushColorRef.current, prevBrushSizeRef.current);
           updated.set(prevToolId, {
             ...prevToolDef,
             settings: { color: prevBrushColorRef.current, size: prevBrushSizeRef.current }

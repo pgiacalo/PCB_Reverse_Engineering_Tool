@@ -722,29 +722,8 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   );
                 })}
 
-              {/* Save Button */}
+              {/* Buttons - Close on left (standard color), Save on right (blue, primary action) */}
               <div style={{ marginTop: '20px', padding: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px', borderTop: '1px solid #ddd' }}>
-                <button
-                  onClick={handleSave}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '12px',
-                    backgroundColor: '#4CAF50',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#45a049';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#4CAF50';
-                  }}
-                >
-                  Save Notes
-                </button>
                 <button
                   onClick={onClose}
                   style={{
@@ -765,6 +744,27 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                   }}
                 >
                   Close
+                </button>
+                <button
+                  onClick={handleSave}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    backgroundColor: '#2196F3',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#1976D2';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#2196F3';
+                  }}
+                >
+                  Save
                 </button>
               </div>
             </>

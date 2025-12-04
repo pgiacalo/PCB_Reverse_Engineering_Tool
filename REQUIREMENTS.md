@@ -708,47 +708,59 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - **REQ-043**: Export final images with annotations
 - **REQ-044**: Auto-save functionality
 - **REQ-045**: Project file format (JSON-based)
+- **REQ-046**: Project state isolation - When creating a new project or opening an existing project, all previous project state shall be completely cleared to prevent state leakage between projects. This includes:
+  - Release of all browser file system permissions (directory handles)
+  - Clearing of project file paths, names, and directory references
+  - Clearing of all drawing data (strokes, components, power/ground symbols)
+  - Clearing of project notes
+  - Resetting all view, transform, and tool states to defaults
+  - Closing all open dialogs
+  - Resetting all lock and visibility states
+- **REQ-047**: Unsaved changes prompt - When the user attempts to create a new project (File -> New Project) or open an existing project (File -> Open Project) while there are unsaved changes, the application shall display a confirmation dialog asking the user whether to save the current project before proceeding. The dialog shall provide three options:
+  - "Yes" - Save the current project first, then proceed with the new/open operation
+  - "No" - Discard unsaved changes and proceed with the new/open operation
+  - "Cancel" - Abort the operation and return to the current project
 
 ## Non-Functional Requirements
 
 ### 12. Usability
-- **REQ-046**: Learning curve under 15 minutes for basic operations
-- **REQ-047**: Consistent UI behavior across all tools
-- **REQ-048**: Clear visual feedback for all user actions
+- **REQ-048**: Learning curve under 15 minutes for basic operations
+- **REQ-049**: Consistent UI behavior across all tools
+- **REQ-050**: Clear visual feedback for all user actions
 
 ### 13. Reliability
-- **REQ-049**: Graceful handling of corrupted or invalid image files
-- **REQ-050**: Error recovery for failed operations
-- **REQ-051**: Data integrity protection
+- **REQ-051**: Graceful handling of corrupted or invalid image files
+- **REQ-052**: Error recovery for failed operations
+- **REQ-053**: Data integrity protection
 
 ### 14. Security
-- **REQ-052**: Client-side processing (no server uploads required)
-- **REQ-053**: Secure file handling
-- **REQ-054**: No data transmission to external servers
+- **REQ-054**: Client-side processing (no server uploads required)
+- **REQ-055**: Secure file handling
+- **REQ-056**: No data transmission to external servers
 
 ## Future Enhancement Requirements
 
 ### 15. Advanced Features (Future Versions)
-- **REQ-055**: Component identification and labeling
-- **REQ-056**: Trace routing visualization
-- **REQ-057**: Measurement tools
-- **REQ-058**: Layer comparison tools
-- **REQ-059**: Export to CAD formats
+- **REQ-057**: Component identification and labeling
+- **REQ-058**: Trace routing visualization
+- **REQ-059**: Measurement tools
+- **REQ-060**: Layer comparison tools
+- **REQ-061**: Export to CAD formats
 
 ## Dependencies and Technologies
 
 ### 16. Core Technologies
-- **REQ-060**: React 18+ with TypeScript
-- **REQ-061**: Canvas API for image manipulation
-- **REQ-062**: Fabric.js or Konva.js for advanced graphics
-- **REQ-063**: Modern CSS for responsive design
-- **REQ-064**: Vite for build tooling
+- **REQ-062**: React 18+ with TypeScript
+- **REQ-063**: Canvas API for image manipulation
+- **REQ-064**: Fabric.js or Konva.js for advanced graphics
+- **REQ-065**: Modern CSS for responsive design
+- **REQ-066**: Vite for build tooling
 
 ### 17. External Libraries
-- **REQ-065**: React Colorful for color picker
-- **REQ-066**: Lucide React for icons
-- **REQ-067**: File API for image loading
-- **REQ-068**: Canvas 2D context for drawing operations
+- **REQ-066**: React Colorful for color picker
+- **REQ-067**: Lucide React for icons
+- **REQ-068**: File API for image loading
+- **REQ-069**: Canvas 2D context for drawing operations
 
 ---
 
