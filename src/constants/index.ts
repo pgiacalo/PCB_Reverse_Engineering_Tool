@@ -2,7 +2,7 @@
 // Application Constants
 // ============================================================================
 
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.3.0';
 
 // ============================================================================
 // Canvas and Drawing Constants

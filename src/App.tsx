@@ -17,6 +17,7 @@ import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
+import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { ComponentEditor } from './components/ComponentEditor';
 import {
@@ -942,6 +943,12 @@ function App() {
   const [notesDialogPosition, setNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingNotesDialog, setIsDraggingNotesDialog] = useState(false);
   const [notesDialogDragOffset, setNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // Project Notes
+  const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
+  const [projectNotesDialogVisible, setProjectNotesDialogVisible] = useState(false);
+  const [projectNotesDialogPosition, setProjectNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
+  const [projectNotesDialogDragOffset, setProjectNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Board dimensions for coordinate scaling
   const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(() => {
     const saved = localStorage.getItem('boardDimensions');
@@ -5536,6 +5543,28 @@ function App() {
       }
     }
     
+    // Project Notes Dialog: Open project notes / TODO list (L)
+    if (e.key === 'L' || e.key === 'l') {
+      if (!e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Ignore if user is typing in an input field, textarea, or contenteditable
+        const active = document.activeElement as HTMLElement | null;
+        const isEditing =
+          !!active &&
+          ((active.tagName === 'INPUT' && 
+            (active as HTMLInputElement).type !== 'range' &&
+            (active as HTMLInputElement).type !== 'checkbox' &&
+            (active as HTMLInputElement).type !== 'radio') ||
+           active.tagName === 'TEXTAREA' ||
+           active.isContentEditable);
+        if (isEditing) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        handleOpenProjectNotes();
+        return;
+      }
+    }
+    
     // Reset view and selection (O key)
     if (e.key === 'O' || e.key === 'o') {
       // Ignore if user is typing in an input field, textarea, or contenteditable
@@ -6972,6 +7001,66 @@ function App() {
     }
   }, [notesDialogVisible, notesDialogPosition]);
 
+  // Handle project notes dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingProjectNotesDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!projectNotesDialogDragOffset) return;
+      const newPosition = {
+        x: e.clientX - projectNotesDialogDragOffset.x,
+        y: e.clientY - projectNotesDialogDragOffset.y,
+      };
+      setProjectNotesDialogPosition(newPosition);
+      // Save position to localStorage
+      localStorage.setItem('projectNotesDialogPosition', JSON.stringify(newPosition));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingProjectNotesDialog(false);
+      setProjectNotesDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingProjectNotesDialog, projectNotesDialogDragOffset]);
+
+  // Initialize project notes dialog position when it opens (load from localStorage or default)
+  React.useEffect(() => {
+    if (projectNotesDialogVisible && projectNotesDialogPosition === null) {
+      // Try to load saved position from localStorage
+      const saved = localStorage.getItem('projectNotesDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setProjectNotesDialogPosition(savedPosition);
+        } catch {
+          // If parsing fails, use default position
+          setProjectNotesDialogPosition({
+            x: 100,
+            y: 100,
+          });
+        }
+      } else {
+        // No saved position, use default position
+        setProjectNotesDialogPosition({
+          x: 100,
+          y: 100,
+        });
+      }
+    }
+  }, [projectNotesDialogVisible, projectNotesDialogPosition]);
+
+  // Function to open project notes dialog
+  const handleOpenProjectNotes = useCallback(() => {
+    setProjectNotesDialogVisible(true);
+  }, []);
+
   // Initialize dialog position when it opens (load from localStorage or center of screen)
   React.useEffect(() => {
     if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
@@ -7881,11 +7970,12 @@ function App() {
         name: projectName,
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
+      projectNotes, // Save project notes (Name, Value pairs)
       savedCenterLocation, // Save the center location set by the Center tool
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, savedCenterLocation]);
+  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, savedCenterLocation]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -8423,6 +8513,7 @@ function App() {
       powersCount: powers.length,
       groundsCount: grounds.length,
       powerBusesCount: powerBuses.length,
+      projectNotesCount: projectNotes.length,
       areImagesLocked,
       areViasLocked,
       areTracesLocked,
@@ -8439,6 +8530,7 @@ function App() {
     powers,
     grounds,
     powerBuses,
+    projectNotes,
     topTraceColor,
     bottomTraceColor,
     topTraceSize,
@@ -8810,6 +8902,12 @@ function App() {
         setSavedCenterLocation(project.savedCenterLocation);
       } else {
         setSavedCenterLocation(null);
+      }
+      // Restore project notes
+      if (project.projectNotes && Array.isArray(project.projectNotes)) {
+        setProjectNotes(project.projectNotes);
+      } else {
+        setProjectNotes([]);
       }
       // Restore trace colors, sizes, and layer choice
       if (project.traceColors) {
@@ -9959,7 +10057,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Reverse Engineering Tool (v2.1)</h1>
+        <h1>🔧 PCB Reverse Engineering Tool (v2.3)</h1>
       </header>
 
       {/* Application menu bar */}
@@ -10085,6 +10183,7 @@ function App() {
         saveDefaultSize={saveDefaultSize}
         saveDefaultColor={saveDefaultColor}
         menuBarRef={menuBarRef}
+        onOpenProjectNotes={handleOpenProjectNotes}
       />
 
       <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
@@ -12217,6 +12316,35 @@ function App() {
               y: e.clientY - notesDialogPosition.y,
             });
             setIsDraggingNotesDialog(true);
+            e.preventDefault();
+          }
+        }}
+      />
+
+      {/* Project Notes Dialog */}
+      <ProjectNotesDialog
+        visible={projectNotesDialogVisible}
+        projectNotes={projectNotes}
+        setProjectNotes={setProjectNotes}
+        onClose={() => {
+          setProjectNotesDialogVisible(false);
+          // Don't reset position - keep it for next time
+        }}
+        position={projectNotesDialogPosition}
+        isDragging={isDraggingProjectNotesDialog}
+        onDragStart={(e) => {
+          if (projectNotesDialogPosition) {
+            setProjectNotesDialogDragOffset({
+              x: e.clientX - projectNotesDialogPosition.x,
+              y: e.clientY - projectNotesDialogPosition.y,
+            });
+            setIsDraggingProjectNotesDialog(true);
+            e.preventDefault();
+          } else {
+            // Initialize position on first drag
+            setProjectNotesDialogPosition({ x: e.clientX - 300, y: e.clientY - 200 });
+            setProjectNotesDialogDragOffset({ x: 300, y: 200 });
+            setIsDraggingProjectNotesDialog(true);
             e.preventDefault();
           }
         }}
