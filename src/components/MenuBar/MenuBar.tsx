@@ -167,6 +167,8 @@ export interface MenuBarProps {
   
   // Menu bar ref
   menuBarRef: React.RefObject<HTMLDivElement | null>;
+  // Project Notes Dialog
+  onOpenProjectNotes: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -291,6 +293,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   saveDefaultSize,
   saveDefaultColor,
   menuBarRef,
+  onOpenProjectNotes,
 }) => {
   // Track which image submenu is open
   const [openImageSubmenu, setOpenImageSubmenu] = React.useState<'top' | 'bottom' | 'both' | null>(null);
@@ -1291,6 +1294,25 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Set Tool Color…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button
+              onClick={() => {
+                onOpenProjectNotes();
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Project Notes…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
@@ -1570,6 +1592,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li>Output schematics (perhaps as KiCad files)</li>
                   <li>Multiple shortcuts to different views</li>
                   <li>Dynamic layers</li>
+                  <li>Add a checklist tool</li>
                 </ul>
               </div>
             </div>
