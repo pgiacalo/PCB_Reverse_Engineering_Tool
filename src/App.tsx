@@ -103,6 +103,8 @@ function App() {
     setTransparency,
     isTransparencyCycling,
     setIsTransparencyCycling,
+    transparencyCycleSpeed,
+    setTransparencyCycleSpeed,
     isGrayscale,
     setIsGrayscale,
     isBlackAndWhiteEdges,
@@ -6542,6 +6544,7 @@ function App() {
     setIsBlackAndWhiteInverted(false);
     setTransparency(50);
     setIsTransparencyCycling(false);
+    setTransparencyCycleSpeed(2000); // Reset to default 2 seconds
     
     // === STEP 9: Reset lock states ===
     setAreImagesLocked(false);
@@ -6652,7 +6655,7 @@ function App() {
     // Transform setters
     setSelectedImageForTransform, setIsTransforming, setTransformStartPos, setTransformMode,
     // Image filter setters
-    setIsGrayscale, setIsBlackAndWhiteEdges, setIsBlackAndWhiteInverted, setTransparency, setIsTransparencyCycling,
+    setIsGrayscale, setIsBlackAndWhiteEdges, setIsBlackAndWhiteInverted, setTransparency, setIsTransparencyCycling, setTransparencyCycleSpeed,
     // Lock setters
     setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTestPointsLocked, setAreTracesLocked,
     setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked,
@@ -7404,16 +7407,22 @@ function App() {
     }
   }, []);
 
-  // Transparency auto-cycle (0% → 100% → 0%) with 2s period while checked
+  // Transparency auto-cycle (0% → 100% → 0%) with configurable period while checked
+  // We need a ref to track the current speed so the animation loop can access it
+  const transparencyCycleSpeedRef = React.useRef(transparencyCycleSpeed);
+  React.useEffect(() => {
+    transparencyCycleSpeedRef.current = transparencyCycleSpeed;
+  }, [transparencyCycleSpeed]);
+
   React.useEffect(() => {
     if (isTransparencyCycling) {
       transparencyCycleStartRef.current = performance.now();
       setTransparency(0);
       const tick = (now: number) => {
         const start = transparencyCycleStartRef.current || now;
-        const periodMs = 2000;
+        const periodMs = transparencyCycleSpeedRef.current; // Use ref for current speed
         const phase = ((now - start) % periodMs) / periodMs; // 0..1
-        const tri = 1 - Math.abs(1 - 2 * phase); // 0→1→0 over 2s
+        const tri = 1 - Math.abs(1 - 2 * phase); // 0→1→0 over period
         setTransparency(Math.round(tri * 100));
         transparencyCycleRafRef.current = requestAnimationFrame(tick);
       };
@@ -11789,6 +11798,24 @@ function App() {
                 className="slider"
                 style={{ width: '100%', marginTop: 3 }}
               />
+              {/* Cycle Speed slider - only visible when Cycle is enabled */}
+              {isTransparencyCycling && (
+                <div style={{ marginTop: 6 }}>
+                  <label style={{ fontSize: 10, color: '#333' }}>
+                    Cycle Speed: {(transparencyCycleSpeed / 1000).toFixed(1)}s
+                  </label>
+                  <input
+                    type="range"
+                    min="500"
+                    max="8000"
+                    step="100"
+                    value={transparencyCycleSpeed}
+                    onChange={(e) => setTransparencyCycleSpeed(Number(e.target.value))}
+                    className="slider"
+                    style={{ width: '100%', marginTop: 3 }}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

@@ -33,6 +33,7 @@ export function useImage() {
   const [currentView, setCurrentView] = useState<ViewMode>('overlay');
   const [transparency, setTransparency] = useState(50);
   const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
+  const [transparencyCycleSpeed, setTransparencyCycleSpeed] = useState(2000); // Cycle period in ms (500-8000)
   const [isGrayscale, setIsGrayscale] = useState(false);
   const [isBlackAndWhiteEdges, setIsBlackAndWhiteEdges] = useState(false);
   const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
@@ -62,6 +63,8 @@ export function useImage() {
     setTransparency,
     isTransparencyCycling,
     setIsTransparencyCycling,
+    transparencyCycleSpeed,
+    setTransparencyCycleSpeed,
     isGrayscale,
     setIsGrayscale,
     isBlackAndWhiteEdges,
