@@ -10847,57 +10847,28 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('ground').size}</span>
               </div>
             </button>
-            {/* Center tool */}
+            {/* Empty space separator after Ground tool (height = 2 toolbar boxes + gap) */}
+            <div style={{ height: 72 }} />
+            {/* Move tool (H) - moved above Set Home */}
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('center'); }} 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
               disabled={isReadOnlyMode}
-              title="Set Home View (X)" 
+              title="Move (H)" 
               style={{ 
                 width: '100%', 
                 height: 32, 
                 display: 'flex', 
                 alignItems: 'center',
-                gap: 3,
-                padding: '4px 3px',
+                gap: 6,
+                padding: '4px 6px',
                 borderRadius: 6, 
-                border: currentTool === 'center' ? '2px solid #000' : '1px solid #ddd', 
-                background: currentTool === 'center' ? '#e6f0ff' : '#fff', 
+                border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
                 color: isReadOnlyMode ? '#999' : '#222',
                 cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Bold X crosshairs icon */}
-              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
-                <line x1="12" y1="2" x2="12" y2="10" stroke="#111" strokeWidth="3" strokeLinecap="round" />
-                <line x1="12" y1="14" x2="12" y2="22" stroke="#111" strokeWidth="3" strokeLinecap="round" />
-                <line x1="2" y1="12" x2="10" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
-                <line x1="14" y1="12" x2="22" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>X</span>
-                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
-              </div>
-            </button>
-              <button 
-                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
-                disabled={isReadOnlyMode}
-                title="Move (H)" 
-                style={{ 
-                  width: '100%', 
-                  height: 32, 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '4px 6px',
-                  borderRadius: 6, 
-                  border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
-                  background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
-                  color: isReadOnlyMode ? '#999' : '#222',
-                  cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-                  opacity: isReadOnlyMode ? 0.5 : 1
-                }}
-              >
               {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -10911,6 +10882,7 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
+            {/* Zoom tool (Z) - moved above Set Home */}
             <button 
               onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} 
               title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} 
@@ -10946,7 +10918,39 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
-            {/* Erase tool - moved below Zoom tool */}
+            {/* Set Home tool (X) */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) setCurrentTool('center'); }} 
+              disabled={isReadOnlyMode}
+              title="Set Home View (X)" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
+                borderRadius: 6, 
+                border: currentTool === 'center' ? '2px solid #000' : '1px solid #ddd', 
+                background: currentTool === 'center' ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              {/* Bold X crosshairs icon */}
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+                <line x1="12" y1="2" x2="12" y2="10" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="12" y1="14" x2="12" y2="22" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="2" y1="12" x2="10" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+                <line x1="14" y1="12" x2="22" y2="12" stroke="#111" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>X</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
+              </div>
+            </button>
+            {/* Erase tool - HIDDEN (code kept for potential future use)
             <button 
               onClick={() => { if (!isReadOnlyMode) setCurrentTool('erase'); }} 
               disabled={isReadOnlyMode}
@@ -10966,7 +10970,6 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Tilted pink eraser */}
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <g transform="rotate(-35 12 12)">
                   <rect x="6" y="8" width="12" height="8" rx="1.5" fill="#f5a3b3" stroke="#111" strokeWidth="1.5" />
@@ -10978,7 +10981,8 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolRegistry.get('erase')?.settings.size ?? 18}</span>
               </div>
             </button>
-            {/* Color picker moved just below magnify */}
+            */}
+            {/* Color picker */}
             <div style={{ position: 'relative' }}>
               <button 
                 onClick={() => { if (!isReadOnlyMode) setShowColorPicker(prev => !prev); }} 
