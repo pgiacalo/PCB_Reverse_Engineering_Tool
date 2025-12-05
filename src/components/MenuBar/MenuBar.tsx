@@ -1184,6 +1184,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Image alignment and transformation</li>
                       <li>Transform modes: nudge, scale, rotate, slant, keystone</li>
                       <li>Horizontal and vertical flip controls</li>
+                      <li>Brightness and contrast controls</li>
                       <li>Grayscale and edge detection modes</li>
                       <li>Board dimensions configuration</li>
                     </ul>
