@@ -22,10 +22,6 @@ export interface TransformImagesDialogProps {
   // Image filters
   isGrayscale: boolean;
   setIsGrayscale: React.Dispatch<React.SetStateAction<boolean>>;
-  isBlackAndWhiteEdges: boolean;
-  setIsBlackAndWhiteEdges: React.Dispatch<React.SetStateAction<boolean>>;
-  isBlackAndWhiteInverted: boolean;
-  setIsBlackAndWhiteInverted: React.Dispatch<React.SetStateAction<boolean>>;
   
   // Lock state
   areImagesLocked: boolean;
@@ -45,10 +41,6 @@ export const TransformImagesDialog: React.FC<TransformImagesDialogProps> = ({
   setCurrentTool,
   isGrayscale,
   setIsGrayscale,
-  isBlackAndWhiteEdges,
-  setIsBlackAndWhiteEdges,
-  isBlackAndWhiteInverted,
-  setIsBlackAndWhiteInverted,
   areImagesLocked,
 }) => {
   // Dialog position state - start on the right side of the screen
@@ -205,28 +197,7 @@ export const TransformImagesDialog: React.FC<TransformImagesDialogProps> = ({
       setSelectedImageForTransform(effectiveSelection);
     }
     setCurrentTool('transform');
-    if (isGrayscale || isBlackAndWhiteEdges) {
-      setIsGrayscale(false);
-      setIsBlackAndWhiteEdges(false);
-      setIsBlackAndWhiteInverted(false);
-    } else {
-      setIsGrayscale(true);
-    }
-  };
-
-  // Handle black & white edges toggle
-  const handleBlackWhiteEdgesToggle = () => {
-    if (isDisabled) return;
-    if (effectiveSelection) {
-      setSelectedImageForTransform(effectiveSelection);
-    }
-    setCurrentTool('transform');
-    if (!isBlackAndWhiteEdges) {
-      setIsBlackAndWhiteEdges(true);
-      setIsBlackAndWhiteInverted(false);
-    } else {
-      setIsBlackAndWhiteInverted(prev => !prev);
-    }
+    setIsGrayscale(!isGrayscale);
   };
 
   // Handle reset transform
@@ -476,20 +447,11 @@ export const TransformImagesDialog: React.FC<TransformImagesDialogProps> = ({
           <button
             onClick={handleGrayscaleToggle}
             disabled={isDisabled}
-            style={buttonStyle(isDisabled, isGrayscale && !isBlackAndWhiteEdges)}
-            onMouseEnter={(e) => !isDisabled && !(isGrayscale && !isBlackAndWhiteEdges) && (e.currentTarget.style.background = '#3a3a42')}
-            onMouseLeave={(e) => !(isGrayscale && !isBlackAndWhiteEdges) && (e.currentTarget.style.background = 'transparent')}
+            style={buttonStyle(isDisabled, isGrayscale)}
+            onMouseEnter={(e) => !isDisabled && !isGrayscale && (e.currentTarget.style.background = '#3a3a42')}
+            onMouseLeave={(e) => !isGrayscale && (e.currentTarget.style.background = 'transparent')}
           >
-            {isGrayscale && !isBlackAndWhiteEdges ? '✓ ' : ''}Grayscale Mode
-          </button>
-          <button
-            onClick={handleBlackWhiteEdgesToggle}
-            disabled={isDisabled}
-            style={buttonStyle(isDisabled, isBlackAndWhiteEdges)}
-            onMouseEnter={(e) => !isDisabled && !isBlackAndWhiteEdges && (e.currentTarget.style.background = '#3a3a42')}
-            onMouseLeave={(e) => !isBlackAndWhiteEdges && (e.currentTarget.style.background = 'transparent')}
-          >
-            {isBlackAndWhiteEdges ? (isBlackAndWhiteInverted ? '✓ Inverted ' : '✓ ') : ''}Black & White Edges
+            {isGrayscale ? '✓ ' : ''}Grayscale Mode
           </button>
         </div>
 

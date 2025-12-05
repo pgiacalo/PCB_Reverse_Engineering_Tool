@@ -35,8 +35,6 @@ export function useImage() {
   const [isTransparencyCycling, setIsTransparencyCycling] = useState(false);
   const [transparencyCycleSpeed, setTransparencyCycleSpeed] = useState(2000); // Cycle period in ms (500-8000)
   const [isGrayscale, setIsGrayscale] = useState(false);
-  const [isBlackAndWhiteEdges, setIsBlackAndWhiteEdges] = useState(false);
-  const [isBlackAndWhiteInverted, setIsBlackAndWhiteInverted] = useState(false);
 
   const loadTopImage = useCallback((image: PCBImage) => {
     setTopImage(image);
@@ -67,10 +65,6 @@ export function useImage() {
     setTransparencyCycleSpeed,
     isGrayscale,
     setIsGrayscale,
-    isBlackAndWhiteEdges,
-    setIsBlackAndWhiteEdges,
-    isBlackAndWhiteInverted,
-    setIsBlackAndWhiteInverted,
     
     // Actions
     loadTopImage,

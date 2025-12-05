@@ -107,10 +107,6 @@ function App() {
     setTransparencyCycleSpeed,
     isGrayscale,
     setIsGrayscale,
-    isBlackAndWhiteEdges,
-    setIsBlackAndWhiteEdges,
-    isBlackAndWhiteInverted,
-    setIsBlackAndWhiteInverted,
   } = image;
   
   const [currentTool, setCurrentTool] = useState<Tool>('none');
@@ -3864,75 +3860,6 @@ function App() {
     ctx.clip();
     ctx.translate(CONTENT_BORDER, CONTENT_BORDER);
 
-    // Helper to create an edge-detected (black & white) canvas from a CanvasImageSource
-    const createEdgeCanvas = (source: CanvasImageSource, invert: boolean): HTMLCanvasElement => {
-      const w = (source as any).width as number;
-      const h = (source as any).height as number;
-      const offscreen = document.createElement('canvas');
-      offscreen.width = w;
-      offscreen.height = h;
-      const octx = offscreen.getContext('2d');
-      if (!octx) return offscreen;
-      octx.drawImage(source, 0, 0, w, h);
-      const srcData = octx.getImageData(0, 0, w, h);
-      const src = srcData.data;
-
-      // Convert to grayscale luminance
-      const gray = new Uint8ClampedArray(w * h);
-      for (let i = 0; i < w * h; i++) {
-        const r = src[i * 4 + 0];
-        const g = src[i * 4 + 1];
-        const b = src[i * 4 + 2];
-        // luminance (rounded)
-        gray[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-      }
-
-      const gxKernel = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
-      const gyKernel = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
-      const mag = new Float32Array(w * h);
-
-      // Convolution (Sobel)
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          let gx = 0;
-          let gy = 0;
-          let k = 0;
-          for (let ky = -1; ky <= 1; ky++) {
-            for (let kx = -1; kx <= 1; kx++) {
-              const ix = x + kx;
-              const iy = y + ky;
-              const val = gray[iy * w + ix];
-              gx += val * gxKernel[k];
-              gy += val * gyKernel[k];
-              k++;
-            }
-          }
-          const m = Math.sqrt(gx * gx + gy * gy);
-          mag[y * w + x] = m;
-        }
-      }
-
-      // Normalize and threshold
-      let maxVal = 0;
-      for (let i = 0; i < mag.length; i++) {
-        if (mag[i] > maxVal) maxVal = mag[i];
-      }
-      const outData = octx.createImageData(w, h);
-      const out = outData.data;
-      const threshold = 0.20; // keep stronger edges (20% of max)
-      for (let i = 0; i < w * h; i++) {
-        const normalized = maxVal > 0 ? mag[i] / maxVal : 0;
-        const edge = normalized >= threshold ? 255 : 0; // white edges on black background
-        const value = invert ? 255 - edge : edge;
-        out[i * 4 + 0] = value;
-        out[i * 4 + 1] = value;
-        out[i * 4 + 2] = value;
-        out[i * 4 + 3] = 255;
-      }
-      octx.putImageData(outData, 0, 0);
-      return offscreen;
-    };
-
     // Draw with perspective-like keystone using slice warping via offscreen canvases
     const drawImageWithKeystone = (
       ctxTarget: CanvasRenderingContext2D,
@@ -4019,8 +3946,8 @@ function App() {
       if (topImage.contrast !== undefined && topImage.contrast !== 100) {
         filters.push(`contrast(${topImage.contrast}%)`);
       }
-      // Apply grayscale filter if enabled and not in edge mode
-      if (isGrayscale && !isBlackAndWhiteEdges) {
+      // Apply grayscale filter if enabled
+      if (isGrayscale) {
         filters.push('grayscale(100%)');
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
@@ -4038,7 +3965,7 @@ function App() {
       ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
       const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
       const scaledHeight = bmp.height * 1;
-      const sourceToDraw: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+      const sourceToDraw: CanvasImageSource = bmp;
       if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
         drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
       } else {
@@ -4059,8 +3986,8 @@ function App() {
       if (bottomImage.contrast !== undefined && bottomImage.contrast !== 100) {
         filters.push(`contrast(${bottomImage.contrast}%)`);
       }
-      // Apply grayscale filter if enabled and not in edge mode
-      if (isGrayscale && !isBlackAndWhiteEdges) {
+      // Apply grayscale filter if enabled
+      if (isGrayscale) {
         filters.push('grayscale(100%)');
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
@@ -4078,7 +4005,7 @@ function App() {
       ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
       const scaledWidth = bmp.width * 1;
       const scaledHeight = bmp.height * 1;
-      const sourceToDrawB: CanvasImageSource = isBlackAndWhiteEdges ? createEdgeCanvas(bmp, isBlackAndWhiteInverted) : bmp;
+      const sourceToDrawB: CanvasImageSource = bmp;
       if ((bottomImage.keystoneV && Math.abs(bottomImage.keystoneV) > 1e-6) || (bottomImage.keystoneH && Math.abs(bottomImage.keystoneH) > 1e-6)) {
         drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight);
       } else {
@@ -4413,7 +4340,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -4931,8 +4858,6 @@ function App() {
     });
     // Also restore color mode (global)
     setIsGrayscale(false);
-    setIsBlackAndWhiteEdges(false);
-    setIsBlackAndWhiteInverted(false);
   }, [updateImageTransform, selectedImageForTransform]);
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
@@ -6614,8 +6539,6 @@ function App() {
     
     // === STEP 8: Reset image filters ===
     setIsGrayscale(false);
-    setIsBlackAndWhiteEdges(false);
-    setIsBlackAndWhiteInverted(false);
     setTransparency(50);
     setIsTransparencyCycling(false);
     setTransparencyCycleSpeed(2000); // Reset to default 2 seconds
@@ -6730,7 +6653,7 @@ function App() {
     // Transform setters
     setSelectedImageForTransform, setIsTransforming, setTransformStartPos, setTransformMode,
     // Image filter setters
-    setIsGrayscale, setIsBlackAndWhiteEdges, setIsBlackAndWhiteInverted, setTransparency, setIsTransparencyCycling, setTransparencyCycleSpeed,
+    setIsGrayscale, setTransparency, setIsTransparencyCycling, setTransparencyCycleSpeed,
     // Lock setters
     setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTestPointsLocked, setAreTracesLocked,
     setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked,
@@ -13208,10 +13131,6 @@ function App() {
         setCurrentTool={setCurrentTool}
         isGrayscale={isGrayscale}
         setIsGrayscale={setIsGrayscale}
-        isBlackAndWhiteEdges={isBlackAndWhiteEdges}
-        setIsBlackAndWhiteEdges={setIsBlackAndWhiteEdges}
-        isBlackAndWhiteInverted={isBlackAndWhiteInverted}
-        setIsBlackAndWhiteInverted={setIsBlackAndWhiteInverted}
         areImagesLocked={areImagesLocked}
       />
 
