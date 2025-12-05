@@ -1122,7 +1122,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   A specialized tool useful for both reverse engineering and troubleshooting electronics by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                  This tool can also be used to assist in troubleshooting electronics by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
+                  This tool can assist in troubleshooting by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
                 </p>
               </div>
 
