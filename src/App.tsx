@@ -8857,7 +8857,9 @@ function App() {
     const w = window as any;
     if (typeof w.showDirectoryPicker === 'function') {
       try {
-        const locationHandle = await w.showDirectoryPicker();
+        // Request readwrite permission upfront to avoid a second permission dialog
+        // when creating the project file
+        const locationHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
         // Try to get a display name for the path (browser limitation - we can't get full path)
         // Store the handle and update the dialog
         setNewProjectSetupDialog(prev => ({
