@@ -21,6 +21,13 @@ import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesD
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
 import { ComponentEditor } from './components/ComponentEditor';
+import { PowerBusManagerDialog } from './components/PowerBusManagerDialog';
+import { GroundBusManagerDialog } from './components/GroundBusManagerDialog';
+import { DesignatorManagerDialog } from './components/DesignatorManagerDialog';
+import { ConfirmationDialog } from './components/ConfirmationDialog';
+import { SetSizeDialog } from './components/SetSizeDialog';
+import { AutoSaveDialog } from './components/AutoSaveDialog';
+import { AutoSavePromptDialog } from './components/AutoSavePromptDialog';
 import {
   useDrawing,
   useSelection,
@@ -892,7 +899,6 @@ function App() {
   const [hoverTestPoint, setHoverTestPoint] = useState<{ stroke: DrawingStroke; x: number; y: number } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
-  const setSizeInputRef = useRef<HTMLInputElement>(null);
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
   const openProjectYesButtonRef = useRef<HTMLButtonElement>(null);
   const newProjectNameInputRef = useRef<HTMLInputElement>(null);
@@ -12019,352 +12025,36 @@ function App() {
       </div>
 
       {/* Power Bus Manager Dialog */}
-      {showPowerBusManager && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px', zIndex: 1000, minWidth: '280px', maxWidth: '320px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Power Buses</h2>
-            <button onClick={() => setShowPowerBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-          </div>
-          <div style={{ marginBottom: '12px' }}>
-            {(() => {
-              // Separate buses into existing (sorted) and editing (at bottom)
-              const existingBuses = powerBuses.filter(b => b.id !== editingPowerBusId);
-              const editingBus = powerBuses.find(b => b.id === editingPowerBusId);
-              
-              // Sort existing buses
-              const sortedExisting = [...existingBuses].sort((a, b) => {
-              // Parse voltage strings to extract numeric values (same logic as Power Bus Selector)
-              const parseVoltage = (voltage: string): { absValue: number; isNegative: boolean; original: string } => {
-                const match = voltage.match(/([+-]?)(\d+\.?\d*)/);
-                if (match) {
-                  const sign = match[1] || '+';
-                  const numValue = parseFloat(match[2]);
-                  const absValue = Math.abs(numValue);
-                  const isNegative = sign === '-';
-                  return { absValue, isNegative, original: voltage };
-                }
-                return { absValue: Infinity, isNegative: false, original: voltage };
-              };
-              
-              const aParsed = parseVoltage(a.voltage);
-              const bParsed = parseVoltage(b.voltage);
-              
-              if (aParsed.absValue !== bParsed.absValue) {
-                return aParsed.absValue - bParsed.absValue;
-              }
-              
-              if (aParsed.isNegative !== bParsed.isNegative) {
-                return aParsed.isNegative ? -1 : 1;
-              }
-              
-              return 0;
-              });
-              
-              // Combine: sorted existing buses first, then editing bus at bottom
-              const allBuses = editingBus ? [...sortedExisting, editingBus] : sortedExisting;
-              
-              return allBuses.map((bus) => {
-              // Find the original index for state updates
-              const originalIndex = powerBuses.findIndex(b => b.id === bus.id);
-              // Check for duplicate names within Power Buses only (excluding current bus)
-              const nameIsDuplicate = powerBuses.some(pb => pb.name === bus.name && pb.id !== bus.id);
-              // Check for duplicate values within Power Buses only (excluding current bus)
-              const valueIsDuplicate = powerBuses.some(pb => pb.voltage === bus.voltage && pb.id !== bus.id);
-              return (
-              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Name</div>
-                  <input
-                    type="text"
-                    value={bus.name}
-                    onChange={(e) => {
-                      const updated = [...powerBuses];
-                      updated[originalIndex] = { ...bus, name: e.target.value };
-                      setPowerBuses(updated);
-                    }}
-                    onFocus={() => {
-                      // Set as editing when user focuses on input
-                      setEditingPowerBusId(bus.id);
-                    }}
-                      placeholder="e.g., +3V3, -3V3"
-                      style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
-                  />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Value</div>
-                  <input
-                    type="text"
-                      inputMode="decimal"
-                    value={bus.voltage}
-                    onChange={(e) => {
-                        const inputValue = e.target.value;
-                        // Allow empty, numbers, decimal point, and + or - at start only
-                        if (inputValue === '' || /^[+-]?\d*\.?\d*$/.test(inputValue)) {
-                      const updated = [...powerBuses];
-                          updated[originalIndex] = { ...bus, voltage: inputValue };
-                      setPowerBuses(updated);
-                        }
-                      }}
-                      onBlur={(e) => {
-                        // Validate and format on blur: ensure it's a valid float
-                        const inputValue = e.target.value.trim();
-                        if (inputValue === '') {
-                          // Clear editing state when user finishes editing (blur)
-                          if (editingPowerBusId === bus.id) {
-                            setEditingPowerBusId(null);
-                          }
-                          return; // Allow empty
-                        }
-                        // Try to parse as float
-                        const numericValue = parseFloat(inputValue);
-                        if (!isNaN(numericValue)) {
-                          // Format with sign and up to 1 decimal place
-                          const sign = numericValue >= 0 ? '+' : '-';
-                          const absValue = Math.abs(numericValue);
-                          const formatted = `${sign}${absValue.toFixed(1).replace(/\.?0+$/, '')}`;
-                          const updated = [...powerBuses];
-                          updated[originalIndex] = { ...bus, voltage: formatted };
-                          setPowerBuses(updated);
-                          // Clear editing state when user finishes editing (blur)
-                          if (editingPowerBusId === bus.id) {
-                            setEditingPowerBusId(null);
-                          }
-                        }
-                      }}
-                      onFocus={() => {
-                        // Set as editing when user focuses on input
-                        setEditingPowerBusId(bus.id);
-                      }}
-                      placeholder="e.g., +3.3, -3.3"
-                      style={{ flex: 1, padding: '2px 4px', border: valueIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
-                    />
-                  </div>
-                </div>
-                <input
-                  type="color"
-                  value={bus.color}
-                  onChange={(e) => {
-                    const updated = [...powerBuses];
-                    updated[originalIndex] = { ...bus, color: e.target.value };
-                    setPowerBuses(updated);
-                  }}
-                  style={{ width: '28px', height: '28px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
-                />
-                <button
-                  onClick={() => {
-                    // Don't allow deleting if any power nodes use this bus
-                    const nodesUsingBus = powers.filter(p => p.powerBusId === bus.id);
-                    if (nodesUsingBus.length > 0) {
-                      alert(`Cannot delete: ${nodesUsingBus.length} power node(s) are using this bus. Remove or reassign them first.`);
-                      return;
-                    }
-                    setPowerBuses(prev => prev.filter(b => b.id !== bus.id));
-                  }}
-                  style={{ padding: '3px 6px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
-                >
-                  Delete
-                </button>
-              </div>
-            );
-            });
-            })()}
-          </div>
-          <button
-            onClick={() => {
-              const newBus: PowerBus = {
-                id: `powerbus-${Date.now()}-${Math.random()}`,
-                name: 'New Power Bus',
-                voltage: '+0.0',
-                color: '#ff0000',
-              };
-              setPowerBuses(prev => [...prev, newBus]);
-              setEditingPowerBusId(newBus.id);
-            }}
-            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
-          >
-            + Add Power Bus
-          </button>
-          <button
-            onClick={() => setShowPowerBusManager(false)}
-            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px' }}
-          >
-            Close
-          </button>
-        </div>
-      )}
+      <PowerBusManagerDialog
+        visible={showPowerBusManager}
+        onClose={() => setShowPowerBusManager(false)}
+        powerBuses={powerBuses}
+        setPowerBuses={setPowerBuses}
+        editingPowerBusId={editingPowerBusId}
+        setEditingPowerBusId={setEditingPowerBusId}
+        powers={powers}
+      />
 
       {/* Ground Bus Manager Dialog */}
-      {showGroundBusManager && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px', zIndex: 1000, minWidth: '280px', maxWidth: '320px', maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Ground Buses</h2>
-            <button onClick={() => setShowGroundBusManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-          </div>
-          <div style={{ marginBottom: '12px' }}>
-            {(() => {
-              // Separate buses into existing (sorted) and editing (at bottom)
-              const existingBuses = groundBuses.filter(b => b.id !== editingGroundBusId);
-              const editingBus = groundBuses.find(b => b.id === editingGroundBusId);
-              
-              // Sort existing buses
-              const sortedExisting = [...existingBuses].sort((a, b) => a.name.localeCompare(b.name));
-              
-              // Combine: sorted existing buses first, then editing bus at bottom
-              const allBuses = editingBus ? [...sortedExisting, editingBus] : sortedExisting;
-              
-              return allBuses.map((bus) => {
-              // Find the original index for state updates
-              const originalIndex = groundBuses.findIndex(b => b.id === bus.id);
-              // Check for duplicate names within Ground Buses only (excluding current bus)
-              const nameIsDuplicate = groundBuses.some(gb => gb.name === bus.name && gb.id !== bus.id);
-              return (
-              <div key={bus.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px', marginBottom: '4px', background: '#f9f9f9', borderRadius: 4, border: '1px solid #e0e0e0' }}>
-                <div style={{ width: 16, height: 16, borderRadius: '50%', background: bus.color, border: '1px solid #ccc', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ fontSize: '10px', color: '#666', width: '40px', flexShrink: 0 }}>Name</div>
-                    <input
-                      type="text"
-                      value={bus.name}
-                      onChange={(e) => {
-                        const updated = [...groundBuses];
-                        updated[originalIndex] = { ...bus, name: e.target.value };
-                        setGroundBuses(updated);
-                      }}
-                      onFocus={() => {
-                        // Set as editing when user focuses on input
-                        setEditingGroundBusId(bus.id);
-                      }}
-                      onBlur={() => {
-                        // Clear editing state when user finishes editing (blur)
-                        if (editingGroundBusId === bus.id) {
-                          setEditingGroundBusId(null);
-                        }
-                      }}
-                      placeholder="e.g., GND, Earth"
-                      style={{ flex: 1, padding: '2px 4px', border: nameIsDuplicate ? '1px solid #ff0000' : '1px solid #ccc', borderRadius: 3, fontSize: '11px' }}
-                    />
-                  </div>
-                </div>
-                <input
-                  type="color"
-                  value={bus.color}
-                  onChange={(e) => {
-                    const updated = [...groundBuses];
-                    updated[originalIndex] = { ...bus, color: e.target.value };
-                    setGroundBuses(updated);
-                  }}
-                  style={{ width: '28px', height: '28px', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', flexShrink: 0 }}
-                />
-                <button
-                  onClick={() => {
-                    // Don't allow deleting if any ground nodes use this bus
-                    const nodesUsingBus = grounds.filter(g => g.groundBusId === bus.id);
-                    if (nodesUsingBus.length > 0) {
-                      alert(`Cannot delete: ${nodesUsingBus.length} ground node(s) are using this bus. Remove or reassign them first.`);
-                      return;
-                    }
-                    setGroundBuses(prev => prev.filter(b => b.id !== bus.id));
-                  }}
-                  style={{ padding: '3px 6px', background: '#e0e0e0', color: '#333', border: '1px solid #ccc', borderRadius: 3, cursor: 'pointer', fontSize: '10px', flexShrink: 0 }}
-                >
-                  Delete
-                </button>
-              </div>
-            );
-            });
-            })()}
-          </div>
-          <button
-            onClick={() => {
-              const newBus: GroundBus = {
-                id: `groundbus-${Date.now()}-${Math.random()}`,
-                name: 'New Ground Bus',
-                color: '#000000',
-              };
-              setGroundBuses(prev => [...prev, newBus]);
-              setEditingGroundBusId(newBus.id);
-            }}
-            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px', marginBottom: '6px' }}
-          >
-            + Add Ground Bus
-          </button>
-          <button
-            onClick={() => setShowGroundBusManager(false)}
-            style={{ width: '100%', padding: '4px 8px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '11px' }}
-          >
-            Close
-          </button>
-        </div>
-      )}
+      <GroundBusManagerDialog
+        visible={showGroundBusManager}
+        onClose={() => setShowGroundBusManager(false)}
+        groundBuses={groundBuses}
+        setGroundBuses={setGroundBuses}
+        editingGroundBusId={editingGroundBusId}
+        setEditingGroundBusId={setEditingGroundBusId}
+        grounds={grounds}
+      />
 
       {/* Designator Manager Dialog */}
-      {showDesignatorManager && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '16px', zIndex: 1000, minWidth: '300px', maxWidth: '400px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#222' }}>Manage Designators</h2>
-            <button onClick={() => setShowDesignatorManager(false)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#666', padding: 0, width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-          </div>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#333', marginBottom: '12px' }}>
-              <input
-                type="checkbox"
-                checked={autoAssignDesignators}
-                onChange={(e) => {
-                  const newValue = e.target.checked;
-                  setAutoAssignDesignators(newValue);
-                  // Note: Setting is saved in project file, not localStorage
-                }}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>Automatically assign designators</span>
-            </label>
-            <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666', lineHeight: '1.4', marginBottom: '12px' }}>
-              {autoAssignDesignators ? (
-                <div>
-                  When enabled, new components automatically receive sequential designators (e.g., C1, C2, C3 for Capacitors; R1, R2, R3 for Resistors).
-                </div>
-              ) : (
-                <div>
-                  When disabled, you must manually assign designators to each component. The designator field will be empty when components are created.
-                </div>
-              )}
-            </div>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#333' }}>
-              <input
-                type="checkbox"
-                checked={useGlobalDesignatorCounters}
-                onChange={(e) => {
-                  const newValue = e.target.checked;
-                  setUseGlobalDesignatorCounters(newValue);
-                }}
-                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>Use global designator counters</span>
-            </label>
-            <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: 4, fontSize: '11px', color: '#666', lineHeight: '1.4' }}>
-              {useGlobalDesignatorCounters ? (
-                <div>
-                  When ON, designators continue from global counters across all projects. New components start with the next value from the global counter (e.g., if global counter is C10, new capacitor will be C11).
-                </div>
-              ) : (
-                <div>
-                  When OFF (default), designators start at 1 for each project. Each project maintains its own independent designator sequence (e.g., C1, C2, C3...).
-                </div>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={() => setShowDesignatorManager(false)}
-            style={{ width: '100%', padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: 4, cursor: 'pointer', fontSize: '12px' }}
-          >
-            Close
-          </button>
-        </div>
-      )}
+      <DesignatorManagerDialog
+        visible={showDesignatorManager}
+        onClose={() => setShowDesignatorManager(false)}
+        autoAssignDesignators={autoAssignDesignators}
+        setAutoAssignDesignators={setAutoAssignDesignators}
+        useGlobalDesignatorCounters={useGlobalDesignatorCounters}
+        setUseGlobalDesignatorCounters={setUseGlobalDesignatorCounters}
+      />
 
       {/* Hidden file inputs for Load Top/Bottom PCB menu items */}
       <input
@@ -12541,190 +12231,26 @@ function App() {
       />
 
       {/* New Project Confirmation Dialog */}
-      {newProjectDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10001,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              handleNewProjectCancel();
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '400px',
-              maxWidth: '500px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '1px solid #1f1f24',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
-              New Project
-            </h2>
-            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
-              You have unsaved changes. Do you want to save your project before creating a new one?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={handleNewProjectCancel}
-                style={{
-                  padding: '8px 16px',
-                  background: '#444',
-                  color: '#f2f2f2',
-                  border: '1px solid #555',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleNewProjectNo}
-                style={{
-                  padding: '8px 16px',
-                  background: '#555',
-                  color: '#f2f2f2',
-                  border: '1px solid #666',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                No
-              </button>
-              <button
-                ref={newProjectYesButtonRef}
-                onClick={handleNewProjectYes}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-                autoFocus
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog
+        visible={newProjectDialog.visible}
+        title="New Project"
+        message="You have unsaved changes. Do you want to save your project before creating a new one?"
+        onYes={handleNewProjectYes}
+        onNo={handleNewProjectNo}
+        onCancel={handleNewProjectCancel}
+        yesButtonRef={newProjectYesButtonRef}
+      />
 
       {/* Open Project Confirmation Dialog */}
-      {openProjectDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10001,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              handleOpenProjectCancel();
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '400px',
-              maxWidth: '500px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '1px solid #1f1f24',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
-              Open Project
-            </h2>
-            <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
-              You have unsaved changes. Do you want to save your project before opening another one?
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={handleOpenProjectCancel}
-                style={{
-                  padding: '8px 16px',
-                  background: '#444',
-                  color: '#f2f2f2',
-                  border: '1px solid #555',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleOpenProjectNo}
-                style={{
-                  padding: '8px 16px',
-                  background: '#555',
-                  color: '#f2f2f2',
-                  border: '1px solid #666',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                No
-              </button>
-              <button
-                ref={openProjectYesButtonRef}
-                onClick={handleOpenProjectYes}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-                autoFocus
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog
+        visible={openProjectDialog.visible}
+        title="Open Project"
+        message="You have unsaved changes. Do you want to save your project before opening another one?"
+        onYes={handleOpenProjectYes}
+        onNo={handleOpenProjectNo}
+        onCancel={handleOpenProjectCancel}
+        yesButtonRef={openProjectYesButtonRef}
+      />
 
       {/* New Project Setup Dialog */}
       {newProjectSetupDialog.visible && (
@@ -13135,391 +12661,31 @@ function App() {
       />
 
       {/* Set Size Dialog */}
-      {setSizeDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10003,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              setSetSizeDialog({ visible: false, size: 6 });
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '300px',
-              maxWidth: '400px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '1px solid #1f1f24',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
-              Set Size
-            </h2>
-            
-            {/* Size Input */}
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
-              Size (pixels):
-            </label>
-            <input
-              ref={setSizeInputRef}
-              type="number"
-              min="1"
-              max="99"
-              value={setSizeDialog.size}
-              onChange={(e) => {
-                const value = parseInt(e.target.value) || 1;
-                // Limit to 2 digits (max 99)
-                const limitedValue = Math.max(1, Math.min(99, value));
-                setSetSizeDialog(prev => ({ ...prev, size: limitedValue }));
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  handleSetSizeApply();
-                } else if (e.key === 'Escape') {
-                  setSetSizeDialog({ visible: false, size: 6 });
-                }
-                // Prevent typing more than 2 digits
-                if (e.key.length === 1 && /[0-9]/.test(e.key)) {
-                  const currentValue = setSizeDialog.size.toString();
-                  if (currentValue.length >= 2 && setSizeInputRef.current?.selectionStart === setSizeInputRef.current?.selectionEnd) {
-                    // If already 2 digits and no selection, prevent adding more
-                    if (setSizeInputRef.current?.selectionStart === currentValue.length) {
-                      e.preventDefault();
-                    }
-                  }
-                }
-              }}
-              onInput={(e) => {
-                // Ensure value doesn't exceed 2 digits
-                const input = e.target as HTMLInputElement;
-                const value = input.value;
-                if (value.length > 2) {
-                  input.value = value.slice(0, 2);
-                  const numValue = parseInt(input.value) || 1;
-                  setSetSizeDialog(prev => ({ ...prev, size: Math.max(1, Math.min(99, numValue)) }));
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                marginBottom: '16px',
-                background: '#1f1f24',
-                border: '1px solid #444',
-                borderRadius: 6,
-                color: '#f2f2f2',
-                fontSize: '14px',
-              }}
-              autoFocus
-            />
-            
-            {/* Size Dropdown */}
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
-              Or select from list:
-            </label>
-            <select
-              value={(() => {
-                const evenValues = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
-                return evenValues.includes(setSizeDialog.size) ? setSizeDialog.size : '';
-              })()}
-              onChange={(e) => {
-                const value = parseInt(e.target.value);
-                if (!isNaN(value) && value > 0) {
-                  setSetSizeDialog(prev => ({ ...prev, size: value }));
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                marginBottom: '20px',
-                background: '#1f1f24',
-                border: '1px solid #444',
-                borderRadius: 6,
-                color: '#f2f2f2',
-                fontSize: '14px',
-              }}
-            >
-              <option value="" style={{ background: '#1f1f24', color: '#f2f2f2' }}>-- Select --</option>
-              {[2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32].map(sz => (
-                <option key={sz} value={sz} style={{ background: '#1f1f24', color: '#f2f2f2' }}>
-                  {sz} pixels
-                </option>
-              ))}
-            </select>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={() => setSetSizeDialog({ visible: false, size: 6 })}
-                style={{
-                  padding: '8px 16px',
-                  background: '#444',
-                  color: '#f2f2f2',
-                  border: '1px solid #555',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSetSizeApply}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SetSizeDialog
+        visible={setSizeDialog.visible}
+        size={setSizeDialog.size}
+        onSizeChange={(size) => setSetSizeDialog(prev => ({ ...prev, size }))}
+        onApply={handleSetSizeApply}
+        onCancel={() => setSetSizeDialog({ visible: false, size: 6 })}
+      />
 
       {/* Auto Save Dialog */}
-      {autoSaveDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10003,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              setAutoSaveDialog({ visible: false, interval: 5 });
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '300px',
-              maxWidth: '400px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '1px solid #1f1f24',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
-              Auto Save
-            </h2>
-            
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
-              Select time interval:
-            </label>
-            <select
-              value={autoSaveDialog.interval === null ? 'disable' : (autoSaveDialog.interval || 5).toString()}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === 'disable') {
-                  setAutoSaveDialog({ visible: true, interval: null });
-                } else {
-                  const numValue = parseFloat(value);
-                  if (!isNaN(numValue) && numValue > 0) {
-                    setAutoSaveDialog({ visible: true, interval: numValue });
-                  }
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                marginBottom: '20px',
-                background: '#1f1f24',
-                border: '1px solid #444',
-                borderRadius: 6,
-                color: '#f2f2f2',
-                fontSize: '14px',
-              }}
-              autoFocus
-            >
-              <option value="1" style={{ background: '#1f1f24', color: '#f2f2f2' }}>1 minute</option>
-              <option value="5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>5 minutes</option>
-              <option value="10" style={{ background: '#1f1f24', color: '#f2f2f2' }}>10 minutes</option>
-              <option value="20" style={{ background: '#1f1f24', color: '#f2f2f2' }}>20 minutes</option>
-              <option value="30" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 minutes</option>
-              <option value="disable" style={{ background: '#1f1f24', color: '#f2f2f2' }}>Disable</option>
-            </select>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={() => setAutoSaveDialog({ visible: false, interval: 5 })}
-                style={{
-                  padding: '8px 16px',
-                  background: '#444',
-                  color: '#f2f2f2',
-                  border: '1px solid #555',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AutoSaveDialog
+        visible={autoSaveDialog.visible}
+        interval={autoSaveDialog.interval}
+        onIntervalChange={(interval) => setAutoSaveDialog({ visible: true, interval })}
+        onApply={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
+        onCancel={() => setAutoSaveDialog({ visible: false, interval: 5 })}
+      />
 
       {/* Auto Save Prompt Dialog (shown after New Project or Open Project) - Combined with interval selector */}
-      {autoSavePromptDialog.visible && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 10004,
-          }}
-          onClick={(e) => {
-            // Close dialog if clicking on backdrop
-            if (e.target === e.currentTarget) {
-              handleAutoSavePromptSkip();
-            }
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#2b2b31',
-              borderRadius: 8,
-              padding: '24px',
-              minWidth: '400px',
-              maxWidth: '500px',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              border: '1px solid #1f1f24',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600, color: '#f2f2f2' }}>
-              Enable Auto Save?
-            </h2>
-            <p style={{ margin: '0 0 20px 0', fontSize: '14px', color: '#e0e0e0', lineHeight: '1.5' }}>
-              We recommend enabling Auto Save to automatically save your project at regular intervals. 
-              This helps protect your work from accidental loss.
-            </p>
-            
-            <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
-              Select time interval:
-            </label>
-            <select
-              value={autoSavePromptDialog.interval === null ? 'disable' : (autoSavePromptDialog.interval || 5).toString()}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === 'disable') {
-                  setAutoSavePromptDialog({ ...autoSavePromptDialog, interval: null });
-                } else {
-                  const numValue = parseFloat(value);
-                  if (!isNaN(numValue) && numValue > 0) {
-                    setAutoSavePromptDialog({ ...autoSavePromptDialog, interval: numValue });
-                  }
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                marginBottom: '24px',
-                background: '#1f1f24',
-                border: '1px solid #444',
-                borderRadius: 6,
-                color: '#f2f2f2',
-                fontSize: '14px',
-              }}
-              autoFocus
-            >
-              <option value="1" style={{ background: '#1f1f24', color: '#f2f2f2' }}>1 minute</option>
-              <option value="5" style={{ background: '#1f1f24', color: '#f2f2f2' }}>5 minutes</option>
-              <option value="10" style={{ background: '#1f1f24', color: '#f2f2f2' }}>10 minutes</option>
-              <option value="20" style={{ background: '#1f1f24', color: '#f2f2f2' }}>20 minutes</option>
-              <option value="30" style={{ background: '#1f1f24', color: '#f2f2f2' }}>30 minutes</option>
-            </select>
-            
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button
-                onClick={handleAutoSavePromptSkip}
-                style={{
-                  padding: '8px 16px',
-                  background: '#444',
-                  color: '#f2f2f2',
-                  border: '1px solid #555',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                }}
-              >
-                Skip
-              </button>
-              <button
-                onClick={() => handleAutoSaveApply(autoSavePromptDialog.interval, true)}
-                style={{
-                  padding: '8px 16px',
-                  background: '#4CAF50',
-                  color: '#fff',
-                  border: '1px solid #45a049',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                }}
-              >
-                Enable Auto Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AutoSavePromptDialog
+        visible={autoSavePromptDialog.visible}
+        interval={autoSavePromptDialog.interval}
+        onIntervalChange={(interval) => setAutoSavePromptDialog({ ...autoSavePromptDialog, interval })}
+        onEnable={() => handleAutoSaveApply(autoSavePromptDialog.interval, true)}
+        onSkip={handleAutoSavePromptSkip}
+      />
 
       {/* Donate/Sponsor Button - fixed position in lower right corner */}
       <div
