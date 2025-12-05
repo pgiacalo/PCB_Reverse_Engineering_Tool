@@ -1186,6 +1186,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Horizontal and vertical flip controls</li>
                       <li>Brightness and contrast controls</li>
                       <li>Grayscale mode</li>
+                      <li>Automated transparency slider</li>
                       <li>Board dimensions configuration</li>
                     </ul>
                   </div>
