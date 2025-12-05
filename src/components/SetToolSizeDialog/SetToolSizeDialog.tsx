@@ -95,7 +95,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
 }) => {
   // State to track tool sizes - forces re-render when sizes change
   const [toolSizes, setToolSizes] = useState<Record<string, number>>({});
-  
+
   // Tool definitions - ordered to match toolbar order: Via, Pad, Trace, Component, Power, Ground, Erase
   // Layer-specific tools shown as separate entries (Top then Bottom)
   const toolEntries: Array<{ id: string; name: string; layer?: 'top' | 'bottom'; instanceId?: ToolInstanceId }> = [
@@ -177,16 +177,16 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
     } else if (instanceId) {
       // For non-layer tools with instances, update tool instance directly
       toolInstanceManager.setSize(instanceId, newSize);
-      
-      // If this tool is currently active, update brushSize immediately
-      const isActiveTool = 
-        (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
-        (toolId === 'power' && currentTool === 'power') ||
-        (toolId === 'ground' && currentTool === 'ground');
-      
-      if (isActiveTool) {
-        setBrushSize(newSize);
-      }
+        
+        // If this tool is currently active, update brushSize immediately
+        const isActiveTool = 
+          (toolId === 'via' && currentTool === 'draw' && drawingMode === 'via') ||
+          (toolId === 'power' && currentTool === 'power') ||
+          (toolId === 'ground' && currentTool === 'ground');
+        
+        if (isActiveTool) {
+          setBrushSize(newSize);
+        }
     } else {
       // Handle component connections specially (not a tool instance)
       if (toolId === 'componentConnection') {

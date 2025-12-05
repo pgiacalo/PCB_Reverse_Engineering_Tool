@@ -173,12 +173,12 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
     if (e.key === 'ArrowRight' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       if (cursorPos === textLength && !hasSelection) {
         if (field === 'name') {
-          e.preventDefault();
-          // Move to value in same row
-          const valueKey = `${index}-value`;
-          const valueInput = inputRefs.current.get(valueKey);
-          if (valueInput) {
-            valueInput.focus();
+      e.preventDefault();
+        // Move to value in same row
+        const valueKey = `${index}-value`;
+        const valueInput = inputRefs.current.get(valueKey);
+        if (valueInput) {
+          valueInput.focus();
             valueInput.setSelectionRange(0, 0); // Cursor at start
           }
         }
@@ -192,12 +192,12 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
     if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.shiftKey && !e.altKey) {
       if (cursorPos === 0 && !hasSelection) {
         if (field === 'value') {
-          e.preventDefault();
-          // Move to name in same row
-          const nameKey = `${index}-name`;
-          const nameInput = inputRefs.current.get(nameKey);
-          if (nameInput) {
-            nameInput.focus();
+      e.preventDefault();
+        // Move to name in same row
+        const nameKey = `${index}-name`;
+        const nameInput = inputRefs.current.get(nameKey);
+        if (nameInput) {
+          nameInput.focus();
             nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length); // Cursor at end
           }
         }
@@ -387,14 +387,14 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
       {/* Header - Only this area is draggable */}
       <div 
         style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid #e0e0e0',
-          background: '#888',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          cursor: 'move',
-          userSelect: 'none',
+        padding: '8px 12px',
+        borderBottom: '1px solid #e0e0e0',
+        background: '#888',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        cursor: 'move',
+        userSelect: 'none',
         }}
         onMouseDown={onDragStart}
       >
@@ -502,80 +502,80 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
 
                   {/* Name Column - Always editable textarea */}
                   <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
-                    <textarea
-                      ref={(el) => {
-                        if (el) inputRefs.current.set(`${index}-name`, el);
-                        else inputRefs.current.delete(`${index}-name`);
-                      }}
-                      value={note.name}
-                      onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
+                      <textarea
+                        ref={(el) => {
+                          if (el) inputRefs.current.set(`${index}-name`, el);
+                          else inputRefs.current.delete(`${index}-name`);
+                        }}
+                        value={note.name}
+                        onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
                       onFocus={() => handleFieldFocus(index, 'name')}
-                      onBlur={handleFieldBlur}
-                      onKeyDown={(e) => handleKeyDown(e, index, 'name')}
+                        onBlur={handleFieldBlur}
+                        onKeyDown={(e) => handleKeyDown(e, index, 'name')}
                       placeholder="Item name..."
-                      rows={1}
-                      style={{
-                        width: '100%',
-                        padding: '4px 6px',
+                        rows={1}
+                        style={{
+                          width: '100%',
+                          padding: '4px 6px',
                         border: editingIndex === index && editingField === 'name' ? '2px solid #0b5fff' : '1px solid transparent',
-                        borderRadius: 3,
-                        fontSize: '12px',
-                        backgroundColor: '#fff',
-                        color: '#000',
-                        fontFamily: 'inherit',
+                          borderRadius: 3,
+                          fontSize: '12px',
+                          backgroundColor: '#fff',
+                          color: '#000',
+                          fontFamily: 'inherit',
                         resize: 'none',
                         minHeight: '24px',
-                        lineHeight: '1.4',
-                        overflow: 'hidden',
+                          lineHeight: '1.4',
+                          overflow: 'hidden',
                         outline: 'none',
                         boxSizing: 'border-box',
-                      }}
-                      onInput={(e) => {
-                        // Auto-resize textarea to fit content
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = `${target.scrollHeight}px`;
-                      }}
-                    />
+                        }}
+                        onInput={(e) => {
+                          // Auto-resize textarea to fit content
+                          const target = e.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          target.style.height = `${target.scrollHeight}px`;
+                        }}
+                      />
                   </div>
 
                   {/* Value Column - Always editable textarea */}
                   <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
-                    <textarea
-                      ref={(el) => {
-                        if (el) inputRefs.current.set(`${index}-value`, el);
-                        else inputRefs.current.delete(`${index}-value`);
-                      }}
-                      value={note.value}
-                      onChange={(e) => handleFieldChange(index, 'value', e.target.value)}
+                      <textarea
+                        ref={(el) => {
+                          if (el) inputRefs.current.set(`${index}-value`, el);
+                          else inputRefs.current.delete(`${index}-value`);
+                        }}
+                        value={note.value}
+                        onChange={(e) => handleFieldChange(index, 'value', e.target.value)}
                       onFocus={() => handleFieldFocus(index, 'value')}
-                      onBlur={handleFieldBlur}
-                      onKeyDown={(e) => handleKeyDown(e, index, 'value')}
+                        onBlur={handleFieldBlur}
+                        onKeyDown={(e) => handleKeyDown(e, index, 'value')}
                       placeholder="Notes..."
-                      rows={1}
-                      style={{
-                        width: '100%',
-                        padding: '4px 6px',
+                        rows={1}
+                        style={{
+                          width: '100%',
+                          padding: '4px 6px',
                         border: editingIndex === index && editingField === 'value' ? '2px solid #0b5fff' : '1px solid transparent',
-                        borderRadius: 3,
-                        fontSize: '12px',
-                        backgroundColor: '#fff',
-                        color: '#000',
-                        fontFamily: 'inherit',
+                          borderRadius: 3,
+                          fontSize: '12px',
+                          backgroundColor: '#fff',
+                          color: '#000',
+                          fontFamily: 'inherit',
                         resize: 'none',
                         minHeight: '24px',
-                        lineHeight: '1.4',
-                        overflow: 'hidden',
+                          lineHeight: '1.4',
+                          overflow: 'hidden',
                         outline: 'none',
                         boxSizing: 'border-box',
-                      }}
-                      onInput={(e) => {
-                        // Auto-resize textarea to fit content
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = `${target.scrollHeight}px`;
-                      }}
-                    />
+                        }}
+                        onInput={(e) => {
+                          // Auto-resize textarea to fit content
+                          const target = e.target as HTMLTextAreaElement;
+                          target.style.height = 'auto';
+                          target.style.height = `${target.scrollHeight}px`;
+                        }}
+                      />
                   </div>
 
                   {/* Actions Column */}

@@ -112,10 +112,10 @@ export function drawTrace(
 
     // Draw points at each vertex (optional)
     if (showCornerDots) {
-      for (const pt of stroke.points) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
-        ctx.fill();
+    for (const pt of stroke.points) {
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+      ctx.fill();
       }
     }
   }

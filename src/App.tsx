@@ -1603,7 +1603,7 @@ function App() {
       // Set 2-second timeout to return to select tool if no number is pressed
       homeViewTimeoutRef.current = setTimeout(() => {
         setIsWaitingForHomeViewKey(false);
-        setCurrentTool('select');
+      setCurrentTool('select');
         setCanvasCursor(undefined);
       }, 2000);
       return;
@@ -4491,10 +4491,10 @@ function App() {
 
         // Draw points at each vertex (optional)
         if (showTraceCornerDots) {
-          for (const pt of stroke.points) {
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
-            ctx.fill();
+        for (const pt of stroke.points) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+          ctx.fill();
           }
         }
       }
@@ -8906,13 +8906,13 @@ function App() {
     } else {
       // Create project folder inside the selected location (standard IDE pattern)
       parentDirHandle = selectedDirHandle;
-      try {
-        projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
-      } catch (e) {
-        console.error('Failed to create project folder:', e);
-        alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
-        return;
-      }
+    try {
+      projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
+    } catch (e) {
+      console.error('Failed to create project folder:', e);
+      alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
+      return;
+    }
     }
     
     // CRITICAL: Close current project first to release all browser permissions and clear all state
@@ -9125,7 +9125,7 @@ function App() {
         if (project.projectInfo.name) {
           setProjectName(project.projectInfo.name);
         }
-      }
+        }
       // Note: Project name is only loaded from project file, not localStorage
 
       // Restore view state
@@ -9421,8 +9421,8 @@ function App() {
         // Fall back to embedded dataUrl if file loading failed
         if (!bitmap && img.dataUrl) {
           try {
-            const blob = await (await fetch(img.dataUrl)).blob();
-            bitmap = await createImageBitmap(blob);
+          const blob = await (await fetch(img.dataUrl)).blob();
+          bitmap = await createImageBitmap(blob);
             url = img.dataUrl;
             console.log(`Loaded image from embedded dataUrl`);
           } catch (e) {
@@ -9659,7 +9659,7 @@ function App() {
         for (const ground of validGrounds) {
           if (ground.pointId && typeof ground.pointId === 'number') {
             registerAllocatedId(ground.pointId);
-          }
+      }
         }
       }
       
@@ -10730,25 +10730,25 @@ function App() {
             {/* Empty space separator after Ground tool (height = 2 toolbar boxes + gap) */}
             <div style={{ height: 72 }} />
             {/* Move tool (H) - moved above Set Home */}
-            <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
-              disabled={isReadOnlyMode}
-              title="Move (H)" 
-              style={{ 
-                width: '100%', 
-                height: 32, 
-                display: 'flex', 
-                alignItems: 'center',
-                gap: 6,
-                padding: '4px 6px',
-                borderRadius: 6, 
-                border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
-                background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
-                color: isReadOnlyMode ? '#999' : '#222',
-                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
-                opacity: isReadOnlyMode ? 0.5 : 1
-              }}
-            >
+              <button 
+                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
+                disabled={isReadOnlyMode}
+                title="Move (H)" 
+                style={{ 
+                  width: '100%', 
+                  height: 32, 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 6px',
+                  borderRadius: 6, 
+                  border: currentTool === 'pan' ? '2px solid #000' : '1px solid #ddd', 
+                  background: currentTool === 'pan' ? '#e6f0ff' : '#fff', 
+                  color: isReadOnlyMode ? '#999' : '#222',
+                  cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                  opacity: isReadOnlyMode ? 0.5 : 1
+                }}
+              >
               {/* Simple hand icon (matches canvas cursor style) */}
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 <g stroke="#111" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -11712,9 +11712,9 @@ function App() {
                     value={8500 - transparencyCycleSpeed}
                     onChange={(e) => setTransparencyCycleSpeed(8500 - Number(e.target.value))}
                     onDoubleClick={() => setTransparencyCycleSpeed(2000)}
-                    className="slider"
-                    style={{ width: '100%', marginTop: 3 }}
-                  />
+                className="slider"
+                style={{ width: '100%', marginTop: 3 }}
+              />
                 </div>
               )}
             </div>
@@ -12676,8 +12676,8 @@ function App() {
         onIntervalChange={(interval) => setAutoSaveDialog({ visible: true, interval })}
         onApply={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
         onCancel={() => setAutoSaveDialog({ visible: false, interval: 5 })}
-      />
-
+            />
+            
       {/* Auto Save Prompt Dialog (shown after New Project or Open Project) - Combined with interval selector */}
       <AutoSavePromptDialog
         visible={autoSavePromptDialog.visible}
@@ -12688,30 +12688,30 @@ function App() {
       />
 
       {/* Donate/Sponsor Button - fixed position in lower right corner */}
-      <div
-        style={{
-          position: 'fixed',
+        <div 
+          style={{
+            position: 'fixed',
           bottom: 8,
           right: 8,
           zIndex: 100,
-        }}
+              }}
       >
-        <button
+              <button
           onClick={() => {
             // Open sponsor page in new window to avoid losing user's work
             window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
           }}
-          style={{
+                style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '6px 12px',
             background: 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)',
             border: '1px solid rgba(27, 31, 36, 0.15)',
-            borderRadius: 6,
-            cursor: 'pointer',
+                  borderRadius: 6,
+                  cursor: 'pointer',
             fontSize: 12,
-            fontWeight: 500,
+                  fontWeight: 500,
             color: '#24292f',
             boxShadow: '0 1px 0 rgba(27, 31, 36, 0.04)',
             transition: 'background 0.2s',
@@ -12728,8 +12728,8 @@ function App() {
             <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
           </svg>
           Sponsor
-        </button>
-      </div>
+              </button>
+            </div>
 
     </div>
   );

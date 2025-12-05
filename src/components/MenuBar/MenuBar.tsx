@@ -297,13 +297,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
   const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
-  
+
   // Helper function to check if project is active before allowing menu actions
   // Returns true if action should proceed, false if blocked
   const requireProject = (action: () => void): void => {
     if (!isProjectActive) {
       alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
-      setOpenMenu(null);
+            setOpenMenu(null);
       return;
     }
     action();
@@ -812,8 +812,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   requireProject(() => {
-                    setAutoSaveDialog({ visible: true, interval: 5 });
-                    setOpenMenu(null);
+                  setAutoSaveDialog({ visible: true, interval: 5 });
+                  setOpenMenu(null);
                   });
                 }
               }} 
@@ -881,16 +881,16 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Enter PCB Dimensions…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button 
-              onClick={() => { 
+              <button 
+                onClick={() => { 
                 onOpenTransformImages();
                 setOpenMenu(null); 
               }} 
               disabled={(!topImage && !bottomImage) || areImagesLocked}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: ((!topImage && !bottomImage) || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: ((!topImage && !bottomImage) || areImagesLocked) ? 'not-allowed' : 'pointer' }}
-            >
+              >
               Transform Images…
-            </button>
+              </button>
             <button 
               onClick={() => { if (!areImagesLocked) { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); } }} 
               disabled={areImagesLocked || (!topImage && !bottomImage)}
@@ -1119,7 +1119,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>About</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
-                  A specialized tool for reverse engineering printed circuit boards (PCBs) by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
+                  A specialized tool useful for both reverse engineering and troubleshooting electronics by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
                   This tool can also be used to assist in troubleshooting electronics by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
