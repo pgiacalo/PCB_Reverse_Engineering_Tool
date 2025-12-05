@@ -1156,7 +1156,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                         <li><strong>Power</strong> — <code>B</code></li>
                         <li><strong>Ground</strong> — <code>G</code></li>
-                        <li><strong>Erase</strong> — <code>E</code></li>
                         <li><strong>Move (Pan)</strong> — <code>H</code></li>
                         <li><strong>Zoom</strong> — <code>Z</code></li>
                         <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
