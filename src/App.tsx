@@ -10223,7 +10223,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Reverse Engineering Tool (v2.3)</h1>
+        <h1>🔧 PCB Reverse Engineering Tool (v2.4)</h1>
       </header>
 
       {/* Application menu bar */}
