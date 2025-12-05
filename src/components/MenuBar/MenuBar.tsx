@@ -1207,6 +1207,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <div>
                     <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Layer Management</p>
                     <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                      <li>14 independent layers to manage PCB element types</li>
                       <li>Separate top and bottom layer support</li>
                       <li>Layer-specific color customization</li>
                       <li>Layer-specific size controls</li>
