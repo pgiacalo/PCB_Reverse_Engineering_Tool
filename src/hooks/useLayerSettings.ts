@@ -130,8 +130,8 @@ export function useLayerSettings() {
     if (settings.componentConnectionSize !== undefined) setComponentConnectionSize(settings.componentConnectionSize);
   }, []);
 
-  // No-op functions - previously saved to localStorage, now settings are only saved in project file
-  // Kept for backward compatibility with existing code that calls these
+  // No-op functions - settings are now only saved in project file
+  // Kept for compatibility with existing code that calls these
   const saveDefaultSize = useCallback((_type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', _size: number, _layer?: 'top' | 'bottom') => {
     // No-op: Settings are now saved in project file, not localStorage
   }, []);
@@ -221,8 +221,8 @@ export function useLayerSettings() {
     resetToDefaults,
     loadFromProject,
     getCurrentSettings,
-    saveDefaultSize,  // No-op for backward compatibility
-    saveDefaultColor, // No-op for backward compatibility
+    saveDefaultSize,  // No-op
+    saveDefaultColor, // No-op
   };
 }
 

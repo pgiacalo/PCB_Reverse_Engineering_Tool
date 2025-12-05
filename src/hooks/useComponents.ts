@@ -3,8 +3,8 @@ import type { PCBComponent } from '../types';
 import { getDefaultUnit } from '../constants';
 
 /**
- * Read value and unit from component, with backward compatibility for old combined format
- * First tries to read separate value/unit fields, falls back to parsing combined string
+ * Read value and unit from component
+ * Reads separate value/unit fields, or parses combined string if needed
  * Special handling for power: always stored as combined "valueW" (e.g., "1/4W", "1W")
  */
 function readValueAndUnit(
@@ -32,7 +32,7 @@ function readValueAndUnit(
     };
   }
   
-  // Fallback: parse combined string (backward compatibility for old projects)
+  // Fallback: parse combined string if no separate fields
   const combined = component[valueField] || '';
   if (typeof combined === 'string' && combined.trim() !== '') {
     return parseValueWithUnit(combined);
@@ -42,7 +42,7 @@ function readValueAndUnit(
 }
 
 /**
- * Parse a value string to extract number and unit (for backward compatibility only)
+ * Parse a value string to extract number and unit
  * Examples: "10kΩ" -> { value: "10", unit: "kΩ" }, "100" -> { value: "100", unit: "" }
  * Also handles fractional values like "1/4W" -> { value: "1/4", unit: "W" }
  */
@@ -231,7 +231,7 @@ export function useComponents() {
     };
     
     // Extract type-specific fields based on component type
-    // Read separate value/unit fields directly (with backward compatibility)
+    // Read type-specific fields
     if (component.componentType === 'Resistor') {
       const r = component as any;
       const resistance = readValueAndUnit(r, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));

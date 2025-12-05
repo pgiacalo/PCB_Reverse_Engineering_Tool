@@ -60,7 +60,7 @@ export interface SetToolColorDialogProps {
   setTopComponentColor: (color: string) => void;
   setBottomComponentColor: (color: string) => void;
   setComponentConnectionColor: (color: string) => void;
-  /** Legacy save function */
+  /** Save default color function */
   saveDefaultColor: (type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   /** Color palette */
   colorPalette: string[];
@@ -82,7 +82,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
   saveToolSettings,
   saveToolLayerSettings,
   setBrushColor,
-  // Legacy props - kept for compatibility but not used
+  // Props kept for API compatibility but not used
   setTopTraceColor: _setTopTraceColor,
   setBottomTraceColor: _setBottomTraceColor,
   setTopPadColor: _setTopPadColor,

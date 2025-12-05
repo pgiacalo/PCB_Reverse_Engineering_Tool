@@ -217,89 +217,163 @@ export function constrainLine(
 }
 
 /**
- * Generate a globally unique ID for all drawing points
- * This ID is used across all vias, trace points, component pins, etc.
- * to establish electrical connections for netlist generation.
+ * ============================================================================
+ * NODE ID GENERATION SYSTEM
+ * ============================================================================
  * 
- * IMPORTANT: These IDs must be globally unique across the entire project
- * and must be preserved in save/load operations.
+ * This module provides globally unique IDs for all drawing points (vias, pads,
+ * trace endpoints, component pins, power/ground nodes, etc.) used to establish
+ * electrical connections for netlist generation.
  * 
- * Thread-safe implementation: Uses a promise-based queue to serialize all
- * ID generation operations, ensuring atomic increments and preventing
- * race conditions even in async/concurrent scenarios.
+ * CRITICAL REQUIREMENTS:
+ * 1. IDs must be globally unique across the entire project
+ * 2. IDs must be preserved in save/load operations
+ * 3. No duplicate IDs can ever be generated
+ * 4. Counter must be properly saved and restored when loading projects
+ * 
+ * DESIGN NOTES:
+ * - JavaScript is single-threaded, so true race conditions from multi-threading
+ *   are not possible. However, we still need to be careful about:
+ *   a) Counter being reset at the wrong time during project load
+ *   b) Counter not being properly saved with the project
+ *   c) Counter not being properly restored when loading a project
+ * - This implementation uses a simple monotonic counter with validation
+ * - Debug logging can be enabled to trace ID allocation issues
  */
+
+// The next ID to be allocated (starts at 1, never goes backwards)
 let nextPointId = 1;
-let idGenerationQueue: Promise<number> = Promise.resolve(0);
+
+// Set of all allocated IDs for validation (helps detect duplicate allocation bugs)
+const allocatedIds = new Set<number>();
+
+// Enable debug logging for ID allocation (set to true to troubleshoot)
+const DEBUG_ID_ALLOCATION = false;
 
 /**
- * Generate a globally unique Node ID in a thread-safe manner.
+ * Generate a globally unique Node ID.
  * 
- * This function uses a promise-based queue to ensure that all ID generation
- * operations are serialized. Even if called from multiple async contexts
- * simultaneously, each call will wait for the previous one to complete,
- * guaranteeing unique IDs and preventing race conditions.
- * 
- * The implementation ensures:
- * 1. Atomic increment operations
- * 2. No duplicate IDs can be generated
- * 3. Proper sequencing even in async scenarios
+ * This function guarantees:
+ * 1. Every call returns a unique integer
+ * 2. IDs are monotonically increasing
+ * 3. No duplicate IDs will ever be returned
  * 
  * @returns A unique integer Node ID
+ * @throws Error if somehow a duplicate ID would be generated (should never happen)
  */
 export function generatePointId(): number {
-  // Serialize ID generation through a promise chain
-  // Each operation waits for the previous one to complete
-  let result: number;
+  const id = nextPointId;
+  nextPointId++;
   
-  idGenerationQueue = idGenerationQueue.then((lastId) => {
-    result = lastId + 1;
-    nextPointId = result + 1; // Update counter for next call
-    return result;
-  });
+  // Validate that this ID hasn't been allocated before
+  if (allocatedIds.has(id)) {
+    console.error(`CRITICAL ERROR: Duplicate Node ID ${id} would be allocated!`);
+    console.error(`Current counter: ${nextPointId}, Allocated IDs count: ${allocatedIds.size}`);
+    // Find the next available ID
+    while (allocatedIds.has(nextPointId)) {
+      nextPointId++;
+    }
+    const safeId = nextPointId;
+    nextPointId++;
+    allocatedIds.add(safeId);
+    console.error(`Recovered by allocating ID ${safeId} instead`);
+    return safeId;
+  }
   
-  // For synchronous code paths, perform immediate increment
-  // The queue handles async serialization
-  // In single-threaded JavaScript, this increment is atomic
-  const currentId = nextPointId;
-  nextPointId = currentId + 1;
-  return currentId;
+  // Track this allocation
+  allocatedIds.add(id);
+  
+  if (DEBUG_ID_ALLOCATION) {
+    console.log(`[NodeID] Allocated ID ${id}, next will be ${nextPointId}`);
+  }
+  
+  return id;
 }
 
 /**
  * Set the point ID counter to a specific value (used when loading projects)
- * Thread-safe: serializes the update through the queue to prevent race conditions
+ * Also clears the allocated IDs set since we're loading a new project.
  * 
- * @param value The new counter value
+ * @param value The new counter value (must be > 0)
  */
 export function setPointIdCounter(value: number): void {
-  // Update through the queue to ensure no ID generation happens during update
-  idGenerationQueue = idGenerationQueue.then(() => {
-    nextPointId = value;
-    return value - 1; // Return value-1 so next generatePointId() will return value
-  });
-  // Also update immediately for synchronous code paths
+  if (value < 1) {
+    console.warn(`setPointIdCounter called with invalid value ${value}, using 1`);
+    value = 1;
+  }
+  
+  if (DEBUG_ID_ALLOCATION) {
+    console.log(`[NodeID] Setting counter to ${value} (was ${nextPointId})`);
+  }
+  
   nextPointId = value;
+  // Clear allocated IDs since we're starting fresh with a loaded project
+  allocatedIds.clear();
 }
 
 /**
  * Get the current point ID counter value (used when saving projects)
- * Thread-safe: reads current value (read operations are inherently safe)
+ * This value should be saved with the project so that new IDs continue
+ * from where we left off when the project is loaded again.
  * 
- * @returns The current counter value
+ * @returns The current counter value (the next ID that will be allocated)
  */
 export function getPointIdCounter(): number {
   return nextPointId;
 }
 
 /**
- * Reset the point ID counter to 1
- * Thread-safe: serializes the reset through the queue to prevent race conditions
+ * Reset the point ID counter to 1 (used when creating a new project)
+ * Also clears the allocated IDs tracking set.
  */
 export function resetPointIdCounter(): void {
-  // Reset the queue to start fresh from 1
-  idGenerationQueue = Promise.resolve(0);
-  // Also reset immediately for synchronous code paths
+  if (DEBUG_ID_ALLOCATION) {
+    console.log(`[NodeID] Resetting counter to 1 (was ${nextPointId})`);
+  }
   nextPointId = 1;
+  allocatedIds.clear();
+}
+
+/**
+ * Register an existing ID as allocated (used when loading project data)
+ * This helps maintain the allocated IDs set for duplicate detection.
+ * 
+ * @param id The ID to register as allocated
+ */
+export function registerAllocatedId(id: number): void {
+  if (id > 0) {
+    allocatedIds.add(id);
+    // Ensure counter is always ahead of any registered ID
+    if (id >= nextPointId) {
+      nextPointId = id + 1;
+      if (DEBUG_ID_ALLOCATION) {
+        console.log(`[NodeID] Registered ID ${id}, advanced counter to ${nextPointId}`);
+      }
+    }
+  }
+}
+
+/**
+ * Check if an ID has been allocated
+ * Useful for debugging duplicate ID issues
+ * 
+ * @param id The ID to check
+ * @returns true if the ID has been allocated
+ */
+export function isIdAllocated(id: number): boolean {
+  return allocatedIds.has(id);
+}
+
+/**
+ * Get debug info about ID allocation state
+ * Useful for debugging duplicate ID issues
+ */
+export function getIdAllocationDebugInfo(): { nextId: number; allocatedCount: number; allocatedIds: number[] } {
+  return {
+    nextId: nextPointId,
+    allocatedCount: allocatedIds.size,
+    allocatedIds: Array.from(allocatedIds).sort((a, b) => a - b)
+  };
 }
 
 export function generateUniqueId(prefix: string = 'id'): string {

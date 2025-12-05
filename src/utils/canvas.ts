@@ -60,12 +60,14 @@ export function drawVia(
 
 /**
  * Draw a trace (polyline)
+ * @param showCornerDots - If true, draw filled circles at each vertex/corner (default: true)
  */
 export function drawTrace(
   ctx: CanvasRenderingContext2D,
   stroke: DrawingStroke,
   viewScale: number,
-  isSelected: boolean = false
+  isSelected: boolean = false,
+  showCornerDots: boolean = true
 ): void {
   if (stroke.points.length === 0) return;
 
@@ -108,11 +110,13 @@ export function drawTrace(
     }
     ctx.stroke();
 
-    // Draw points at each vertex
-    for (const pt of stroke.points) {
-      ctx.beginPath();
-      ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
-      ctx.fill();
+    // Draw points at each vertex (optional)
+    if (showCornerDots) {
+      for (const pt of stroke.points) {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 

@@ -7,7 +7,7 @@ export interface PCBImage {
   name: string;
   width: number;
   height: number;
-  // Persistable image content for Save/Load (data URL) - kept for backward compatibility
+  // Embedded image data (fallback if file not found in project directory)
   dataUrl?: string;
   // File path relative to project directory (preferred for new projects)
   filePath?: string;

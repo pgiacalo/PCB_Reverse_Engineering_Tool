@@ -9,6 +9,7 @@ import type {
   Battery,
   Capacitor,
   ElectrolyticCapacitor,
+  FilmCapacitor,
   Diode,
   Fuse,
   FerriteBead,
@@ -113,6 +114,9 @@ export function createComponent(
     
     case 'Electrolytic Capacitor':
       return { ...baseComponent, componentType: 'Electrolytic Capacitor', polarity: 'Positive' } as ElectrolyticCapacitor;
+    
+    case 'Film Capacitor':
+      return { ...baseComponent, componentType: 'Film Capacitor', filmType: 'Polyester' } as FilmCapacitor;
     
     case 'Diode':
       return { ...baseComponent, componentType: 'Diode', diodeType: 'Standard' } as Diode;
@@ -379,16 +383,16 @@ export function getDefaultDesignatorCounters(): DesignatorCounters {
 }
 
 /**
- * @deprecated - No longer uses localStorage. Counters are managed in memory by App.tsx
- * Kept for backward compatibility but always returns empty object
+ * @deprecated - No longer used. Counters are managed in memory by App.tsx
+ * Returns empty object for compatibility
  */
 export function loadDesignatorCounters(): DesignatorCounters {
   return {};
 }
 
 /**
- * @deprecated - No longer uses localStorage. Counters are managed in memory by App.tsx
- * Kept for backward compatibility but does nothing
+ * @deprecated - No longer used. Counters are managed in memory by App.tsx
+ * No-op for compatibility
  */
 export function saveDesignatorCounters(_counters: DesignatorCounters): void {
   // No-op: localStorage is no longer used for designator counters

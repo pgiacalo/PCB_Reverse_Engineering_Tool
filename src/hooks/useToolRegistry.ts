@@ -44,7 +44,7 @@ export function useToolRegistry(
   bottomPadColor: string,
   topPadSize: number,
   bottomPadSize: number,
-  // Legacy props - kept for compatibility but not used
+  // Props kept for API compatibility but not used
   topTestPointColor: string,
   bottomTestPointColor: string,
   topTestPointSize: number,
@@ -58,7 +58,7 @@ export function useToolRegistry(
   testPointToolLayer: 'top' | 'bottom',
   componentToolLayer: 'top' | 'bottom'
 ) {
-  // Suppress unused parameter warnings for legacy props
+  // Suppress unused parameter warnings
   void topTestPointColor;
   void bottomTestPointColor;
   void topTestPointSize;

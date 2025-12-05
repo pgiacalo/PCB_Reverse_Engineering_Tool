@@ -6,7 +6,7 @@ import {
   formatComponentTypeName,
   COMPONENT_CATEGORIES,
 } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
@@ -528,7 +528,7 @@ function App() {
         if (currentTool === 'draw' && drawingMode === 'trace') {
           const layer = traceToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
-          // Update state and legacy defaults
+          // Update state and layer defaults
           if (layer === 'top') {
             setTopTraceColor(brushColor);
             setTopTraceSize(brushSize);
@@ -555,7 +555,7 @@ function App() {
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
           const layer = padToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
-          // Update state and legacy defaults
+          // Update state and layer defaults
           if (layer === 'top') {
             setTopPadColor(brushColor);
             setTopPadSize(brushSize);
@@ -582,7 +582,7 @@ function App() {
         } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
           const layer = testPointToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
-          // Update state and legacy defaults
+          // Update state and layer defaults
           if (layer === 'top') {
             setTopTestPointColor(brushColor);
             setTopTestPointSize(brushSize);
@@ -609,7 +609,7 @@ function App() {
         } else if (currentTool === 'component') {
           const layer = componentToolLayer || 'top';
           // Tool settings are project-specific, saved in project file
-          // Update state and legacy defaults
+          // Update state and layer defaults
           if (layer === 'top') {
             setTopComponentColor(brushColor);
             setTopComponentSize(brushSize);
@@ -943,6 +943,8 @@ function App() {
   const [showGroundLayer, setShowGroundLayer] = useState(true);
   // Connections layer
   const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
+  // Trace corner dots (circles at each vertex/turn)
+  const [showTraceCornerDots, setShowTraceCornerDots] = useState(true);
   // Detailed Info Dialog position and drag state
   const [detailedInfoDialogPosition, setDetailedInfoDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingDetailedInfoDialog, setIsDraggingDetailedInfoDialog] = useState(false);
@@ -1533,7 +1535,7 @@ function App() {
         name: file.name,
         width: bitmap.width,
         height: bitmap.height,
-        dataUrl, // Keep for backward compatibility
+        dataUrl, // Embedded image data
         filePath, // Store filename (full path constructed from project directory)
         // Store images in world coordinates from the start
         // This ensures they stay aligned with drawn items when canvas resizes
@@ -4411,7 +4413,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, isBlackAndWhiteEdges, isBlackAndWhiteInverted, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -4554,11 +4556,13 @@ function App() {
         });
         ctx.stroke();
 
-        // Draw points at each vertex
-        for (const pt of stroke.points) {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
-          ctx.fill();
+        // Draw points at each vertex (optional)
+        if (showTraceCornerDots) {
+          for (const pt of stroke.points) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     });
@@ -4883,7 +4887,7 @@ function App() {
         }
       }
     }
-  }, [drawingStrokes, selectedIds, showTopTracesLayer, showBottomTracesLayer, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, currentStroke, currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, tracePreviewMousePos]);
+  }, [drawingStrokes, selectedIds, showTopTracesLayer, showBottomTracesLayer, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, currentStroke, currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, tracePreviewMousePos, showTraceCornerDots]);
 
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom' | 'both', updates: Partial<PCBImage>) => {
@@ -5253,9 +5257,7 @@ function App() {
       }
     } else {
       setBrushSize(sz);
-      // Tool settings are project-specific and will be saved in the project file
-      // when brushSize changes, so we don't need to manually save here
-      // Legacy support: also save using old system for backward compatibility
+      // Also update layer defaults for consistent behavior
       if (currentTool === 'draw' && drawingMode === 'trace') {
         if (selectedDrawingLayer === 'top') {
           setTopTraceSize(sz);
@@ -5342,8 +5344,6 @@ function App() {
     }
     
     // Use project directory for auto-save (same directory as project.json)
-    // Note: performAutoSave uses projectDirHandle directly via projectDirHandleRef
-    // We still set autoSaveDirHandle for backward compatibility, but it's not used by performAutoSave
     setAutoSaveDirHandle(dirHandleToUse);
     // Use project name as base name for auto-save files, removing any existing timestamp
     const projectNameWithoutExt = projectName.replace(/\.json$/i, '');
@@ -6501,8 +6501,8 @@ function App() {
     setTransparency(50);
     setIsTransparencyCycling(false);
     setCurrentView('overlay');
-    // Reset point ID counter
-    setPointIdCounter(1);
+    // Reset point ID counter and clear allocated IDs tracking
+    resetPointIdCounter();
   }, [saveDefaultColor, saveDefaultSize]);
 
   // Close the current project and release all browser permissions
@@ -6645,6 +6645,7 @@ function App() {
     setShowPowerLayer(true);
     setShowGroundLayer(true);
     setShowConnectionsLayer(true);
+    setShowTraceCornerDots(true);
     
     // === STEP 11: Reset tool state ===
     setCurrentTool('select');
@@ -6666,8 +6667,8 @@ function App() {
     setUseGlobalDesignatorCounters(false);
     // Note: No localStorage to clear - all project data is stored in project file only
     
-    // === STEP 13: Reset point ID counter ===
-    setPointIdCounter(1);
+    // === STEP 13: Reset point ID counter and clear allocated IDs tracking ===
+    resetPointIdCounter();
     
     // === STEP 14: Close all dialogs ===
     setOpenMenu(null);
@@ -8181,10 +8182,8 @@ function App() {
           name: topImage.name,
           width: topImage.width,
           height: topImage.height,
-          // Save filePath instead of dataUrl to keep JSON files small and readable
-          // dataUrl is kept for backward compatibility with old project files
-          filePath: topImage.filePath || topImage.name, // Use filePath if available, fallback to name
-          dataUrl: topImage.dataUrl, // Keep for backward compatibility, but prefer filePath
+          filePath: topImage.filePath || topImage.name,
+          dataUrl: topImage.dataUrl, // Embedded image data (fallback if file not found)
           x: topImage.x, y: topImage.y, // World coordinates - saved as-is
           scale: topImage.scale,
           rotation: topImage.rotation,
@@ -8198,9 +8197,8 @@ function App() {
           name: bottomImage.name,
           width: bottomImage.width,
           height: bottomImage.height,
-          // Save filePath instead of dataUrl to keep JSON files small and readable
-          filePath: bottomImage.filePath || bottomImage.name, // Use filePath if available, fallback to name
-          dataUrl: bottomImage.dataUrl, // Keep for backward compatibility, but prefer filePath
+          filePath: bottomImage.filePath || bottomImage.name,
+          dataUrl: bottomImage.dataUrl, // Embedded image data (fallback if file not found)
           x: bottomImage.x, y: bottomImage.y,
           scale: bottomImage.scale,
           rotation: bottomImage.rotation,
@@ -8297,6 +8295,7 @@ function App() {
         showPowerLayer,
         showGroundLayer,
         showConnectionsLayer,
+        showTraceCornerDots,
       },
       autoSave: {
         enabled: autoSaveEnabled,
@@ -9184,11 +9183,11 @@ function App() {
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
-      // Restore tool instances from project data (single source of truth)
+      // Restore tool instances from project data
       if (project.toolInstances) {
         toolInstanceManager.initializeFromProject(project);
       } else {
-        // Initialize with defaults if no tool instances in project (backward compatibility)
+        // Initialize with defaults if project doesn't have tool instances
         toolInstanceManager.initialize();
       }
       
@@ -9211,9 +9210,6 @@ function App() {
       // Restore home views (multiple saved view locations)
       if (project.homeViews) {
         setHomeViews(project.homeViews);
-      } else if (project.savedCenterLocation) {
-        // Backward compatibility: migrate old savedCenterLocation to homeViews[0]
-        setHomeViews({ 0: project.savedCenterLocation });
       } else {
         setHomeViews({});
       }
@@ -9473,7 +9469,7 @@ function App() {
         });
       }
       // Helper to build PCBImage from saved data
-      // Tries to load from file path first, falls back to dataUrl for backward compatibility
+      // Tries to load from file path first, falls back to embedded dataUrl
       const buildImage = async (img: any, dirHandle: FileSystemDirectoryHandle | null): Promise<PCBImage | null> => {
         if (!img) return null;
         let bitmap: ImageBitmap | null = null;
@@ -9483,25 +9479,23 @@ function App() {
         // Try to load from file path if we have a project directory handle
         if (filePath && dirHandle) {
           try {
-            // Try to get file from project directory
             const fileHandle = await dirHandle.getFileHandle(filePath);
             const file = await fileHandle.getFile();
             bitmap = await createImageBitmap(file);
             url = URL.createObjectURL(file);
             console.log(`Loaded image from file path: ${filePath}`);
           } catch (e) {
-            console.warn(`Failed to load image from file path ${filePath}, falling back to dataUrl:`, e);
-            // Fall through to dataUrl loading
+            console.warn(`Failed to load image from file path ${filePath}:`, e);
           }
         }
         
-        // Fall back to dataUrl if file path loading failed or not available
+        // Fall back to embedded dataUrl if file loading failed
         if (!bitmap && img.dataUrl) {
           try {
-          const blob = await (await fetch(img.dataUrl)).blob();
-          bitmap = await createImageBitmap(blob);
+            const blob = await (await fetch(img.dataUrl)).blob();
+            bitmap = await createImageBitmap(blob);
             url = img.dataUrl;
-            console.log(`Loaded image from dataUrl (backward compatibility)`);
+            console.log(`Loaded image from embedded dataUrl`);
           } catch (e) {
             console.error(`Failed to load image from dataUrl:`, e);
           }
@@ -9517,10 +9511,10 @@ function App() {
           name: img.name ?? 'image',
           width: img.width ?? bitmap.width,
           height: img.height ?? bitmap.height,
-          dataUrl: img.dataUrl, // Keep for backward compatibility
-          filePath, // Store file path for future saves
-          x: img.x ?? 0, // World coordinates - loaded as-is
-          y: img.y ?? 0, // World coordinates - loaded as-is
+          dataUrl: img.dataUrl,
+          filePath,
+          x: img.x ?? 0,
+          y: img.y ?? 0,
           scale: img.scale ?? 1,
           rotation: img.rotation ?? 0,
           flipX: !!img.flipX,
@@ -9529,8 +9523,8 @@ function App() {
           skewY: img.skewY ?? 0,
           keystoneV: img.keystoneV ?? 0,
           keystoneH: img.keystoneH ?? 0,
-          brightness: img.brightness ?? 100, // Default to 100 if not present (backward compatibility)
-          contrast: img.contrast ?? 100, // Default to 100 if not present (backward compatibility)
+          brightness: img.brightness ?? 100,
+          contrast: img.contrast ?? 100,
           bitmap,
         };
       };
@@ -9539,86 +9533,24 @@ function App() {
       setTopImage(newTop);
       setBottomImage(newBottom);
 
-      // Restore point ID counter if present (for new projects, start from saved value)
-      // If not present (old project files), calculate the max ID from existing elements
+      // Restore point ID counter from saved value
       if (project.pointIdCounter && typeof project.pointIdCounter === 'number') {
         setPointIdCounter(project.pointIdCounter);
       } else {
-        // For backward compatibility: find the maximum Node ID in the project
-        // and set the counter to max + 1 to ensure uniqueness
-        let maxId = 0;
-        
-        // Check all drawing strokes (vias, pads, traces)
-        if (project.drawing?.drawingStrokes) {
-          for (const stroke of project.drawing.drawingStrokes) {
-            if (stroke.points) {
-              for (const point of stroke.points) {
-                if (point.id && typeof point.id === 'number' && point.id > maxId) {
-                  maxId = point.id;
-                }
-              }
-            }
-          }
-        }
-        
-        // Check component pin connections
-        const allComponents = [
-          ...(project.drawing?.componentsTop || []),
-          ...(project.drawing?.componentsBottom || [])
-        ];
-        for (const comp of allComponents) {
-          if (comp.pinConnections) {
-            for (const conn of comp.pinConnections) {
-              if (conn) {
-                const nodeId = parseInt(conn.trim(), 10);
-                if (!isNaN(nodeId) && nodeId > maxId) {
-                  maxId = nodeId;
-                }
-              }
-            }
-          }
-        }
-        
-        // Check power and ground nodes
-        if (project.drawing?.powers) {
-          for (const power of project.drawing.powers) {
-            if (power.pointId && typeof power.pointId === 'number' && power.pointId > maxId) {
-              maxId = power.pointId;
-            }
-          }
-        }
-        if (project.drawing?.grounds) {
-          for (const ground of project.drawing.grounds) {
-            if (ground.pointId && typeof ground.pointId === 'number' && ground.pointId > maxId) {
-              maxId = ground.pointId;
-            }
-          }
-        }
-        
-        // Set counter to max + 1 to ensure next ID is unique
-        setPointIdCounter(maxId + 1);
+        // Project file is missing pointIdCounter - start from 1
+        // This should only happen with very old/corrupted project files
+        console.warn('Project file missing pointIdCounter. Starting from 1.');
+        setPointIdCounter(1);
       }
       
       // Restore lock states if present
       if (project.locks) {
-        // Support both new and old property names for backward compatibility
-        if (typeof project.locks.areImagesLocked === 'boolean') {
-          setAreImagesLocked(project.locks.areImagesLocked);
-        } else if (typeof (project.locks as any).isImagesLocked === 'boolean') {
-          // Legacy: support old name
-          setAreImagesLocked((project.locks as any).isImagesLocked);
-        }
+        if (typeof project.locks.areImagesLocked === 'boolean') setAreImagesLocked(project.locks.areImagesLocked);
         if (typeof project.locks.areViasLocked === 'boolean') setAreViasLocked(project.locks.areViasLocked);
         if (typeof project.locks.arePadsLocked === 'boolean') setArePadsLocked(project.locks.arePadsLocked);
         if (typeof project.locks.areTracesLocked === 'boolean') setAreTracesLocked(project.locks.areTracesLocked);
         if (typeof project.locks.areComponentsLocked === 'boolean') setAreComponentsLocked(project.locks.areComponentsLocked);
-        // Support both new and old property names for backward compatibility
-        if (typeof project.locks.areGroundNodesLocked === 'boolean') {
-          setAreGroundNodesLocked(project.locks.areGroundNodesLocked);
-        } else if (typeof (project.locks as any).isGroundLocked === 'boolean') {
-          // Legacy: support old name
-          setAreGroundNodesLocked((project.locks as any).isGroundLocked);
-        }
+        if (typeof project.locks.areGroundNodesLocked === 'boolean') setAreGroundNodesLocked(project.locks.areGroundNodesLocked);
         if (typeof project.locks.arePowerNodesLocked === 'boolean') setArePowerNodesLocked(project.locks.arePowerNodesLocked);
       }
 
@@ -9634,6 +9566,7 @@ function App() {
         if (typeof project.visibility.showPowerLayer === 'boolean') setShowPowerLayer(project.visibility.showPowerLayer);
         if (typeof project.visibility.showGroundLayer === 'boolean') setShowGroundLayer(project.visibility.showGroundLayer);
         if (typeof project.visibility.showConnectionsLayer === 'boolean') setShowConnectionsLayer(project.visibility.showConnectionsLayer);
+        if (typeof project.visibility.showTraceCornerDots === 'boolean') setShowTraceCornerDots(project.visibility.showTraceCornerDots);
       }
 
       // Restore auto save settings if present
@@ -9685,9 +9618,8 @@ function App() {
         }
       }
 
-      // Restore drawing strokes - prefer saved drawingStrokes with point IDs
+      // Restore drawing strokes
       if (project.drawing?.drawingStrokes && Array.isArray(project.drawing.drawingStrokes)) {
-        // New format: restore strokes with preserved point IDs
         // Truncate coordinates to 3 decimal places for consistency with new objects
         // Filter out single-point traces (traces must have at least 2 points to form a line)
         // Keep vias (which are single points by design) and traces with 2+ points
@@ -9704,73 +9636,29 @@ function App() {
           return true; // Keep vias and valid traces
         });
         setDrawingStrokes(validStrokes);
-      } else {
-        // Legacy format: rebuild from vias/traces arrays (point IDs will be regenerated)
-        const strokes: DrawingStroke[] = [];
-        const pushVia = (v: Via, layer: 'top' | 'bottom') => {
-          // Truncate coordinates to 3 decimal places for consistency with new objects
-          const truncatedPos = truncatePoint({ x: v.x, y: v.y });
-          strokes.push({
-            id: v.id || `${Date.now()}-via-${Math.random()}`,
-            points: [{ 
-              id: v.pointId || generatePointId(), // Use saved point ID or generate new
-              x: truncatedPos.x, 
-              y: truncatedPos.y 
-            }],
-            color: v.color,
-            size: v.size,
-            layer,
-            type: 'via',
-          });
-        };
-        const pushSeg = (s: TraceSegment, layer: 'top' | 'bottom') => {
-          // For legacy format, create separate strokes for each segment
-          // This loses the original stroke grouping but preserves point IDs
-          // Truncate coordinates to 3 decimal places for consistency with new objects
-          const startPos = truncatePoint({ x: s.x1, y: s.y1 });
-          const endPos = truncatePoint({ x: s.x2, y: s.y2 });
-          strokes.push({
-            id: s.id || `${Date.now()}-trace-${Math.random()}`,
-            points: [
-              { id: s.startPointId || generatePointId(), x: startPos.x, y: startPos.y },
-              { id: s.endPointId || generatePointId(), x: endPos.x, y: endPos.y }
-            ],
-            color: s.color,
-            size: s.size,
-            layer,
-            type: 'trace',
-          });
-        };
-        // Back-compat: support either single 'vias' array or legacy viasTop/viasBottom
-        if (project.drawing?.vias) {
-          (project.drawing.vias as Via[]).forEach((v: Via) => pushVia(v, 'top'));
-        } else {
-          (project.drawing?.viasTop ?? []).forEach((v: Via) => pushVia(v, 'top'));
-          (project.drawing?.viasBottom ?? []).forEach((v: Via) => pushVia(v, 'bottom'));
-        }
-        (project.drawing?.tracesTop ?? []).forEach((s: TraceSegment) => pushSeg(s, 'top'));
-        (project.drawing?.tracesBottom ?? []).forEach((s: TraceSegment) => pushSeg(s, 'bottom'));
-        // Filter out single-point traces (traces must have at least 2 points to form a line)
-        // Keep vias (which are single points by design) and traces with 2+ points
-        const validStrokes = strokes.filter(s => {
-          if (s.type === 'trace' && s.points.length < 2) {
-            return false; // Remove single-point traces
+        
+        // Register all existing point IDs to prevent duplicate allocation
+        for (const stroke of validStrokes) {
+          for (const point of stroke.points) {
+            if (point.id && typeof point.id === 'number') {
+              registerAllocatedId(point.id);
+            }
           }
-          return true; // Keep vias and valid traces
-        });
-        setDrawingStrokes(validStrokes);
+        }
+      } else {
+        // Project file is missing drawingStrokes - start with empty strokes
+        console.warn('Project file missing drawingStrokes. Starting with empty strokes.');
+        setDrawingStrokes([]);
       }
-      // load components if present, ensuring all properties are preserved including layer
+      // Load components if present
       if (project.drawing?.componentsTop) {
         const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => {
-          // Truncate coordinates to 3 decimal places for consistency with new objects
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
           return {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
-            layer: comp.layer || 'top', // Ensure layer property is set (default to 'top' for backward compatibility)
-            // Ensure pinConnections is always an array
+            layer: comp.layer || 'top',
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
         });
@@ -9778,46 +9666,25 @@ function App() {
       }
       if (project.drawing?.componentsBottom) {
         const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => {
-          // Truncate coordinates to 3 decimal places for consistency with new objects
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
           return {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
-            layer: comp.layer || 'bottom', // Ensure layer property is set (default to 'bottom' for backward compatibility)
-            // Ensure pinConnections is always an array
+            layer: comp.layer || 'bottom',
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
         });
         setComponentsBottom(compsBottom);
       }
       
-      // Restore designator counters from project file, or initialize from existing components
+      // Restore designator counters from project file
       if (project.designatorCounters && typeof project.designatorCounters === 'object') {
-        // Load saved counters
         const savedCounters = project.designatorCounters as Record<string, number>;
         saveDesignatorCounters(savedCounters);
       } else {
-        // For legacy projects or if counters are missing, initialize from existing components
-        const allComponents = [
-          ...(project.drawing?.componentsTop || []),
-          ...(project.drawing?.componentsBottom || [])
-        ];
-        const counters: Record<string, number> = {};
-        for (const comp of allComponents) {
-          if (comp.designator && comp.designator.trim()) {
-            const prefix = getDefaultPrefix(comp.componentType);
-            const match = comp.designator.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (!counters[prefix] || num > counters[prefix]) {
-                counters[prefix] = num;
-              }
-            }
-          }
-        }
-        // Store counters in session ref (no localStorage)
-        sessionDesignatorCountersRef.current = counters;
+        // Project file missing designator counters - start with empty counters
+        sessionDesignatorCountersRef.current = {};
       }
       
       // Restore auto-designator assignment setting (no localStorage)
@@ -9835,17 +9702,17 @@ function App() {
       // Reset session counters when loading a project
       sessionDesignatorCountersRef.current = {};
       
+      // Load ground symbols
       if (project.drawing?.grounds) {
         const loadedGrounds = project.drawing.grounds as GroundSymbol[];
-        // Filter out ground symbols with invalid coordinates (in border area or negative)
-        // Also ensure pointId exists (for legacy projects without it)
+        // Filter out ground symbols with invalid coordinates
         const validGrounds = loadedGrounds
           .map(g => {
-            // Ensure pointId exists (for legacy projects without it)
-            const pointId = g.pointId || generatePointId();
-            // Truncate coordinates to 3 decimal places for consistency with new objects
+            if (!g.pointId) {
+              console.warn('Ground symbol missing pointId - this may cause issues');
+            }
             const truncatedPos = truncatePoint({ x: g.x, y: g.y });
-            return { ...g, pointId, x: truncatedPos.x, y: truncatedPos.y };
+            return { ...g, x: truncatedPos.x, y: truncatedPos.y };
           })
           .filter(g => {
             const isValid = g.y >= 0 && g.x >= 0 && 
@@ -9853,72 +9720,75 @@ function App() {
                            !isNaN(g.x) && !isNaN(g.y) &&
                            isFinite(g.x) && isFinite(g.y);
             if (!isValid) {
-              console.warn(`Filtered out invalid ground symbol at (${g.x}, ${g.y}) - likely in border area or invalid coordinates`);
+              console.warn(`Filtered out invalid ground symbol at (${g.x}, ${g.y})`);
             }
             return isValid;
           });
         setGroundSymbols(validGrounds);
+        
+        // Register ground symbol IDs
+        for (const ground of validGrounds) {
+          if (ground.pointId && typeof ground.pointId === 'number') {
+            registerAllocatedId(ground.pointId);
+          }
+        }
       }
-      // Load power buses first (needed for legacy power node migration)
+      
+      // Load power buses
       let loadedPowerBuses: PowerBus[];
       if (project.powerBuses && Array.isArray(project.powerBuses) && project.powerBuses.length > 0) {
-        // Load saved power buses (preserves user edits)
         loadedPowerBuses = project.powerBuses as PowerBus[];
         setPowerBuses(loadedPowerBuses);
       } else {
-        // Initialize default power buses if project doesn't have any (for legacy projects)
+        // Use default power buses if project doesn't have any
         loadedPowerBuses = [
           { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
           { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
         ];
         setPowerBuses(loadedPowerBuses);
       }
+      
       // Load ground buses
       if (project.groundBuses && Array.isArray(project.groundBuses) && project.groundBuses.length > 0) {
-        // Load saved ground buses (preserves user edits)
-        // Remove value field if present (legacy projects may have it)
-        const migratedGroundBuses = (project.groundBuses as any[]).map(bus => {
-          const { value, ...busWithoutValue } = bus;
-          return busWithoutValue as GroundBus;
-        });
-        setGroundBuses(migratedGroundBuses);
+        setGroundBuses(project.groundBuses as GroundBus[]);
       } else {
-        // Initialize default ground buses if project doesn't have any (for legacy projects)
+        // Use default ground buses if project doesn't have any
         setGroundBuses([
           { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
           { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
         ]);
       }
+      
+      // Load power symbols
       if (project.drawing?.powers) {
         const loadedPowers = project.drawing.powers as PowerSymbol[];
-        // Ensure all power nodes have a powerBusId and layer (for legacy projects)
-        // Also filter out power nodes with invalid coordinates (in border area or negative)
-        const powersWithBusId = loadedPowers
+        // Filter out power nodes with invalid coordinates
+        const validPowers = loadedPowers
           .map(p => {
-            // Ensure pointId exists (for legacy projects without it)
-            const pointId = p.pointId || generatePointId();
-            // Truncate coordinates to 3 decimal places for consistency with new objects
-            const truncatedPos = truncatePoint({ x: p.x, y: p.y });
-            if (!p.powerBusId) {
-              // Assign to first power bus or create a default one
-              return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, powerBusId: loadedPowerBuses.length > 0 ? loadedPowerBuses[0].id : 'default-5v', layer: p.layer || 'top' };
+            if (!p.pointId) {
+              console.warn('Power symbol missing pointId - this may cause issues');
             }
-            return { ...p, pointId, x: truncatedPos.x, y: truncatedPos.y, layer: p.layer || 'top' };
+            const truncatedPos = truncatePoint({ x: p.x, y: p.y });
+            return { ...p, x: truncatedPos.x, y: truncatedPos.y };
           })
           .filter(p => {
-            // Filter out power nodes with negative coordinates or invalid values
-            // These are likely accidentally placed in the border area or corrupted data
-            // Coordinates are in content space, so they should be >= 0
             const isValid = p.y >= 0 && p.x >= 0 && 
                            typeof p.x === 'number' && typeof p.y === 'number' && 
                            !isNaN(p.x) && !isNaN(p.y) &&
                            isFinite(p.x) && isFinite(p.y);
             if (!isValid) {
-              console.warn(`Filtered out invalid power node at (${p.x}, ${p.y}) - likely in border area or invalid coordinates`);
+              console.warn(`Filtered out invalid power node at (${p.x}, ${p.y})`);
             }
             return isValid;
           });
-        setPowerSymbols(powersWithBusId);
+        setPowerSymbols(validPowers);
+        
+        // Register power symbol IDs
+        for (const power of validPowers) {
+          if (power.pointId && typeof power.pointId === 'number') {
+            registerAllocatedId(power.pointId);
+          }
+        }
       }
       // Reset change tracking for auto save after loading project
       hasChangesSinceLastAutoSaveRef.current = false;
@@ -10258,8 +10128,9 @@ function App() {
             if (typeof w.showDirectoryPicker === 'function') {
               // Prompt user to select the directory containing the opened file
               // This ensures we get the correct directory handle with proper permissions
+              // Use the file handle as startIn to open the picker in the same directory as the selected file
               projectDirHandle = await w.showDirectoryPicker({
-                startIn: 'documents', // Suggest documents folder
+                startIn: handle, // Start in the same directory as the opened file
               });
             } else {
               throw new Error('Directory picker not available in this browser');
@@ -10480,6 +10351,8 @@ function App() {
         setAreGroundNodesLocked={setAreGroundNodesLocked}
         arePowerNodesLocked={arePowerNodesLocked}
         setArePowerNodesLocked={setArePowerNodesLocked}
+        showTraceCornerDots={showTraceCornerDots}
+        setShowTraceCornerDots={setShowTraceCornerDots}
         setSelectedIds={setSelectedIds}
         setSelectedComponentIds={setSelectedComponentIds}
         setSelectedPowerIds={setSelectedPowerIds}
@@ -11229,7 +11102,7 @@ function App() {
                             }
                           }
                         }
-                        // Legacy support: also save using old system for backward compatibility
+                        // Also save to layer defaults
                         saveDefaultColor('brush', c);
                         if (selectedIds.size > 0) {
                           // Determine object types from selected items to persist defaults

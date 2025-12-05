@@ -79,6 +79,10 @@ export interface MenuBarProps {
   arePowerNodesLocked: boolean;
   setArePowerNodesLocked: React.Dispatch<React.SetStateAction<boolean>>;
   
+  // Trace display options
+  showTraceCornerDots: boolean;
+  setShowTraceCornerDots: React.Dispatch<React.SetStateAction<boolean>>;
+  
   // Selection operations
   setSelectedIds: (ids: Set<string>) => void;
   setSelectedComponentIds: (ids: Set<string>) => void;
@@ -153,7 +157,7 @@ export interface MenuBarProps {
   setBottomComponentColor: (color: string) => void;
   setComponentConnectionColor: (color: string) => void;
   
-  // Legacy save functions (used by +/- keys)
+  // Save functions (used by +/- keys)
   saveDefaultSize: (toolType: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
   saveDefaultColor: (type: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'brush', color: string, layer?: 'top' | 'bottom') => void;
   
@@ -218,6 +222,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setAreGroundNodesLocked,
   arePowerNodesLocked,
   setArePowerNodesLocked,
+  showTraceCornerDots,
+  setShowTraceCornerDots,
   setSelectedIds: _setSelectedIds,
   setSelectedComponentIds: _setSelectedComponentIds,
   setSelectedPowerIds: _setSelectedPowerIds,
@@ -852,7 +858,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         {openMenu === 'transform' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-            <div style={{ padding: '4px 10px', fontSize: 12, color: '#bbb' }}>Load Images</div>
             <button 
               onClick={() => { if (!isReadOnlyMode && !areImagesLocked) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
               disabled={isReadOnlyMode || areImagesLocked}
@@ -1079,6 +1084,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowDesignatorManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Designators…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={() => { setShowTraceCornerDots(!showTraceCornerDots); setOpenMenu(null); }} 
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
             </button>
           </div>
         )}

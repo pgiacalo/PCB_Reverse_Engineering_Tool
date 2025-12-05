@@ -127,7 +127,7 @@ function readValueAndUnit(
     };
   }
   
-  // Fallback: parse combined string (backward compatibility for old projects)
+  // Fallback: parse combined string if no separate fields
   const combined = component[valueField] || '';
   if (typeof combined === 'string' && combined.trim() !== '') {
     // Try to match fractional values (e.g., "1/4W", "1/2W") or number followed by unit

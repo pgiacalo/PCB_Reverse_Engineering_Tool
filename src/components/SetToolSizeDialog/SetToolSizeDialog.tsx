@@ -60,7 +60,7 @@ export interface SetToolSizeDialogProps {
   setTopComponentSize: (size: number) => void;
   setBottomComponentSize: (size: number) => void;
   setComponentConnectionSize: (size: number) => void;
-  /** Legacy save function */
+  /** Save default size function */
   saveDefaultSize: (toolType: 'via' | 'pad' | 'testPoint' | 'trace' | 'component' | 'componentConnection' | 'power' | 'ground' | 'brush', size: number, layer?: 'top' | 'bottom') => void;
   /** Callback to close the dialog */
   onClose: () => void;
@@ -75,7 +75,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
   padToolLayer,
   testPointToolLayer,
   componentToolLayer,
-  // Legacy props - kept for compatibility but not used
+  // Props kept for API compatibility but not used
   updateToolSettings: _updateToolSettings,
   updateToolLayerSettings: _updateToolLayerSettings,
   setBrushSize,
