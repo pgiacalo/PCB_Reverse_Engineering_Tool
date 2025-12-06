@@ -497,7 +497,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
             Type:
           </label>
-          <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#666' }}>
+          <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
             {formatComponentTypeName(comp.componentType)}
           </div>
         </div>
@@ -513,7 +513,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.layer}
             onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
           >
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
@@ -548,7 +548,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               }
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
           >
             <option value="0">0°</option>
             <option value="90">90°</option>
@@ -586,7 +586,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder="e.g., U2, R7, C1"
           />
         </div>
@@ -606,7 +606,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, description: e.target.value });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder={comp.componentType === 'IntegratedCircuit' ? "e.g., Dual Op-Amp" : "e.g., Op Amp OP07"}
           />
         </div>
@@ -637,7 +637,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               border: '1px solid #ddd', 
               borderRadius: 2, 
               fontSize: '10px', 
-              color: '#666', 
+              color: '#000', 
               opacity: areComponentsLocked ? 0.6 : 1,
               cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
               overflow: 'hidden',
@@ -697,7 +697,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                 }
               }}
               disabled={areComponentsLocked}
-              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             />
           </div>
         )}
@@ -717,7 +717,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, x: val });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
@@ -736,7 +736,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, y: val });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
@@ -752,7 +752,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.manufacturer}
             onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
@@ -768,7 +768,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.partNumber}
             onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#666', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         

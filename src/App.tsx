@@ -11,7 +11,7 @@ import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
-import type { ComponentType, PCBComponent } from './types';
+import type { ComponentType, PCBComponent, HomeView } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -92,7 +92,7 @@ interface TraceSegment {
 // Tool registry functions are now imported from utils/toolRegistry.ts
 
 function App() {
-  const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
+  const CONTENT_BORDER = 5; // fixed border (in canvas pixels) where nothing is drawn
   
   // Tool instances are initialized at module load time (see toolInstances.ts)
   // Re-initialize from project data if needed (handled in loadProject)
@@ -652,29 +652,6 @@ function App() {
       return prev;
     });
   }, [brushColor, brushSize, currentTool, drawingMode, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, getCurrentToolDef, saveDefaultColor, saveDefaultSize, saveToolLayerSettings, setTopTraceColor, setBottomTraceColor, setTopTraceSize, setBottomTraceSize, setTopPadColor, setBottomPadColor, setTopPadSize, setBottomPadSize, setTopTestPointColor, setBottomTestPointColor, setTopTestPointSize, setBottomTestPointSize, setTopComponentColor, setBottomComponentColor, setTopComponentSize, setBottomComponentSize]);
-  
-  // Show power bus selector when power tool is selected
-  React.useEffect(() => {
-    if (currentTool === 'power') {
-      setShowPowerBusSelector(true);
-      setSelectedPowerBusId(null); // Reset selection when tool is selected
-    } else {
-      setShowPowerBusSelector(false);
-      setSelectedPowerBusId(null);
-    }
-  }, [currentTool]);
-  
-  // Show ground bus selector when ground tool is selected
-  React.useEffect(() => {
-    if (currentTool === 'ground') {
-      setShowGroundBusSelector(true);
-      setSelectedGroundBusId(null); // Reset selection when tool is selected
-    } else {
-      setShowGroundBusSelector(false);
-      setSelectedGroundBusId(null);
-    }
-  }, [currentTool]);
-
   // Show trace layer chooser when trace tool is selected
   // When a tool is clicked, this triggers the tool state management process:
   // Step 1: Which tool was selected? (currentTool, drawingMode)
@@ -799,6 +776,64 @@ function App() {
     // setGroundEditor,
   } = powerGround;
   
+  // Show power bus selector when power tool is selected (only if multiple buses exist)
+  React.useEffect(() => {
+    if (currentTool === 'power') {
+      // Always close ground selector when power tool is selected
+      setShowGroundBusSelector(false);
+      if (powerBuses.length > 1) {
+        // Multiple buses: show selector and don't auto-select
+        setShowPowerBusSelector(true);
+        setSelectedPowerBusId(null);
+      } else if (powerBuses.length === 1) {
+        // Single bus: auto-select it and don't show selector
+        setSelectedPowerBusId(powerBuses[0].id);
+        setShowPowerBusSelector(false);
+      } else {
+        // No buses: show selector (user needs to create one)
+        setShowPowerBusSelector(true);
+        setSelectedPowerBusId(null);
+      }
+    } else {
+      // Close power selector when switching to any other tool
+      setShowPowerBusSelector(false);
+      // Don't reset selectedPowerBusId when switching away - keep it for next time
+    }
+  }, [currentTool, powerBuses]);
+  
+  // Show ground bus selector when ground tool is selected (only if multiple buses exist)
+  React.useEffect(() => {
+    if (currentTool === 'ground') {
+      // Always close power selector when ground tool is selected
+      setShowPowerBusSelector(false);
+      if (groundBuses.length > 1) {
+        // Multiple buses: show selector and don't auto-select
+        setShowGroundBusSelector(true);
+        setSelectedGroundBusId(null);
+      } else if (groundBuses.length === 1) {
+        // Single bus: auto-select it and don't show selector
+        setSelectedGroundBusId(groundBuses[0].id);
+        setShowGroundBusSelector(false);
+      } else {
+        // No buses: show selector (user needs to create one)
+        setShowGroundBusSelector(true);
+        setSelectedGroundBusId(null);
+      }
+    } else {
+      // Close ground selector when switching to any other tool
+      setShowGroundBusSelector(false);
+      // Don't reset selectedGroundBusId when switching away - keep it for next time
+    }
+  }, [currentTool, groundBuses]);
+  
+  // Close both bus selectors when switching to any tool other than power or ground
+  React.useEffect(() => {
+    if (currentTool !== 'power' && currentTool !== 'ground') {
+      setShowPowerBusSelector(false);
+      setShowGroundBusSelector(false);
+    }
+  }, [currentTool]);
+  
   // Locks hook
   const locks = useLocks();
   const {
@@ -890,7 +925,7 @@ function App() {
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Home Views feature: allows user to set up to 10 custom view locations (0-9) that can be recalled
-  const [homeViews, setHomeViews] = useState<Record<number, { x: number; y: number; zoom: number }>>({});
+  const [homeViews, setHomeViews] = useState<Record<number, HomeView>>({});
   // Track when center tool is waiting for a number key press (with 2-second timeout)
   const [isWaitingForHomeViewKey, setIsWaitingForHomeViewKey] = useState(false);
   const homeViewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1481,6 +1516,7 @@ function App() {
   const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
   const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
+  const lastSelectedComponentTypeRef = React.useRef<ComponentType | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const componentTypeChooserRef = useRef<HTMLDivElement>(null);
   const componentLayerChooserRef = useRef<HTMLDivElement>(null);
@@ -3859,6 +3895,13 @@ function App() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Fill border area with black
+    ctx.fillStyle = '#000000'; // black
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Fill content area with white (will be drawn over by content)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(CONTENT_BORDER, CONTENT_BORDER, canvas.width - 2 * CONTENT_BORDER, canvas.height - 2 * CONTENT_BORDER);
+
     // Clip to content area (exclude fixed border), then translate origin to content top-left
     ctx.save();
     ctx.beginPath();
@@ -4027,10 +4070,10 @@ function App() {
     if (showPowerLayer && powers.length > 0) {
       const drawPower = (p: PowerSymbol) => {
         ctx.save();
-        // Find the power bus to get its voltage
+        // Find the power bus to get its voltage and color
         const bus = powerBuses.find(b => b.id === p.powerBusId);
         const isSelected = selectedPowerIds.has(p.id);
-        const powerColor = '#ff0000'; // Power symbols are always red
+        const powerColor = bus?.color || '#ff0000'; // Use bus color, default to red if bus not found
         ctx.strokeStyle = powerColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.lineCap = 'round';
@@ -4065,13 +4108,15 @@ function App() {
         ctx.lineTo(p.x + radius + lineExtension, p.y);
         ctx.stroke();
         
-        // Draw voltage label if bus is found
+        // Draw bus name label below the icon if bus is found
         if (bus) {
           ctx.fillStyle = powerColor;
-          ctx.font = `${Math.max(10, radius * 0.8)}px sans-serif`;
+          const fontSize = Math.max(10, radius * 0.8);
+          ctx.font = `${fontSize}px sans-serif`;
           ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(bus.voltage, p.x, p.y + radius + lineExtension + 12);
+          ctx.textBaseline = 'top';
+          // Position text below the icon (below the vertical line extension)
+          ctx.fillText(bus.name, p.x, p.y + radius + lineExtension + 8);
         }
         ctx.restore();
       };
@@ -4081,10 +4126,15 @@ function App() {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
         const isSelected = selectedGroundIds.has(g.id);
-        const groundColor = g.color || '#000000'; // Use ground bus color if available
+        
+        // Find the ground bus to get its name and color
+        const bus = groundBuses.find(b => b.id === g.groundBusId);
+        const groundColor = bus?.color || g.color || '#000000'; // Use bus color if available, fallback to stored color
         
         // Check if this is Earth Ground (use Earth Ground symbol)
         const isEarthGround = g.groundBusId === 'groundbus-earth';
+        
+        let bottomY: number; // Track the bottom of the icon for text positioning
         
         if (isEarthGround) {
           // Draw Earth Ground symbol: vertical line with 3 horizontal bars (progressively shorter)
@@ -4124,6 +4174,9 @@ function App() {
             ctx.lineTo(g.x + barWidth / 2, barY);
             ctx.stroke();
           }
+          
+          // Bottom of Earth Ground symbol is after the 3rd bar
+          bottomY = g.y + vLen + barG * 2;
         } else {
           // Draw GND or other ground symbol: circle with lines
         const radius = Math.max(6, (g.size || 18) / 2);
@@ -4156,6 +4209,20 @@ function App() {
         ctx.moveTo(g.x - radius - lineExtension, g.y);
         ctx.lineTo(g.x + radius + lineExtension, g.y);
         ctx.stroke();
+        
+        // Bottom of GND symbol is below the vertical line extension
+        bottomY = g.y + radius + lineExtension;
+        }
+        
+        // Draw ground bus name label below the icon if bus is found
+        if (bus) {
+          ctx.fillStyle = groundColor;
+          const fontSize = Math.max(10, (g.size || 18) * 0.5);
+          ctx.font = `${fontSize}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          // Position text below the icon
+          ctx.fillText(bus.name, g.x, bottomY + 8);
         }
         
         ctx.restore();
@@ -4363,9 +4430,18 @@ function App() {
       // Leave some padding on the right
       const LEFT_OFFSET = 244; // Canvas left position
       const RIGHT_PADDING = 12; // Right padding
+      const CANVAS_TOP = 6; // Canvas top position
       const VERTICAL_PADDING = 12; // Top/bottom padding (6px top + 6px bottom)
       const availableW = container.clientWidth - LEFT_OFFSET - RIGHT_PADDING;
-      const availableH = container.clientHeight - VERTICAL_PADDING;
+      
+      // Calculate available height accounting for viewport limits
+      // Get container's position relative to viewport
+      const containerRect = container.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const containerTop = containerRect.top;
+      const BOTTOM_MARGIN = 10; // Keep 10 pixels above bottom of browser window
+      const maxHeightFromViewport = viewportHeight - containerTop - CANVAS_TOP - BOTTOM_MARGIN;
+      const availableH = Math.min(container.clientHeight - VERTICAL_PADDING, maxHeightFromViewport);
       
       // Calculate dimensions based on aspect ratio
       // If we use full height, how wide would it be?
@@ -4387,6 +4463,9 @@ function App() {
       // Ensure minimum usable size
       width = Math.max(600, width);
       height = Math.max(375, height);
+      
+      // Reduce height by 20 pixels (keep top position unchanged)
+      height = Math.max(355, height - 20);
       
       setCanvasSize(prev => {
         // If canvas size is changing, adjust viewPan to maintain the same world-to-screen mapping
@@ -4491,10 +4570,12 @@ function App() {
 
         // Draw points at each vertex (optional)
         if (showTraceCornerDots) {
-        for (const pt of stroke.points) {
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
-          ctx.fill();
+          // Use black for corner dots to make them visible regardless of trace color
+          ctx.fillStyle = '#000000';
+          for (const pt of stroke.points) {
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+            ctx.fill();
           }
         }
       }
@@ -5385,13 +5466,27 @@ function App() {
           const centerWorldX = (canvasCenterContentX - viewPan.x) / viewScale;
           const centerWorldY = (canvasCenterContentY - viewPan.y) / viewScale;
           
-          // Save the view to the specified slot
+          // Save the view to the specified slot (including all layer visibility settings)
           setHomeViews(prev => ({
             ...prev,
             [numKey]: {
               x: centerWorldX,
               y: centerWorldY,
               zoom: viewScale,
+              showTopImage,
+              showBottomImage,
+              showViasLayer,
+              showTopTracesLayer,
+              showBottomTracesLayer,
+              showTopPadsLayer,
+              showBottomPadsLayer,
+              showTopTestPointsLayer,
+              showBottomTestPointsLayer,
+              showTopComponents,
+              showBottomComponents,
+              showPowerLayer,
+              showGroundLayer,
+              showConnectionsLayer,
             }
           }));
         }
@@ -5428,6 +5523,22 @@ function App() {
         }
         
         setViewPan({ x: panX, y: panY });
+        
+        // Restore all layer visibility settings
+        setShowTopImage(homeView.showTopImage);
+        setShowBottomImage(homeView.showBottomImage);
+        setShowViasLayer(homeView.showViasLayer);
+        setShowTopTracesLayer(homeView.showTopTracesLayer);
+        setShowBottomTracesLayer(homeView.showBottomTracesLayer);
+        setShowTopPadsLayer(homeView.showTopPadsLayer);
+        setShowBottomPadsLayer(homeView.showBottomPadsLayer);
+        setShowTopTestPointsLayer(homeView.showTopTestPointsLayer);
+        setShowBottomTestPointsLayer(homeView.showBottomTestPointsLayer);
+        setShowTopComponents(homeView.showTopComponents);
+        setShowBottomComponents(homeView.showBottomComponents);
+        setShowPowerLayer(homeView.showPowerLayer);
+        setShowGroundLayer(homeView.showGroundLayer);
+        setShowConnectionsLayer(homeView.showConnectionsLayer);
       }
       return;
     }
@@ -5625,6 +5736,22 @@ function App() {
         }
         
         setViewPan({ x: panX, y: panY });
+        
+        // Restore all layer visibility settings
+        setShowTopImage(homeView.showTopImage);
+        setShowBottomImage(homeView.showBottomImage);
+        setShowViasLayer(homeView.showViasLayer);
+        setShowTopTracesLayer(homeView.showTopTracesLayer);
+        setShowBottomTracesLayer(homeView.showBottomTracesLayer);
+        setShowTopPadsLayer(homeView.showTopPadsLayer);
+        setShowBottomPadsLayer(homeView.showBottomPadsLayer);
+        setShowTopTestPointsLayer(homeView.showTopTestPointsLayer);
+        setShowBottomTestPointsLayer(homeView.showBottomTestPointsLayer);
+        setShowTopComponents(homeView.showTopComponents);
+        setShowBottomComponents(homeView.showBottomComponents);
+        setShowPowerLayer(homeView.showPowerLayer);
+        setShowGroundLayer(homeView.showGroundLayer);
+        setShowConnectionsLayer(homeView.showConnectionsLayer);
       } else {
         // Default behavior: reset view settings (no home view 0 saved)
         setViewScale(1);
@@ -5870,12 +5997,38 @@ function App() {
           case 'b':
           case 'B':
             e.preventDefault();
-            setCurrentTool('power');
+            if (powerBuses.length === 1) {
+              // Single bus: auto-select and switch to power tool
+              setSelectedPowerBusId(powerBuses[0].id);
+              setCurrentTool('power');
+              setShowPowerBusSelector(false);
+            } else if (powerBuses.length > 1) {
+              // Multiple buses: show selector but don't switch tool until selection
+              setShowPowerBusSelector(true);
+              // Keep current tool (don't switch to power yet)
+            } else {
+              // No buses: show selector
+              setShowPowerBusSelector(true);
+              setCurrentTool('power');
+            }
             return;
           case 'g':
           case 'G':
             e.preventDefault();
-            setCurrentTool('ground');
+            if (groundBuses.length === 1) {
+              // Single bus: auto-select and switch to ground tool
+              setSelectedGroundBusId(groundBuses[0].id);
+              setCurrentTool('ground');
+              setShowGroundBusSelector(false);
+            } else if (groundBuses.length > 1) {
+              // Multiple buses: show selector but don't switch tool until selection
+              setShowGroundBusSelector(true);
+              // Keep current tool (don't switch to ground yet)
+            } else {
+              // No buses: show selector
+              setShowGroundBusSelector(true);
+              setCurrentTool('ground');
+            }
             return;
           case 'v':
           case 'V':
@@ -5919,10 +6072,17 @@ function App() {
             e.preventDefault();
             setCurrentTool('component');
             // Use current global layer setting (selectedDrawingLayer is the source of truth)
-            // Show layer chooser first (like trace/pad pattern)
-            setShowComponentLayerChooser(true);
-            setShowComponentTypeChooser(false);
-            setSelectedComponentType(null);
+            // Restore last selected component type if available, otherwise show '?' (null)
+            if (lastSelectedComponentTypeRef.current) {
+              setSelectedComponentType(lastSelectedComponentTypeRef.current);
+              setShowComponentLayerChooser(false);
+              setShowComponentTypeChooser(false);
+            } else {
+              // No previous selection - show layer chooser first (like trace/pad pattern)
+              setShowComponentLayerChooser(true);
+              setShowComponentTypeChooser(false);
+              setSelectedComponentType(null);
+            }
             return;
           case 'e':
           case 'E':
@@ -6407,13 +6567,11 @@ function App() {
     setBrushSize(6);
     // Reset power buses to defaults
     setPowerBuses([
-      { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
-      { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+      { id: 'powerbus-default', name: '+5VDC', voltage: '+5', color: '#ff0000' },
     ]);
-    // Reset ground buses to defaults (GND and Earth Ground)
+    // Reset ground buses to defaults
     setGroundBuses([
       { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
-      { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
     ]);
     // Reset pad tool sizes to defaults (project-specific, will be saved in project file)
     // Reset power and ground tool sizes to defaults (project-specific, will be saved in project file)
@@ -6504,14 +6662,12 @@ function App() {
     
     // Reset power buses to defaults
     setPowerBuses([
-      { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
-      { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+      { id: 'powerbus-default', name: '+5VDC', voltage: '+5', color: '#ff0000' },
     ]);
     
     // Reset ground buses to defaults
     setGroundBuses([
       { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
-      { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
     ]);
     
     // === STEP 4: Clear selections ===
@@ -7627,9 +7783,10 @@ function App() {
       }
     } else if (kind === 'ground') {
       // Draw ground symbol cursor based on selected ground bus type
-      // Use tool instance directly (single source of truth)
-      const groundInstance = toolInstanceManager.get('ground');
-      ctx.strokeStyle = groundInstance.color;
+      // Use selected ground bus color (matches the bus that will be drawn)
+      const selectedBus = selectedGroundBusId ? groundBuses.find(b => b.id === selectedGroundBusId) : null;
+      const groundColor = selectedBus?.color || '#000000'; // Default to black if no bus selected
+      ctx.strokeStyle = groundColor;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       
@@ -7681,9 +7838,10 @@ function App() {
       }
     } else if (kind === 'power') {
       // Draw power symbol cursor: empty circle with extending vertical and horizontal lines
-      // Use tool instance directly (single source of truth)
-      const powerInstance = toolInstanceManager.get('power');
-      ctx.strokeStyle = powerInstance.color;
+      // Use selected power bus color (matches the bus that will be drawn)
+      const selectedBus = selectedPowerBusId ? powerBuses.find(b => b.id === selectedPowerBusId) : null;
+      const powerColor = selectedBus?.color || '#ff0000'; // Default to red if no bus selected
+      ctx.strokeStyle = powerColor;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       const lineExtension = r * 0.8; // Lines extend outside the circle
@@ -7731,7 +7889,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -9139,8 +9297,40 @@ function App() {
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
       }
       // Restore home views (multiple saved view locations)
+      // Migrate old homeViews format (without layer settings) to new format
       if (project.homeViews) {
-        setHomeViews(project.homeViews);
+        const migratedHomeViews: Record<number, HomeView> = {};
+        for (const [key, view] of Object.entries(project.homeViews)) {
+          const slot = parseInt(key, 10);
+          const oldView = view as any;
+          // Check if this is an old format view (missing layer settings)
+          if (oldView.showTopImage === undefined) {
+            // Migrate old format: use current layer visibility as defaults
+            migratedHomeViews[slot] = {
+              x: oldView.x,
+              y: oldView.y,
+              zoom: oldView.zoom,
+              showTopImage: showTopImage,
+              showBottomImage: showBottomImage,
+              showViasLayer: showViasLayer,
+              showTopTracesLayer: showTopTracesLayer,
+              showBottomTracesLayer: showBottomTracesLayer,
+              showTopPadsLayer: showTopPadsLayer,
+              showBottomPadsLayer: showBottomPadsLayer,
+              showTopTestPointsLayer: showTopTestPointsLayer,
+              showBottomTestPointsLayer: showBottomTestPointsLayer,
+              showTopComponents: showTopComponents,
+              showBottomComponents: showBottomComponents,
+              showPowerLayer: showPowerLayer,
+              showGroundLayer: showGroundLayer,
+              showConnectionsLayer: showConnectionsLayer,
+            };
+          } else {
+            // Already in new format
+            migratedHomeViews[slot] = oldView as HomeView;
+          }
+        }
+        setHomeViews(migratedHomeViews);
       } else {
         setHomeViews({});
       }
@@ -9671,10 +9861,9 @@ function App() {
         loadedPowerBuses = project.powerBuses as PowerBus[];
         setPowerBuses(loadedPowerBuses);
       } else {
-        // Use default power buses if project doesn't have any
+        // Use default power bus if project doesn't have any
         loadedPowerBuses = [
-          { id: 'powerbus-1', name: '+3V3', voltage: '+3.3', color: '#ff0000' },
-          { id: 'powerbus-2', name: '+5V', voltage: '+5.0', color: '#ff0000' },
+          { id: 'powerbus-default', name: '+5VDC', voltage: '+5', color: '#ff0000' },
         ];
         setPowerBuses(loadedPowerBuses);
       }
@@ -9683,10 +9872,9 @@ function App() {
       if (project.groundBuses && Array.isArray(project.groundBuses) && project.groundBuses.length > 0) {
         setGroundBuses(project.groundBuses as GroundBus[]);
       } else {
-        // Use default ground buses if project doesn't have any
+        // Use default ground bus if project doesn't have any
         setGroundBuses([
           { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
-          { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
         ]);
       }
       
@@ -9967,6 +10155,31 @@ function App() {
     prevModeRef.current = drawingMode;
     prevLayerRef.current = selectedDrawingLayer;
   }, [drawingMode, selectedDrawingLayer, currentTool, brushColor, brushSize]);
+
+  // Finalize in-progress trace when switching away from draw tool
+  const prevToolRef = React.useRef<Tool>(currentTool);
+  React.useEffect(() => {
+    // If switching away from draw tool and there's an incomplete trace, finalize it
+    if (prevToolRef.current === 'draw' && currentTool !== 'draw' && drawingMode === 'trace' && currentStrokeRef.current.length >= 2) {
+      const newStroke: DrawingStroke = {
+        id: `${Date.now()}-trace-autofinalize`,
+        points: currentStrokeRef.current,
+        color: brushColor,
+        size: brushSize,
+        layer: selectedDrawingLayer,
+        type: 'trace',
+      };
+      setDrawingStrokes(prev => [...prev, newStroke]);
+      if (selectedDrawingLayer === 'top') {
+        setTraceOrderTop(prev => [...prev, newStroke.id]);
+      } else {
+        setTraceOrderBottom(prev => [...prev, newStroke.id]);
+      }
+      setCurrentStroke([]);
+      setIsDrawing(false);
+    }
+    prevToolRef.current = currentTool;
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer]);
 
   // Simple HSV -> HEX for palette generation (currently unused)
   // const hsvToHex = useCallback((h: number, s: number, v: number): string => {
@@ -10662,7 +10875,22 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   console.log('Power tool clicked');
-                  setCurrentTool('power');
+                  // Always close ground selector when power button is clicked
+                  setShowGroundBusSelector(false);
+                  if (powerBuses.length === 1) {
+                    // Single bus: auto-select and switch to power tool
+                    setSelectedPowerBusId(powerBuses[0].id);
+                    setCurrentTool('power');
+                    setShowPowerBusSelector(false);
+                  } else if (powerBuses.length > 1) {
+                    // Multiple buses: show selector but don't switch tool until selection
+                    setShowPowerBusSelector(true);
+                    // Keep current tool (don't switch to power yet)
+                  } else {
+                    // No buses: show selector
+                    setShowPowerBusSelector(true);
+                    setCurrentTool('power');
+                  }
                 }
               }} 
               disabled={isReadOnlyMode}
@@ -10682,8 +10910,8 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Power symbol icon - use tool instance directly (single source of truth) to match cursor color */}
-              <span style={{ color: toolInstanceManager.get('power').color, fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
+              {/* Power symbol icon - use selected power bus color to match cursor and drawn icon */}
+              <span style={{ color: (selectedPowerBusId ? powerBuses.find(b => b.id === selectedPowerBusId)?.color : null) || '#ff0000', fontSize: '18px', fontWeight: 'bold', lineHeight: 1, flexShrink: 0 }}>V</span>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>B</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('power').size}</span>
@@ -10695,7 +10923,22 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   console.log('Ground tool clicked');
-                  setCurrentTool('ground');
+                  // Always close power selector when ground button is clicked
+                  setShowPowerBusSelector(false);
+                  if (groundBuses.length === 1) {
+                    // Single bus: auto-select and switch to ground tool
+                    setSelectedGroundBusId(groundBuses[0].id);
+                    setCurrentTool('ground');
+                    setShowGroundBusSelector(false);
+                  } else if (groundBuses.length > 1) {
+                    // Multiple buses: show selector but don't switch tool until selection
+                    setShowGroundBusSelector(true);
+                    // Keep current tool (don't switch to ground yet)
+                  } else {
+                    // No buses: show selector
+                    setShowGroundBusSelector(true);
+                    setCurrentTool('ground');
+                  }
                 }
               }} 
               disabled={isReadOnlyMode}
@@ -10715,9 +10958,9 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1
               }}
             >
-              {/* Ground symbol icon - use tool instance directly (single source of truth) to match cursor color */}
+              {/* Ground symbol icon - use selected ground bus color to match cursor and drawn icon */}
               <svg width="14" height="14" viewBox="0 0 24 20" aria-hidden="true" style={{ overflow: 'visible', flexShrink: 0 }}>
-                <g stroke={toolInstanceManager.get('ground').color} strokeWidth="2" strokeLinecap="round">
+                <g stroke={(selectedGroundBusId ? groundBuses.find(b => b.id === selectedGroundBusId)?.color : null) || '#000000'} strokeWidth="2" strokeLinecap="round">
                   <line x1="12" y1="2" x2="12" y2="10" />
                   <line x1="5" y1="10" x2="19" y2="10" />
                   <line x1="7" y1="13" x2="17" y2="13" />
@@ -11253,7 +11496,7 @@ function App() {
             </div>
           )}
           {/* Power Bus Selector */}
-          {showPowerBusSelector && currentTool === 'power' && (
+          {showPowerBusSelector && (
             <div ref={powerBusSelectorRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25, minWidth: '200px' }}>
               <div style={{ marginBottom: '4px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Power Bus:</div>
               {powerBuses.length === 0 ? (
@@ -11297,8 +11540,9 @@ function App() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      // Set the selected power bus and close the selector
+                      // Set the selected power bus, switch to power tool, and close the selector
                       setSelectedPowerBusId(bus.id);
+                      setCurrentTool('power');
                       setShowPowerBusSelector(false);
                     }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
@@ -11341,7 +11585,7 @@ function App() {
             </div>
           )}
           {/* Ground Bus Selector */}
-          {showGroundBusSelector && currentTool === 'ground' && (
+          {showGroundBusSelector && (
             <div ref={groundBusSelectorRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25, minWidth: '200px' }}>
               <div style={{ marginBottom: '4px', fontWeight: 600, fontSize: '12px', color: '#333' }}>Select Ground Bus:</div>
               {groundBuses.length === 0 ? (
@@ -11356,8 +11600,9 @@ function App() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Set the selected ground bus and close the selector
+                        // Set the selected ground bus, switch to ground tool, and close the selector
                         setSelectedGroundBusId(bus.id);
+                        setCurrentTool('ground');
                         setShowGroundBusSelector(false);
                       }}
                       style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: isSelected ? '#e0e0e0' : '#f5f5f5', border: isSelected ? '2px solid #000' : '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
@@ -11530,7 +11775,9 @@ function App() {
                                     e.stopPropagation();
                                     // For special cases (LED, Schottky, Tantalum), we need to handle them differently
                                     // For now, just set the base type - user can modify in properties dialog
-                                    setSelectedComponentType(type as ComponentType);
+                                    const componentType = type as ComponentType;
+                                    setSelectedComponentType(componentType);
+                                    lastSelectedComponentTypeRef.current = componentType; // Store last selected type
                                     setShowComponentTypeChooser(false);
                                   }}
                                   style={{
@@ -11599,6 +11846,7 @@ function App() {
               <input type="checkbox" checked={showViasLayer} onChange={(e) => setShowViasLayer(e.target.checked)} />
               <span>Vias</span>
             </label>
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopPadsLayer} onChange={(e) => setShowTopPadsLayer(e.target.checked)} />
               <span>Pads (Top)</span>

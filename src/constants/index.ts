@@ -8,7 +8,7 @@ export const APP_VERSION = '2.4.0';
 // Canvas and Drawing Constants
 // ============================================================================
 
-export const CONTENT_BORDER = 40; // fixed border (in canvas pixels) where nothing is drawn
+export const CONTENT_BORDER = 5; // fixed border (in canvas pixels) where nothing is drawn
 export const DEFAULT_BRUSH_SIZE = 10;
 export const MIN_BRUSH_SIZE = 1;
 export const MAX_BRUSH_SIZE = 50;

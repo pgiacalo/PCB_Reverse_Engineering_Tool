@@ -43,11 +43,13 @@ export interface GroundSymbol {
  * Custom hook for managing power and ground symbols
  */
 export function usePowerGround() {
-  const [powerBuses, setPowerBuses] = useState<PowerBus[]>([]);
-  // Initialize with default ground buses: GND and Earth Ground
+  // Initialize with default power bus: +5VDC
+  const [powerBuses, setPowerBuses] = useState<PowerBus[]>(() => [
+    { id: 'powerbus-default', name: '+5VDC', voltage: '+5', color: '#ff0000' },
+  ]);
+  // Initialize with default ground bus: GND
   const [groundBuses, setGroundBuses] = useState<GroundBus[]>(() => [
     { id: 'groundbus-circuit', name: 'GND', color: '#000000' },
-    { id: 'groundbus-earth', name: 'Earth Ground', color: '#333333' },
   ]);
   const [powerSymbols, setPowerSymbols] = useState<PowerSymbol[]>([]);
   const [groundSymbols, setGroundSymbols] = useState<GroundSymbol[]>([]);

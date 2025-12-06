@@ -511,6 +511,21 @@ export interface HomeView {
   x: number;      // World X coordinate of view center
   y: number;      // World Y coordinate of view center
   zoom: number;   // Zoom level (viewScale)
+  // Layer visibility settings
+  showTopImage: boolean;
+  showBottomImage: boolean;
+  showViasLayer: boolean;
+  showTopTracesLayer: boolean;
+  showBottomTracesLayer: boolean;
+  showTopPadsLayer: boolean;
+  showBottomPadsLayer: boolean;
+  showTopTestPointsLayer: boolean;
+  showBottomTestPointsLayer: boolean;
+  showTopComponents: boolean;
+  showBottomComponents: boolean;
+  showPowerLayer: boolean;
+  showGroundLayer: boolean;
+  showConnectionsLayer: boolean;
 }
 
 /** Map of home view slots (0-9) to their saved view locations */
