@@ -1114,7 +1114,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         {openMenu === 'about' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>PCB Reverse Engineering Tool</h2>
+              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>Worms: An Electronics Tool</h2>
               
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>About</h3>
