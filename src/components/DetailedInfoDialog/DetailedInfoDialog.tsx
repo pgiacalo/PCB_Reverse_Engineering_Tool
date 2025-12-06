@@ -723,7 +723,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const point = stroke.points[0];
             // Determine via type - all vias are "Top and Bottom" since blind vias aren't supported yet
             // Vias always have an id, so this is safe
-            const viaType = (stroke as any).viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
+            const viaType = (stroke as any).viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via');
             return (
               <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                 <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>

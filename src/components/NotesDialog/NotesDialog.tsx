@@ -421,7 +421,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                 .filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0)
                 .map((stroke) => {
                   const point = stroke.points[0];
-                  const viaType = (stroke as any).viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via (Signal)');
+                  const viaType = (stroke as any).viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via');
                   const notes = notesMap.get(stroke.id) || '';
                   const charCount = notes.length;
                   return (

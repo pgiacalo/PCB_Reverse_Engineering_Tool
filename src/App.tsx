@@ -782,9 +782,18 @@ function App() {
       // Always close ground selector when power tool is selected
       setShowGroundBusSelector(false);
       if (powerBuses.length > 1) {
-        // Multiple buses: show selector and don't auto-select
-        setShowPowerBusSelector(true);
-        setSelectedPowerBusId(null);
+        // Multiple buses: show selector only if no bus is currently selected or selected bus is invalid
+        const selectedBusExists = selectedPowerBusId && powerBuses.some(b => b.id === selectedPowerBusId);
+        if (!selectedBusExists) {
+          setShowPowerBusSelector(true);
+          // Only clear selection if it's invalid, not if it's just unset
+          if (selectedPowerBusId !== null) {
+            setSelectedPowerBusId(null);
+          }
+        } else {
+          // Valid bus is already selected, don't show selector
+          setShowPowerBusSelector(false);
+        }
       } else if (powerBuses.length === 1) {
         // Single bus: auto-select it and don't show selector
         setSelectedPowerBusId(powerBuses[0].id);
@@ -807,9 +816,18 @@ function App() {
       // Always close power selector when ground tool is selected
       setShowPowerBusSelector(false);
       if (groundBuses.length > 1) {
-        // Multiple buses: show selector and don't auto-select
-        setShowGroundBusSelector(true);
-        setSelectedGroundBusId(null);
+        // Multiple buses: show selector only if no bus is currently selected or selected bus is invalid
+        const selectedBusExists = selectedGroundBusId && groundBuses.some(b => b.id === selectedGroundBusId);
+        if (!selectedBusExists) {
+          setShowGroundBusSelector(true);
+          // Only clear selection if it's invalid, not if it's just unset
+          if (selectedGroundBusId !== null) {
+            setSelectedGroundBusId(null);
+          }
+        } else {
+          // Valid bus is already selected, don't show selector
+          setShowGroundBusSelector(false);
+        }
       } else if (groundBuses.length === 1) {
         // Single bus: auto-select it and don't show selector
         setSelectedGroundBusId(groundBuses[0].id);
@@ -1014,7 +1032,7 @@ function App() {
   
   // Helper function to determine via type based on Node ID connections
   // Rules:
-  // 1. If via has no POWER or GROUND node at same Node ID → "Via (Signal)"
+  // 1. If via has no POWER or GROUND node at same Node ID → "Via"
   // 2. If via has POWER node at same Node ID → "Via (+5VDC Power Node)" etc.
   // 3. If via has GROUND node at same Node ID → "Via (Ground)"
   const determineViaType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
@@ -1033,8 +1051,8 @@ function App() {
       return `Via (${groundType})`;
     }
     
-    // No power or ground connection → Via (Signal)
-    return 'Via (Signal)';
+    // No power or ground connection → Via
+    return 'Via';
   }, [powers, grounds]);
 
   // Helper function to determine pad type based on Node ID connections (same logic as vias)
@@ -11540,9 +11558,13 @@ function App() {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      // Set the selected power bus, switch to power tool, and close the selector
+                      // Set the selected power bus first, then switch to power tool, and close the selector
+                      // Use functional update to ensure state is set correctly
                       setSelectedPowerBusId(bus.id);
-                      setCurrentTool('power');
+                      // Only set tool if not already power (to avoid triggering unnecessary useEffect)
+                      if (currentTool !== 'power') {
+                        setCurrentTool('power');
+                      }
                       setShowPowerBusSelector(false);
                     }}
                     style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
@@ -11600,9 +11622,13 @@ function App() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        // Set the selected ground bus, switch to ground tool, and close the selector
+                        // Set the selected ground bus first, then switch to ground tool, and close the selector
+                        // Use functional update to ensure state is set correctly
                         setSelectedGroundBusId(bus.id);
-                        setCurrentTool('ground');
+                        // Only set tool if not already ground (to avoid triggering unnecessary useEffect)
+                        if (currentTool !== 'ground') {
+                          setCurrentTool('ground');
+                        }
                         setShowGroundBusSelector(false);
                       }}
                       style={{ display: 'block', width: '100%', textAlign: 'left', padding: '4px 6px', marginBottom: '2px', background: isSelected ? '#e0e0e0' : '#f5f5f5', border: isSelected ? '2px solid #000' : '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}

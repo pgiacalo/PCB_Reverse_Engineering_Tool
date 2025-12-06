@@ -784,7 +784,7 @@ export const createMouseHandlers = (props: MouseHandlersProps): MouseHandlers =>
           size: viaSize,
           layer: selectedDrawingLayer,
           type: 'via',
-          viaType: 'Via (Signal)', // Default: Via (Signal) (no power/ground connection)
+          viaType: 'Via', // Default: Via (no power/ground connection)
         };
         setDrawingStrokes(prev => [...prev, viaStroke]);
         if (selectedDrawingLayer === 'top') {
