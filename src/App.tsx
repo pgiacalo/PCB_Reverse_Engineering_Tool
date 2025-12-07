@@ -1597,17 +1597,88 @@ function App() {
   const [selectRect, setSelectRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   // (Open Project uses native picker or hidden input; no overlay)
 
+  // Helper function to copy image file to Images/ subdirectory in project directory
+  const copyImageToProjectDirectory = useCallback(async (file: File, projectDirHandle: FileSystemDirectoryHandle | null): Promise<string> => {
+    if (!projectDirHandle) {
+      throw new Error('No project directory available. Please create or open a project before loading images. The project directory is needed to store image files.');
+    }
+
+    try {
+      // Ensure Images subdirectory exists
+      let imagesDirHandle: FileSystemDirectoryHandle;
+      try {
+        imagesDirHandle = await projectDirHandle.getDirectoryHandle('Images', { create: true });
+      } catch (e) {
+        throw new Error(`Failed to create Images directory in project folder. This may be due to insufficient permissions. Please ensure you have write access to the project directory. Error details: ${(e as Error).message}`);
+      }
+
+      // Copy the file to Images subdirectory (always copy, even if file exists)
+      const fileName = file.name;
+      const imagePath = `Images/${fileName}`;
+      
+      try {
+        const fileHandle = await imagesDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(file);
+        await writable.close();
+        console.log(`Image copied to project directory: ${imagePath}`);
+        return imagePath;
+      } catch (e) {
+        throw new Error(`Failed to copy image file "${fileName}" to project Images directory. The file may be locked by another application, or there may be insufficient disk space. Please try again or check your disk space. Error details: ${(e as Error).message}`);
+      }
+    } catch (err) {
+      // Re-throw with more context if it's already our error
+      if (err instanceof Error && err.message.includes('No project directory')) {
+        throw err;
+      }
+      if (err instanceof Error && err.message.includes('Failed to')) {
+        throw err;
+      }
+      // Otherwise, wrap in a user-friendly error
+      throw new Error(`An unexpected error occurred while copying the image to the project directory. This may be due to file system permissions or disk space issues. Please try again. Technical details: ${(err as Error).message}`);
+    }
+  }, []);
+
   const handleImageLoad = useCallback(async (file: File, type: 'top' | 'bottom') => {
     try {
+      // Validate file type - only accept PNG and JPEG images
+      const fileName = file.name.toLowerCase();
+      const validExtensions = ['.png', '.jpg', '.jpeg'];
+      const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+      
+      // Also check MIME type as a secondary validation
+      const validMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      const hasValidMimeType = validMimeTypes.includes(file.type);
+      
+      if (!hasValidExtension && !hasValidMimeType) {
+        alert(`Error: Unsupported image format.\n\nThe software only accepts PNG and JPEG image files.\n\nFile selected: ${file.name}\nFile type: ${file.type || 'unknown'}\n\nPlease select a .png, .jpg, or .jpeg image file.`);
+        return;
+      }
+
+      // First, copy the image to the project directory if we have one
+      let imageFilePath: string | undefined;
+      if (projectDirHandle) {
+        try {
+          imageFilePath = await copyImageToProjectDirectory(file, projectDirHandle);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred while copying image to project directory.';
+          alert(`Error: ${errorMessage}\n\nThe image could not be loaded. Please ensure you have a project open and have write permissions to the project directory.`);
+          return;
+        }
+      } else {
+        // No project directory yet - warn user but allow loading (they'll need to save project first)
+        const layerName = type === 'top' ? 'top' : 'bottom';
+        const proceed = confirm(`Warning: No project directory is currently open. The image will be loaded, but you must create or open a project and save it before the image will be stored in the project directory.\n\nDo you want to continue loading the ${layerName} image?`);
+        if (!proceed) {
+          return;
+        }
+        // Use just the filename for now - will be updated when project is saved
+        imageFilePath = file.name;
+      }
+
       const bitmap = await createImageBitmap(file);
       const url = URL.createObjectURL(file);
-      // Also keep a persistable data URL for Save/Load
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result as string);
-        fr.onerror = reject;
-        fr.readAsDataURL(file);
-      });
+      
       // Calculate initial world position for image center
       // Images should start centered, which in world coordinates is:
       // worldX = (centerX - viewPan.x) / viewScale
@@ -1626,17 +1697,13 @@ function App() {
         initialWorldY = (centerY - viewPan.y) / viewScale;
       }
       
-      // Try to get file path - File objects don't expose full path, so we'll store filename
-      // and construct full path from project directory on save/load
-      const filePath = file.name; // Store filename; full path will be constructed from project directory
-      
       const imageData: PCBImage = {
         url,
         name: file.name,
         width: bitmap.width,
         height: bitmap.height,
-        dataUrl, // Embedded image data
-        filePath, // Store filename (full path constructed from project directory)
+        // No dataUrl - images are stored as files in Images/ subdirectory
+        filePath: imageFilePath, // Path relative to project directory (e.g., "Images/filename.jpg")
         // Store images in world coordinates from the start
         // This ensures they stay aligned with drawn items when canvas resizes
         x: initialWorldX,
@@ -1657,9 +1724,11 @@ function App() {
         setBottomImage(imageData);
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred while loading the image.';
+      alert(`Error: Failed to load image file "${file.name}".\n\n${errorMessage}\n\nPlease ensure the file is a valid image format (PNG, JPEG, etc.) and is not corrupted.`);
       console.error('Failed to load image', err);
     }
-  }, [viewPan.x, viewPan.y, viewScale, topImage, bottomImage]);
+  }, [viewPan.x, viewPan.y, viewScale, projectDirHandle, copyImageToProjectDirectory]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Stop propagation to prevent document-level handlers from interfering
@@ -8355,8 +8424,8 @@ function App() {
           name: topImage.name,
           width: topImage.width,
           height: topImage.height,
-          filePath: topImage.filePath || topImage.name,
-          dataUrl: topImage.dataUrl, // Embedded image data (fallback if file not found)
+          filePath: topImage.filePath || topImage.name, // Path relative to project directory (e.g., "Images/filename.jpg")
+          // Images are stored as files in Images/ subdirectory, not embedded in JSON
           x: topImage.x, y: topImage.y, // World coordinates - saved as-is
           scale: topImage.scale,
           rotation: topImage.rotation,
@@ -8370,8 +8439,8 @@ function App() {
           name: bottomImage.name,
           width: bottomImage.width,
           height: bottomImage.height,
-          filePath: bottomImage.filePath || bottomImage.name,
-          dataUrl: bottomImage.dataUrl, // Embedded image data (fallback if file not found)
+          filePath: bottomImage.filePath || bottomImage.name, // Path relative to project directory (e.g., "Images/filename.jpg")
+          // Images are stored as files in Images/ subdirectory, not embedded in JSON
           x: bottomImage.x, y: bottomImage.y,
           scale: bottomImage.scale,
           rotation: bottomImage.rotation,
@@ -9679,40 +9748,55 @@ function App() {
         });
       }
       // Helper to build PCBImage from saved data
-      // Tries to load from file path first, falls back to embedded dataUrl
+      // Loads image from file path in Images/ subdirectory
       const buildImage = async (img: any, dirHandle: FileSystemDirectoryHandle | null): Promise<PCBImage | null> => {
         if (!img) return null;
         let bitmap: ImageBitmap | null = null;
         let url = '';
         let filePath = img.filePath || img.name;
         
-        // Try to load from file path if we have a project directory handle
-        if (filePath && dirHandle) {
+        // Ensure we have a project directory handle
+        if (!dirHandle) {
+          const imageName = img.name || 'image';
+          alert(`Error: Cannot load image "${imageName}" because no project directory is available.\n\nPlease ensure you opened the project file from its project directory. The project directory is required to access the image files stored in the Images/ subdirectory.`);
+          return null;
+        }
+        
+        // Try to load from file path (should be in Images/ subdirectory)
+        if (filePath) {
           try {
-            const fileHandle = await dirHandle.getFileHandle(filePath);
+            // Handle both old format (just filename) and new format (Images/filename)
+            let actualPath = filePath;
+            if (!filePath.startsWith('Images/')) {
+              // Old format - try Images/ subdirectory first
+              actualPath = `Images/${filePath}`;
+            }
+            
+            const fileHandle = await dirHandle.getFileHandle(actualPath);
             const file = await fileHandle.getFile();
             bitmap = await createImageBitmap(file);
             url = URL.createObjectURL(file);
-            console.log(`Loaded image from file path: ${filePath}`);
+            console.log(`Loaded image from file path: ${actualPath}`);
+            // Update filePath to use Images/ prefix if it wasn't already
+            if (!filePath.startsWith('Images/')) {
+              filePath = actualPath;
+            }
           } catch (e) {
-            console.warn(`Failed to load image from file path ${filePath}:`, e);
+            const errorDetails = e instanceof Error ? e.message : 'Unknown error';
+            const imageName = img.name || 'image';
+            const suggestedPath = filePath.startsWith('Images/') ? filePath : `Images/${filePath}`;
+            alert(`Error: Failed to load image "${imageName}" from project directory.\n\nExpected location: ${suggestedPath}\n\nThis may occur if:\n- The image file was moved or deleted\n- The project directory structure was modified\n- File permissions are insufficient\n\nPlease ensure the image file exists in the Images/ subdirectory of your project folder.\n\nTechnical details: ${errorDetails}`);
+            return null;
           }
-        }
-        
-        // Fall back to embedded dataUrl if file loading failed
-        if (!bitmap && img.dataUrl) {
-          try {
-          const blob = await (await fetch(img.dataUrl)).blob();
-          bitmap = await createImageBitmap(blob);
-            url = img.dataUrl;
-            console.log(`Loaded image from embedded dataUrl`);
-          } catch (e) {
-            console.error(`Failed to load image from dataUrl:`, e);
-          }
+        } else {
+          const imageName = img.name || 'image';
+          alert(`Error: Image "${imageName}" has no file path specified in the project file.\n\nThe project file is missing the image file path information. This may indicate the project file is corrupted or was created with an older version of the software.`);
+          return null;
         }
         
         if (!bitmap) {
-          console.warn('Could not load image bitmap');
+          const imageName = img.name || 'image';
+          alert(`Error: Could not create image bitmap for "${imageName}".\n\nThe image file may be corrupted or in an unsupported format. Please ensure the image is a valid PNG, JPEG, or other supported image format.`);
           return null;
         }
         
@@ -9721,7 +9805,7 @@ function App() {
           name: img.name ?? 'image',
           width: img.width ?? bitmap.width,
           height: img.height ?? bitmap.height,
-          dataUrl: img.dataUrl,
+          // No dataUrl - images are stored as files
           filePath,
           x: img.x ?? 0,
           y: img.y ?? 0,
@@ -12539,7 +12623,7 @@ function App() {
       <input
         ref={fileInputTopRef}
         type="file"
-        accept="image/*"
+        accept=".png,.jpg,.jpeg,image/png,image/jpeg"
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -12550,7 +12634,7 @@ function App() {
       <input
         ref={fileInputBottomRef}
         type="file"
-        accept="image/*"
+        accept=".png,.jpg,.jpeg,image/png,image/jpeg"
         style={{ display: 'none' }}
         onChange={(e) => {
           const file = e.target.files?.[0];
