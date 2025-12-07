@@ -106,6 +106,8 @@ export interface MenuBarProps {
   setShowGroundBusManager: (show: boolean) => void;
   // Designator management
   setShowDesignatorManager: (show: boolean) => void;
+  // PastMachine
+  setShowPastMachine: (show: boolean) => void;
   
   // Tool registry
   toolRegistry: Map<string, ToolDefinition>;
@@ -240,6 +242,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setShowPowerBusManager,
   setShowGroundBusManager,
   setShowDesignatorManager,
+  setShowPastMachine,
   toolRegistry,
   updateToolSettings,
   updateToolLayerSettings,
@@ -1092,6 +1095,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
             </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={() => { setShowPastMachine(true); setOpenMenu(null); }} 
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              Restore from History…
+            </button>
           </div>
         )}
       </div>
@@ -1157,12 +1167,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Power</strong> — <code>B</code></li>
                         <li><strong>Ground</strong> — <code>G</code></li>
                         <li><strong>Move (Pan)</strong> — <code>H</code></li>
-                        <li><strong>Zoom</strong> — <code>Z</code></li>
+                        <li><strong>Magnify</strong> — <code>M</code></li>
                         <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
                         <li><strong>Recall View</strong> — <code>0-9</code> to recall saved view</li>
                         <li><strong>Information Dialog</strong> — <code>I</code></li>
                         <li><strong>Notes Dialog</strong> — <code>N</code></li>
                         <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
+                        <li><strong>Undo</strong> — <code>Ctrl</code> + <code>Z</code></li>
                       </ul>
                     </div>
                   </div>

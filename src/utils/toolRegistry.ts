@@ -308,8 +308,8 @@ export const createToolRegistry = (): Map<string, ToolDefinition> => {
     name: 'Zoom',
     toolType: 'magnify',
     icon: '🔍+',
-    shortcut: 'Z',
-    tooltip: 'Zoom In (or Zoom Out)',
+    shortcut: 'M',
+    tooltip: 'Magnify',
     colorReflective: false,
     settings: loadToolSettings('magnify', '#ff0000', 10),
     layerSettings: new Map([

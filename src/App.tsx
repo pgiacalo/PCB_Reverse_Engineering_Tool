@@ -28,6 +28,7 @@ import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { SetSizeDialog } from './components/SetSizeDialog';
 import { AutoSaveDialog } from './components/AutoSaveDialog';
 import { AutoSavePromptDialog } from './components/AutoSavePromptDialog';
+import { PastMachineDialog } from './components/PastMachineDialog';
 import {
   useDrawing,
   useSelection,
@@ -980,6 +981,9 @@ function App() {
   const grounds = groundSymbols;
   const [showPowerBusManager, setShowPowerBusManager] = useState(false);
   const [editingPowerBusId, setEditingPowerBusId] = useState<string | null>(null);
+  const [showPastMachine, setShowPastMachine] = useState(false);
+  const [pastMachinePosition, setPastMachinePosition] = useState<{ x: number; y: number } | undefined>(undefined);
+  const [isDraggingPastMachine, setIsDraggingPastMachine] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Ground bus management (similar to power buses)
@@ -5448,12 +5452,12 @@ function App() {
       return;
     }
     
-    // In read-only mode (viewing file history), only allow Zoom (Z key) shortcut
+    // In read-only mode (viewing file history), only allow Magnify (M key) shortcut
     // Check currentFileIndexRef to get the latest value without causing re-renders
     const isReadOnly = currentFileIndexRef.current > 0;
     
-    // Allow Zoom (Z key) even in read-only mode
-    if (isReadOnly && (e.key !== 'z' && e.key !== 'Z')) {
+    // Allow Magnify (M key) even in read-only mode
+    if (isReadOnly && (e.key !== 'm' && e.key !== 'M')) {
       // Block all other shortcuts in read-only mode
       return;
     }
@@ -6129,9 +6133,9 @@ function App() {
               setCanvasCursor(undefined);
             }, 2000);
             return;
-          case 'z':
-          case 'Z':
-            // If not Ctrl+Z (handled above), select Zoom tool (default to zoom-in)
+          case 'm':
+          case 'M':
+            // Select Magnify tool (default to zoom-in)
             if (!e.ctrlKey) {
               e.preventDefault();
               setIsShiftPressed(false);
@@ -10094,6 +10098,122 @@ function App() {
     }
   }, [loadProject, refreshAutoSaveFileHistory, initializeApplication]);
 
+  // Function to restore a file from history directory (PastMachine)
+  const restoreFileFromHistory = useCallback(async (fileName: string) => {
+    if (!projectDirHandle) {
+      console.warn('Cannot restore file: no project directory handle');
+      alert('No project directory available. Please open or create a project first.');
+      return;
+    }
+    
+    try {
+      // Get history directory
+      let historyDirHandle: FileSystemDirectoryHandle;
+      try {
+        historyDirHandle = await projectDirHandle.getDirectoryHandle('history');
+      } catch (e) {
+        console.error('History directory not found:', e);
+        alert('History directory not found.');
+        return;
+      }
+
+      // Get the file from history directory
+      const fileHandle = await historyDirHandle.getFileHandle(fileName);
+      const file = await fileHandle.getFile();
+      
+      // Check if file is empty
+      if (file.size === 0) {
+        alert(`File ${fileName} is empty.`);
+        return;
+      }
+      
+      const text = await file.text();
+      
+      // Check if text is empty or whitespace only
+      if (!text || text.trim().length === 0) {
+        alert(`File ${fileName} contains no data.`);
+        return;
+      }
+      
+      let project;
+      try {
+        project = JSON.parse(text);
+      } catch (parseError) {
+        console.error(`Failed to parse JSON from file ${fileName}:`, parseError);
+        alert(`Failed to parse file ${fileName}. It may be corrupted.`);
+        return;
+      }
+      
+      // Call initialization BEFORE loading project to prevent visual flash
+      initializeApplicationDefaults();
+      setViewScale(1);
+      // Reset browser zoom to 100% immediately
+      if (document.body) {
+        document.body.style.zoom = '1';
+      }
+      if (document.documentElement) {
+        document.documentElement.style.zoom = '1';
+      }
+      // Clear all selections immediately
+      setSelectedIds(new Set());
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
+      // Also call full initialization for pan calculation
+      initializeApplication();
+      
+      await loadProject(project);
+      
+      // Update current project file path to reflect the restored file
+      setCurrentProjectFilePath(fileName);
+      
+      // Reset change tracking since we loaded a saved file
+      hasChangesSinceLastAutoSaveRef.current = false;
+      
+      console.log(`Successfully restored file: ${fileName}`);
+    } catch (e) {
+      console.error('Failed to restore file from history:', e);
+      alert(`Failed to restore file ${fileName}. Please try again.`);
+    }
+  }, [projectDirHandle, loadProject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentProjectFilePath, setViewScale, initializeApplicationDefaults, initializeApplication]);
+
+  // Initialize PastMachine dialog position when it opens
+  React.useEffect(() => {
+    if (showPastMachine && !pastMachinePosition) {
+      // Center the dialog on screen
+      setPastMachinePosition({
+        x: window.innerWidth / 2 - 300,
+        y: window.innerHeight / 2 - 250,
+      });
+    }
+  }, [showPastMachine, pastMachinePosition]);
+
+  // Drag handlers for PastMachine dialog
+  const handlePastMachineDragStart = useCallback((e: React.MouseEvent) => {
+    if (!pastMachinePosition) {
+      return;
+    }
+    setIsDraggingPastMachine(true);
+    const startX = e.clientX - pastMachinePosition.x;
+    const startY = e.clientY - pastMachinePosition.y;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      setPastMachinePosition({
+        x: moveEvent.clientX - startX,
+        y: moveEvent.clientY - startY,
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingPastMachine(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [pastMachinePosition]);
+
   // Navigate to previous file (older file, higher index) - reserved for future use
   // @ts-ignore - Reserved for future use
   const _navigateToPreviousFile = useCallback(async () => {
@@ -10531,6 +10651,7 @@ function App() {
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
         setShowDesignatorManager={setShowDesignatorManager}
+        setShowPastMachine={setShowPastMachine}
         toolRegistry={toolRegistry}
         updateToolSettings={updateToolSettings}
         updateToolLayerSettings={updateToolLayerSettings}
@@ -11025,10 +11146,10 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
-            {/* Zoom tool (Z) - moved above Set Home */}
+            {/* Magnify tool (M) - moved above Set Home */}
             <button 
               onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} 
-              title={`${isShiftPressed ? 'Zoom Out' : 'Zoom In'} (Z)`} 
+              title={`Magnify (M)`} 
               style={{ 
                 width: '100%', 
                 height: 32, 
@@ -11057,7 +11178,7 @@ function App() {
                 )}
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>Z</span>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>M</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
@@ -12321,6 +12442,18 @@ function App() {
         setEditingGroundBusId={setEditingGroundBusId}
         grounds={grounds}
       />
+      <PastMachineDialog
+        visible={showPastMachine}
+        projectDirHandle={projectDirHandle}
+        onClose={() => {
+          setShowPastMachine(false);
+          setPastMachinePosition(undefined);
+        }}
+        onRestore={restoreFileFromHistory}
+        position={pastMachinePosition}
+        isDragging={isDraggingPastMachine}
+        onDragStart={handlePastMachineDragStart}
+      />
 
       {/* Designator Manager Dialog */}
       <DesignatorManagerDialog
@@ -12963,7 +13096,7 @@ function App() {
         onSkip={handleAutoSavePromptSkip}
       />
 
-      {/* Donate/Sponsor Button - fixed position in lower right corner */}
+      {/* Donate Button - fixed position in lower right corner */}
         <div 
           style={{
             position: 'fixed',
@@ -12974,7 +13107,7 @@ function App() {
       >
               <button
           onClick={() => {
-            // Open sponsor page in new window to avoid losing user's work
+            // Open donate page in new window to avoid losing user's work
             window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
           }}
                 style={{
@@ -12998,12 +13131,12 @@ function App() {
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)';
           }}
-          title="Support this project on GitHub Sponsors"
+          title="Donate to support this project"
         >
           <svg height="16" width="16" viewBox="0 0 16 16" fill="#bf3989" aria-hidden="true">
             <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
           </svg>
-          Sponsor
+          Donate
               </button>
             </div>
 
