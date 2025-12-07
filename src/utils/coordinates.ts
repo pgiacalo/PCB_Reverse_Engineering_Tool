@@ -365,6 +365,43 @@ export function isIdAllocated(id: number): boolean {
 }
 
 /**
+ * Unregister an allocated ID (used when undoing object creation)
+ * This allows the ID to be reused and helps maintain the counter correctly.
+ * 
+ * @param id The ID to unregister
+ */
+export function unregisterAllocatedId(id: number): void {
+  if (id > 0 && allocatedIds.has(id)) {
+    allocatedIds.delete(id);
+    
+    if (DEBUG_ID_ALLOCATION) {
+      console.log(`[NodeID] Unregistered ID ${id}`);
+    }
+    
+    // After unregistering, adjust the counter so freed IDs can be reused
+    // Find the maximum allocated ID
+    if (allocatedIds.size > 0) {
+      const maxAllocatedId = Math.max(...Array.from(allocatedIds));
+      // If the max allocated ID is less than the current counter,
+      // we can decrement the counter to allow reuse of the freed IDs
+      if (maxAllocatedId < nextPointId) {
+        // Set counter to max allocated ID + 1, but don't go below 1
+        nextPointId = Math.max(1, maxAllocatedId + 1);
+        if (DEBUG_ID_ALLOCATION) {
+          console.log(`[NodeID] Decremented counter to ${nextPointId} after unregistering ID ${id} (max allocated: ${maxAllocatedId})`);
+        }
+      }
+    } else {
+      // No allocated IDs left, reset counter to 1
+      nextPointId = 1;
+      if (DEBUG_ID_ALLOCATION) {
+        console.log(`[NodeID] Reset counter to 1 (no allocated IDs remaining)`);
+      }
+    }
+  }
+}
+
+/**
  * Get debug info about ID allocation state
  * Useful for debugging duplicate ID issues
  */

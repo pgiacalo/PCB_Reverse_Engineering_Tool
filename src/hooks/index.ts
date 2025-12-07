@@ -34,3 +34,5 @@ export { useFileOperations } from './useFileOperations';
 
 export { usePCBConnectivity } from './usePCBConnectivity';
 
+export { useUndo } from './useUndo';
+export type { UndoSnapshot } from './useUndo';

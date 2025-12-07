@@ -473,7 +473,7 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                 .filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0)
                 .map((stroke) => {
                   const point = stroke.points[0];
-                  const padType = (stroke as any).padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
+                  const padType = (stroke as any).padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad');
                   const notes = notesMap.get(stroke.id) || '';
                   const charCount = notes.length;
                   return (
@@ -525,7 +525,10 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                 .filter(s => selectedIds.has(s.id) && s.type === 'testPoint' && s.points.length > 0)
                 .map((stroke) => {
                   const point = stroke.points[0];
-                  const testPointType = (stroke as any).testPointType || (point.id !== undefined ? determineTestPointType(point.id, powerBuses) : 'Test Point (Signal)');
+                  // Always use determineTestPointType if we have a point ID, otherwise default to "Test Point"
+                  const testPointType = point.id !== undefined 
+                    ? determineTestPointType(point.id, powerBuses) 
+                    : 'Test Point';
                   const notes = notesMap.get(stroke.id) || '';
                   const charCount = notes.length;
                   return (

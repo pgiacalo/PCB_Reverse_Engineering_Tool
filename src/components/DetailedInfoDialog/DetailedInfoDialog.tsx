@@ -76,6 +76,12 @@ export interface DetailedInfoDialogProps {
   determineTestPointType: (nodeId: number, powerBuses: PowerBus[]) => string;
   /** Callback to find and center on a component */
   onFindComponent?: (componentId: string, x: number, y: number) => void;
+  /** Callback to find and center on a drawing stroke */
+  onFindStroke?: (strokeId: string, x: number, y: number) => void;
+  /** Callback to find and center on a power symbol */
+  onFindPower?: (powerId: string, x: number, y: number) => void;
+  /** Callback to find and center on a ground symbol */
+  onFindGround?: (groundId: string, x: number, y: number) => void;
   /** Dialog position for dragging */
   position: { x: number; y: number } | null;
   /** Whether the dialog is being dragged */
@@ -105,6 +111,9 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   determinePadType,
   determineTestPointType,
   onFindComponent,
+  onFindStroke,
+  onFindPower,
+  onFindGround,
   position,
   isDragging,
   onDragStart,
@@ -726,16 +735,45 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const viaType = (stroke as any).viaType || (point.id !== undefined ? determineViaType(point.id, powerBuses) : 'Via');
             return (
               <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {viaType}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {viaType}
+                    </div>
                   </div>
+                  {onFindStroke && (
+                    <button
+                      onClick={() => {
+                        onFindStroke(stroke.id, point.x, point.y);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   {point.id && <div>Node ID: {point.id}</div>}
@@ -784,19 +822,48 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const point = stroke.points[0];
             // Determine pad type - pads belong to only one layer (top or bottom)
             // Pads always have an id, so this is safe
-            const padType = (stroke as any).padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad (Signal)');
+            const padType = (stroke as any).padType || (point.id !== undefined ? determinePadType(point.id, powerBuses) : 'Pad');
             return (
               <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {padType}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {padType}
+                    </div>
                   </div>
+                  {onFindStroke && (
+                    <button
+                      onClick={() => {
+                        onFindStroke(stroke.id, point.x, point.y);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   {point.id && <div>Node ID: {point.id}</div>}
@@ -845,19 +912,52 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const point = stroke.points[0];
             // Determine test point type - test points belong to only one layer (top or bottom)
             // Test points always have an id, so this is safe
-            const testPointType = (stroke as any).testPointType || (point.id !== undefined ? determineTestPointType(point.id, powerBuses) : 'Test Point (Signal)');
+            // Always use determineTestPointType if we have a point ID, otherwise default to "Test Point"
+            const testPointType = point.id !== undefined 
+              ? determineTestPointType(point.id, powerBuses) 
+              : 'Test Point';
+            
             return (
               <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {testPointType}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {testPointType}
+                    </div>
                   </div>
+                  {onFindStroke && (
+                    <button
+                      onClick={() => {
+                        onFindStroke(stroke.id, point.x, point.y);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   {point.id && <div>Node ID: {point.id}</div>}
@@ -903,18 +1003,54 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
 
           {/* Traces - Formatted UI */}
           {selectedIds.size > 0 && drawingStrokes.filter(s => selectedIds.has(s.id) && s.type === 'trace').map((stroke) => {
+            // Calculate center point of trace for centering
+            const centerX = stroke.points.length > 0 
+              ? stroke.points.reduce((sum, p) => sum + p.x, 0) / stroke.points.length 
+              : 0;
+            const centerY = stroke.points.length > 0 
+              ? stroke.points.reduce((sum, p) => sum + p.y, 0) / stroke.points.length 
+              : 0;
             return (
               <div key={stroke.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {stroke.type || 'unknown'}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {stroke.type || 'unknown'}
+                    </div>
                   </div>
+                  {onFindStroke && stroke.points.length > 0 && (
+                    <button
+                      onClick={() => {
+                        onFindStroke(stroke.id, centerX, centerY);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   {stroke.points.length > 0 && (
@@ -991,16 +1127,45 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
             const bus = powerBuses.find(b => b.id === power.powerBusId);
             return (
               <div key={power.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                  <div style={{
-                    color: '#fff',
-                    padding: '4px 8px',
-                    fontSize: '12px',
-                    fontWeight: 500
-                  }}>
-                    {power.type || (bus ? `${bus.name} Power Node` : 'Power Node')}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                    <div style={{
+                      color: '#fff',
+                      padding: '4px 8px',
+                      fontSize: '12px',
+                      fontWeight: 500
+                    }}>
+                      {power.type || (bus ? `${bus.name} Power Node` : 'Power Node')}
+                    </div>
                   </div>
+                  {onFindPower && (
+                    <button
+                      onClick={() => {
+                        onFindPower(power.id, power.x, power.y);
+                      }}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        backgroundColor: '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap',
+                        marginLeft: '8px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#45a049';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#4CAF50';
+                      }}
+                    >
+                      Find
+                    </button>
+                  )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   <div>Node ID: {power.pointId || '(not assigned)'}</div>
@@ -1048,16 +1213,45 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
           {/* Ground Symbol Properties */}
           {selectedGroundIds.size > 0 && grounds.filter(g => selectedGroundIds.has(g.id)).map((ground) => (
             <div key={ground.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-              <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', padding: '8px 12px', minHeight: '32px' }}>
-                <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                <div style={{
-                  color: '#fff',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  fontWeight: 500
-                }}>
-                  {ground.type || 'Ground Node'}
+              <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                  <div style={{
+                    color: '#fff',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}>
+                    {ground.type || 'Ground Node'}
+                  </div>
                 </div>
+                {onFindGround && (
+                  <button
+                    onClick={() => {
+                      onFindGround(ground.id, ground.x, ground.y);
+                    }}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '10px',
+                      backgroundColor: '#4CAF50',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      marginLeft: '8px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#45a049';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = '#4CAF50';
+                    }}
+                  >
+                    Find
+                  </button>
+                )}
               </div>
               <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                 <div>Node ID: {ground.pointId || '(not assigned)'}</div>

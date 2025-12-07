@@ -6,7 +6,7 @@ import {
   formatComponentTypeName,
   COMPONENT_CATEGORIES,
 } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
@@ -43,6 +43,7 @@ import {
   useLocks,
   useDialogs,
   useFileOperations,
+  useUndo,
   type DrawingPoint,
   type DrawingStroke,
   type PCBImage,
@@ -777,6 +778,10 @@ function App() {
     // setGroundEditor,
   } = powerGround;
   
+  // Undo hook
+  const undoHook = useUndo();
+  const { saveSnapshot, undo: performUndo, clearSnapshot } = undoHook;
+  
   // Show power bus selector when power tool is selected (only if multiple buses exist)
   React.useEffect(() => {
     if (currentTool === 'power') {
@@ -1061,7 +1066,7 @@ function App() {
 
   // Helper function to determine pad type based on Node ID connections (same logic as vias)
   // Rules:
-  // 1. If pad has no POWER or GROUND node at same Node ID → "Pad (Signal)"
+  // 1. If pad has no POWER or GROUND node at same Node ID → "Pad"
   // 2. If pad has POWER node at same Node ID → "Pad (+5VDC Power Node)" etc.
   // 3. If pad has GROUND node at same Node ID → "Pad (Ground)"
   const determinePadType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
@@ -1080,13 +1085,13 @@ function App() {
       return `Pad (${groundType})`;
     }
     
-    // No power or ground connection → Pad (Signal)
-    return 'Pad (Signal)';
+    // No power or ground connection → Pad
+    return 'Pad';
   }, [powers, grounds]);
 
   // Helper function to determine test point type based on Node ID connections (same logic as pads)
   // Rules:
-  // 1. If test point has no POWER or GROUND node at same Node ID → "Test Point (Signal)"
+  // 1. If test point has no POWER or GROUND node at same Node ID → "Test Point"
   // 2. If test point has POWER node at same Node ID → "Test Point (+5VDC Power Node)" etc.
   // 3. If test point has GROUND node at same Node ID → "Test Point (Ground)"
   const determineTestPointType = useCallback((nodeId: number, powerBuses: PowerBus[]): string => {
@@ -1105,8 +1110,8 @@ function App() {
       return `Test Point (${groundType})`;
     }
     
-    // No power or ground connection → Test Point (Signal)
-    return 'Test Point (Signal)';
+    // No power or ground connection → Test Point
+    return 'Test Point';
   }, [powers, grounds]);
 
   // Selection functions for "Select All" menu items
@@ -1167,7 +1172,8 @@ function App() {
     setDebugDialog({ visible: true, text: '' });
   }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds, setDebugDialog]);
 
-  const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
+  // Generic function to center any object at given world coordinates
+  const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -1177,20 +1183,54 @@ function App() {
     const visibleCenterX = contentWidth / 2;
     const visibleCenterY = contentHeight / 2;
 
-    // Calculate viewPan to center the component at the visible center
+    // Calculate viewPan to center the object at the visible center
     // Formula: viewPan = visibleCenter - world * scale
     const newPanX = visibleCenterX - worldX * viewScale;
     const newPanY = visibleCenterY - worldY * viewScale;
 
-    // Update view pan to center on component
+    // Update view pan to center on object
     setViewPan({ x: newPanX, y: newPanY });
+  }, [viewScale, setViewPan]);
+
+  const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
+    findAndCenterObject(worldX, worldY);
 
     // Select the component and clear other selections
     setSelectedComponentIds(new Set([componentId]));
     setSelectedIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
-  }, [viewScale, setViewPan, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+  }, [findAndCenterObject, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const findAndCenterStroke = useCallback((strokeId: string, worldX: number, worldY: number) => {
+    findAndCenterObject(worldX, worldY);
+
+    // Select the stroke and clear other selections
+    setSelectedIds(new Set([strokeId]));
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [findAndCenterObject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  const findAndCenterPower = useCallback((powerId: string, worldX: number, worldY: number) => {
+    findAndCenterObject(worldX, worldY);
+
+    // Select the power symbol and clear other selections
+    setSelectedPowerIds(new Set([powerId]));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [findAndCenterObject, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
+
+  const findAndCenterGround = useCallback((groundId: string, worldX: number, worldY: number) => {
+    findAndCenterObject(worldX, worldY);
+
+    // Select the ground symbol and clear other selections
+    setSelectedGroundIds(new Set([groundId]));
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+  }, [findAndCenterObject, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
 
   const powerNodeNames = React.useMemo(() => {
     // Collect bus IDs that have at least one power symbol
@@ -2214,6 +2254,9 @@ function App() {
         const viaType = determineViaType(nodeId, powerBuses);
         
         const center = { id: nodeId, x: snapped.x, y: snapped.y };
+        // Save snapshot before adding new via
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+        
         const viaStroke: DrawingStroke = {
           id: `${Date.now()}-via`,
           points: [center],
@@ -2299,6 +2342,9 @@ function App() {
         const padColor = brushColor || (padToolLayer === 'top' ? topPadColor : bottomPadColor);
         const padSize = brushSize || (padToolLayer === 'top' ? topPadSize : bottomPadSize);
         const center = { id: nodeId, x: snapped.x, y: snapped.y };
+        // Save snapshot before adding new pad
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+        
         const padStroke: DrawingStroke = {
           id: `${Date.now()}-pad`,
           points: [center],
@@ -2375,6 +2421,9 @@ function App() {
         // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
         const testPointColor = brushColor || (testPointToolLayer === 'top' ? topTestPointColor : bottomTestPointColor);
         const testPointSize = brushSize || (testPointToolLayer === 'top' ? topTestPointSize : bottomTestPointSize);
+        // Save snapshot before adding new test point
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+        
         const testPointStroke: DrawingStroke = {
           id: `${Date.now()}-testPoint`,
           points: [{ id: nodeId, x: truncatedPos.x, y: truncatedPos.y }],
@@ -2505,6 +2554,9 @@ function App() {
         }
       }
       
+      // Save snapshot before adding new component
+      saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+      
       // Add component to appropriate layer
       if (componentToolLayer === 'top') {
         setShowTopComponents(true);
@@ -2586,6 +2638,9 @@ function App() {
           });
           return;
         }
+        
+        // Save snapshot before adding new power symbol
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
         
         // Place power node immediately
         const p: PowerSymbol = {
@@ -2704,6 +2759,9 @@ function App() {
         return;
       }
       
+      // Save snapshot before adding new ground symbol
+      saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+      
         // Place ground node immediately
       const g: GroundSymbol = {
         id: `gnd-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2786,6 +2844,9 @@ function App() {
       }
       
       if (pts.length >= 1) {
+        // Save snapshot before finalizing trace
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+        
         // Use centralized tool state (single source of truth)
         // Get tool instance ID from centralized state management
         const layer = traceToolLayer || 'top';
@@ -2948,6 +3009,9 @@ function App() {
         layer: layer,
         type: 'trace',
       };
+      // Save snapshot before finalizing trace
+      saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+      
       setDrawingStrokes(prev => [...prev, newStroke]);
       if (layer === 'top') {
         setTraceOrderTop(prev => [...prev, newStroke.id]);
@@ -3334,6 +3398,9 @@ function App() {
             const disjoint = maxX < bbMinX || minX > bbMaxX || maxY < bbMinY || minY > bbMaxY;
             return !disjoint;
           };
+          // Save snapshot before erasing components
+          saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+          
           setComponentsTop(prev => prev.filter(c => !intersects(c)));
           setComponentsBottom(prev => prev.filter(c => !intersects(c)));
         }
@@ -3396,7 +3463,7 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey, saveSnapshot, powerSymbols, groundSymbols]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Finalize selection if active
@@ -5846,6 +5913,9 @@ function App() {
       e.preventDefault();
       e.stopPropagation();
       
+      // Save snapshot before deleting
+      saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+      
       // Handle each type independently so one locked type doesn't prevent deleting others
       if (selectedIds.size > 0) {
         // Filter out locked vias and traces
@@ -5898,103 +5968,90 @@ function App() {
       }
       return;
     }
-    // Drawing undo: Ctrl+Z removes last stroke on the selected layer
-    // Also handles Power and Ground tool undo
-    // Only handle undo keys here; let other keys pass through to tool shortcuts
-    if ((currentTool === 'draw' || currentTool === 'erase' || currentTool === 'power' || currentTool === 'ground') && 
-        (e.key === 'z' || e.key === 'Z') && 
-        e.ctrlKey && 
+    // Unified Undo: CMD-Z (Mac) or CTRL-Z (Windows/Linux)
+    // Works for all tools and restores the last state snapshot
+    if ((e.key === 'z' || e.key === 'Z') && 
+        (e.ctrlKey || e.metaKey) && 
         !e.shiftKey && !e.altKey) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Let browser handle undo in text fields
+      }
+      
       e.preventDefault();
       e.stopPropagation();
       
-      // Power tool undo: remove last power symbol in reverse order
-      if (currentTool === 'power') {
-        setPowerSymbols(prev => {
-          if (prev.length === 0) return prev;
-          return prev.slice(0, -1); // Remove last power symbol
-        });
-        return;
-      }
-      
-      // Ground tool undo: remove last ground symbol in reverse order
-      if (currentTool === 'ground') {
-        setGroundSymbols(prev => {
-          if (prev.length === 0) return prev;
-          return prev.slice(0, -1); // Remove last ground symbol
-        });
-        return;
-      }
-      
-      // Special handling for trace mode: undo last segment instead of entire trace
-      if (currentTool === 'draw' && drawingMode === 'trace') {
-          // ALWAYS check in-progress trace first (most recent action)
-          // Check both state (source of truth) and ref (backup) to catch all cases
-          const statePoints = currentStroke;
-          const refPoints = currentStrokeRef.current;
-          // Prefer state (source of truth), but use ref if state is empty (handles timing edge cases)
-          const inProgressPoints = statePoints.length > 0 ? statePoints : refPoints;
-          
-          // If a trace is in progress, remove the last point (undo last segment)
-          // This is the most recent action, so it takes priority over completed traces
-          if (inProgressPoints.length > 0) {
-            if (inProgressPoints.length > 1) {
-              // Remove last point, keeping the trace in progress
-              setCurrentStroke(prev => prev.slice(0, -1));
-            } else {
-              // Only one point left, cancel the trace
-              setCurrentStroke([]);
+      // Perform undo and restore state
+      const snapshot = performUndo();
+      if (snapshot) {
+        // Find objects that were added (exist in current state but not in snapshot)
+        // and unregister their NodeIDs
+        
+        // Find added drawing strokes and unregister their point IDs
+        const snapshotStrokeIds = new Set(snapshot.drawingStrokes.map((s: DrawingStroke) => s.id));
+        for (const stroke of drawingStrokes) {
+          if (!snapshotStrokeIds.has(stroke.id)) {
+            // This stroke was added, unregister its point IDs
+            for (const point of stroke.points) {
+              if (point.id && typeof point.id === 'number') {
+                unregisterAllocatedId(point.id);
+              }
             }
-            return;
           }
-          
-          // No trace in progress - find the MOST RECENT completed trace (last in array)
-          // and remove its last segment, then restore it to currentStroke so user can continue
-          setDrawingStrokes(prev => {
-            // Search backwards from the end to find the most recent trace
-            for (let i = prev.length - 1; i >= 0; i--) {
-              const s = prev[i];
-              // Check if it's a trace on the current layer
-              if (s.type === 'trace' && s.layer === selectedDrawingLayer && s.points.length >= 2) {
-                if (s.points.length > 2) {
-                  // Remove last point (undo last segment)
-                  const remainingPoints = s.points.slice(0, -1);
-                  // Restore the remaining points to currentStroke so user can continue drawing
-                  // Remove the trace from drawingStrokes since it's now back in currentStroke
-                  setCurrentStroke(remainingPoints);
-                  return [...prev.slice(0, i), ...prev.slice(i + 1)];
-                } else {
-                  // Only 2 points left (one segment), remove entire trace
-                  return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        }
+        
+        // Find added components and unregister their pin connection NodeIDs
+        const snapshotComponentIds = new Set([...snapshot.componentsTop.map((c: PCBComponent) => c.id), ...snapshot.componentsBottom.map((c: PCBComponent) => c.id)]);
+        for (const comp of [...componentsTop, ...componentsBottom]) {
+          if (!snapshotComponentIds.has(comp.id)) {
+            // This component was added, unregister its pin connection NodeIDs
+            for (const pinConnection of comp.pinConnections) {
+              if (pinConnection && pinConnection.trim() !== '') {
+                const nodeId = parseInt(pinConnection, 10);
+                if (!isNaN(nodeId) && nodeId > 0) {
+                  unregisterAllocatedId(nodeId);
                 }
               }
             }
-            return prev;
-          });
-          return;
+          }
         }
         
-        // For vias and other tools: remove last point if in progress, or remove entire stroke
-        if (isDrawing && currentStroke.length > 0) {
-          setCurrentStroke([]);
-          return;
+        // Find added power symbols and unregister their point IDs
+        const snapshotPowerIds = new Set(snapshot.powerSymbols.map((p: PowerSymbol) => p.id));
+        for (const power of powerSymbols) {
+          if (!snapshotPowerIds.has(power.id) && power.pointId && typeof power.pointId === 'number') {
+            unregisterAllocatedId(power.pointId);
+          }
         }
         
-        // Remove the last stroke of the current type on the selected layer
-        if (currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'pad' || drawingMode === 'testPoint')) {
-          setDrawingStrokes(prev => {
-            for (let i = prev.length - 1; i >= 0; i--) {
-              const s = prev[i];
-              if (s.layer === selectedDrawingLayer && s.type === drawingMode) {
-                return [...prev.slice(0, i), ...prev.slice(i + 1)];
-              }
-            }
-            return prev;
-          });
-        } else if (currentTool === 'erase') {
+        // Find added ground symbols and unregister their point IDs
+        const snapshotGroundIds = new Set(snapshot.groundSymbols.map((g: GroundSymbol) => g.id));
+        for (const ground of groundSymbols) {
+          if (!snapshotGroundIds.has(ground.id) && ground.pointId && typeof ground.pointId === 'number') {
+            unregisterAllocatedId(ground.pointId);
+          }
         }
-        return;
+        
+        // Restore state from snapshot
+        setDrawingStrokes(snapshot.drawingStrokes);
+        setComponentsTop(snapshot.componentsTop);
+        setComponentsBottom(snapshot.componentsBottom);
+        setPowerSymbols(snapshot.powerSymbols);
+        setGroundSymbols(snapshot.groundSymbols);
+        // Clear any in-progress drawing
+        setCurrentStroke([]);
       }
+      return;
+    }
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.ctrlKey && !e.altKey) {
@@ -6520,7 +6577,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -6614,7 +6671,9 @@ function App() {
     setCurrentView('overlay');
     // Reset point ID counter and clear allocated IDs tracking
     resetPointIdCounter();
-  }, [saveDefaultColor, saveDefaultSize]);
+    // Clear undo snapshot
+    clearSnapshot();
+  }, [saveDefaultColor, saveDefaultSize, clearSnapshot]);
 
   // Close the current project and release all browser permissions
   // This function clears ALL project state to ensure a clean slate before opening/creating a new project
@@ -6661,6 +6720,9 @@ function App() {
     // Clear images
     setTopImage(null);
     setBottomImage(null);
+    
+    // Clear undo snapshot
+    clearSnapshot();
     
     // Clear drawing data
     setDrawingStrokes([]);
@@ -6851,7 +6913,9 @@ function App() {
     setAutoAssignDesignators, setUseGlobalDesignatorCounters,
     // Dialog setters
     setOpenMenu, setDebugDialog, setErrorDialog, setNewProjectDialog, setNewProjectSetupDialog, setSaveAsDialog,
-    setAutoSaveDialog, setAutoSavePromptDialog, setShowColorPicker, setShowPowerBusManager, setShowGroundBusManager,
+    setAutoSaveDialog, setAutoSavePromptDialog,
+    // Undo hook
+    clearSnapshot, setShowColorPicker, setShowPowerBusManager, setShowGroundBusManager,
     setShowDesignatorManager, setShowBoardDimensionsDialog, setNotesDialogVisible, setProjectNotesDialogVisible,
     // Other setters
     setBoardDimensions, setHoverComponent, setHoverTestPoint, setIsPanning, setIsDrawing, setTracePreviewMousePos,
@@ -9294,6 +9358,9 @@ function App() {
   // Load project from JSON (images embedded)
   const loadProject = useCallback(async (project: any) => {
     try {
+      // Clear undo snapshot when loading a project
+      clearSnapshot();
+      
       // Restore tool instances from project data
       if (project.toolInstances) {
         toolInstanceManager.initializeFromProject(project);
@@ -9937,7 +10004,7 @@ function App() {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
     }
-  }, [currentTool, drawingMode, projectDirHandle, setTopImage, setBottomImage, setPointIdCounter, setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTracesLocked, setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked, setShowViasLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setDrawingStrokes, setComponentsTop, setComponentsBottom, setGroundSymbols, setPowerBuses, setGroundBuses, setPowerSymbols, generatePointId, truncatePoint, getDefaultPrefix, saveDesignatorCounters, loadDesignatorCounters, setAutoAssignDesignators, setUseGlobalDesignatorCounters]);
+  }, [currentTool, drawingMode, projectDirHandle, setTopImage, setBottomImage, setPointIdCounter, setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTracesLocked, setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked, setShowViasLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setDrawingStrokes, setComponentsTop, setComponentsBottom, setGroundSymbols, setPowerBuses, setGroundBuses, setPowerSymbols, generatePointId, truncatePoint, getDefaultPrefix, saveDesignatorCounters, loadDesignatorCounters, setAutoAssignDesignators, setUseGlobalDesignatorCounters, clearSnapshot]);
 
   // Function to get list of auto-saved files from history subdirectory, sorted by timestamp
   // COMMENTED OUT: File history navigation is disabled
@@ -10269,9 +10336,12 @@ function App() {
   React.useEffect(() => {
     // Only react when mode actually changed; do NOT auto-finalize on layer change
     const modeChanged = drawingMode !== prevModeRef.current;
-    if (currentTool === 'draw' && prevModeRef.current === 'trace' && modeChanged) {
+      if (currentTool === 'draw' && prevModeRef.current === 'trace' && modeChanged) {
       // finalize without losing the current points
       if (currentStrokeRef.current.length >= 2) {
+        // Save snapshot before auto-finalizing trace
+        saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+        
         const newStroke: DrawingStroke = {
           id: `${Date.now()}-trace-autofinalize`,
           points: currentStrokeRef.current,
@@ -12556,6 +12626,9 @@ function App() {
         determinePadType={determinePadType}
         determineTestPointType={determineTestPointType}
         onFindComponent={findAndCenterComponent}
+        onFindStroke={findAndCenterStroke}
+        onFindPower={findAndCenterPower}
+        onFindGround={findAndCenterGround}
         onOpenNotesDialog={() => setNotesDialogVisible(true)}
         position={detailedInfoDialogPosition}
         isDragging={isDraggingDetailedInfoDialog}
