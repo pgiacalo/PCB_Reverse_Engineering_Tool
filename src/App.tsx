@@ -913,6 +913,10 @@ function App() {
   
   // File operations hook
   const fileOperations = useFileOperations();
+  
+  // Auto-save indicator state: true = red (changes detected), false = empty (saved)
+  const [autoSaveIndicatorActive, setAutoSaveIndicatorActive] = useState(false);
+  
   const {
     autoSaveEnabled,
     setAutoSaveEnabled,
@@ -6778,6 +6782,8 @@ function App() {
       autoSaveBaseNameRef.current = '';
     }
     hasChangesSinceLastAutoSaveRef.current = false;
+    // Clear auto-save indicator
+    setAutoSaveIndicatorActive(false);
     
     // Clear auto-save interval timer
     if (autoSaveIntervalRef.current) {
@@ -8757,8 +8763,12 @@ function App() {
       currentFileIndexRef.current = 0;
       // Reset the changes flag after successful save
       hasChangesSinceLastAutoSaveRef.current = false;
+      // Clear the auto-save indicator (return to empty circle)
+      setAutoSaveIndicatorActive(false);
     } catch (e) {
       console.error('Auto save failed:', e);
+      // Clear indicator even on failure
+      setAutoSaveIndicatorActive(false);
     }
   }, []); // Empty dependencies - function never changes
   
@@ -9081,6 +9091,10 @@ function App() {
     
     // Track changes if auto save is enabled
     hasChangesSinceLastAutoSaveRef.current = true;
+    // Show red indicator when changes are detected
+    if (autoSaveEnabled) {
+      setAutoSaveIndicatorActive(true);
+    }
     console.log('Auto save: Change detected, marking for save', {
       topImage: !!topImage,
       bottomImage: !!bottomImage,
@@ -9126,8 +9140,12 @@ function App() {
     if (autoSaveEnabled) {
       isFirstRunAfterEnableRef.current = true;
       console.log('Auto save: Enabled, marking first run');
+      // Set indicator to green (enabled, no changes yet)
+      setAutoSaveIndicatorActive(false);
     } else {
       isFirstRunAfterEnableRef.current = false;
+      // Clear indicator when auto-save is disabled
+      setAutoSaveIndicatorActive(false);
     }
   }, [autoSaveEnabled]);
 
@@ -10253,6 +10271,8 @@ function App() {
       
       // Reset change tracking since we loaded a saved file
       hasChangesSinceLastAutoSaveRef.current = false;
+      // Clear auto-save indicator when project is loaded from history
+      setAutoSaveIndicatorActive(false);
     } catch (e) {
       console.error('Failed to load file from history:', e);
       // Don't show alert for navigation errors, just log
@@ -10759,6 +10779,8 @@ function App() {
         isReadOnlyMode={isReadOnlyMode}
         currentProjectFilePath={currentProjectFilePath}
         isProjectActive={!!projectDirHandle}
+        autoSaveEnabled={autoSaveEnabled}
+        autoSaveIndicatorActive={autoSaveIndicatorActive}
         onNewProject={newProject}
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}

@@ -8,8 +8,8 @@ import { SetToolColorDialog } from '../SetToolColorDialog';
 
 export interface MenuBarProps {
   // Menu state
-  openMenu: 'file' | 'transform' | 'tools' | 'about' | null;
-  setOpenMenu: React.Dispatch<React.SetStateAction<'file' | 'transform' | 'tools' | 'about' | null>>;
+  openMenu: 'file' | 'transform' | 'tools' | 'about' | 'help' | null;
+  setOpenMenu: React.Dispatch<React.SetStateAction<'file' | 'transform' | 'tools' | 'about' | 'help' | null>>;
   
   // Read-only mode
   isReadOnlyMode: boolean;
@@ -17,6 +17,10 @@ export interface MenuBarProps {
   
   // Project active state - true when a project has been created or opened
   isProjectActive: boolean;
+  
+  // Auto-save indicator
+  autoSaveEnabled: boolean;
+  autoSaveIndicatorActive: boolean; // true = red (changes detected), false = empty (saved)
   
   // File operations
   onNewProject: () => void;
@@ -177,6 +181,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   isReadOnlyMode,
   currentProjectFilePath,
   isProjectActive,
+  autoSaveEnabled,
+  autoSaveIndicatorActive,
   onNewProject,
   onOpenProject,
   onSaveProject,
@@ -1320,6 +1326,178 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         )}
       </div>
 
+      {/* Help menu */}
+      <div style={{ position: 'relative' }}>
+        <button 
+          onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'help' ? null : 'help'); }} 
+          style={{ 
+            padding: '6px 10px', 
+            borderRadius: 6, 
+            border: '1px solid #ddd', 
+            background: openMenu === 'help' ? '#eef3ff' : '#fff', 
+            fontWeight: 600, 
+            color: '#222'
+          }}
+        >
+          Help ▾
+        </button>
+        {openMenu === 'help' && (
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
+            <div style={{ marginBottom: 16 }}>
+              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>Help: Typical Usage Steps</h2>
+              
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 1: Create or Open a Project</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>New Project:</strong> File → New Project. Choose a project name and location.</li>
+                  <li><strong>Open Project:</strong> File → Open Project. Select an existing project file (.json).</li>
+                  <li><strong>Auto-Save:</strong> File → Auto Save → Enable to automatically save your work at regular intervals.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 2: Load PCB Images</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Load Top Image:</strong> Images → Load Top Image. Select your top-side PCB photo (.png or .jpeg).</li>
+                  <li><strong>Load Bottom Image:</strong> Images → Load Bottom Image. Select your bottom-side PCB photo.</li>
+                  <li>Images are automatically copied to the <code style={{ background: '#1f1f24', padding: '2px 4px', borderRadius: 3, color: '#fff' }}>images/</code> subdirectory.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 3: Align and Transform Images</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Enter Transform Mode:</strong> Images → Transform Images. Select which image (Top or Bottom) to transform.</li>
+                  <li><strong>Transform Operations:</strong> Use Move, Nudge, Scale, Rotate, Slant, or Keystone to align images.</li>
+                  <li><strong>Image Adjustments:</strong> Adjust brightness, contrast, sharpness, and grayscale as needed.</li>
+                  <li><strong>Flip Images:</strong> Use horizontal or vertical flip if your images are mirrored.</li>
+                  <li><strong>Arrow Keys:</strong> When transform tool is active, use arrow keys for precise adjustments.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 4: Set Board Dimensions</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Enter Dimensions:</strong> Images → Enter Board Dimensions. Specify the actual physical dimensions of your PCB.</li>
+                  <li>This helps ensure accurate measurements and scaling for your reverse engineering work.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 5: Trace Connections</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Place Vias:</strong> Click the Via tool (<code>V</code>) and click on the PCB where vias connect layers.</li>
+                  <li><strong>Place Pads:</strong> Click the Pad tool (<code>P</code>) and mark component pad locations.</li>
+                  <li><strong>Place Test Points:</strong> Click the Test Point tool (<code>Y</code>) to mark test points.</li>
+                  <li><strong>Draw Traces:</strong> Click the Trace tool (<code>T</code>), select Top or Bottom layer, then click to start a trace. Click again to add segments. Press <code>Enter</code> or click outside to finish.</li>
+                  <li><strong>Snapping:</strong> Traces automatically snap to nearby vias, pads, power nodes, and ground nodes.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 6: Place Components</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Place Component:</strong> Click the Component tool (<code>C</code>), select component type, then click on the PCB.</li>
+                  <li><strong>Edit Component:</strong> Double-click a component to open the Component Editor dialog.</li>
+                  <li><strong>Set Properties:</strong> Enter designator (e.g., R1, C2), value, and other component details.</li>
+                  <li><strong>Connect Pins:</strong> Click on pads or vias to connect component pins to the circuit.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 7: Add Power and Ground Nodes</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Manage Power Buses:</strong> Tools → Manage Power Buses to create and configure voltage buses (e.g., +5V, +3.3V).</li>
+                  <li><strong>Place Power Nodes:</strong> Click the Power tool (<code>B</code>), select a voltage bus, then click on the PCB.</li>
+                  <li><strong>Manage Ground Buses:</strong> Tools → Manage Ground Buses to configure ground connections.</li>
+                  <li><strong>Place Ground Nodes:</strong> Click the Ground tool (<code>G</code>), select a ground bus, then click on the PCB.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 8: Add Notes and Documentation</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Element Notes:</strong> Press <code>N</code> to open the Notes dialog for selected elements (vias, pads, traces, etc.).</li>
+                  <li><strong>Project Notes:</strong> Press <code>L</code> to open Project Notes / TODO list for general project documentation.</li>
+                  <li><strong>Information Dialog:</strong> Press <code>I</code> to see detailed information about selected elements.</li>
+                  <li><strong>Find Elements:</strong> Use the Find button in the Information dialog to center and highlight specific elements.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 9: Save Your Work</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Manual Save:</strong> File → Save Project to save your work manually.</li>
+                  <li><strong>Auto-Save:</strong> If enabled, your project is automatically saved at regular intervals.</li>
+                  <li><strong>History:</strong> Auto-saved versions are stored in the <code style={{ background: '#1f1f24', padding: '2px 4px', borderRadius: 3, color: '#fff' }}>history/</code> subdirectory.</li>
+                  <li><strong>Restore from History:</strong> Tools → Restore from History to access previous versions.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Keyboard Shortcuts</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Drawing Tools</p>
+                    <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                      <li><strong>Select</strong> — <code>S</code></li>
+                      <li><strong>Via</strong> — <code>V</code></li>
+                      <li><strong>Pad</strong> — <code>P</code></li>
+                      <li><strong>Test Point</strong> — <code>Y</code></li>
+                      <li><strong>Trace</strong> — <code>T</code></li>
+                      <li><strong>Component</strong> — <code>C</code></li>
+                      <li><strong>Power</strong> — <code>B</code></li>
+                      <li><strong>Ground</strong> — <code>G</code></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>View & Navigation</p>
+                    <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                      <li><strong>Move (Pan)</strong> — <code>H</code></li>
+                      <li><strong>Magnify</strong> — <code>M</code></li>
+                      <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code></li>
+                      <li><strong>Recall View</strong> — <code>0-9</code></li>
+                      <li><strong>Information</strong> — <code>I</code></li>
+                      <li><strong>Notes</strong> — <code>N</code></li>
+                      <li><strong>Project Notes</strong> — <code>L</code></li>
+                      <li><strong>Undo</strong> — <code>Ctrl+Z</code> / <code>Cmd+Z</code></li>
+                    </ul>
+                  </div>
+                </div>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
+                  <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                    <li>Use arrow keys to adjust image transformations (when transform tool is active)</li>
+                    <li>Use arrow keys to nudge selected components</li>
+                    <li>Click a slider first, then use arrow keys for precise adjustment</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Tips & Tricks</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                  <li>Double-click any slider to reset it to the default value</li>
+                  <li>Double-click a component to edit its properties</li>
+                  <li>Hold <code>Shift</code> while clicking to add to selection</li>
+                  <li>Use the Information dialog (<code>I</code>) to see details about selected elements</li>
+                  <li>Lock layers (Tools → Lock) to prevent accidental modifications</li>
+                  <li>Use the Find button in the Information dialog to center elements in view</li>
+                  <li>Save views with <code>X</code> + number key for quick navigation</li>
+                  <li>Use <code>+</code> and <code>-</code> keys to resize tool icons</li>
+                </ul>
+              </div>
+
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
+                <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '12px', lineHeight: '1.5' }}>
+                  For more detailed feature information, see the <strong>About</strong> menu.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* File path display */}
       {currentProjectFilePath && (
         <div style={{ 
@@ -1340,6 +1518,20 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           }} title={currentProjectFilePath}>
             {currentProjectFilePath}
           </div>
+          {/* Auto-save indicator - only show when auto-save is enabled */}
+          {autoSaveEnabled && (
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                border: '1px solid #666',
+                backgroundColor: autoSaveIndicatorActive ? '#ff0000' : '#00ff00',
+                flexShrink: 0,
+              }}
+              title={autoSaveIndicatorActive ? 'Auto-save pending (changes detected)' : 'Auto-save enabled (no changes)'}
+            />
+          )}
         </div>
       )}
     </div>
