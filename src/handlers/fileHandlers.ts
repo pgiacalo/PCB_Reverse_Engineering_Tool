@@ -70,7 +70,7 @@ export interface FileHandlersProps {
   
   // Utility functions
   alert: (message: string) => void;
-  loadProject: (project: any) => Promise<void>;
+  loadProject: (project: any, dirHandleOverride?: FileSystemDirectoryHandle | null) => Promise<void>;
 }
 
 export interface FileHandlers {
@@ -417,7 +417,8 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
         const text = await file.text();
         const project = JSON.parse(text);
         
-        await loadProject(project);
+        // Pass directory handle directly to avoid race condition with state update
+        await loadProject(project, projectDirHandle);
         
         let projectNameToUse: string;
         if (project.projectInfo?.name) {

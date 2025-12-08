@@ -1176,6 +1176,42 @@ function App() {
     setDebugDialog({ visible: true, text: '' });
   }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds, setDebugDialog]);
 
+  const selectAllComponentConnections = useCallback(() => {
+    // Collect all Point IDs from all component pin connections
+    const componentPointIds = new Set<number>();
+    for (const comp of [...componentsTop, ...componentsBottom]) {
+      const pinConnections = comp.pinConnections || [];
+      for (const conn of pinConnections) {
+        if (conn && conn.trim() !== '') {
+          const pointId = parseInt(conn.trim(), 10);
+          if (!isNaN(pointId) && pointId > 0) {
+            componentPointIds.add(pointId);
+          }
+        }
+      }
+    }
+
+    // Find all traces that contain any of these Point IDs in their points array
+    const connectedTraceIds = new Set<string>();
+    for (const stroke of drawingStrokes) {
+      if (stroke.type === 'trace' && stroke.points.length >= 2) {
+        // Check if any point in this trace matches a component connection Point ID
+        const hasComponentConnection = stroke.points.some(point => 
+          point && point.id !== undefined && point.id !== null && componentPointIds.has(point.id)
+        );
+        if (hasComponentConnection) {
+          connectedTraceIds.add(stroke.id);
+        }
+      }
+    }
+
+    // Select the connected traces
+    setSelectedIds(connectedTraceIds);
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+  }, [componentsTop, componentsBottom, drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
   // Generic function to center any object at given world coordinates
   const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
     const canvas = canvasRef.current;
@@ -9443,7 +9479,8 @@ function App() {
   }, [newProjectDialog.visible, handleNewProjectYes]);
 
   // Load project from JSON (images embedded)
-  const loadProject = useCallback(async (project: any) => {
+  // Optional dirHandle parameter allows passing directory handle directly to avoid race condition
+  const loadProject = useCallback(async (project: any, dirHandleOverride?: FileSystemDirectoryHandle | null) => {
     try {
       // Clear undo snapshot when loading a project
       clearSnapshot();
@@ -9859,8 +9896,10 @@ function App() {
           bitmap,
         };
       };
-      const newTop = await buildImage(project.images?.top, projectDirHandle);
-      const newBottom = await buildImage(project.images?.bottom, projectDirHandle);
+      // Use provided directory handle if available, otherwise fall back to state
+      const dirHandleToUse = dirHandleOverride !== undefined ? dirHandleOverride : projectDirHandle;
+      const newTop = await buildImage(project.images?.top, dirHandleToUse);
+      const newBottom = await buildImage(project.images?.bottom, dirHandleToUse);
       setTopImage(newTop);
       setBottomImage(newBottom);
 
@@ -10574,9 +10613,18 @@ function App() {
           return;
         }
         
+        // CRITICAL: Set flag BEFORE closing project to prevent useEffect from overwriting refs
+        // This ensures the ref sync useEffect doesn't interfere with our directory handle setup
+        isOpeningProjectRef.current = true;
+        
         // CRITICAL: Close current project first to release all browser permissions and clear all state
         // This prevents state leakage from the previous project into the newly opened project
+        // Must clear state BEFORE getting the new directory handle to avoid using stale handles
         closeProject();
+        
+        // Small delay to ensure state is cleared before proceeding
+        // This ensures projectDirHandle state is null before we set the new one
+        await new Promise(resolve => setTimeout(resolve, 0));
         
         setCurrentProjectFilePath(file.name);
         const text = await file.text();
@@ -10650,7 +10698,9 @@ function App() {
         // This ensures we can update the directory handle immediately if needed
         const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
         
-        await loadProject(project);
+        // CRITICAL: Pass directory handle directly to avoid race condition with state update
+        // After closeProject() clears the state, we need to pass the new handle directly
+        await loadProject(project, projectDirHandle);
         
         let projectNameToUse: string;
         if (project.projectInfo?.name) {
@@ -10839,6 +10889,7 @@ function App() {
         selectAllPads={selectAllPads}
         selectAllComponents={selectAllComponents}
         selectDisconnectedComponents={selectDisconnectedComponents}
+        selectAllComponentConnections={selectAllComponentConnections}
         selectAllPowerNodes={selectAllPowerNodes}
         selectAllGroundNodes={selectAllGroundNodes}
         selectPowerNodesByName={selectPowerNodesByName}

@@ -99,6 +99,7 @@ export interface MenuBarProps {
   selectAllPads: () => void;
   selectAllComponents: () => void;
   selectDisconnectedComponents: () => void;
+  selectAllComponentConnections: () => void;
   selectAllPowerNodes: () => void;
   selectAllGroundNodes: () => void;
   selectPowerNodesByName: (name: string) => void;
@@ -241,6 +242,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectAllPads,
   selectAllComponents,
   selectDisconnectedComponents,
+  selectAllComponentConnections,
   selectAllPowerNodes,
   selectAllGroundNodes,
   selectPowerNodesByName,
@@ -684,6 +686,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         <button onClick={() => { selectAllComponents(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
           All Components
+        </button>
+        <button onClick={() => { selectAllComponentConnections(); setOpenToolsSubmenu(null); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+          All Component Connections
         </button>
         <div style={{ position: 'relative' }}>
           <button
