@@ -1179,37 +1179,165 @@ function App() {
   const selectAllComponentConnections = useCallback(() => {
     // Collect all Point IDs from all component pin connections
     const componentPointIds = new Set<number>();
+    let totalPins = 0;
+    let connectedPins = 0;
+    
     for (const comp of [...componentsTop, ...componentsBottom]) {
       const pinConnections = comp.pinConnections || [];
+      totalPins += comp.pinCount || 0;
       for (const conn of pinConnections) {
         if (conn && conn.trim() !== '') {
           const pointId = parseInt(conn.trim(), 10);
           if (!isNaN(pointId) && pointId > 0) {
             componentPointIds.add(pointId);
+            connectedPins++;
           }
         }
       }
     }
 
-    // Find all traces that contain any of these Point IDs in their points array
-    const connectedTraceIds = new Set<string>();
+    console.log(`Component connections: ${connectedPins} pins connected, ${componentPointIds.size} unique Point IDs`);
+
+    if (componentPointIds.size === 0) {
+      console.log('No component connections found - components may not have pins connected');
+      alert('No component connections found. Please connect component pins to vias, pads, or traces first.');
+      return;
+    }
+
+    // Build a map: Point ID -> Set of trace IDs that contain this Point ID
+    const pointIdToTraces = new Map<number, Set<string>>();
     for (const stroke of drawingStrokes) {
       if (stroke.type === 'trace' && stroke.points.length >= 2) {
-        // Check if any point in this trace matches a component connection Point ID
-        const hasComponentConnection = stroke.points.some(point => 
-          point && point.id !== undefined && point.id !== null && componentPointIds.has(point.id)
-        );
-        if (hasComponentConnection) {
-          connectedTraceIds.add(stroke.id);
+        for (const point of stroke.points) {
+          if (point && point.id !== undefined && point.id !== null) {
+            if (!pointIdToTraces.has(point.id)) {
+              pointIdToTraces.set(point.id, new Set());
+            }
+            pointIdToTraces.get(point.id)!.add(stroke.id);
+          }
         }
       }
     }
 
+    // Build connectivity graph: Point ID -> Set of connected Point IDs (through traces, vias, and pads)
+    // This allows us to find all Point IDs connected to component pins, even indirectly
+    // CRITICAL: Pads and vias are connection nodes - if a trace connects to a pad/via, they share the same Point ID
+    const connectivityGraph = new Map<number, Set<number>>();
+    
+    // First, add all pads/vias to the graph (they're connection nodes)
+    for (const stroke of drawingStrokes) {
+      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length >= 1) {
+        const pointId = stroke.points[0]?.id;
+        if (pointId !== undefined && pointId !== null) {
+          // Initialize the node in the graph
+          if (!connectivityGraph.has(pointId)) {
+            connectivityGraph.set(pointId, new Set());
+          }
+        }
+      }
+    }
+    
+    // Then, process traces to connect Point IDs
+    for (const stroke of drawingStrokes) {
+      if (stroke.type === 'trace' && stroke.points.length >= 2) {
+        // Extract all Point IDs from this trace
+        const pointIds: number[] = [];
+        for (const point of stroke.points) {
+          if (point && point.id !== undefined && point.id !== null) {
+            pointIds.push(point.id);
+          }
+        }
+        // Connect all Point IDs in this trace (they're all connected through the trace)
+        // If a trace point has the same Point ID as a pad/via, they're automatically connected
+        for (let i = 0; i < pointIds.length; i++) {
+          for (let j = i + 1; j < pointIds.length; j++) {
+            const id1 = pointIds[i];
+            const id2 = pointIds[j];
+            if (!connectivityGraph.has(id1)) {
+              connectivityGraph.set(id1, new Set());
+            }
+            if (!connectivityGraph.has(id2)) {
+              connectivityGraph.set(id2, new Set());
+            }
+            connectivityGraph.get(id1)!.add(id2);
+            connectivityGraph.get(id2)!.add(id1);
+          }
+        }
+      }
+    }
+
+    // Traverse connectivity graph from component Point IDs to find all connected Point IDs
+    const visited = new Set<number>();
+    const connectedPointIds = new Set<number>();
+    
+    const dfs = (pointId: number) => {
+      if (visited.has(pointId)) return;
+      visited.add(pointId);
+      connectedPointIds.add(pointId);
+      
+      const neighbors = connectivityGraph.get(pointId);
+      if (neighbors) {
+        for (const neighborId of neighbors) {
+          dfs(neighborId);
+        }
+      }
+    };
+
+    // Start DFS from all component Point IDs
+    for (const componentPointId of componentPointIds) {
+      dfs(componentPointId);
+    }
+
+    // Find all traces that contain any of the connected Point IDs
+    const connectedTraceIds = new Set<string>();
+    for (const pointId of connectedPointIds) {
+      const traces = pointIdToTraces.get(pointId);
+      if (traces) {
+        for (const traceId of traces) {
+          connectedTraceIds.add(traceId);
+        }
+      }
+    }
+
+    // Also find traces that connect to pads/vias with component Point IDs
+    // Even if the trace point doesn't share the exact Point ID, if it's close enough to a pad/via,
+    // it's still connected. But actually, when traces snap to pads/vias, they should share the Point ID.
+    // This is a fallback check for any edge cases.
+    for (const stroke of drawingStrokes) {
+      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length >= 1) {
+        const pointId = stroke.points[0]?.id;
+        if (pointId !== undefined && pointId !== null && componentPointIds.has(pointId)) {
+          // This pad/via is connected to a component pin
+          // Find all traces that have this Point ID (they snapped to this pad/via)
+          const traces = pointIdToTraces.get(pointId);
+          if (traces) {
+            for (const traceId of traces) {
+              connectedTraceIds.add(traceId);
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`Found ${connectedTraceIds.size} traces connected to components`);
+    console.log(`  - Component Point IDs: ${Array.from(componentPointIds).slice(0, 10).join(', ')}${componentPointIds.size > 10 ? '...' : ''}`);
+    console.log(`  - Connected Point IDs: ${connectedPointIds.size} total`);
+    console.log(`  - Traces found: ${Array.from(connectedTraceIds).slice(0, 5).join(', ')}${connectedTraceIds.size > 5 ? '...' : ''}`);
+    
+    if (connectedTraceIds.size === 0) {
+      // Provide more detailed error message
+      const componentPointIdsList = Array.from(componentPointIds).slice(0, 5).join(', ');
+      alert(`No traces found connected to components.\n\nComponent Point IDs: ${componentPointIdsList}${componentPointIds.size > 5 ? '...' : ''}\n\nMake sure:\n1. Component pins are connected to vias/pads\n2. Traces are drawn and snapped to those same vias/pads\n3. When drawing traces, click on the vias/pads to snap (this shares the Point ID)`);
+      return;
+    }
+    
     // Select the connected traces
     setSelectedIds(connectedTraceIds);
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    
+    console.log(`Selected ${connectedTraceIds.size} traces`);
   }, [componentsTop, componentsBottom, drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   // Generic function to center any object at given world coordinates
@@ -2667,6 +2795,7 @@ function App() {
       saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
       
       // Add component to appropriate layer
+      // NOTE: This will trigger auto-save change detection via the useEffect that watches componentsTop/componentsBottom
       if (componentToolLayer === 'top') {
         setShowTopComponents(true);
         setComponentsTop(prev => [...prev, comp]);
@@ -9126,6 +9255,14 @@ function App() {
     }
     
     // Track changes if auto save is enabled
+    // This effect triggers when any of the dependencies change, including:
+    // - componentsTop/componentsBottom (when components are added/modified/deleted)
+    // - drawingStrokes (when traces, vias, pads, etc. are added/modified/deleted)
+    // - powers/grounds (when power/ground symbols are added/modified/deleted)
+    // - powerBuses (when power buses are added/modified/deleted)
+    // - projectNotes (when notes are added/modified/deleted)
+    // - topImage/bottomImage (when images are loaded/transformed)
+    // - Various lock states and tool settings
     hasChangesSinceLastAutoSaveRef.current = true;
     // Show red indicator when changes are detected
     if (autoSaveEnabled) {
@@ -9152,8 +9289,8 @@ function App() {
     topImage,
     bottomImage,
     drawingStrokes,
-    componentsTop,
-    componentsBottom,
+    componentsTop, // Triggers auto-save when components are added/modified/deleted
+    componentsBottom, // Triggers auto-save when components are added/modified/deleted
     powers,
     grounds,
     powerBuses,
