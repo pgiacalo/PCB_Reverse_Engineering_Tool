@@ -914,8 +914,8 @@ function App() {
   // File operations hook
   const fileOperations = useFileOperations();
   
-  // Auto-save indicator state: true = red (changes detected), false = empty (saved)
-  const [autoSaveIndicatorActive, setAutoSaveIndicatorActive] = useState(false);
+  // Save status indicator state: true = changes detected (yellow if auto-save enabled, red if disabled), false = saved (green)
+  const [hasUnsavedChangesState, setHasUnsavedChangesState] = useState(false);
   
   const {
     autoSaveEnabled,
@@ -6947,8 +6947,8 @@ function App() {
       autoSaveBaseNameRef.current = '';
     }
     hasChangesSinceLastAutoSaveRef.current = false;
-    // Clear auto-save indicator
-    setAutoSaveIndicatorActive(false);
+    // Clear save status indicator (project is saved)
+    setHasUnsavedChangesState(false);
     
     // Clear auto-save interval timer
     if (autoSaveIntervalRef.current) {
@@ -8928,12 +8928,11 @@ function App() {
       currentFileIndexRef.current = 0;
       // Reset the changes flag after successful save
       hasChangesSinceLastAutoSaveRef.current = false;
-      // Clear the auto-save indicator (return to empty circle)
-      setAutoSaveIndicatorActive(false);
+      // Clear the save status indicator (project is saved - green)
+      setHasUnsavedChangesState(false);
     } catch (e) {
       console.error('Auto save failed:', e);
-      // Clear indicator even on failure
-      setAutoSaveIndicatorActive(false);
+      // Don't clear indicator on failure - keep showing that changes exist
     }
   }, []); // Empty dependencies - function never changes
   
@@ -9037,6 +9036,9 @@ function App() {
         await writable.write(blob);
         await writable.close();
         setCurrentProjectFilePath(filename);
+        // Reset save status indicator (project is saved - green)
+        setHasUnsavedChangesState(false);
+        hasChangesSinceLastAutoSaveRef.current = false;
         console.log(`Project saved: ${projectName}/${filename}`);
         return;
       } catch (e) {
@@ -9061,6 +9063,9 @@ function App() {
           await writable.write(blob);
           await writable.close();
           setCurrentProjectFilePath(filename);
+          // Reset save status indicator (project is saved - green)
+          setHasUnsavedChangesState(false);
+          hasChangesSinceLastAutoSaveRef.current = false;
           console.log(`Project saved: ${filename} in selected directory`);
           return;
         } catch (e) {
@@ -9239,22 +9244,24 @@ function App() {
   // Only track changes if auto save is enabled
   // Use a ref to track if this is the first run after enabling auto save
   const isFirstRunAfterEnableRef = useRef<boolean>(false);
+  // Use a ref to track if we're currently loading a project (to skip change tracking during load)
+  const isLoadingProjectRef = useRef<boolean>(false);
   
   React.useEffect(() => {
-    // Skip if auto save is not enabled (don't track changes when disabled)
-    if (!autoSaveEnabled) {
-      isFirstRunAfterEnableRef.current = false;
+    // Skip if we're currently loading a project (loading doesn't count as a change)
+    if (isLoadingProjectRef.current) {
+      console.log('Change tracking: Skipping - project is being loaded');
       return;
     }
     
-    // On first run after enabling, skip (initial save is handled by enable action)
-    if (isFirstRunAfterEnableRef.current) {
+    // Skip on first run after enabling auto-save (initial save is handled by enable action)
+    if (autoSaveEnabled && isFirstRunAfterEnableRef.current) {
       isFirstRunAfterEnableRef.current = false;
       console.log('Auto save: Skipping change tracking on first run after enable (initial save handled separately)');
       return;
     }
     
-    // Track changes if auto save is enabled
+    // Track changes regardless of auto-save status
     // This effect triggers when any of the dependencies change, including:
     // - componentsTop/componentsBottom (when components are added/modified/deleted)
     // - drawingStrokes (when traces, vias, pads, etc. are added/modified/deleted)
@@ -9264,11 +9271,10 @@ function App() {
     // - topImage/bottomImage (when images are loaded/transformed)
     // - Various lock states and tool settings
     hasChangesSinceLastAutoSaveRef.current = true;
-    // Show red indicator when changes are detected
-    if (autoSaveEnabled) {
-      setAutoSaveIndicatorActive(true);
-    }
-    console.log('Auto save: Change detected, marking for save', {
+    // Mark as having unsaved changes (will show yellow if auto-save enabled, red if disabled)
+    setHasUnsavedChangesState(true);
+    console.log('Change detected, marking as unsaved', {
+      autoSaveEnabled,
       topImage: !!topImage,
       bottomImage: !!bottomImage,
       drawingStrokesCount: drawingStrokes.length,
@@ -9313,12 +9319,10 @@ function App() {
     if (autoSaveEnabled) {
       isFirstRunAfterEnableRef.current = true;
       console.log('Auto save: Enabled, marking first run');
-      // Set indicator to green (enabled, no changes yet)
-      setAutoSaveIndicatorActive(false);
+      // Don't change indicator state here - it will be set when changes are detected or when saved
     } else {
       isFirstRunAfterEnableRef.current = false;
-      // Clear indicator when auto-save is disabled
-      setAutoSaveIndicatorActive(false);
+      // Don't change indicator state when auto-save is disabled - keep current state
     }
   }, [autoSaveEnabled]);
 
@@ -9552,6 +9556,10 @@ function App() {
       // Update project directory handle
       setProjectDirHandle(dirHandle);
       
+      // Reset save status indicator (project is saved - green)
+      setHasUnsavedChangesState(false);
+      hasChangesSinceLastAutoSaveRef.current = false;
+      
       // Close the dialog
       setSaveAsDialog({ visible: false, filename: '', locationPath: '', locationHandle: null });
       setOpenMenu(null);
@@ -9618,6 +9626,8 @@ function App() {
   // Load project from JSON (images embedded)
   // Optional dirHandle parameter allows passing directory handle directly to avoid race condition
   const loadProject = useCallback(async (project: any, dirHandleOverride?: FileSystemDirectoryHandle | null) => {
+    // Set flag to skip change tracking during project load
+    isLoadingProjectRef.current = true;
     try {
       // Clear undo snapshot when loading a project
       clearSnapshot();
@@ -10297,9 +10307,18 @@ function App() {
       }
       // Reset change tracking for auto save after loading project
       hasChangesSinceLastAutoSaveRef.current = false;
+      // Reset save status indicator (project is loaded and saved - green)
+      setHasUnsavedChangesState(false);
+      // Clear the loading flag after a short delay to ensure all state updates have completed
+      // Use setTimeout to ensure this happens after all state updates from loadProject have propagated
+      setTimeout(() => {
+        isLoadingProjectRef.current = false;
+      }, 100);
     } catch (err) {
       console.error('Failed to open project', err);
       alert('Failed to open project file. See console for details.');
+      // Clear the loading flag even on error
+      isLoadingProjectRef.current = false;
     }
   }, [currentTool, drawingMode, projectDirHandle, setTopImage, setBottomImage, setPointIdCounter, setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTracesLocked, setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked, setShowViasLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setDrawingStrokes, setComponentsTop, setComponentsBottom, setGroundSymbols, setPowerBuses, setGroundBuses, setPowerSymbols, generatePointId, truncatePoint, getDefaultPrefix, saveDesignatorCounters, loadDesignatorCounters, setAutoAssignDesignators, setUseGlobalDesignatorCounters, clearSnapshot]);
 
@@ -10447,8 +10466,8 @@ function App() {
       
       // Reset change tracking since we loaded a saved file
       hasChangesSinceLastAutoSaveRef.current = false;
-      // Clear auto-save indicator when project is loaded from history
-      setAutoSaveIndicatorActive(false);
+      // Clear save status indicator when project is loaded from history (project is saved - green)
+      setHasUnsavedChangesState(false);
     } catch (e) {
       console.error('Failed to load file from history:', e);
       // Don't show alert for navigation errors, just log
@@ -10967,7 +10986,8 @@ function App() {
         currentProjectFilePath={currentProjectFilePath}
         isProjectActive={!!projectDirHandle}
         autoSaveEnabled={autoSaveEnabled}
-        autoSaveIndicatorActive={autoSaveIndicatorActive}
+        autoSaveInterval={autoSaveInterval}
+        hasUnsavedChangesState={hasUnsavedChangesState}
         onNewProject={newProject}
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}

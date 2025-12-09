@@ -18,9 +18,10 @@ export interface MenuBarProps {
   // Project active state - true when a project has been created or opened
   isProjectActive: boolean;
   
-  // Auto-save indicator
+  // Save status indicator
   autoSaveEnabled: boolean;
-  autoSaveIndicatorActive: boolean; // true = red (changes detected), false = empty (saved)
+  autoSaveInterval: number | null; // Auto-save interval in minutes
+  hasUnsavedChangesState: boolean; // true = changes detected, false = saved (no changes)
   
   // File operations
   onNewProject: () => void;
@@ -183,7 +184,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   currentProjectFilePath,
   isProjectActive,
   autoSaveEnabled,
-  autoSaveIndicatorActive,
+  autoSaveInterval,
+  hasUnsavedChangesState,
   onNewProject,
   onOpenProject,
   onSaveProject,
@@ -1324,6 +1326,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li>A searchable list of common components</li>
                   <li>Output schematics (perhaps as KiCad files)</li>
                   <li>Dynamic layers</li>
+                  <li>Create a desktop version of this application using Electron</li>
                 </ul>
               </div>
             </div>
@@ -1523,20 +1526,26 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           }} title={currentProjectFilePath}>
             {currentProjectFilePath}
           </div>
-          {/* Auto-save indicator - only show when auto-save is enabled */}
-          {autoSaveEnabled && (
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                border: '1px solid #666',
-                backgroundColor: autoSaveIndicatorActive ? '#ff0000' : '#00ff00',
-                flexShrink: 0,
-              }}
-              title={autoSaveIndicatorActive ? 'Auto-save pending (changes detected)' : 'Auto-save enabled (no changes)'}
-            />
-          )}
+          {/* Save status indicator - shows project save state */}
+          <div
+            style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              border: '1px solid #666',
+              backgroundColor: hasUnsavedChangesState 
+                ? (autoSaveEnabled ? '#ffaa00' : '#ff0000') // Yellow if auto-save enabled, Red if disabled
+                : '#00ff00', // Green if saved
+              flexShrink: 0,
+            }}
+            title={
+              hasUnsavedChangesState 
+                ? (autoSaveEnabled 
+                    ? `Changes detected • Auto Save: ON • Will be saved automatically every ${autoSaveInterval || 1} minute${autoSaveInterval === 1 ? '' : 's'}` 
+                    : 'Changes detected • Auto Save: OFF • You need to save manually (File → Save Project)')
+                : 'Project saved • No unsaved changes • Auto Save: ' + (autoSaveEnabled ? 'ON' : 'OFF')
+            }
+          />
         </div>
       )}
     </div>
