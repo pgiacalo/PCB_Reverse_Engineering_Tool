@@ -175,6 +175,8 @@ export interface MenuBarProps {
   onOpenProjectNotes: () => void;
   // Transform Images Dialog
   onOpenTransformImages: () => void;
+  // Transform All Dialog
+  onOpenTransformAll: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -298,6 +300,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   menuBarRef,
   onOpenProjectNotes,
   onOpenTransformImages,
+  onOpenTransformAll,
 }) => {
   // Track which node selection submenu is open (power or ground)
   const [openSelectNodesSubmenu, setOpenSelectNodesSubmenu] = React.useState<'power' | 'ground' | null>(null);
@@ -951,6 +954,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
         {openMenu === 'tools' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
+            <button onClick={() => { onOpenTransformAll(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+              Change Perspective…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button
               onClick={() => {
                 increaseSize();
@@ -1088,7 +1095,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 cursor: 'pointer',
               }}
             >
-              Project Notes…
+              Open Project Notes…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
@@ -1101,7 +1108,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button onClick={() => { setShowDesignatorManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
               Manage Designators…
             </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
               onClick={() => { setShowTraceCornerDots(!showTraceCornerDots); setOpenMenu(null); }} 
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}

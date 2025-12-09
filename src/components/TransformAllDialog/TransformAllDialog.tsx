@@ -138,30 +138,35 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   }, [isDragging]);
 
   // Calculate center point for transformations in world coordinates
+  // Use a fixed center point based on the center of the images to ensure
+  // rotations are consistent regardless of zoom/pan state
   const getCenterPoint = (): { x: number; y: number } => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      // Calculate content area center in content coordinates (after CONTENT_BORDER translation)
-      const contentWidth = canvas.width - 2 * contentBorder;
-      const contentHeight = canvas.height - 2 * contentBorder;
-      const contentCenterX = contentWidth / 2;
-      const contentCenterY = contentHeight / 2;
-      
-      // Convert to world coordinates
-      // The drawing transform is: translate(CONTENT_BORDER, CONTENT_BORDER) then translate(viewPan) then scale(viewScale)
-      // So a world coordinate (x, y) is drawn at canvas coordinate:
-      //   CONTENT_BORDER + viewPan.x + x * viewScale
-      // To reverse: worldX = (contentCoord - viewPan.x) / viewScale
-      // The content center in content coordinates is (contentCenterX, contentCenterY)
-      const worldCenterX = (contentCenterX - viewPan.x) / viewScale;
-      const worldCenterY = (contentCenterY - viewPan.y) / viewScale;
-      
+    // Calculate center based on image positions (if images exist)
+    // This ensures rotations are around a fixed point in world coordinates
+    // that doesn't change with view zoom/pan
+    let centerX = 0;
+    let centerY = 0;
+    let count = 0;
+    
+    if (topImage) {
+      centerX += topImage.x;
+      centerY += topImage.y;
+      count++;
+    }
+    if (bottomImage) {
+      centerX += bottomImage.x;
+      centerY += bottomImage.y;
+      count++;
+    }
+    
+    if (count > 0) {
       return {
-        x: worldCenterX,
-        y: worldCenterY,
+        x: centerX / count,
+        y: centerY / count,
       };
     }
-    // Fallback to 0,0 if canvas not available
+    
+    // If no images, use (0, 0) as the center
     return { x: 0, y: 0 };
   };
 
@@ -385,7 +390,7 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: '#888', fontSize: '14px' }}>⋮⋮</span>
           <h2 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#f2f2f2' }}>
-            Transform All
+            Change Perspective
           </h2>
         </div>
         <button
