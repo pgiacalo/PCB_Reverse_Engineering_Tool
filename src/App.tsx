@@ -20,6 +20,7 @@ import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
+import { TransformAllDialog } from './components/TransformAllDialog';
 import { ComponentEditor } from './components/ComponentEditor';
 import { PowerBusManagerDialog } from './components/PowerBusManagerDialog';
 import { GroundBusManagerDialog } from './components/GroundBusManagerDialog';
@@ -916,6 +917,12 @@ function App() {
   
   // Save status indicator state: true = changes detected (yellow if auto-save enabled, red if disabled), false = saved (green)
   const [hasUnsavedChangesState, setHasUnsavedChangesState] = useState(false);
+  
+  // Transform All dialog state
+  const [transformAllDialogVisible, setTransformAllDialogVisible] = useState(false);
+  const [isBottomView, setIsBottomView] = useState(false);
+  const [originalTopFlipX, setOriginalTopFlipX] = useState<boolean | null>(null);
+  const [originalBottomFlipX, setOriginalBottomFlipX] = useState<boolean | null>(null);
   
   const {
     autoSaveEnabled,
@@ -6949,6 +6956,10 @@ function App() {
     hasChangesSinceLastAutoSaveRef.current = false;
     // Clear save status indicator (project is saved)
     setHasUnsavedChangesState(false);
+    // Reset transform all view state
+    setIsBottomView(false);
+    setOriginalTopFlipX(null);
+    setOriginalBottomFlipX(null);
     
     // Clear auto-save interval timer
     if (autoSaveIntervalRef.current) {
@@ -10309,6 +10320,8 @@ function App() {
       hasChangesSinceLastAutoSaveRef.current = false;
       // Reset save status indicator (project is loaded and saved - green)
       setHasUnsavedChangesState(false);
+      // Reset transform all view state
+      setIsBottomView(false);
       // Clear the loading flag after a short delay to ensure all state updates have completed
       // Use setTimeout to ensure this happens after all state updates from loadProject have propagated
       setTimeout(() => {
@@ -11100,6 +11113,7 @@ function App() {
         menuBarRef={menuBarRef}
         onOpenProjectNotes={handleOpenProjectNotes}
         onOpenTransformImages={() => setTransformImagesDialogVisible(true)}
+        onOpenTransformAll={() => setTransformAllDialogVisible(true)}
       />
 
       <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
@@ -13473,6 +13487,31 @@ function App() {
         isGrayscale={isGrayscale}
         setIsGrayscale={setIsGrayscale}
         areImagesLocked={areImagesLocked}
+      />
+
+      <TransformAllDialog
+        visible={transformAllDialogVisible}
+        onClose={() => setTransformAllDialogVisible(false)}
+        topImage={topImage}
+        bottomImage={bottomImage}
+        setTopImage={setTopImage}
+        setBottomImage={setBottomImage}
+        componentsTop={componentsTop}
+        componentsBottom={componentsBottom}
+        setComponentsTop={setComponentsTop}
+        setComponentsBottom={setComponentsBottom}
+        drawingStrokes={drawingStrokes}
+        setDrawingStrokes={setDrawingStrokes}
+        canvasRef={canvasRef}
+        isBottomView={isBottomView}
+        setIsBottomView={setIsBottomView}
+        originalTopFlipX={originalTopFlipX}
+        setOriginalTopFlipX={setOriginalTopFlipX}
+        originalBottomFlipX={originalBottomFlipX}
+        setOriginalBottomFlipX={setOriginalBottomFlipX}
+        viewPan={viewPan}
+        viewScale={viewScale}
+        contentBorder={CONTENT_BORDER}
       />
 
       {/* Set Size Dialog */}
