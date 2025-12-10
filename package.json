@@ -3,6 +3,7 @@
   "private": true,
   "version": "2.6.0",
   "type": "module",
+  "author": "Philip L. Giacalone",
   "homepage": "https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool",
   "scripts": {
     "dev": "vite",
