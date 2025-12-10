@@ -7954,7 +7954,9 @@ function App() {
         ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : drawingMode === 'testPoint' ? 'testPoint' : 'trace')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
-    const scale = Math.max(1, viewScale);
+    // Scale cursor size to match what will be drawn on canvas
+    // Tool sizes are in world coordinates (pixels), so multiply by viewScale to get screen pixels
+    const scale = viewScale;
     const diameterPx = kind === 'magnify' ? 18 : kind === 'component' ? Math.max(16, Math.round(brushSize * scale)) : kind === 'power' || kind === 'ground' ? Math.max(12, Math.round(brushSize * scale)) : Math.max(6, Math.round(brushSize * scale));
     const pad = 4;
     const size = diameterPx + pad * 2 + (kind === 'magnify' ? 8 : 0); // extra room for handle/plus
@@ -8049,13 +8051,17 @@ function App() {
       // Use tool instance directly (single source of truth)
       const testPointInstanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
       const testPointInstance = toolInstanceManager.get(testPointInstanceId);
-      setCanvasCursor(generateTestPointCursor(testPointInstance.size));
+      // Scale the size to match what will be drawn on canvas
+      const scaledSize = testPointInstance.size * scale;
+      setCanvasCursor(generateTestPointCursor(scaledSize));
       return;
     } else if (kind === 'erase') {
       // Draw tilted pink eraser matching toolbar icon shape
-      const width = Math.max(brushSize * 0.75, 8); // Width of eraser
-      const height = Math.max(brushSize * 0.5, 6); // Height of eraser
-      const tipHeight = Math.max(brushSize * 0.2, 2); // Tip height
+      // Scale brushSize to match what will be drawn on canvas
+      const scaledBrushSize = brushSize * scale;
+      const width = Math.max(scaledBrushSize * 0.75, 8); // Width of eraser
+      const height = Math.max(scaledBrushSize * 0.5, 6); // Height of eraser
+      const tipHeight = Math.max(scaledBrushSize * 0.2, 2); // Tip height
       
       ctx.save();
       ctx.translate(cx, cy);
