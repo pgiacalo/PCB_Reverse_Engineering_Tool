@@ -617,22 +617,12 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
             View:
           </div>
           <button
-            onClick={handleSwitchToTopView}
-            disabled={!isBottomView}
-            style={buttonStyle(!isBottomView)}
-            onMouseEnter={(e) => !isBottomView && (e.currentTarget.style.background = '#3a3a42')}
-            onMouseLeave={(e) => !isBottomView && (e.currentTarget.style.background = 'transparent')}
+            onClick={isBottomView ? handleSwitchToTopView : handleSwitchToBottomView}
+            style={buttonStyle(false)}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#3a3a42')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           >
-            {!isBottomView ? '✓ ' : ''}Switch to Top View
-          </button>
-          <button
-            onClick={handleSwitchToBottomView}
-            disabled={isBottomView}
-            style={buttonStyle(isBottomView)}
-            onMouseEnter={(e) => isBottomView && (e.currentTarget.style.background = '#3a3a42')}
-            onMouseLeave={(e) => isBottomView && (e.currentTarget.style.background = 'transparent')}
-          >
-            {isBottomView ? '✓ ' : ''}Switch to Bottom View
+            {isBottomView ? 'Switch to Top View' : 'Switch to Bottom View'}
           </button>
         </div>
 
