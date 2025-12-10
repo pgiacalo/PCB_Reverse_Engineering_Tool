@@ -600,6 +600,8 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 
 ### 3. View Management
 - **REQ-009**: Toggle between top view and bottom view of PCB
+- **REQ-009A**: Change Perspective feature - Switch between top and bottom view perspectives, flipping all elements (images, components, traces) horizontally around center point
+- **REQ-009B**: Rotate all elements (images, components, traces, vias, pads) together by 90°, 180°, or 270° around a fixed center point
 - **REQ-010**: Smooth transitions between views
 - **REQ-011**: Preserve drawing annotations when switching views
 

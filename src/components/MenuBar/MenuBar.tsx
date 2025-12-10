@@ -1314,6 +1314,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>View mode switching (top/bottom/overlay)</li>
                       <li>Save up to 10 view locations (X + 0-9)</li>
                       <li>Recall saved views instantly (0-9 keys)</li>
+                      <li>Change Perspective (Tools menu) - switch between top/bottom view and rotate all elements</li>
                       <li>Detailed information dialog</li>
                     </ul>
                   </div>
@@ -1386,6 +1387,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Image Adjustments:</strong> Adjust brightness, contrast, sharpness, and grayscale as needed.</li>
                   <li><strong>Flip Images:</strong> Use horizontal or vertical flip if your images are mirrored.</li>
                   <li><strong>Arrow Keys:</strong> When transform tool is active, use arrow keys for precise adjustments.</li>
+                  <li><strong>Change Perspective:</strong> Tools → Change Perspective to switch between top/bottom view or rotate all elements (images, components, traces) together by 90°, 180°, or 270°.</li>
                 </ul>
               </div>
 

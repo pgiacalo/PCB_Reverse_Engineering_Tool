@@ -300,6 +300,23 @@ Notes:
 - All drawing and erasing actions are mapped to the zoomed view so strokes align with what you see.
 - Current zoom is clamped between 0.25× and 8×.
 
+### Change Perspective (Tools Menu)
+
+The Change Perspective feature allows you to transform the entire view perspective, including images, components, traces, and all drawn elements.
+
+**Access:** Tools → Change Perspective
+
+**Features:**
+- **Switch to Top View / Switch to Bottom View**: Flips all elements horizontally around the center point, allowing you to view the PCB from the opposite side perspective
+- **Rotate 90°, 180°, 270°**: Rotates all elements (images, components, traces, vias, pads, etc.) together around a fixed center point
+- All transformations maintain alignment between images and drawn elements
+- Useful for viewing PCBs from different angles or when working with images taken from different perspectives
+
+**Notes:**
+- Rotations use a fixed center point based on image positions, ensuring consistent alignment regardless of zoom level
+- All transformations are applied to the entire project, maintaining relationships between all elements
+- You can switch back to the original view at any time
+
 ## API Documentation
 
 ### Core Components
