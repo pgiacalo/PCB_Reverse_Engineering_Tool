@@ -179,31 +179,21 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   }, [isDragging]);
 
   // Calculate center point for transformations in world coordinates
-  // Use a fixed center point based on the center of the images to ensure
-  // rotations are consistent regardless of zoom/pan state
+  // Use the top image's center as the reference point to ensure consistent
+  // transformations that are not affected by the offset between top and bottom images
   const getCenterPoint = (): { x: number; y: number } => {
-    // Calculate center based on image positions (if images exist)
-    // This ensures rotations are around a fixed point in world coordinates
-    // that doesn't change with view zoom/pan
-    let centerX = 0;
-    let centerY = 0;
-    let count = 0;
-    
+    // Use top image center as reference (or bottom if top doesn't exist)
+    // This ensures the center point is consistent and not affected by image offset
     if (topImage) {
-      centerX += topImage.x;
-      centerY += topImage.y;
-      count++;
+      return {
+        x: topImage.x,
+        y: topImage.y,
+      };
     }
     if (bottomImage) {
-      centerX += bottomImage.x;
-      centerY += bottomImage.y;
-      count++;
-    }
-    
-    if (count > 0) {
       return {
-        x: centerX / count,
-        y: centerY / count,
+        x: bottomImage.x,
+        y: bottomImage.y,
       };
     }
     
@@ -265,6 +255,7 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     };
     
     // Save original flipX and flipY state before applying bottom view transform
+    // Flip images: toggle flip flags AND flip bottom image position around center to maintain relative offset
     if (topImage) {
       setOriginalTopFlipX(topImage.flipX || false);
       setOriginalTopFlipY(topImage.flipY || false);
@@ -276,7 +267,14 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     if (bottomImage) {
       setOriginalBottomFlipX(bottomImage.flipX || false);
       setOriginalBottomFlipY(bottomImage.flipY || false);
-      setBottomImage(prev => prev ? flipImageVertical(prev) : null);
+      const flipped = flipImageVertical(bottomImage);
+      if (flipped) {
+        // Flip bottom image's X position around center to maintain relative offset with top image
+        setBottomImage({
+          ...flipped,
+          x: centerX - (bottomImage.x - centerX), // Flip x around center
+        });
+      }
     } else {
       setOriginalBottomFlipX(null);
       setOriginalBottomFlipY(null);
@@ -371,11 +369,19 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     };
     
     // Flip back using the same logic (don't just restore - flip again to undo)
+    // Flip images: toggle flip flags AND flip bottom image position around center to maintain relative offset
     if (topImage) {
       setTopImage(prev => prev ? flipImageVertical(prev) : null);
     }
     if (bottomImage) {
-      setBottomImage(prev => prev ? flipImageVertical(prev) : null);
+      const flipped = flipImageVertical(bottomImage);
+      if (flipped) {
+        // Flip bottom image's X position around center to maintain relative offset with top image
+        setBottomImage({
+          ...flipped,
+          x: centerX - (bottomImage.x - centerX), // Flip x around center
+        });
+      }
     }
     
     // Flip components back (flip x coordinates around center again)
