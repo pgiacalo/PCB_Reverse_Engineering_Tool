@@ -24,7 +24,7 @@ export interface TransformAllDialogProps {
   setDrawingStrokes: React.Dispatch<React.SetStateAction<DrawingStroke[]>>;
   
   // Canvas ref for calculating center
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   
   // View state (tracked in parent)
   isBottomView: boolean;
@@ -49,11 +49,11 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   bottomImage,
   setTopImage,
   setBottomImage,
-  componentsTop,
-  componentsBottom,
+  componentsTop: _componentsTop,
+  componentsBottom: _componentsBottom,
   setComponentsTop,
   setComponentsBottom,
-  drawingStrokes,
+  drawingStrokes: _drawingStrokes,
   setDrawingStrokes,
   canvasRef,
   isBottomView,
