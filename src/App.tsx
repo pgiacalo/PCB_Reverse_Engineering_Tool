@@ -6067,6 +6067,30 @@ function App() {
       }
     }
     
+    // Change Perspective Dialog: Open Tools -> Change Perspective dialog (E)
+    if (e.key === 'E' || e.key === 'e') {
+      if (!e.ctrlKey && !e.shiftKey && !e.altKey) {
+        // Ignore if user is typing in an input field, textarea, or contenteditable
+        const active = document.activeElement as HTMLElement | null;
+        const isEditing =
+          !!active &&
+          ((active.tagName === 'INPUT' && 
+            (active as HTMLInputElement).type !== 'range' &&
+            (active as HTMLInputElement).type !== 'checkbox' &&
+            (active as HTMLInputElement).type !== 'radio') ||
+           active.tagName === 'TEXTAREA' ||
+           active.isContentEditable);
+        if (isEditing) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isReadOnlyMode) {
+          setTransformAllDialogVisible(true);
+        }
+        return;
+      }
+    }
+    
     // Reset view and selection (O key)
     if (e.key === 'O' || e.key === 'o') {
       // Ignore if user is typing in an input field, textarea, or contenteditable
@@ -11644,6 +11668,44 @@ function App() {
               </svg>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
                 <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>M</span>
+                <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
+              </div>
+            </button>
+            {/* Change Perspective tool (E) - opens Tools -> Change Perspective dialog */}
+            <button 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  setTransformAllDialogVisible(true);
+                }
+              }} 
+              disabled={isReadOnlyMode}
+              title="Change Perspective (E) - Open Change Perspective Dialog" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 3,
+                padding: '4px 3px',
+                borderRadius: 6, 
+                border: transformAllDialogVisible ? '2px solid #000' : '1px solid #ddd', 
+                background: transformAllDialogVisible ? '#e6f0ff' : '#fff', 
+                color: isReadOnlyMode ? '#999' : '#222',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1
+              }}
+            >
+              {/* Eye icon - simple line art style */}
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
+                {/* Eye outline (almond shape) */}
+                <ellipse cx="12" cy="12" rx="9" ry="6" fill="none" stroke="#111" strokeWidth="2" />
+                {/* Iris circle */}
+                <circle cx="12" cy="12" r="4" fill="none" stroke="#111" strokeWidth="2" />
+                {/* Pupil (offset slightly up-left) */}
+                <circle cx="11" cy="11" r="1.5" fill="#111" stroke="none" />
+              </svg>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 'bold', lineHeight: 1 }}>E</span>
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>-</span>
               </div>
             </button>
