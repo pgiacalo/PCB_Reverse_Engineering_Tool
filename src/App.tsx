@@ -945,6 +945,8 @@ function App() {
   const [isBottomView, setIsBottomView] = useState(false);
   const [originalTopFlipX, setOriginalTopFlipX] = useState<boolean | null>(null);
   const [originalBottomFlipX, setOriginalBottomFlipX] = useState<boolean | null>(null);
+  const [originalTopFlipY, setOriginalTopFlipY] = useState<boolean | null>(null);
+  const [originalBottomFlipY, setOriginalBottomFlipY] = useState<boolean | null>(null);
   
   const {
     autoSaveEnabled,
@@ -4426,6 +4428,15 @@ function App() {
     if (showPowerLayer && powers.length > 0) {
       const drawPower = (p: PowerSymbol) => {
         ctx.save();
+        // Apply transformations: translate, rotate, flip
+        ctx.translate(p.x, p.y);
+        if (p.rotation !== undefined && p.rotation !== 0) {
+          ctx.rotate((p.rotation * Math.PI) / 180);
+        }
+        if (p.flipX) {
+          ctx.scale(-1, 1);
+        }
+        
         // Find the power bus to get its voltage and color
         const bus = powerBuses.find(b => b.id === p.powerBusId);
         const isSelected = selectedPowerIds.has(p.id);
@@ -4441,7 +4452,7 @@ function App() {
           ctx.strokeStyle = '#0066ff';
           ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(p.x, p.y, radius + lineExtension + 3, 0, Math.PI * 2);
+          ctx.arc(0, 0, radius + lineExtension + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
         
@@ -4449,19 +4460,19 @@ function App() {
         ctx.strokeStyle = powerColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.beginPath();
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
         ctx.stroke();
         
         // Draw vertical line extending above and below the circle
         ctx.beginPath();
-        ctx.moveTo(p.x, p.y - radius - lineExtension);
-        ctx.lineTo(p.x, p.y + radius + lineExtension);
+        ctx.moveTo(0, -radius - lineExtension);
+        ctx.lineTo(0, radius + lineExtension);
         ctx.stroke();
         
         // Draw horizontal line extending left and right of the circle
         ctx.beginPath();
-        ctx.moveTo(p.x - radius - lineExtension, p.y);
-        ctx.lineTo(p.x + radius + lineExtension, p.y);
+        ctx.moveTo(-radius - lineExtension, 0);
+        ctx.lineTo(radius + lineExtension, 0);
         ctx.stroke();
         
         // Draw bus name label below the icon if bus is found
@@ -4472,7 +4483,7 @@ function App() {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           // Position text below the icon (below the vertical line extension)
-          ctx.fillText(bus.name, p.x, p.y + radius + lineExtension + 8);
+          ctx.fillText(bus.name, 0, radius + lineExtension + 8);
         }
         ctx.restore();
       };
@@ -4481,6 +4492,15 @@ function App() {
     if (showGroundLayer && grounds.length > 0) {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
+        // Apply transformations: translate, rotate, flip
+        ctx.translate(g.x, g.y);
+        if (g.rotation !== undefined && g.rotation !== 0) {
+          ctx.rotate((g.rotation * Math.PI) / 180);
+        }
+        if (g.flipX) {
+          ctx.scale(-1, 1);
+        }
+        
         const isSelected = selectedGroundIds.has(g.id);
         
         // Find the ground bus to get its name and color
@@ -4508,7 +4528,7 @@ function App() {
             ctx.strokeStyle = '#0066ff';
             ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
             ctx.setLineDash([5, 5]);
-            ctx.strokeRect(g.x - width / 2 - 3, g.y - 3, width + 6, vLen + barG * 2 + 6);
+            ctx.strokeRect(-width / 2 - 3, -3, width + 6, vLen + barG * 2 + 6);
             ctx.setLineDash([]);
           }
           
@@ -4517,22 +4537,22 @@ function App() {
           
           // Vertical line (from top)
           ctx.beginPath();
-          ctx.moveTo(g.x, g.y);
-          ctx.lineTo(g.x, g.y + vLen);
+          ctx.moveTo(0, 0);
+          ctx.lineTo(0, vLen);
           ctx.stroke();
           
           // Three horizontal bars (progressively shorter)
           for (let i = 0; i < 3; i++) {
-            const barY = g.y + vLen + i * barG;
+            const barY = vLen + i * barG;
             const barWidth = width * (1 - i * 0.25); // Each bar is 25% shorter than previous
             ctx.beginPath();
-            ctx.moveTo(g.x - barWidth / 2, barY);
-            ctx.lineTo(g.x + barWidth / 2, barY);
+            ctx.moveTo(-barWidth / 2, barY);
+            ctx.lineTo(barWidth / 2, barY);
             ctx.stroke();
           }
           
           // Bottom of Earth Ground symbol is after the 3rd bar
-          bottomY = g.y + vLen + barG * 2;
+          bottomY = vLen + barG * 2;
         } else {
           // Draw GND or other ground symbol: circle with lines
         const radius = Math.max(6, (g.size || 18) / 2);
@@ -4543,7 +4563,7 @@ function App() {
           ctx.strokeStyle = '#0066ff';
           ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(g.x, g.y, radius + lineExtension + 3, 0, Math.PI * 2);
+          ctx.arc(0, 0, radius + lineExtension + 3, 0, Math.PI * 2);
           ctx.stroke();
         }
         
@@ -4551,23 +4571,23 @@ function App() {
         ctx.strokeStyle = groundColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.beginPath();
-        ctx.arc(g.x, g.y, radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
         ctx.stroke();
         
         // Draw vertical line extending above and below the circle
         ctx.beginPath();
-        ctx.moveTo(g.x, g.y - radius - lineExtension);
-        ctx.lineTo(g.x, g.y + radius + lineExtension);
+        ctx.moveTo(0, -radius - lineExtension);
+        ctx.lineTo(0, radius + lineExtension);
         ctx.stroke();
         
         // Draw horizontal line extending left and right of the circle
         ctx.beginPath();
-        ctx.moveTo(g.x - radius - lineExtension, g.y);
-        ctx.lineTo(g.x + radius + lineExtension, g.y);
+        ctx.moveTo(-radius - lineExtension, 0);
+        ctx.lineTo(radius + lineExtension, 0);
         ctx.stroke();
         
         // Bottom of GND symbol is below the vertical line extension
-        bottomY = g.y + radius + lineExtension;
+        bottomY = radius + lineExtension;
         }
         
         // Draw ground bus name label below the icon if bus is found
@@ -4578,7 +4598,7 @@ function App() {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           // Position text below the icon
-          ctx.fillText(bus.name, g.x, bottomY + 8);
+          ctx.fillText(bus.name, 0, bottomY + 8);
         }
         
         ctx.restore();
@@ -13530,6 +13550,10 @@ function App() {
         setComponentsBottom={setComponentsBottom}
         drawingStrokes={drawingStrokes}
         setDrawingStrokes={setDrawingStrokes}
+        powerSymbols={powers}
+        groundSymbols={grounds}
+        setPowerSymbols={setPowerSymbols}
+        setGroundSymbols={setGroundSymbols}
         canvasRef={canvasRef}
         isBottomView={isBottomView}
         setIsBottomView={setIsBottomView}
@@ -13537,6 +13561,10 @@ function App() {
         setOriginalTopFlipX={setOriginalTopFlipX}
         originalBottomFlipX={originalBottomFlipX}
         setOriginalBottomFlipX={setOriginalBottomFlipX}
+        originalTopFlipY={originalTopFlipY}
+        setOriginalTopFlipY={setOriginalTopFlipY}
+        originalBottomFlipY={originalBottomFlipY}
+        setOriginalBottomFlipY={setOriginalBottomFlipY}
         viewPan={viewPan}
         viewScale={viewScale}
         contentBorder={CONTENT_BORDER}

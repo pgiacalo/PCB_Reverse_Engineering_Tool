@@ -46,6 +46,8 @@ export interface PowerSymbol {
   type?: string;
   pointId?: number;
   notes?: string | null; // Max 500 characters, null until user enters a value
+  rotation?: number; // Rotation in degrees (0-360)
+  flipX?: boolean; // Horizontal flip
 }
 
 export interface GroundSymbol {
@@ -59,6 +61,8 @@ export interface GroundSymbol {
   type?: string;
   pointId?: number;
   notes?: string | null; // Max 500 characters, null until user enters a value
+  rotation?: number; // Rotation in degrees (0-360)
+  flipX?: boolean; // Horizontal flip
 }
 
 /**
