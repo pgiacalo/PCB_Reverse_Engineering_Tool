@@ -51,6 +51,7 @@ export interface MenuBarProps {
   onSaveProject: () => Promise<void>;
   onSaveAs: () => void;
   onPrint: () => void;
+  onExportBOM: () => Promise<void>;
   hasUnsavedChanges: () => boolean;
   
   // Dialogs
@@ -215,6 +216,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onSaveProject,
   onSaveAs,
   onPrint,
+  onExportBOM,
   hasUnsavedChanges,
   setNewProjectDialog,
   setAutoSaveDialog,
@@ -338,13 +340,19 @@ export const MenuBar: React.FC<MenuBarProps> = ({
 
   // Helper function to check if project is active before allowing menu actions
   // Returns true if action should proceed, false if blocked
-  const requireProject = (action: () => void): void => {
+  const requireProject = (action: () => void | Promise<void>): void => {
     if (!isProjectActive) {
       alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
             setOpenMenu(null);
       return;
     }
-    action();
+    const result = action();
+    // If action returns a Promise, handle it (but don't await - this is fire-and-forget)
+    if (result instanceof Promise) {
+      result.catch((e) => {
+        console.error('Error in requireProject action:', e);
+      });
+    }
   };
 
   const renderSelectNodesSubmenu = (type: 'power' | 'ground') => {
@@ -862,6 +870,27 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Auto Save…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={async () => { 
+                if (isReadOnlyMode) return;
+                if (!isProjectActive) {
+                  alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                  setOpenMenu(null);
+                  return;
+                }
+                try {
+                  await onExportBOM(); 
+                  setOpenMenu(null); 
+                } catch (e) {
+                  console.error('Error exporting BOM:', e);
+                }
+              }} 
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
+            >
+              Export BOM…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>

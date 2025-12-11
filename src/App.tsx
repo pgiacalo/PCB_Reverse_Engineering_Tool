@@ -31,6 +31,7 @@ import {
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
+import { generateBOM } from './utils/bom';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
 import type { ComponentType, PCBComponent, HomeView } from './types';
@@ -9248,6 +9249,55 @@ function App() {
     }, 0);
   }, [buildProjectData]);
 
+  // Export BOM function
+  const handleExportBOM = useCallback(async () => {
+    console.log('handleExportBOM called');
+    if (!projectDirHandle) {
+      alert('Please create or open a project before exporting BOM.');
+      return;
+    }
+
+    try {
+      console.log('Generating BOM data...');
+      // Generate BOM data
+      const bomData = generateBOM(componentsTop, componentsBottom, projectName);
+      console.log('BOM data generated:', bomData);
+      
+      // Convert to JSON
+      const json = JSON.stringify(bomData, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      
+      // Get or create BOM directory
+      console.log('Creating/getting BOM directory...');
+      let bomDirHandle: FileSystemDirectoryHandle;
+      try {
+        bomDirHandle = await projectDirHandle.getDirectoryHandle('BOM', { create: true });
+        console.log('BOM directory obtained');
+      } catch (e) {
+        console.error('Failed to get/create BOM directory:', e);
+        alert('Failed to create BOM directory. See console for details.');
+        return;
+      }
+      
+      // Generate filename with timestamp
+      const timestamp = formatTimestamp();
+      const filename = `bill_of_materials_${timestamp}.json`;
+      console.log('Saving file:', filename);
+      
+      // Save file
+      const fileHandle = await bomDirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      
+      console.log('BOM file saved successfully');
+      alert(`BOM exported successfully to ${filename} in BOM directory!`);
+    } catch (e) {
+      console.error('Failed to export BOM:', e);
+      alert(`Failed to export BOM: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
+    }
+  }, [projectDirHandle, componentsTop, componentsBottom, projectName]);
+
   // Export netlist function
   // exportNetlist function removed - menu item was commented out and function is unused
   // If needed in the future, uncomment the menu item and restore this function
@@ -10338,8 +10388,8 @@ function App() {
             return { ...g, x: truncatedPos.x, y: truncatedPos.y };
           })
           .filter(g => {
-            const isValid = g.y >= 0 && g.x >= 0 && 
-                           typeof g.x === 'number' && typeof g.y === 'number' && 
+            // Allow negative coordinates (valid in world coordinates)
+            const isValid = typeof g.x === 'number' && typeof g.y === 'number' && 
                            !isNaN(g.x) && !isNaN(g.y) &&
                            isFinite(g.x) && isFinite(g.y);
             if (!isValid) {
@@ -10353,8 +10403,11 @@ function App() {
         for (const ground of validGrounds) {
           if (ground.pointId && typeof ground.pointId === 'number') {
             registerAllocatedId(ground.pointId);
-      }
+          }
         }
+      } else {
+        // Initialize empty array if project doesn't have ground symbols
+        setGroundSymbols([]);
       }
       
       // Load power buses
@@ -10393,8 +10446,8 @@ function App() {
             return { ...p, x: truncatedPos.x, y: truncatedPos.y };
           })
           .filter(p => {
-            const isValid = p.y >= 0 && p.x >= 0 && 
-                           typeof p.x === 'number' && typeof p.y === 'number' && 
+            // Allow negative coordinates (valid in world coordinates)
+            const isValid = typeof p.x === 'number' && typeof p.y === 'number' && 
                            !isNaN(p.x) && !isNaN(p.y) &&
                            isFinite(p.x) && isFinite(p.y);
             if (!isValid) {
@@ -10410,6 +10463,9 @@ function App() {
             registerAllocatedId(power.pointId);
           }
         }
+      } else {
+        // Initialize empty array if project doesn't have power symbols
+        setPowerSymbols([]);
       }
       // Reset change tracking for auto save after loading project
       hasChangesSinceLastAutoSaveRef.current = false;
@@ -11101,6 +11157,7 @@ function App() {
         onSaveProject={saveProject}
         onSaveAs={openSaveAsDialog}
         onPrint={handlePrint}
+        onExportBOM={handleExportBOM}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}
@@ -12545,14 +12602,6 @@ function App() {
             </label>
             <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showTopPadsLayer} onChange={(e) => setShowTopPadsLayer(e.target.checked)} />
-              <span>Pads (Top)</span>
-            </label>
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showTopTestPointsLayer} onChange={(e) => setShowTopTestPointsLayer(e.target.checked)} />
-              <span>Test Points (Top)</span>
-            </label>
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showTopTracesLayer} onChange={(e) => setShowTopTracesLayer(e.target.checked)} />
               <span>Traces (Top)</span>
             </label>
@@ -12560,15 +12609,15 @@ function App() {
               <input type="checkbox" checked={showTopComponents} onChange={(e) => setShowTopComponents(e.target.checked)} />
               <span>Components (Top)</span>
             </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showTopPadsLayer} onChange={(e) => setShowTopPadsLayer(e.target.checked)} />
+              <span>Pads (Top)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showTopTestPointsLayer} onChange={(e) => setShowTopTestPointsLayer(e.target.checked)} />
+              <span>Test Points (Top)</span>
+            </label>
             <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
-              <span>Pads (Bottom)</span>
-            </label>
-            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={showBottomTestPointsLayer} onChange={(e) => setShowBottomTestPointsLayer(e.target.checked)} />
-              <span>Test Points (Bottom)</span>
-            </label>
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomTracesLayer} onChange={(e) => setShowBottomTracesLayer(e.target.checked)} />
               <span>Traces (Bottom)</span>
@@ -12576,6 +12625,14 @@ function App() {
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showBottomComponents} onChange={(e) => setShowBottomComponents(e.target.checked)} />
               <span>Components (Bottom)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomPadsLayer} onChange={(e) => setShowBottomPadsLayer(e.target.checked)} />
+              <span>Pads (Bottom)</span>
+            </label>
+            <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={showBottomTestPointsLayer} onChange={(e) => setShowBottomTestPointsLayer(e.target.checked)} />
+              <span>Test Points (Bottom)</span>
             </label>
             <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

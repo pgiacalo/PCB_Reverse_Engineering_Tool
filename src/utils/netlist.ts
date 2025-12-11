@@ -965,7 +965,7 @@ function combineValueAndUnit(value: string, unit: string): string {
 /**
  * Get default unit for a property
  */
-function getDefaultUnit(property: string): string {
+export function getDefaultUnit(property: string): string {
   const unitMap: Record<string, string> = {
     resistance: 'Ω',
     capacitance: 'F',
