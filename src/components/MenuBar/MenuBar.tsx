@@ -1275,34 +1275,34 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           About ▾
         </button>
         {openMenu === 'about' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>Worms: An Electronics Toolkit</h2>
+              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>Worms: An Electronics Toolkit</h2>
               
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>About</h3>
-                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>About</h3>
+                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   A specialized tool useful for both reverse engineering and troubleshooting electronics by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
-                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   This tool can assist in troubleshooting by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
                 </p>
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
-                <p style={{ margin: '0 0 12px 0', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
+                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   The application runs entirely client-side in the browser, to provide a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Features</h3>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Features</h3>
                 
                 {/* Tools & Shortcuts - Full Width */}
                 <div style={{ marginBottom: 20 }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#f2f2f2' }}>
                     <div>
                       <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                         <li><strong>Select</strong> — <code>S</code></li>
@@ -1330,21 +1330,22 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       </ul>
                     </div>
                   </div>
-                  <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
-                    <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                      <li><strong>Switch Perspective</strong> — <code>←</code> / <code>→</code> to switch between front/back view (when not in Image Transform mode)</li>
-                      <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
-                      <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components</li>
-                    </ul>
-                  </div>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#f2f2f2' }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Arrow Keys</p>
+                  <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                    <li><strong>Switch Perspective</strong> — <code>←</code> / <code>→</code> to switch between front/back view (when not in Image Transform mode)</li>
+                    <li><strong>Rotate Perspective</strong> — <code>↑</code> (counter-clockwise) / <code>↓</code> (clockwise) to rotate in 90° increments (when not in Image Transform mode)</li>
+                    <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
+                    <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components</li>
+                  </ul>
+                </div>
                 </div>
 
                 {/* Other Features - 2 Column Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Image Management</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Image Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Load top and bottom PCB images</li>
                       <li>Image alignment and transformation</li>
                       <li>Transform modes: nudge, scale, rotate, slant, keystone</li>
@@ -1357,8 +1358,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
                   
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Drawing Tools</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Drawing Tools</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Draw copper traces (top and bottom layers)</li>
                       <li>Place vias for layer connections</li>
                       <li>Place component pads (SMD and through-hole)</li>
@@ -1370,8 +1371,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Layer Management</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Layer Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>14 independent layers to manage PCB element types</li>
                       <li>Separate top and bottom layer support</li>
                       <li>Layer-specific color customization</li>
@@ -1382,8 +1383,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Component Management</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Component Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Component placement with pin counts</li>
                       <li>Pin connection tracking</li>
                       <li>Component type classification</li>
@@ -1394,8 +1395,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Selection & Locking</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Selection & Locking</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Select individual elements or groups</li>
                       <li>Select all vias, traces, pads, or components</li>
                       <li>Select power/ground nodes by name</li>
@@ -1406,8 +1407,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Power & Ground</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Power & Ground</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Multiple voltage power nodes</li>
                       <li>Power bus management</li>
                       <li>Ground node placement</li>
@@ -1417,8 +1418,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Customization</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Customization</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Customizable colors per layer</li>
                       <li>Adjustable brush/tool sizes</li>
                       <li>Size presets for common tools</li>
@@ -1428,8 +1429,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>Project Management</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Project Management</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Create, open, and save projects</li>
                       <li>Auto-save with configurable intervals</li>
                       <li>File history automatically saved in history subdirectory when Auto Save is enabled</li>
@@ -1441,8 +1442,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   </div>
 
                   <div>
-                    <p style={{ margin: '0 0 8px 0', color: '#222', fontSize: '14px', fontWeight: 600 }}>View Controls</p>
-                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>View Controls</p>
+                    <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                       <li>Zoom in/out with mouse wheel</li>
                       <li>Pan view with hand tool</li>
                       <li>Zoom to fit</li>
@@ -1456,15 +1457,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 </div>
               </div>
 
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-                <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '12px', lineHeight: '1.5' }}>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
+                <p style={{ margin: '0 0 8px 0', color: '#bbb', fontSize: '12px', lineHeight: '1.5' }}>
                   Use the <strong>File</strong> menu to manage projects, the <strong>Images</strong> menu for image loading and transformation, and the <strong>Tools</strong> menu for selection, locking, and customization options.
                 </p>
               </div>
 
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Future / TODO List</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Future / TODO List</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                   <li>A searchable list of common components</li>
                   <li>Output schematics (perhaps as KiCad files)</li>
                   <li>Dynamic layers</li>
@@ -1492,13 +1493,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           Help ▾
         </button>
         {openMenu === 'help' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#fff', border: '1px solid #ccc', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#000', fontSize: '20px', fontWeight: 700 }}>Help: Typical Usage Steps</h2>
+              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>Help: Typical Usage Steps</h2>
               
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 1: Create or Open a Project</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 1: Create or Open a Project</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>New Project:</strong> File → New Project. Choose a project name and location.</li>
                   <li><strong>Open Project:</strong> File → Open Project. Select an existing project file (.json).</li>
                   <li><strong>Auto-Save:</strong> File → Auto Save → Enable to automatically save your work at regular intervals.</li>
@@ -1506,8 +1507,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 2: Load PCB Images</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 2: Load PCB Images</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Load Top Image:</strong> Images → Load Top Image. Select your top-side PCB photo (.png or .jpeg).</li>
                   <li><strong>Load Bottom Image:</strong> Images → Load Bottom Image. Select your bottom-side PCB photo.</li>
                   <li>Images are automatically copied to the <code style={{ background: '#1f1f24', padding: '2px 4px', borderRadius: 3, color: '#fff' }}>images/</code> subdirectory.</li>
@@ -1515,8 +1516,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 3: Align and Transform Images</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 3: Align and Transform Images</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Enter Transform Mode:</strong> Images → Transform Images. Select which image (Top or Bottom) to transform.</li>
                   <li><strong>Transform Operations:</strong> Use Move, Nudge, Scale, Rotate, Slant, or Keystone to align images.</li>
                   <li><strong>Image Adjustments:</strong> Adjust brightness, contrast, sharpness, and grayscale as needed.</li>
@@ -1524,20 +1525,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Arrow Keys:</strong> When transform tool is active, use arrow keys for precise adjustments.</li>
                   <li><strong>Change Perspective:</strong> Tools → Change Perspective (or press <code>E</code>) to switch between top/bottom view or rotate all elements (images, components, traces) together by 90°, 180°, or 270°.</li>
                   <li><strong>Quick Perspective Switch:</strong> Press <code>←</code> or <code>→</code> arrow keys (when not in Image Transform mode) to quickly switch between front/back view.</li>
+                  <li><strong>Quick Perspective Rotation:</strong> Press <code>↑</code> (counter-clockwise) or <code>↓</code> (clockwise) arrow keys (when not in Image Transform mode) to rotate perspective in 90° increments.</li>
                 </ul>
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 4: Set Board Dimensions</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 4: Set Board Dimensions</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Enter Dimensions:</strong> Images → Enter Board Dimensions. Specify the actual physical dimensions of your PCB.</li>
                   <li>This helps ensure accurate measurements and scaling for your reverse engineering work.</li>
                 </ul>
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 5: Trace Connections</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 5: Trace Connections</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Place Vias:</strong> Click the Via tool (<code>V</code>) and click on the PCB where vias connect layers.</li>
                   <li><strong>Place Pads:</strong> Click the Pad tool (<code>P</code>) and mark component pad locations.</li>
                   <li><strong>Place Test Points:</strong> Click the Test Point tool (<code>Y</code>) to mark test points.</li>
@@ -1547,8 +1549,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 6: Place Components</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 6: Place Components</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Place Component:</strong> Click the Component tool (<code>C</code>), select component type, then click on the PCB.</li>
                   <li><strong>Edit Component:</strong> Double-click a component to open the Component Editor dialog.</li>
                   <li><strong>Set Properties:</strong> Enter designator (e.g., R1, C2), value, and other component details.</li>
@@ -1557,8 +1559,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 7: Add Power and Ground Nodes</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 7: Add Power and Ground Nodes</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Manage Power Buses:</strong> Tools → Manage Power Buses to create and configure voltage buses (e.g., +5V, +3.3V).</li>
                   <li><strong>Place Power Nodes:</strong> Click the Power tool (<code>B</code>), select a voltage bus, then click on the PCB.</li>
                   <li><strong>Manage Ground Buses:</strong> Tools → Manage Ground Buses to configure ground connections.</li>
@@ -1567,8 +1569,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 8: Add Notes and Documentation</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 8: Add Notes and Documentation</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Element Notes:</strong> Press <code>N</code> to open the Notes dialog for selected elements (vias, pads, traces, etc.).</li>
                   <li><strong>Project Notes:</strong> Press <code>L</code> to open Project Notes / TODO list for general project documentation.</li>
                   <li><strong>Information Dialog:</strong> Press <code>I</code> to see detailed information about selected elements.</li>
@@ -1577,8 +1579,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Step 9: Save Your Work</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '14px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 9: Save Your Work</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Manual Save:</strong> File → Save Project to save your work manually.</li>
                   <li><strong>Auto-Save:</strong> If enabled, your project is automatically saved at regular intervals.</li>
                   <li><strong>History:</strong> Auto-saved versions are stored in the <code style={{ background: '#1f1f24', padding: '2px 4px', borderRadius: 3, color: '#fff' }}>history/</code> subdirectory.</li>
@@ -1586,11 +1588,11 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 </ul>
               </div>
 
-              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Keyboard Shortcuts</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#222' }}>
+              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Keyboard Shortcuts</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#f2f2f2' }}>
                   <div>
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Drawing Tools</p>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Drawing Tools</p>
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                       <li><strong>Select</strong> — <code>S</code></li>
                       <li><strong>Via</strong> — <code>V</code></li>
@@ -1603,7 +1605,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     </ul>
                   </div>
                   <div>
-                    <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>View & Navigation</p>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>View & Navigation</p>
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                       <li><strong>Move (Pan)</strong> — <code>H</code></li>
                       <li><strong>Magnify</strong> — <code>M</code></li>
@@ -1616,10 +1618,11 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     </ul>
                   </div>
                 </div>
-                <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
-                  <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#f2f2f2' }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Arrow Keys</p>
                   <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                     <li><strong>Switch Perspective</strong> — <code>←</code> / <code>→</code> (when not in Image Transform mode)</li>
+                    <li><strong>Rotate Perspective</strong> — <code>↑</code> (counter-clockwise) / <code>↓</code> (clockwise) to rotate in 90° increments (when not in Image Transform mode)</li>
                     <li>Use arrow keys to adjust image transformations (when transform tool is active)</li>
                     <li>Use arrow keys to nudge selected components</li>
                     <li>Click a slider first, then use arrow keys for precise adjustment</li>
@@ -1628,8 +1631,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#000', fontSize: '16px', fontWeight: 600 }}>Tips & Tricks</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#222', fontSize: '13px', lineHeight: '1.6' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Tips & Tricks</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                   <li>Double-click any slider to reset it to the default value</li>
                   <li>Double-click a component to edit its properties</li>
                   <li>Hold <code>Shift</code> while clicking to add to selection</li>
@@ -1641,8 +1644,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 </ul>
               </div>
 
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #ddd' }}>
-                <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '12px', lineHeight: '1.5' }}>
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
+                <p style={{ margin: '0 0 8px 0', color: '#bbb', fontSize: '12px', lineHeight: '1.5' }}>
                   For more detailed feature information, see the <strong>About</strong> menu.
                 </p>
               </div>

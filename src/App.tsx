@@ -1473,6 +1473,112 @@ function App() {
     }
   }, [isBottomView, topImage, bottomImage, originalTopFlipX, originalTopFlipY, originalBottomFlipX, originalBottomFlipY, getCenterPointForPerspective, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, setOriginalTopFlipX, setOriginalTopFlipY, setOriginalBottomFlipX, setOriginalBottomFlipY, setCameraWorldCenter, setIsBottomView]);
 
+  // Rotate perspective by specified angle (clockwise)
+  const rotatePerspective = useCallback((angle: number) => {
+    const center = getCenterPointForPerspective();
+    const centerX = center.x;
+    const centerY = center.y;
+    const radians = (angle * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    
+    // Rotate point around center (used for both images and components)
+    const rotatePoint = (x: number, y: number): { x: number; y: number } => {
+      const dx = x - centerX;
+      const dy = y - centerY;
+      return {
+        x: centerX + dx * cos - dy * sin,
+        y: centerY + dx * sin + dy * cos,
+      };
+    };
+    
+    // Rotate images - rotate their position around center AND add to rotation
+    if (topImage) {
+      const rotatedPos = rotatePoint(topImage.x, topImage.y);
+      const newRotation = (((topImage.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
+      setTopImage(prev => prev ? { 
+        ...prev, 
+        x: rotatedPos.x,
+        y: rotatedPos.y,
+        rotation: newRotation 
+      } : null);
+    }
+    if (bottomImage) {
+      const rotatedPos = rotatePoint(bottomImage.x, bottomImage.y);
+      const newRotation = (((bottomImage.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
+      setBottomImage(prev => prev ? { 
+        ...prev, 
+        x: rotatedPos.x,
+        y: rotatedPos.y,
+        rotation: newRotation 
+      } : null);
+    }
+    
+    // Rotate camera center around the same center point to maintain the same visible region
+    const rotatedCamera = rotatePoint(cameraWorldCenter.x, cameraWorldCenter.y);
+    setCameraWorldCenter(rotatedCamera);
+    
+    // Rotate components
+    setComponentsTop(prev => prev.map(comp => {
+      const rotated = rotatePoint(comp.x, comp.y);
+      const newOrientation = comp.orientation ? (((comp.orientation + angle) % 360 + 360) % 360) : ((angle % 360 + 360) % 360);
+      return {
+        ...comp,
+        x: rotated.x,
+        y: rotated.y,
+        orientation: newOrientation,
+      };
+    }));
+    
+    setComponentsBottom(prev => prev.map(comp => {
+      const rotated = rotatePoint(comp.x, comp.y);
+      const newOrientation = comp.orientation ? (((comp.orientation + angle) % 360 + 360) % 360) : ((angle % 360 + 360) % 360);
+      return {
+        ...comp,
+        x: rotated.x,
+        y: rotated.y,
+        orientation: newOrientation,
+      };
+    }));
+    
+    // Rotate drawing strokes
+    setDrawingStrokes(prev => prev.map(stroke => ({
+      ...stroke,
+      points: stroke.points.map(point => {
+        const rotated = rotatePoint(point.x, point.y);
+        return {
+          ...point,
+          x: rotated.x,
+          y: rotated.y,
+        };
+      }),
+    })));
+    
+    // Rotate power symbols
+    setPowerSymbols(prev => prev.map(p => {
+      const rotated = rotatePoint(p.x, p.y);
+      const newRotation = (((p.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
+      return {
+        ...p,
+        x: rotated.x,
+        y: rotated.y,
+        rotation: newRotation,
+      };
+    }));
+    
+    // Rotate ground symbols
+    setGroundSymbols(prev => prev.map(g => {
+      const rotated = rotatePoint(g.x, g.y);
+      const newRotation = (((g.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
+      return {
+        ...g,
+        x: rotated.x,
+        y: rotated.y,
+        rotation: newRotation,
+      };
+    }));
+  }, [getCenterPointForPerspective, topImage, bottomImage, cameraWorldCenter, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, setCameraWorldCenter]);
+
   // Generic function to center any object at given world coordinates
   const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
     const canvas = canvasRef.current;
@@ -6052,63 +6158,106 @@ function App() {
       return;
     }
     
-    // Arrow keys: Move selected components
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && selectedComponentIds.size > 0) {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Movement step size (in world coordinates)
-      const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
-      
-      let deltaX = 0;
-      let deltaY = 0;
-      if (e.key === 'ArrowUp') {
-        deltaY = -stepSize;
-      } else if (e.key === 'ArrowDown') {
-        deltaY = stepSize;
-      } else if (e.key === 'ArrowLeft') {
-        deltaX = -stepSize;
-      } else if (e.key === 'ArrowRight') {
-        deltaX = stepSize;
-      }
-      
-      // Move all selected components
-      for (const compId of selectedComponentIds) {
-        const topComp = componentsTop.find(c => c.id === compId);
-        if (topComp) {
-          const newX = topComp.x + deltaX;
-          const newY = topComp.y + deltaY;
-          // Truncate coordinates to 4 decimal places for exact matching
-          const truncated = truncatePoint({ x: newX, y: newY });
-          setComponentsTop(prev => prev.map(c => 
-            c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
-          ));
-        } else {
-          const bottomComp = componentsBottom.find(c => c.id === compId);
-          if (bottomComp) {
-            const newX = bottomComp.x + deltaX;
-            const newY = bottomComp.y + deltaY;
-            // Truncate coordinates to 4 decimal places for exact matching
-            const truncated = truncatePoint({ x: newX, y: newY });
-            setComponentsBottom(prev => prev.map(c => 
-              c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
-            ));
+    // Arrow keys: Perspective controls when NOT in transform mode
+    // Left/Right: Switch perspective (front/back) OR move selected components
+    // Up/Down: Rotate perspective in 90-degree increments (when not in transform mode)
+    if (!(currentTool === 'transform' && selectedImageForTransform)) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        // Rotate perspective: Up = counter-clockwise (-90°), Down = clockwise (+90°)
+        e.preventDefault();
+        e.stopPropagation();
+        const angle = e.key === 'ArrowUp' ? -90 : 90;
+        rotatePerspective(angle);
+        return;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        // If components are selected, move them; otherwise switch perspective
+        if (selectedComponentIds.size > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Movement step size (in world coordinates)
+          const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
+          
+          const deltaX = e.key === 'ArrowLeft' ? -stepSize : stepSize;
+          
+          // Move all selected components
+          for (const compId of selectedComponentIds) {
+            const topComp = componentsTop.find(c => c.id === compId);
+            if (topComp) {
+              const newX = topComp.x + deltaX;
+              // Truncate coordinates to 4 decimal places for exact matching
+              const truncated = truncatePoint({ x: newX, y: topComp.y });
+              setComponentsTop(prev => prev.map(c => 
+                c.id === compId ? { ...c, x: truncated.x } : c
+              ));
+            } else {
+              const bottomComp = componentsBottom.find(c => c.id === compId);
+              if (bottomComp) {
+                const newX = bottomComp.x + deltaX;
+                // Truncate coordinates to 4 decimal places for exact matching
+                const truncated = truncatePoint({ x: newX, y: bottomComp.y });
+                setComponentsBottom(prev => prev.map(c => 
+                  c.id === compId ? { ...c, x: truncated.x } : c
+                ));
+              }
+            }
           }
+          return;
+        } else {
+          // No components selected - switch perspective
+          e.preventDefault();
+          e.stopPropagation();
+          switchPerspective();
+          return;
         }
       }
-      return;
-    }
-    
-    // Left/Right Arrow keys: Switch perspective (front/back) when NOT in transform nudge mode
-    // Only handle this if we're not in transform mode at all
-    // The transform mode handler (below) will handle arrow keys for all transform modes (nudge, scale, rotate, etc.)
-    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && 
-        !(currentTool === 'transform' && selectedImageForTransform)) {
-      // Not in transform mode - switch perspective
-      e.preventDefault();
-      e.stopPropagation();
-      switchPerspective();
-      return;
+    } else {
+      // In transform mode - handle component movement separately if components are selected
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && selectedComponentIds.size > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Movement step size (in world coordinates)
+        const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
+        
+        let deltaX = 0;
+        let deltaY = 0;
+        if (e.key === 'ArrowUp') {
+          deltaY = -stepSize;
+        } else if (e.key === 'ArrowDown') {
+          deltaY = stepSize;
+        } else if (e.key === 'ArrowLeft') {
+          deltaX = -stepSize;
+        } else if (e.key === 'ArrowRight') {
+          deltaX = stepSize;
+        }
+        
+        // Move all selected components
+        for (const compId of selectedComponentIds) {
+          const topComp = componentsTop.find(c => c.id === compId);
+          if (topComp) {
+            const newX = topComp.x + deltaX;
+            const newY = topComp.y + deltaY;
+            // Truncate coordinates to 4 decimal places for exact matching
+            const truncated = truncatePoint({ x: newX, y: newY });
+            setComponentsTop(prev => prev.map(c => 
+              c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
+            ));
+          } else {
+            const bottomComp = componentsBottom.find(c => c.id === compId);
+            if (bottomComp) {
+              const newX = bottomComp.x + deltaX;
+              const newY = bottomComp.y + deltaY;
+              // Truncate coordinates to 4 decimal places for exact matching
+              const truncated = truncatePoint({ x: newX, y: newY });
+              setComponentsBottom(prev => prev.map(c => 
+                c.id === compId ? { ...c, x: truncated.x, y: truncated.y } : c
+              ));
+            }
+          }
+        }
+        return;
+      }
     }
     
     // Detailed Information: Display properties of selected objects (I)
