@@ -5883,14 +5883,9 @@ function App() {
           homeViewTimeoutRef.current = null;
         }
         
-        // Calculate the center of the visible canvas in world coordinates
+        // Save current camera center in world coordinates
         const canvas = canvasRef.current;
         if (canvas) {
-          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-          const canvasCenterContentX = contentWidth / 2;
-          const canvasCenterContentY = contentHeight / 2;
-          
           // Use current camera center in world coordinates
           const centerWorldX = cameraWorldCenter.x;
           const centerWorldY = cameraWorldCenter.y;
@@ -5931,27 +5926,9 @@ function App() {
       const homeView = homeViews[numKey];
       if (homeView) {
         // Restore to saved home view location and zoom
+        // homeView.x and homeView.y are already in world coordinates
         setViewScale(homeView.zoom);
-        
-        // Calculate pan to center the saved world location in the visible canvas area
-        const canvas = canvasRef.current;
-        let panX = 0;
-        let panY = 0;
-        
-        if (canvas) {
-          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-          
-          // Canvas center in content coordinates
-          const canvasCenterContentX = contentWidth / 2;
-          const canvasCenterContentY = contentHeight / 2;
-          
-          // Pan to center the saved world location: pan = canvasCenter - (worldPos * zoom)
-          panX = canvasCenterContentX - (homeView.x * homeView.zoom);
-          panY = canvasCenterContentY - (homeView.y * homeView.zoom);
-        }
-        
-        setViewPan({ x: panX, y: panY });
+        setCameraWorldCenter({ x: homeView.x, y: homeView.y });
         
         // Restore all layer visibility settings
         setShowTopImage(homeView.showTopImage);
@@ -6168,27 +6145,9 @@ function App() {
       const homeView = homeViews[0];
       if (homeView) {
         // Restore to saved home view location and zoom
+        // homeView.x and homeView.y are already in world coordinates
         setViewScale(homeView.zoom);
-        
-        // Calculate pan to center the saved world location in the visible canvas area
-        const canvas = canvasRef.current;
-        let panX = 0;
-        let panY = 0;
-        
-        if (canvas) {
-          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-          
-          // Canvas center in content coordinates
-          const canvasCenterContentX = contentWidth / 2;
-          const canvasCenterContentY = contentHeight / 2;
-          
-          // Pan to center the saved world location: pan = canvasCenter - (worldPos * zoom)
-          panX = canvasCenterContentX - (homeView.x * homeView.zoom);
-          panY = canvasCenterContentY - (homeView.y * homeView.zoom);
-        }
-        
-        setViewPan({ x: panX, y: panY });
+        setCameraWorldCenter({ x: homeView.x, y: homeView.y });
         
         // Restore all layer visibility settings
         setShowTopImage(homeView.showTopImage);
