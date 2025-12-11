@@ -1333,6 +1333,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
                     <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                      <li><strong>Switch Perspective</strong> — <code>←</code> / <code>→</code> to switch between front/back view (when not in Image Transform mode)</li>
                       <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
                       <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components</li>
                     </ul>
@@ -1521,7 +1522,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Image Adjustments:</strong> Adjust brightness, contrast, sharpness, and grayscale as needed.</li>
                   <li><strong>Flip Images:</strong> Use horizontal or vertical flip if your images are mirrored.</li>
                   <li><strong>Arrow Keys:</strong> When transform tool is active, use arrow keys for precise adjustments.</li>
-                  <li><strong>Change Perspective:</strong> Tools → Change Perspective to switch between top/bottom view or rotate all elements (images, components, traces) together by 90°, 180°, or 270°.</li>
+                  <li><strong>Change Perspective:</strong> Tools → Change Perspective (or press <code>E</code>) to switch between top/bottom view or rotate all elements (images, components, traces) together by 90°, 180°, or 270°.</li>
+                  <li><strong>Quick Perspective Switch:</strong> Press <code>←</code> or <code>→</code> arrow keys (when not in Image Transform mode) to quickly switch between front/back view.</li>
                 </ul>
               </div>
 
@@ -1617,6 +1619,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <div style={{ marginTop: '12px', fontSize: '13px', color: '#222' }}>
                   <p style={{ margin: '0 0 8px 0', fontWeight: 600 }}>Arrow Keys</p>
                   <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                    <li><strong>Switch Perspective</strong> — <code>←</code> / <code>→</code> (when not in Image Transform mode)</li>
                     <li>Use arrow keys to adjust image transformations (when transform tool is active)</li>
                     <li>Use arrow keys to nudge selected components</li>
                     <li>Click a slider first, then use arrow keys for precise adjustment</li>

@@ -1075,6 +1075,8 @@ function App() {
   const [isDraggingPastMachine, setIsDraggingPastMachine] = useState(false);
   const [showPowerBusSelector, setShowPowerBusSelector] = useState(false);
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
+  // Component connection selection: Set of "componentId:pointId" strings
+  const [selectedComponentConnections, setSelectedComponentConnections] = useState<Set<string>>(new Set());
   // Ground bus management (similar to power buses)
   const [showGroundBusManager, setShowGroundBusManager] = useState(false);
   const [editingGroundBusId, setEditingGroundBusId] = useState<string | null>(null);
@@ -1207,6 +1209,7 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const selectAllTraces = useCallback(() => {
@@ -1217,6 +1220,7 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const selectAllPads = useCallback(() => {
@@ -1227,6 +1231,7 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const selectAllComponents = useCallback(() => {
@@ -1235,6 +1240,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const selectDisconnectedComponents = useCallback(() => {
@@ -1252,173 +1258,220 @@ function App() {
     setSelectedIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
     // Automatically open the Detailed Information dialog
     setDebugDialog({ visible: true, text: '' });
   }, [componentsTop, componentsBottom, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds, setDebugDialog]);
 
   const selectAllComponentConnections = useCallback(() => {
-    // Collect all Point IDs from all component pin connections
-    const componentPointIds = new Set<number>();
-    let totalPins = 0;
-    let connectedPins = 0;
+    // Collect all component connections: each line from component center to via/pad
+    // Format: "componentId:pointId" for each connection
+    const connectionKeys = new Set<string>();
+    let totalConnections = 0;
     
     for (const comp of [...componentsTop, ...componentsBottom]) {
       const pinConnections = comp.pinConnections || [];
-      totalPins += comp.pinCount || 0;
       for (const conn of pinConnections) {
         if (conn && conn.trim() !== '') {
           const pointId = parseInt(conn.trim(), 10);
           if (!isNaN(pointId) && pointId > 0) {
-            componentPointIds.add(pointId);
-            connectedPins++;
+            // Create unique key for this connection: "componentId:pointId"
+            const connectionKey = `${comp.id}:${pointId}`;
+            connectionKeys.add(connectionKey);
+            totalConnections++;
           }
         }
       }
     }
 
-    console.log(`Component connections: ${connectedPins} pins connected, ${componentPointIds.size} unique Point IDs`);
+    console.log(`Component connections: ${totalConnections} connection lines found`);
 
-    if (componentPointIds.size === 0) {
+    if (connectionKeys.size === 0) {
       console.log('No component connections found - components may not have pins connected');
-      alert('No component connections found. Please connect component pins to vias, pads, or traces first.');
+      alert('No component connections found. Please connect component pins to vias or pads first.');
       return;
     }
 
-    // Build a map: Point ID -> Set of trace IDs that contain this Point ID
-    const pointIdToTraces = new Map<number, Set<string>>();
-    for (const stroke of drawingStrokes) {
-      if (stroke.type === 'trace' && stroke.points.length >= 2) {
-        for (const point of stroke.points) {
-          if (point && point.id !== undefined && point.id !== null) {
-            if (!pointIdToTraces.has(point.id)) {
-              pointIdToTraces.set(point.id, new Set());
-            }
-            pointIdToTraces.get(point.id)!.add(stroke.id);
-          }
-        }
-      }
-    }
-
-    // Build connectivity graph: Point ID -> Set of connected Point IDs (through traces, vias, and pads)
-    // This allows us to find all Point IDs connected to component pins, even indirectly
-    // CRITICAL: Pads and vias are connection nodes - if a trace connects to a pad/via, they share the same Point ID
-    const connectivityGraph = new Map<number, Set<number>>();
-    
-    // First, add all pads/vias to the graph (they're connection nodes)
-    for (const stroke of drawingStrokes) {
-      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length >= 1) {
-        const pointId = stroke.points[0]?.id;
-        if (pointId !== undefined && pointId !== null) {
-          // Initialize the node in the graph
-          if (!connectivityGraph.has(pointId)) {
-            connectivityGraph.set(pointId, new Set());
-          }
-        }
-      }
-    }
-    
-    // Then, process traces to connect Point IDs
-    for (const stroke of drawingStrokes) {
-      if (stroke.type === 'trace' && stroke.points.length >= 2) {
-        // Extract all Point IDs from this trace
-        const pointIds: number[] = [];
-        for (const point of stroke.points) {
-          if (point && point.id !== undefined && point.id !== null) {
-            pointIds.push(point.id);
-          }
-        }
-        // Connect all Point IDs in this trace (they're all connected through the trace)
-        // If a trace point has the same Point ID as a pad/via, they're automatically connected
-        for (let i = 0; i < pointIds.length; i++) {
-          for (let j = i + 1; j < pointIds.length; j++) {
-            const id1 = pointIds[i];
-            const id2 = pointIds[j];
-            if (!connectivityGraph.has(id1)) {
-              connectivityGraph.set(id1, new Set());
-            }
-            if (!connectivityGraph.has(id2)) {
-              connectivityGraph.set(id2, new Set());
-            }
-            connectivityGraph.get(id1)!.add(id2);
-            connectivityGraph.get(id2)!.add(id1);
-          }
-        }
-      }
-    }
-
-    // Traverse connectivity graph from component Point IDs to find all connected Point IDs
-    const visited = new Set<number>();
-    const connectedPointIds = new Set<number>();
-    
-    const dfs = (pointId: number) => {
-      if (visited.has(pointId)) return;
-      visited.add(pointId);
-      connectedPointIds.add(pointId);
-      
-      const neighbors = connectivityGraph.get(pointId);
-      if (neighbors) {
-        for (const neighborId of neighbors) {
-          dfs(neighborId);
-        }
-      }
-    };
-
-    // Start DFS from all component Point IDs
-    for (const componentPointId of componentPointIds) {
-      dfs(componentPointId);
-    }
-
-    // Find all traces that contain any of the connected Point IDs
-    const connectedTraceIds = new Set<string>();
-    for (const pointId of connectedPointIds) {
-      const traces = pointIdToTraces.get(pointId);
-      if (traces) {
-        for (const traceId of traces) {
-          connectedTraceIds.add(traceId);
-        }
-      }
-    }
-
-    // Also find traces that connect to pads/vias with component Point IDs
-    // Even if the trace point doesn't share the exact Point ID, if it's close enough to a pad/via,
-    // it's still connected. But actually, when traces snap to pads/vias, they should share the Point ID.
-    // This is a fallback check for any edge cases.
-    for (const stroke of drawingStrokes) {
-      if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length >= 1) {
-        const pointId = stroke.points[0]?.id;
-        if (pointId !== undefined && pointId !== null && componentPointIds.has(pointId)) {
-          // This pad/via is connected to a component pin
-          // Find all traces that have this Point ID (they snapped to this pad/via)
-          const traces = pointIdToTraces.get(pointId);
-          if (traces) {
-            for (const traceId of traces) {
-              connectedTraceIds.add(traceId);
-            }
-          }
-        }
-      }
-    }
-
-    console.log(`Found ${connectedTraceIds.size} traces connected to components`);
-    console.log(`  - Component Point IDs: ${Array.from(componentPointIds).slice(0, 10).join(', ')}${componentPointIds.size > 10 ? '...' : ''}`);
-    console.log(`  - Connected Point IDs: ${connectedPointIds.size} total`);
-    console.log(`  - Traces found: ${Array.from(connectedTraceIds).slice(0, 5).join(', ')}${connectedTraceIds.size > 5 ? '...' : ''}`);
-    
-    if (connectedTraceIds.size === 0) {
-      // Provide more detailed error message
-      const componentPointIdsList = Array.from(componentPointIds).slice(0, 5).join(', ');
-      alert(`No traces found connected to components.\n\nComponent Point IDs: ${componentPointIdsList}${componentPointIds.size > 5 ? '...' : ''}\n\nMake sure:\n1. Component pins are connected to vias/pads\n2. Traces are drawn and snapped to those same vias/pads\n3. When drawing traces, click on the vias/pads to snap (this shares the Point ID)`);
-      return;
-    }
-    
-    // Select the connected traces
-    setSelectedIds(connectedTraceIds);
+    // Select all component connections (the lines themselves)
+    setSelectedComponentConnections(connectionKeys);
+    // Clear other selections
+    setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
     
-    console.log(`Selected ${connectedTraceIds.size} traces`);
-  }, [componentsTop, componentsBottom, drawingStrokes, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+    console.log(`Selected ${connectionKeys.size} component connection lines`);
+  }, [componentsTop, componentsBottom, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
+  // Helper function to get center point for perspective switching (same logic as TransformAllDialog)
+  const getCenterPointForPerspective = useCallback((): { x: number; y: number } => {
+    // Use top image center as reference (or bottom if top doesn't exist)
+    if (topImage) {
+      return { x: topImage.x, y: topImage.y };
+    }
+    if (bottomImage) {
+      return { x: bottomImage.x, y: bottomImage.y };
+    }
+    return { x: 0, y: 0 };
+  }, [topImage, bottomImage]);
+
+  // Switch perspective (toggle between top and bottom view)
+  const switchPerspective = useCallback(() => {
+    const center = getCenterPointForPerspective();
+    const centerX = center.x;
+
+    // Helper function to flip image around vertical axis in world coordinates
+    const flipImageVertical = (image: PCBImage | null) => {
+      if (!image) return null;
+      const rotation = (image.rotation || 0) % 360;
+      const normalizedRotation = rotation < 0 ? rotation + 360 : rotation;
+      const tolerance = 1;
+
+      if ((normalizedRotation >= 0 && normalizedRotation < tolerance) || 
+          (normalizedRotation >= 180 - tolerance && normalizedRotation < 180 + tolerance) ||
+          (normalizedRotation >= 360 - tolerance)) {
+        return { ...image, flipX: !image.flipX };
+      } else if ((normalizedRotation >= 90 - tolerance && normalizedRotation < 90 + tolerance) ||
+                 (normalizedRotation >= 270 - tolerance && normalizedRotation < 270 + tolerance)) {
+        return { ...image, flipY: !image.flipY };
+      } else {
+        const rad = (normalizedRotation * Math.PI) / 180;
+        const cosR = Math.cos(rad);
+        const sinR = Math.sin(rad);
+        const localXWorldX = cosR;
+        const localYWorldX = -sinR;
+        if (Math.abs(localXWorldX) > Math.abs(localYWorldX)) {
+          return { ...image, flipX: !image.flipX };
+        } else {
+          return { ...image, flipY: !image.flipY };
+        }
+      }
+    };
+
+    if (isBottomView) {
+      // Switch to Top View (reset flip)
+      if (topImage && originalTopFlipX !== null) {
+        setTopImage({ ...topImage, flipX: originalTopFlipX, flipY: originalTopFlipY || false });
+      }
+      if (bottomImage && originalBottomFlipX !== null) {
+        const flipped = flipImageVertical(bottomImage);
+        if (flipped) {
+          setBottomImage({
+            ...flipped,
+            x: centerX - (bottomImage.x - centerX),
+            flipX: originalBottomFlipX,
+            flipY: originalBottomFlipY || false,
+          });
+        }
+      }
+
+      // Flip components back
+      setComponentsTop(prev => prev.map(comp => ({
+        ...comp,
+        x: centerX - (comp.x - centerX),
+        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
+      })));
+      setComponentsBottom(prev => prev.map(comp => ({
+        ...comp,
+        x: centerX - (comp.x - centerX),
+        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
+      })));
+
+      // Flip drawing strokes back
+      setDrawingStrokes(prev => prev.map(stroke => ({
+        ...stroke,
+        points: stroke.points.map(point => ({
+          ...point,
+          x: centerX - (point.x - centerX),
+        })),
+      })));
+
+      // Flip power and ground symbols back
+      setPowerSymbols(prev => prev.map(p => ({
+        ...p,
+        x: centerX - (p.x - centerX),
+        flipX: !p.flipX,
+      })));
+      setGroundSymbols(prev => prev.map(g => ({
+        ...g,
+        x: centerX - (g.x - centerX),
+        flipX: !g.flipX,
+      })));
+
+      // Flip camera center back
+      setCameraWorldCenter(prev => ({
+        x: centerX - (prev.x - centerX),
+        y: prev.y,
+      }));
+
+      setIsBottomView(false);
+    } else {
+      // Switch to Bottom View (flip horizontal)
+      if (topImage) {
+        setOriginalTopFlipX(topImage.flipX || false);
+        setOriginalTopFlipY(topImage.flipY || false);
+        setTopImage(flipImageVertical(topImage));
+      } else {
+        setOriginalTopFlipX(null);
+        setOriginalTopFlipY(null);
+      }
+      if (bottomImage) {
+        setOriginalBottomFlipX(bottomImage.flipX || false);
+        setOriginalBottomFlipY(bottomImage.flipY || false);
+        const flipped = flipImageVertical(bottomImage);
+        if (flipped) {
+          setBottomImage({
+            ...flipped,
+            x: centerX - (bottomImage.x - centerX),
+          });
+        }
+      } else {
+        setOriginalBottomFlipX(null);
+        setOriginalBottomFlipY(null);
+      }
+
+      // Flip components horizontally
+      setComponentsTop(prev => prev.map(comp => ({
+        ...comp,
+        x: centerX - (comp.x - centerX),
+        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
+      })));
+      setComponentsBottom(prev => prev.map(comp => ({
+        ...comp,
+        x: centerX - (comp.x - centerX),
+        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
+      })));
+
+      // Flip drawing strokes horizontally
+      setDrawingStrokes(prev => prev.map(stroke => ({
+        ...stroke,
+        points: stroke.points.map(point => ({
+          ...point,
+          x: centerX - (point.x - centerX),
+        })),
+      })));
+
+      // Flip power and ground symbols horizontally
+      setPowerSymbols(prev => prev.map(p => ({
+        ...p,
+        x: centerX - (p.x - centerX),
+        flipX: !p.flipX,
+      })));
+      setGroundSymbols(prev => prev.map(g => ({
+        ...g,
+        x: centerX - (g.x - centerX),
+        flipX: !g.flipX,
+      })));
+
+      // Flip camera center
+      setCameraWorldCenter(prev => ({
+        x: centerX - (prev.x - centerX),
+        y: prev.y,
+      }));
+
+      setIsBottomView(true);
+    }
+  }, [isBottomView, topImage, bottomImage, originalTopFlipX, originalTopFlipY, originalBottomFlipX, originalBottomFlipY, getCenterPointForPerspective, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, setOriginalTopFlipX, setOriginalTopFlipY, setOriginalBottomFlipX, setOriginalBottomFlipY, setCameraWorldCenter, setIsBottomView]);
 
   // Generic function to center any object at given world coordinates
   const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
@@ -1448,6 +1501,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [findAndCenterObject, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const findAndCenterStroke = useCallback((strokeId: string, worldX: number, worldY: number) => {
@@ -1458,6 +1512,7 @@ function App() {
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [findAndCenterObject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const findAndCenterPower = useCallback((powerId: string, worldX: number, worldY: number) => {
@@ -1468,6 +1523,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [findAndCenterObject, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
 
   const findAndCenterGround = useCallback((groundId: string, worldX: number, worldY: number) => {
@@ -1478,6 +1534,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [findAndCenterObject, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
 
   const powerNodeNames = React.useMemo(() => {
@@ -1511,6 +1568,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [powers, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
 
   const selectAllGroundNodes = useCallback(() => {
@@ -1519,6 +1577,7 @@ function App() {
     setSelectedIds(new Set());
     setSelectedComponentIds(new Set());
     setSelectedPowerIds(new Set());
+    setSelectedComponentConnections(new Set());
   }, [grounds, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
 
   const selectPowerNodesByName = useCallback((name: string) => {
@@ -2403,6 +2462,7 @@ function App() {
           setSelectedComponentIds(new Set());
           setSelectedPowerIds(new Set());
           setSelectedGroundIds(new Set());
+          setSelectedComponentConnections(new Set());
         }
         
         // Vias and pads are not moveable - only selectable
@@ -2416,6 +2476,7 @@ function App() {
         setSelectedComponentIds(new Set());
         setSelectedPowerIds(new Set());
         setSelectedGroundIds(new Set());
+        setSelectedComponentConnections(new Set());
       }
       
       // Store whether Shift was pressed at mouseDown for use in mouseUp
@@ -4815,14 +4876,27 @@ function App() {
             // Use component center as starting point
             const compCenter = { x: comp.x, y: comp.y };
             
+            // Check if this connection is selected
+            const pointId = parseInt(nodeIdStr, 10);
+            const connectionKey = `${comp.id}:${pointId}`;
+            const isSelected = selectedComponentConnections.has(connectionKey);
+            
             ctx.save();
             // Use black for negative connections of polarized components, otherwise use component connection color
+            // If selected, use highlight color (cyan) and thicker line
+            if (isSelected) {
+              ctx.strokeStyle = '#00bfff'; // Cyan highlight
+              ctx.lineWidth = Math.max(2, (componentConnectionSize * 1.5) / Math.max(viewScale, 0.001));
+              ctx.setLineDash([4, 3]);
+            } else {
             ctx.strokeStyle = isNegative ? 'rgba(0, 0, 0, 0.8)' : componentConnectionColor;
             ctx.lineWidth = Math.max(1, componentConnectionSize / Math.max(viewScale, 0.001));
+            }
             ctx.beginPath();
             ctx.moveTo(compCenter.x, compCenter.y);
             ctx.lineTo(nodePos.x, nodePos.y);
             ctx.stroke();
+            ctx.setLineDash([]);
             ctx.restore();
           }
         }
@@ -4855,7 +4929,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -6022,6 +6096,18 @@ function App() {
           }
         }
       }
+      return;
+    }
+    
+    // Left/Right Arrow keys: Switch perspective (front/back) when NOT in transform nudge mode
+    // Only handle this if we're not in transform mode at all
+    // The transform mode handler (below) will handle arrow keys for all transform modes (nudge, scale, rotate, etc.)
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && 
+        !(currentTool === 'transform' && selectedImageForTransform)) {
+      // Not in transform mode - switch perspective
+      e.preventDefault();
+      e.stopPropagation();
+      switchPerspective();
       return;
     }
     
@@ -8777,6 +8863,16 @@ function App() {
         top: toolRegistry.get('component')?.layerSettings.get('top')?.size || topComponentSize,
         bottom: toolRegistry.get('component')?.layerSettings.get('bottom')?.size || bottomComponentSize,
       },
+      testPointColors: {
+        top: toolRegistry.get('testPoint')?.layerSettings.get('top')?.color || topTestPointColor,
+        bottom: toolRegistry.get('testPoint')?.layerSettings.get('bottom')?.color || bottomTestPointColor,
+      },
+      testPointSizes: {
+        top: toolRegistry.get('testPoint')?.layerSettings.get('top')?.size || topTestPointSize,
+        bottom: toolRegistry.get('testPoint')?.layerSettings.get('bottom')?.size || bottomTestPointSize,
+      },
+      componentConnectionColor: componentConnectionColor,
+      componentConnectionSize: componentConnectionSize,
       traceToolLayer, // Save last layer choice
       toolSettings: {
         // Convert Map to plain object for JSON serialization
@@ -10118,6 +10214,35 @@ function App() {
               updated.set('component', { ...restoredSettings, layerSettings });
             }
           }
+          // Restore test point settings if present
+          if (project.testPointSizes && project.testPointColors) {
+            setTopTestPointColor(project.testPointColors.top || topTestPointColor);
+            setBottomTestPointColor(project.testPointColors.bottom || bottomTestPointColor);
+            setTopTestPointSize(project.testPointSizes.top || topTestPointSize);
+            setBottomTestPointSize(project.testPointSizes.bottom || bottomTestPointSize);
+            
+            // Also update tool registry for testPoint
+            const testPointDef = updated.get('testPoint');
+            if (testPointDef) {
+              const layerSettings = new Map(testPointDef.layerSettings);
+              layerSettings.set('top', { 
+                color: project.testPointColors.top || testPointDef.layerSettings.get('top')?.color || '#E69F00', 
+                size: project.testPointSizes.top || testPointDef.layerSettings.get('top')?.size || 6 
+              });
+              layerSettings.set('bottom', { 
+                color: project.testPointColors.bottom || testPointDef.layerSettings.get('bottom')?.color || '#F0E442', 
+                size: project.testPointSizes.bottom || testPointDef.layerSettings.get('bottom')?.size || 6 
+              });
+              updated.set('testPoint', { ...testPointDef, layerSettings });
+            }
+          }
+          // Restore component connection settings if present
+          if (project.componentConnectionColor !== undefined) {
+            setComponentConnectionColor(project.componentConnectionColor);
+          }
+          if (project.componentConnectionSize !== undefined) {
+            setComponentConnectionSize(project.componentConnectionSize);
+          }
           if (project.toolSettings.ground) {
             const groundDef = updated.get('ground');
             if (groundDef) {
@@ -10142,6 +10267,7 @@ function App() {
             if (currentTool === 'draw' && drawingMode === 'trace') return updated.get('trace');
             if (currentTool === 'draw' && drawingMode === 'via') return updated.get('via');
             if (currentTool === 'draw' && drawingMode === 'pad') return updated.get('pad');
+            if (currentTool === 'draw' && drawingMode === 'testPoint') return updated.get('testPoint');
             if (currentTool === 'component') return updated.get('component');
             if (currentTool === 'power') return updated.get('power');
             if (currentTool === 'ground') return updated.get('ground');
@@ -10196,6 +10322,23 @@ function App() {
                 } else {
                   setBottomComponentColor(layerSettings.color);
                   setBottomComponentSize(layerSettings.size);
+                }
+              } else {
+                setBrushColor(currentToolDef.settings.color);
+                setBrushSize(currentToolDef.settings.size);
+              }
+            } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+              const layer = testPointToolLayer || 'top';
+              const layerSettings = currentToolDef.layerSettings.get(layer);
+              if (layerSettings) {
+                setBrushColor(layerSettings.color);
+                setBrushSize(layerSettings.size);
+                if (layer === 'top') {
+                  setTopTestPointColor(layerSettings.color);
+                  setTopTestPointSize(layerSettings.size);
+                } else {
+                  setBottomTestPointColor(layerSettings.color);
+                  setBottomTestPointSize(layerSettings.size);
                 }
               } else {
                 setBrushColor(currentToolDef.settings.color);
@@ -10509,7 +10652,7 @@ function App() {
         for (const ground of validGrounds) {
           if (ground.pointId && typeof ground.pointId === 'number') {
             registerAllocatedId(ground.pointId);
-          }
+      }
         }
       } else {
         // Initialize empty array if project doesn't have ground symbols
