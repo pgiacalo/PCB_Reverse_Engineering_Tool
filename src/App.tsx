@@ -9696,6 +9696,17 @@ function App() {
   const isFirstRunAfterEnableRef = useRef<boolean>(false);
   // Use a ref to track if we're currently loading a project (to skip change tracking during load)
   const isLoadingProjectRef = useRef<boolean>(false);
+  // Track tool instance changes (colors/sizes) so dirty state updates when tool settings change
+  const [toolInstanceVersion, setToolInstanceVersion] = React.useState(0);
+
+  // Subscribe to all tool instances to detect changes for dirty tracking
+  React.useEffect(() => {
+    const ids = Object.keys(toolInstanceManager.getAll());
+    const unsubscribers = ids.map(id => toolInstanceManager.subscribe(id as any, () => {
+      setToolInstanceVersion(v => v + 1);
+    }));
+    return () => unsubscribers.forEach(u => u());
+  }, []);
   
   React.useEffect(() => {
     // Skip if we're currently loading a project (loading doesn't count as a change)
@@ -9761,7 +9772,28 @@ function App() {
     areComponentsLocked,
     areGroundNodesLocked,
     arePowerNodesLocked,
+    groundBuses,
     autoSaveEnabled, // Need to include this to check if enabled, but we skip on first run
+    topPadColor,
+    bottomPadColor,
+    topPadSize,
+    bottomPadSize,
+    topComponentColor,
+    bottomComponentColor,
+    topComponentSize,
+    bottomComponentSize,
+    topTestPointColor,
+    bottomTestPointColor,
+    topTestPointSize,
+    bottomTestPointSize,
+    componentConnectionColor,
+    componentConnectionSize,
+    traceToolLayer,
+    autoAssignDesignators,
+    useGlobalDesignatorCounters,
+    homeViews,
+    toolRegistry,
+    toolInstanceVersion,
   ]);
   
   // Mark first run when auto save is enabled
