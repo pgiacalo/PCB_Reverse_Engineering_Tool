@@ -227,12 +227,14 @@ function App() {
   const {
     viewScale,
     setViewScale,
-    viewPan,
-    setViewPan,
+    cameraWorldCenter,
+    setCameraWorldCenter,
     isShiftConstrained,
     setIsShiftConstrained,
     showBothLayers,
     setShowBothLayers,
+    setCameraCenter,
+    getViewPan,
   } = view;
   
   // Tool-specific layer defaults (persist until tool re-selected)
@@ -745,6 +747,40 @@ function App() {
   const [tracesBottom, setTracesBottom] = useState<TraceSegment[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Calculate viewPan from cameraWorldCenter for drawing (backward compatibility)
+  // Use useMemo to recalculate when canvas size or camera changes
+  const viewPan = React.useMemo(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+    const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+    return getViewPan(canvasCenterX, canvasCenterY);
+  }, [canvasRef.current?.width, canvasRef.current?.height, cameraWorldCenter, viewScale, getViewPan]);
+  
+  // Helper function to set viewPan (converts from canvas coords to world coords for camera)
+  const setViewPan = React.useCallback((panOrUpdater: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+    const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+    
+    // Get current viewPan value
+    const currentViewPan = getViewPan(canvasCenterX, canvasCenterY);
+    
+    // Calculate new viewPan
+    const newViewPan = typeof panOrUpdater === 'function' 
+      ? panOrUpdater(currentViewPan)
+      : panOrUpdater;
+    
+    // Convert viewPan (canvas coords) to cameraWorldCenter (world coords)
+    // Formula: cameraWorldCenter.x = (canvasCenterX - viewPan.x) / viewScale
+    const cameraWorldX = (canvasCenterX - newViewPan.x) / viewScale;
+    const cameraWorldY = (canvasCenterY - newViewPan.y) / viewScale;
+    
+    setCameraWorldCenter({ x: cameraWorldX, y: cameraWorldY });
+  }, [getViewPan, viewScale, setCameraWorldCenter]);
+  
   // Note: Point IDs are now generated globally via generatePointId() from coordinates.ts
   // This ensures globally unique IDs across all vias, traces, and connection points
   
@@ -979,8 +1015,8 @@ function App() {
   const transparencyCycleRafRef = useRef<number | null>(null);
   const transparencyCycleStartRef = useRef<number | null>(null);
   const [isPanning, setIsPanning] = useState(false);
-  const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number } | null>(null);
-  const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number } | null>(null);
+  const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number; cameraCenterX: number; cameraCenterY: number } | null>(null);
+  const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number; cameraCenterX: number; cameraCenterY: number } | null>(null);
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Home Views feature: allows user to set up to 10 custom view locations (0-9) that can be recalled
@@ -1891,9 +1927,9 @@ function App() {
         const contentHeight = canvas.height - 2 * CONTENT_BORDER;
         const centerX = contentWidth / 2;
         const centerY = contentHeight / 2;
-        // Convert center position to world coordinates
-        initialWorldX = (centerX - viewPan.x) / viewScale;
-        initialWorldY = (centerY - viewPan.y) / viewScale;
+        // Use current camera center as initial world position
+        initialWorldX = cameraWorldCenter.x;
+        initialWorldY = cameraWorldCenter.y;
       }
       
       const imageData: PCBImage = {
@@ -1927,7 +1963,7 @@ function App() {
       alert(`Error: Failed to load image file "${file.name}".\n\n${errorMessage}\n\nPlease ensure the file is a valid image format (PNG, JPEG, etc.) and is not corrupted.`);
       console.error('Failed to load image', err);
     }
-  }, [viewPan.x, viewPan.y, viewScale, projectDirHandle, copyImageToProjectDirectory]);
+  }, [cameraWorldCenter, viewScale, projectDirHandle, copyImageToProjectDirectory]);
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Stop propagation to prevent document-level handlers from interfering
@@ -2378,17 +2414,29 @@ function App() {
     } else if (currentTool === 'magnify') {
       const factor = e.shiftKey ? 0.5 : 2;
       const newScale = Math.max(0.25, Math.min(8, viewScale * factor));
-      // Keep clicked world point under cursor after zoom: pan' = canvasPt - newScale * world
-      const newPanX = contentCanvasX - newScale * x;
-      const newPanY = contentCanvasY - newScale * y;
+      // Keep clicked world point under cursor after zoom: center camera on that world point
+      setCameraCenter(x, y);
       setViewScale(newScale);
-      setViewPan({ x: newPanX, y: newPanY });
       return;
     } else if (currentTool === 'pan') {
-      // Start panning in content-canvas coordinates
-      panStartRef.current = { startCX: contentCanvasX, startCY: contentCanvasY, panX: viewPan.x, panY: viewPan.y };
+      // Start panning - track starting camera center in world coordinates
+      panStartRef.current = { 
+        startCX: contentCanvasX, 
+        startCY: contentCanvasY, 
+        panX: viewPan.x, 
+        panY: viewPan.y,
+        cameraCenterX: cameraWorldCenter.x,
+        cameraCenterY: cameraWorldCenter.y,
+      };
       // Also track client coordinates for out-of-canvas drags
-      panClientStartRef.current = { startClientX: e.clientX, startClientY: e.clientY, panX: viewPan.x, panY: viewPan.y };
+      panClientStartRef.current = { 
+        startClientX: e.clientX, 
+        startClientY: e.clientY, 
+        panX: viewPan.x, 
+        panY: viewPan.y,
+        cameraCenterX: cameraWorldCenter.x,
+        cameraCenterY: cameraWorldCenter.y,
+      };
       setIsPanning(true);
       return;
     } else if (currentTool === 'draw') {
@@ -3084,10 +3132,9 @@ function App() {
     const stepOut = 1 / stepIn;
     const factor = e.deltaY < 0 ? stepIn : stepOut;
     const newScale = Math.max(0.25, Math.min(8, viewScale * factor));
-    const newPanX = (canvasX - CONTENT_BORDER) - newScale * worldX;
-    const newPanY = (canvasY - CONTENT_BORDER) - newScale * worldY;
+    // Keep the world point under cursor at the same position - center camera on it
+    setCameraCenter(worldX, worldY);
     setViewScale(newScale);
-    setViewPan({ x: newPanX, y: newPanY });
   }, [currentTool, viewScale, viewPan.x, viewPan.y]);
 
   const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -3496,10 +3543,13 @@ function App() {
       const sy = selectStart.y;
       setSelectRect({ x: Math.min(sx, x), y: Math.min(sy, y), width: Math.abs(x - sx), height: Math.abs(y - sy) });
     } else if (currentTool === 'pan' && isPanning && panStartRef.current) {
-      const { startCX, startCY, panX, panY } = panStartRef.current;
+      const { startCX, startCY, cameraCenterX, cameraCenterY } = panStartRef.current;
       const dx = contentCanvasX - startCX;
       const dy = contentCanvasY - startCY;
-      setViewPan({ x: panX + dx, y: panY + dy });
+      // Convert canvas delta to world delta and update camera center
+      const worldDeltaX = -dx / viewScale; // Negative because moving canvas right moves view left
+      const worldDeltaY = -dy / viewScale; // Negative because moving canvas down moves view up
+      setCameraCenter(cameraCenterX + worldDeltaX, cameraCenterY + worldDeltaY);
     } else if (isDrawing && currentStroke.length > 0) {
       if (currentTool === 'draw') {
         if (isShiftConstrained) {
@@ -4222,10 +4272,13 @@ function App() {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-      const { startClientX, startClientY, panX, panY } = panClientStartRef.current!;
+      const { startClientX, startClientY, cameraCenterX, cameraCenterY } = panClientStartRef.current!;
       const dx = (e.clientX - startClientX) * scaleX;
       const dy = (e.clientY - startClientY) * scaleY;
-      setViewPan({ x: panX + dx, y: panY + dy });
+      // Convert canvas delta to world delta and update camera center
+      const worldDeltaX = -dx / viewScale; // Negative because moving canvas right moves view left
+      const worldDeltaY = -dy / viewScale; // Negative because moving canvas down moves view up
+      setCameraCenter(cameraCenterX + worldDeltaX, cameraCenterY + worldDeltaY);
     };
     const onUp = () => {
       setIsPanning(false);
@@ -5838,9 +5891,9 @@ function App() {
           const canvasCenterContentX = contentWidth / 2;
           const canvasCenterContentY = contentHeight / 2;
           
-          // Convert canvas center to world coordinates
-          const centerWorldX = (canvasCenterContentX - viewPan.x) / viewScale;
-          const centerWorldY = (canvasCenterContentY - viewPan.y) / viewScale;
+          // Use current camera center in world coordinates
+          const centerWorldX = cameraWorldCenter.x;
+          const centerWorldY = cameraWorldCenter.y;
           
           // Save the view to the specified slot (including all layer visibility settings)
           setHomeViews(prev => ({
@@ -6155,21 +6208,7 @@ function App() {
       } else {
         // Default behavior: reset view settings (no home view 0 saved)
         setViewScale(1);
-        const canvas = canvasRef.current;
-        let panX = 0;
-        let panY = 0;
-        if (canvas) {
-          const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-          const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-          
-          // Canvas center in content coordinates
-          const canvasCenterContentX = contentWidth / 2;
-          const canvasCenterContentY = contentHeight / 2;
-          
-          // Pan to align world origin with canvas center
-          panX = canvasCenterContentX;
-          panY = canvasCenterContentY;
-        }
+        setCameraCenter(0, 0);
         // Reset browser zoom to 100%
         if (document.body) {
           document.body.style.zoom = '1';
@@ -6177,7 +6216,6 @@ function App() {
         if (document.documentElement) {
           document.documentElement.style.zoom = '1';
         }
-        setViewPan({ x: panX, y: panY });
       }
       setCurrentView('overlay');
       // Clear all selections
@@ -7084,7 +7122,7 @@ function App() {
     // === STEP 6: Reset view state ===
     setCurrentView('overlay');
     setViewScale(1);
-    setViewPan({ x: 0, y: 0 });
+    setCameraCenter(0, 0);
     setShowBothLayers(true);
     setSelectedDrawingLayer('top');
     setHomeViews({}); // Clear all home views
@@ -7292,9 +7330,17 @@ function App() {
         const visibleCenterContentX = visibleCenterXCanvas - CONTENT_BORDER;
         const visibleCenterContentY = visibleCenterYCanvas - CONTENT_BORDER;
         
-        // Pan to align image center with visible center
-        panX = visibleCenterContentX - imageCenterX;
-        panY = visibleCenterContentY - imageCenterY;
+        // Calculate world position of visible center
+        // visibleCenterContentX = cameraWorldCenter.x * viewScale + viewPan.x
+        // So: cameraWorldCenter.x = (visibleCenterContentX - viewPan.x) / viewScale
+        // But we want the image center to be at the visible center
+        // imageCenterX in world coords = (imageCenterX - viewPan.x) / viewScale
+        // We want cameraWorldCenter.x = imageCenterX in world coords
+        const imageCenterWorldX = (imageCenterX - viewPan.x) / viewScale;
+        const imageCenterWorldY = (imageCenterY - viewPan.y) / viewScale;
+        setCameraCenter(imageCenterWorldX, imageCenterWorldY);
+      } else {
+        setCameraCenter(0, 0);
       }
       // Reset browser zoom to 100%
       if (document.body) {
@@ -7303,7 +7349,6 @@ function App() {
       if (document.documentElement) {
         document.documentElement.style.zoom = '1';
       }
-      setViewPan({ x: panX, y: panY });
       // Clear all selections
       setSelectedIds(new Set());
       setSelectedComponentIds(new Set());
@@ -8669,7 +8714,7 @@ function App() {
       view: {
         currentView,
         viewScale,
-        viewPan,
+        cameraWorldCenter, // Save camera center in world coordinates
         showBothLayers,
         selectedDrawingLayer,
       },
@@ -8807,7 +8852,7 @@ function App() {
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, viewPan, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
+  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -9735,7 +9780,26 @@ function App() {
       if (project.view) {
         if (project.view.currentView) setCurrentView(project.view.currentView);
         if (project.view.viewScale != null) setViewScale(project.view.viewScale);
-        if (project.view.viewPan) setViewPan(project.view.viewPan);
+        // Handle both new format (cameraWorldCenter) and old format (viewPan) for backward compatibility
+        if (project.view.cameraWorldCenter) {
+          // New format: camera center in world coordinates
+          setCameraWorldCenter(project.view.cameraWorldCenter);
+        } else if (project.view.viewPan) {
+          // Old format: convert viewPan (canvas coords) to cameraWorldCenter (world coords)
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+            const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+            const viewScale = project.view.viewScale ?? 1;
+            // Convert: cameraWorldCenter.x = (canvasCenterX - viewPan.x) / viewScale
+            const cameraWorldX = (canvasCenterX - project.view.viewPan.x) / viewScale;
+            const cameraWorldY = (canvasCenterY - project.view.viewPan.y) / viewScale;
+            setCameraWorldCenter({ x: cameraWorldX, y: cameraWorldY });
+          } else {
+            // Fallback if canvas not available yet
+            setCameraWorldCenter({ x: 0, y: 0 });
+          }
+        }
         if (project.view.showBothLayers != null) setShowBothLayers(project.view.showBothLayers);
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
       }
@@ -13627,7 +13691,8 @@ function App() {
         setOriginalTopFlipY={setOriginalTopFlipY}
         originalBottomFlipY={originalBottomFlipY}
         setOriginalBottomFlipY={setOriginalBottomFlipY}
-        viewPan={viewPan}
+        cameraWorldCenter={cameraWorldCenter}
+        setCameraWorldCenter={setCameraWorldCenter}
         viewScale={viewScale}
         contentBorder={CONTENT_BORDER}
       />

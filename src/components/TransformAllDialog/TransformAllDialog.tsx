@@ -69,8 +69,9 @@ export interface TransformAllDialogProps {
   originalBottomFlipY: boolean | null;
   setOriginalBottomFlipY: React.Dispatch<React.SetStateAction<boolean | null>>;
   
-  // View transform state (needed for center calculation in world coordinates)
-  viewPan: { x: number; y: number };
+  // View transform state (camera in world coordinates for consistency)
+  cameraWorldCenter: { x: number; y: number };
+  setCameraWorldCenter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   viewScale: number;
   contentBorder: number;
 }
@@ -103,7 +104,8 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   setOriginalTopFlipY,
   originalBottomFlipY,
   setOriginalBottomFlipY,
-  viewPan,
+  cameraWorldCenter,
+  setCameraWorldCenter,
   viewScale,
   contentBorder,
 }) => {
@@ -316,8 +318,14 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
       flipX: !g.flipX, // Toggle flipX
     })));
     
+    // Flip camera center around the same center point to maintain the same visible region
+    setCameraWorldCenter(prev => ({
+      x: centerX - (prev.x - centerX), // Flip camera center X around same center as objects
+      y: prev.y, // Y stays the same for horizontal flip
+    }));
+    
     setIsBottomView(true);
-  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, setOriginalTopFlipX, setOriginalBottomFlipX, setOriginalTopFlipY, setOriginalBottomFlipY, viewPan, viewScale, contentBorder]);
+  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, setOriginalTopFlipX, setOriginalBottomFlipX, setOriginalTopFlipY, setOriginalBottomFlipY, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
 
   // Switch to Top View (reset flip)
   const handleSwitchToTopView = useCallback(() => {
@@ -420,8 +428,14 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
       flipX: !g.flipX, // Toggle flipX back
     })));
     
+    // Flip camera center back around the same center point to maintain the same visible region
+    setCameraWorldCenter(prev => ({
+      x: centerX - (prev.x - centerX), // Flip camera center X around same center as objects
+      y: prev.y, // Y stays the same for horizontal flip
+    }));
+    
     setIsBottomView(false);
-  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, originalTopFlipX, originalBottomFlipX, originalTopFlipY, originalBottomFlipY, viewPan, viewScale, contentBorder]);
+  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, originalTopFlipX, originalBottomFlipX, originalTopFlipY, originalBottomFlipY, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
 
   // Rotate by specified angle (clockwise)
   const handleRotate = useCallback((angle: number) => {
@@ -463,6 +477,10 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
         rotation: newRotation 
       } : null);
     }
+    
+    // Rotate camera center around the same center point to maintain the same visible region
+    const rotatedCamera = rotatePoint(cameraWorldCenter.x, cameraWorldCenter.y);
+    setCameraWorldCenter(rotatedCamera);
     
     // Rotate components
     
@@ -525,7 +543,7 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
       };
     }));
     
-  }, [topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, viewPan, viewScale, contentBorder]);
+  }, [topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
 
   if (!visible) return null;
 

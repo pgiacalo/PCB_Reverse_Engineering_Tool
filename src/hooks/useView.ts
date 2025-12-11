@@ -24,16 +24,18 @@ import { useState, useCallback } from 'react';
 
 /**
  * Custom hook for managing view state (zoom, pan, constraints)
+ * Camera is now stored in world coordinates for consistency with objects
  */
 export function useView() {
   const [viewScale, setViewScale] = useState(1);
-  const [viewPan, setViewPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Camera center position in world coordinates (what the camera is looking at)
+  const [cameraWorldCenter, setCameraWorldCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isShiftConstrained, setIsShiftConstrained] = useState(false);
   const [showBothLayers, setShowBothLayers] = useState(false);
 
   const resetView = useCallback(() => {
     setViewScale(1);
-    setViewPan({ x: 0, y: 0 });
+    setCameraWorldCenter({ x: 0, y: 0 });
   }, []);
 
   const zoomIn = useCallback((factor: number = 1.2) => {
@@ -48,23 +50,37 @@ export function useView() {
     setViewScale(scale);
   }, []);
 
-  const pan = useCallback((deltaX: number, deltaY: number) => {
-    setViewPan(prev => ({
-      x: prev.x + deltaX,
-      y: prev.y + deltaY,
+  // Pan by delta in canvas coordinates - convert to world coordinate change
+  const pan = useCallback((deltaX: number, deltaY: number, currentViewScale: number) => {
+    // Delta is in canvas coordinates, convert to world coordinates
+    const worldDeltaX = deltaX / currentViewScale;
+    const worldDeltaY = deltaY / currentViewScale;
+    setCameraWorldCenter(prev => ({
+      x: prev.x - worldDeltaX, // Negative because moving canvas right moves view left
+      y: prev.y - worldDeltaY, // Negative because moving canvas down moves view up
     }));
   }, []);
 
-  const setPan = useCallback((x: number, y: number) => {
-    setViewPan({ x, y });
+  // Set camera center directly in world coordinates
+  const setCameraCenter = useCallback((x: number, y: number) => {
+    setCameraWorldCenter({ x, y });
   }, []);
+
+  // Calculate viewPan from cameraWorldCenter (for backward compatibility during transition)
+  // This will be used by drawing code until we fully refactor
+  const getViewPan = useCallback((canvasCenterX: number, canvasCenterY: number): { x: number; y: number } => {
+    return {
+      x: canvasCenterX - cameraWorldCenter.x * viewScale,
+      y: canvasCenterY - cameraWorldCenter.y * viewScale,
+    };
+  }, [cameraWorldCenter, viewScale]);
 
   return {
     // State
     viewScale,
     setViewScale,
-    viewPan,
-    setViewPan,
+    cameraWorldCenter,
+    setCameraWorldCenter,
     isShiftConstrained,
     setIsShiftConstrained,
     showBothLayers,
@@ -76,7 +92,8 @@ export function useView() {
     zoomOut,
     setZoom,
     pan,
-    setPan,
+    setCameraCenter,
+    getViewPan, // Helper to calculate viewPan for drawing
   };
 }
 

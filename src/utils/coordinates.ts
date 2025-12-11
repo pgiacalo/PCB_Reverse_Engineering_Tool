@@ -45,15 +45,20 @@ export function screenToCanvas(
 
 /**
  * Convert canvas coordinates to world coordinates
- * Accounts for view pan and scale
+ * Uses camera center in world coordinates
  */
 export function canvasToWorld(
   canvasX: number,
   canvasY: number,
-  viewPanX: number,
-  viewPanY: number,
-  viewScale: number
+  cameraWorldCenterX: number,
+  cameraWorldCenterY: number,
+  viewScale: number,
+  canvasCenterX: number,
+  canvasCenterY: number
 ): Point {
+  // Calculate viewPan from camera center
+  const viewPanX = canvasCenterX - cameraWorldCenterX * viewScale;
+  const viewPanY = canvasCenterY - cameraWorldCenterY * viewScale;
   const x = (canvasX - viewPanX) / viewScale;
   const y = (canvasY - viewPanY) / viewScale;
   return { x, y };
@@ -61,15 +66,20 @@ export function canvasToWorld(
 
 /**
  * Convert world coordinates to canvas coordinates
- * Accounts for view pan and scale
+ * Uses camera center in world coordinates
  */
 export function worldToCanvas(
   worldX: number,
   worldY: number,
-  viewPanX: number,
-  viewPanY: number,
-  viewScale: number
+  cameraWorldCenterX: number,
+  cameraWorldCenterY: number,
+  viewScale: number,
+  canvasCenterX: number,
+  canvasCenterY: number
 ): Point {
+  // Calculate viewPan from camera center
+  const viewPanX = canvasCenterX - cameraWorldCenterX * viewScale;
+  const viewPanY = canvasCenterY - cameraWorldCenterY * viewScale;
   const x = worldX * viewScale + viewPanX;
   const y = worldY * viewScale + viewPanY;
   return { x, y };
@@ -84,12 +94,14 @@ export function screenToWorld(
   screenY: number,
   canvas: HTMLCanvasElement,
   dpr: number,
-  viewPanX: number,
-  viewPanY: number,
-  viewScale: number
+  cameraWorldCenterX: number,
+  cameraWorldCenterY: number,
+  viewScale: number,
+  canvasCenterX: number,
+  canvasCenterY: number
 ): Point {
   const canvasPoint = screenToCanvas(screenX, screenY, canvas, dpr);
-  return canvasToWorld(canvasPoint.x, canvasPoint.y, viewPanX, viewPanY, viewScale);
+  return canvasToWorld(canvasPoint.x, canvasPoint.y, cameraWorldCenterX, cameraWorldCenterY, viewScale, canvasCenterX, canvasCenterY);
 }
 
 /**
