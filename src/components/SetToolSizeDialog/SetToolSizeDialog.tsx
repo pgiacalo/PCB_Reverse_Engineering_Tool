@@ -240,7 +240,7 @@ export const SetToolSizeDialog: React.FC<SetToolSizeDialogProps> = ({
           padding: '16px',
           width: 'fit-content',
           maxWidth: '400px',
-          maxHeight: '70vh',
+          maxHeight: '85vh',
           overflowY: 'auto',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
           border: '1px solid #1f1f24',

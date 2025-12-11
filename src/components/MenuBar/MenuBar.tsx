@@ -54,6 +54,10 @@ export interface MenuBarProps {
   onExportBOM: () => Promise<void>;
   hasUnsavedChanges: () => boolean;
   
+  // Settings
+  bomExportFormat: 'json' | 'pdf';
+  setBomExportFormat: (format: 'json' | 'pdf') => void;
+  
   // Dialogs
   setNewProjectDialog: (dialog: { visible: boolean }) => void;
   setAutoSaveDialog: (dialog: { visible: boolean; interval: number | null }) => void;
@@ -218,6 +222,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onPrint,
   onExportBOM,
   hasUnsavedChanges,
+  bomExportFormat,
+  setBomExportFormat,
   setNewProjectDialog,
   setAutoSaveDialog,
   topImage,
@@ -333,6 +339,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Track which Tools submenu is open (Lock or Select)
   const [openToolsSubmenu, setOpenToolsSubmenu] = React.useState<'lock' | 'select' | null>(null);
   const toolsSubmenuTimeoutRef = React.useRef<number | null>(null);
+  
+  // Track Settings submenu
+  const [openSettingsSubmenu, setOpenSettingsSubmenu] = React.useState(false);
+  const settingsSubmenuTimeoutRef = React.useRef<number | null>(null);
   
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
@@ -873,6 +883,123 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
+              onClick={() => { setShowPastMachine(true); setOpenMenu(null); }} 
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              Restore from History…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <div style={{ position: 'relative' }}>
+              <button 
+                onMouseEnter={() => {
+                  if (settingsSubmenuTimeoutRef.current) {
+                    clearTimeout(settingsSubmenuTimeoutRef.current);
+                    settingsSubmenuTimeoutRef.current = null;
+                  }
+                  setOpenSettingsSubmenu(true);
+                }}
+                onMouseLeave={() => {
+                  settingsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                    setOpenSettingsSubmenu(false);
+                  }, 200);
+                }}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setOpenSettingsSubmenu(!openSettingsSubmenu);
+                }} 
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+              >
+                Settings ▸
+              </button>
+              {openSettingsSubmenu && (
+                <div 
+                  onMouseEnter={() => {
+                    if (settingsSubmenuTimeoutRef.current) {
+                      clearTimeout(settingsSubmenuTimeoutRef.current);
+                      settingsSubmenuTimeoutRef.current = null;
+                    }
+                    setOpenSettingsSubmenu(true);
+                  }}
+                  onMouseLeave={() => {
+                    settingsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                      setOpenSettingsSubmenu(false);
+                    }, 200);
+                  }}
+                  style={{ position: 'absolute', top: 0, left: '100%', marginLeft: '4px', minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 10 }}
+                >
+                  <div style={{ padding: '4px 8px', color: '#aaa', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>BOM Export Format</div>
+                  <label 
+                    onClick={(e) => { e.stopPropagation(); setBomExportFormat('pdf'); }}
+                    style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="bomFormat" 
+                      checked={bomExportFormat === 'pdf'} 
+                      onChange={() => setBomExportFormat('pdf')}
+                      style={{ marginRight: '8px', cursor: 'pointer', accentColor: '#4a9eff' }}
+                    />
+                    <span>PDF</span>
+                  </label>
+                  <label 
+                    onClick={(e) => { e.stopPropagation(); setBomExportFormat('json'); }}
+                    style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    <input 
+                      type="radio" 
+                      name="bomFormat" 
+                      checked={bomExportFormat === 'json'} 
+                      onChange={() => setBomExportFormat('json')}
+                      style={{ marginRight: '8px', cursor: 'pointer', accentColor: '#4a9eff' }}
+                    />
+                    <span>JSON</span>
+                  </label>
+                  <div style={{ height: 1, background: '#444', margin: '8px 0' }} />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSetToolSizeDialogVisible(true);
+                      setOpenMenu(null);
+                      setOpenSettingsSubmenu(false);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '6px 10px',
+                      color: '#f2f2f2',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Set Tool Sizes…
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSetToolColorDialogVisible(true);
+                      setOpenMenu(null);
+                      setOpenSettingsSubmenu(false);
+                    }}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '6px 10px',
+                      color: '#f2f2f2',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Set Tool Colors…
+                  </button>
+                </div>
+              )}
+            </div>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
               onClick={async () => { 
                 if (isReadOnlyMode) return;
                 if (!isProjectActive) {
@@ -1028,43 +1155,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Decrease Size (-)
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button
-              onClick={() => {
-                setSetToolSizeDialogVisible(true);
-                setOpenMenu(null);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                color: '#f2f2f2',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Set Tool Size…
-            </button>
-            <button
-              onClick={() => {
-                setSetToolColorDialogVisible(true);
-                setOpenMenu(null);
-              }}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                color: '#f2f2f2',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Set Tool Color…
-            </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
@@ -1164,13 +1254,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
               {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
-            </button>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button 
-              onClick={() => { setShowPastMachine(true); setOpenMenu(null); }} 
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
-            >
-              Restore from History…
             </button>
           </div>
         )}
@@ -1497,7 +1580,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Manual Save:</strong> File → Save Project to save your work manually.</li>
                   <li><strong>Auto-Save:</strong> If enabled, your project is automatically saved at regular intervals.</li>
                   <li><strong>History:</strong> Auto-saved versions are stored in the <code style={{ background: '#1f1f24', padding: '2px 4px', borderRadius: 3, color: '#fff' }}>history/</code> subdirectory.</li>
-                  <li><strong>Restore from History:</strong> Tools → Restore from History to access previous versions.</li>
+                  <li><strong>Restore from History:</strong> File → Restore from History to access previous versions.</li>
                 </ul>
               </div>
 

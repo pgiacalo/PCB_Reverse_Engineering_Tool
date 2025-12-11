@@ -31,7 +31,8 @@ import {
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
-import { generateBOM } from './utils/bom';
+import { generateBOM, type BOMData } from './utils/bom';
+import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
 import type { ComponentType, PCBComponent, HomeView } from './types';
@@ -143,6 +144,17 @@ function App() {
   } = image;
   
   const [currentTool, setCurrentTool] = useState<Tool>('none');
+  
+  // BOM Export format setting (default to 'pdf', persisted in localStorage)
+  const [bomExportFormat, setBomExportFormat] = useState<'json' | 'pdf'>(() => {
+    const saved = localStorage.getItem('bomExportFormat');
+    return (saved === 'json' || saved === 'pdf') ? saved : 'pdf';
+  });
+  
+  // Persist BOM export format to localStorage when it changes
+  React.useEffect(() => {
+    localStorage.setItem('bomExportFormat', bomExportFormat);
+  }, [bomExportFormat]);
   // Layer settings hook
   const layerSettings = useLayerSettings();
   const {
@@ -9249,9 +9261,92 @@ function App() {
     }, 0);
   }, [buildProjectData]);
 
+  // Generate PDF from BOM data
+  const generateBOMPDF = useCallback((bomData: BOMData): Blob => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    let yPos = margin;
+    const lineHeight = 7;
+    const tableStartY = 60;
+    
+    // Title
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bill of Materials', pageWidth / 2, yPos, { align: 'center' });
+    yPos += lineHeight * 2;
+    
+    // Project info
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    if (bomData.projectName) {
+      doc.text(`Project: ${bomData.projectName}`, margin, yPos);
+      yPos += lineHeight;
+    }
+    doc.text(`Exported: ${new Date(bomData.exportedAt).toLocaleString()}`, margin, yPos);
+    yPos += lineHeight;
+    doc.text(`Total Components: ${bomData.totalComponents} | Unique Components: ${bomData.uniqueComponents}`, margin, yPos);
+    yPos = tableStartY;
+    
+    // Table headers
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const colWidths = [15, 50, 30, 20, 25, 30, 20]; // Qty, Type, Value, Package, Mfr, Part#, Layer
+    const headers = ['Qty', 'Component Type', 'Value', 'Package', 'Manufacturer', 'Part Number', 'Layer'];
+    let xPos = margin;
+    
+    headers.forEach((header, idx) => {
+      doc.text(header, xPos, yPos);
+      xPos += colWidths[idx];
+    });
+    
+    yPos += lineHeight;
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += lineHeight * 0.5;
+    
+    // Table rows
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    
+    bomData.items.forEach((item) => {
+      // Check if we need a new page
+      if (yPos > pageHeight - margin - lineHeight * 3) {
+        doc.addPage();
+        yPos = margin + lineHeight;
+      }
+      
+      xPos = margin;
+      const rowData = [
+        item.quantity.toString(),
+        item.componentType,
+        item.value || '-',
+        item.packageType || '-',
+        item.manufacturer || '-',
+        item.partNumber || '-',
+        item.layer,
+      ];
+      
+      rowData.forEach((text, idx) => {
+        // Truncate long text to fit column
+        const maxWidth = colWidths[idx] - 2;
+        const truncated = doc.splitTextToSize(text, maxWidth);
+        doc.text(truncated[0] || '-', xPos, yPos);
+        xPos += colWidths[idx];
+      });
+      
+      yPos += lineHeight * 1.2;
+    });
+    
+    // Convert to blob
+    const pdfBlob = doc.output('blob');
+    return pdfBlob;
+  }, []);
+
   // Export BOM function
   const handleExportBOM = useCallback(async () => {
-    console.log('handleExportBOM called');
+    console.log('handleExportBOM called, format:', bomExportFormat);
     if (!projectDirHandle) {
       alert('Please create or open a project before exporting BOM.');
       return;
@@ -9262,10 +9357,6 @@ function App() {
       // Generate BOM data
       const bomData = generateBOM(componentsTop, componentsBottom, projectName);
       console.log('BOM data generated:', bomData);
-      
-      // Convert to JSON
-      const json = JSON.stringify(bomData, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
       
       // Get or create BOM directory
       console.log('Creating/getting BOM directory...');
@@ -9281,7 +9372,22 @@ function App() {
       
       // Generate filename with timestamp
       const timestamp = formatTimestamp();
-      const filename = `bill_of_materials_${timestamp}.json`;
+      let blob: Blob;
+      let filename: string;
+      
+      if (bomExportFormat === 'pdf') {
+        // Generate PDF
+        console.log('Generating PDF...');
+        blob = generateBOMPDF(bomData);
+        filename = `BOM_${timestamp}.pdf`;
+      } else {
+        // Generate JSON
+        console.log('Generating JSON...');
+        const json = JSON.stringify(bomData, null, 2);
+        blob = new Blob([json], { type: 'application/json' });
+        filename = `BOM_${timestamp}.json`;
+      }
+      
       console.log('Saving file:', filename);
       
       // Save file
@@ -9296,7 +9402,7 @@ function App() {
       console.error('Failed to export BOM:', e);
       alert(`Failed to export BOM: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
     }
-  }, [projectDirHandle, componentsTop, componentsBottom, projectName]);
+  }, [projectDirHandle, componentsTop, componentsBottom, projectName, bomExportFormat, generateBOMPDF]);
 
   // Export netlist function
   // exportNetlist function removed - menu item was commented out and function is unused
@@ -11139,7 +11245,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 Worms: An Electronics Toolkit (v2.6)</h1>
+        <h1>🔧 Worms: An Electronics Toolkit (v2.7)</h1>
       </header>
 
       {/* Application menu bar */}
@@ -11158,6 +11264,8 @@ function App() {
         onSaveAs={openSaveAsDialog}
         onPrint={handlePrint}
         onExportBOM={handleExportBOM}
+        bomExportFormat={bomExportFormat}
+        setBomExportFormat={setBomExportFormat}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}

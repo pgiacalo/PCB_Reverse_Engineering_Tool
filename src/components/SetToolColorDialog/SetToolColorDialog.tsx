@@ -351,7 +351,7 @@ export const SetToolColorDialog: React.FC<SetToolColorDialogProps> = ({
           width: 'fit-content',
           minWidth: '450px',
           maxWidth: '600px',
-          maxHeight: '70vh',
+          maxHeight: '85vh',
           overflowY: 'auto',
           overflowX: 'visible',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
