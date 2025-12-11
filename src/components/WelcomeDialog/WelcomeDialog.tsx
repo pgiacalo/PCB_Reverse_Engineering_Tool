@@ -51,21 +51,21 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
       maxWidth: '500px'
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-        PCB Reverse Engineering Tool
+        Reverse Engineering & Troubleshooting Tool
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-        Supports Typical 4-Layer PCBs
+        Supports Multilayer PCBs
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1) Use the File menu to start a new project.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        2) Use the Images menu to load PCB photos.
+        2) Use the Images menu to load and align PCB photos.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
         3) Use the tools to draw vias, pads, traces, etc.
       </div>
-      <div style={{ fontSize: '13px', color: '#555', marginTop: '16px', lineHeight: '1.5', textAlign: 'left', fontWeight: 'bold' }}>
+      <div style={{ fontSize: '13px', color: '#555', marginTop: '16px', lineHeight: '1.5', textAlign: 'center', fontWeight: 'bold' }}>
         Best viewed in browser's Full Screen Mode
       </div>
     </div>
