@@ -27,6 +27,7 @@ import {
   COMPONENT_TYPE_INFO,
   formatComponentTypeName,
   COMPONENT_CATEGORIES,
+  COLOR_PALETTE,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
@@ -11283,20 +11284,8 @@ function App() {
   // }, []);
 
   // High-contrast 32-color palette tuned for PCB work (includes grays/blacks)
-  const palette8x8 = React.useMemo(() => ([
-    // Neutrals (4)
-    '#000000', '#3C3C3C', '#7F7F7F', '#BFBFBF',
-    // Blues/Cyans (8)
-    '#0072B2', '#56B4E9', '#00BFC4', '#332288',
-    '#1F77B4', '#A6CEE3', '#17BECF', '#6A3D9A',
-    // Greens/Yellows (8)
-    '#009E73', '#B3DE69', '#E69F00', '#F0E442',
-    '#2CA02C', '#B2DF8A', '#BCBD22', '#FFED6F',
-    // Reds/Purples/Browns (12)
-    '#E15759', '#D62728', '#FB9A99', '#CC79A7',
-    '#AA4499', '#F781BF', '#9467BD', '#CAB2D6',
-    '#9C755F', '#8C564B', '#FF7F0E', '#FFFFFF',
-  ]), []);
+  // Organized by color family, arranged light to dark within each family
+  const palette8x8 = React.useMemo(() => COLOR_PALETTE, []);
 
   // Force redraw when drawingStrokes change (for eraser)
   React.useEffect(() => {

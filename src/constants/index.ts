@@ -60,21 +60,29 @@ export const KEYSTONE_STEP = 0.5; // degrees
 // ============================================================================
 
 export const COLOR_PALETTE = [
-  // Row 1: Neutrals
-  '#000000', '#3C3C3C', '#7F7F7F', '#BFBFBF',
-  '#FFFFFF', '#FF0000', '#00FF00', '#0000FF',
+  // Row 1: Neutrals (light to dark, left to right)
+  '#FFFFFF', '#BFBFBF', '#7F7F7F', '#3C3C3C', '#000000',
+  // Row 1 continued: Light blues (light to dark)
+  '#A6CEE3', '#56B4E9', '#17BECF',
   
-  // Row 2: Blues
-  '#0072B2', '#56B4E9', '#00BFC4', '#332288',
-  '#1F77B4', '#A6CEE3', '#17BECF', '#6A3D9A',
+  // Row 2: Blues and cyans (light to dark, left to right)
+  '#00BFC4', '#1F77B4', '#0072B2', '#332288',
+  // Row 2 continued: Light greens (light to dark)
+  '#B2DF8A', '#B3DE69', '#2CA02C', '#009E73',
   
-  // Row 3: Greens and Yellows
-  '#009E73', '#B3DE69', '#E69F00', '#F0E442',
-  '#2CA02C', '#B2DF8A', '#BCBD22', '#FFED6F',
+  // Row 3: Yellows (light to dark, left to right)
+  '#FFED6F', '#F0E442', '#BCBD22',
+  // Row 3 continued: Oranges (light to dark)
+  '#E69F00', '#FF7F0E',
+  // Row 3 continued: Light pinks (light to dark)
+  '#FB9A99', '#F781BF',
   
-  // Row 4: Reds, Pinks, and Browns
-  '#E15759', '#D62728', '#FB9A99', '#CC79A7',
-  '#AA4499', '#F781BF', '#9467BD', '#CAB2D6',
+  // Row 4: Reds (light to dark, left to right)
+  '#E15759', '#D62728',
+  // Row 4 continued: Purples (light to dark) - all purples grouped together
+  '#CAB2D6', '#CC79A7', '#AA4499', '#6A3D9A', '#9467BD',
+  // Row 4 continued: Browns (light to dark)
+  '#9C755F', '#8C564B',
 ];
 
 export const PALETTE_COLUMNS = 8;
