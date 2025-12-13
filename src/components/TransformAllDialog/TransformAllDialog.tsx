@@ -81,6 +81,9 @@ export interface TransformAllDialogProps {
   viewFlipX: boolean;
   setViewFlipX: React.Dispatch<React.SetStateAction<boolean>>;
   contentBorder: number;
+  
+  // Transparency state
+  setTransparency: React.Dispatch<React.SetStateAction<number>>;
 }
 
 export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
@@ -119,6 +122,7 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   viewFlipX: _viewFlipX,
   setViewFlipX,
   contentBorder: _contentBorder,
+  setTransparency,
 }) => {
   // Dialog position state - start on the right side of the screen
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -197,7 +201,8 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     if (isBottomView) return; // Already in bottom view
     setViewFlipX(true);
     setIsBottomView(true);
-  }, [isBottomView, setViewFlipX, setIsBottomView]);
+    setTransparency(100); // 100 = bottom image fully opaque, only bottom visible
+  }, [isBottomView, setViewFlipX, setIsBottomView, setTransparency]);
 
   // Switch to Top View (reset flip)
   // This now modifies the VIEW transform, not object properties
@@ -205,7 +210,8 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     if (!isBottomView) return; // Already in top view
     setViewFlipX(false);
     setIsBottomView(false);
-  }, [isBottomView, setViewFlipX, setIsBottomView]);
+    setTransparency(0); // 0 = bottom image transparent, only top visible
+  }, [isBottomView, setViewFlipX, setIsBottomView, setTransparency]);
 
   // Rotate by specified angle (clockwise)
   // This now modifies the VIEW transform, not object properties

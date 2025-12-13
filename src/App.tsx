@@ -1361,15 +1361,17 @@ function App() {
   // Objects maintain their world coordinates and properties unchanged
   const switchPerspective = useCallback(() => {
     if (isBottomView) {
-      // Switch to Top View - remove view flip
+      // Switch to Top View - remove view flip and show only top image
       setViewFlipX(false);
       setIsBottomView(false);
+      setTransparency(0); // 0 = bottom image transparent, only top visible
     } else {
-      // Switch to Bottom View - apply view flip
+      // Switch to Bottom View - apply view flip and show only bottom image
       setViewFlipX(true);
       setIsBottomView(true);
+      setTransparency(100); // 100 = bottom image fully opaque, only bottom visible
     }
-  }, [isBottomView, setViewFlipX, setIsBottomView]);
+  }, [isBottomView, setViewFlipX, setIsBottomView, setTransparency]);
 
   // Rotate perspective by specified angle (clockwise)
   // This now modifies the VIEW transform, not object properties
@@ -6109,13 +6111,17 @@ function App() {
           const centerWorldX = cameraWorldCenter.x;
           const centerWorldY = cameraWorldCenter.y;
           
-          // Save the view to the specified slot (including all layer visibility settings)
+          // Save the view to the specified slot (including all layer visibility settings and view state)
           setHomeViews(prev => ({
             ...prev,
             [numKey]: {
               x: centerWorldX,
               y: centerWorldY,
               zoom: viewScale,
+              viewRotation,
+              viewFlipX,
+              isBottomView,
+              transparency,
               showTopImage,
               showBottomImage,
               showViasLayer,
@@ -6148,6 +6154,12 @@ function App() {
         // homeView.x and homeView.y are already in world coordinates
         setViewScale(homeView.zoom);
         setCameraWorldCenter({ x: homeView.x, y: homeView.y });
+        
+        // Restore view perspective state
+        setViewRotation(homeView.viewRotation ?? 0);
+        setViewFlipX(homeView.viewFlipX ?? false);
+        setIsBottomView(homeView.isBottomView ?? false);
+        setTransparency(homeView.transparency ?? 50);
         
         // Restore all layer visibility settings
         setShowTopImage(homeView.showTopImage);
@@ -10132,7 +10144,7 @@ function App() {
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
       }
       // Restore home views (multiple saved view locations)
-      // Migrate old homeViews format (without layer settings) to new format
+      // Migrate old homeViews format (without layer settings or view state) to new format
       if (project.homeViews) {
         const migratedHomeViews: Record<number, HomeView> = {};
         for (const [key, view] of Object.entries(project.homeViews)) {
@@ -10140,11 +10152,15 @@ function App() {
           const oldView = view as any;
           // Check if this is an old format view (missing layer settings)
           if (oldView.showTopImage === undefined) {
-            // Migrate old format: use current layer visibility as defaults
+            // Migrate old format: use current layer visibility and view state as defaults
             migratedHomeViews[slot] = {
               x: oldView.x,
               y: oldView.y,
               zoom: oldView.zoom,
+              viewRotation: viewRotation, // Use current view rotation
+              viewFlipX: viewFlipX, // Use current view flip
+              isBottomView: isBottomView, // Use current bottom view state
+              transparency: transparency, // Use current transparency
               showTopImage: showTopImage,
               showBottomImage: showBottomImage,
               showViasLayer: showViasLayer,
@@ -10161,8 +10177,14 @@ function App() {
               showConnectionsLayer: showConnectionsLayer,
             };
           } else {
-            // Already in new format
-            migratedHomeViews[slot] = oldView as HomeView;
+            // Already in new format, but may be missing new view state fields
+            migratedHomeViews[slot] = {
+              ...oldView,
+              viewRotation: oldView.viewRotation ?? 0,
+              viewFlipX: oldView.viewFlipX ?? false,
+              isBottomView: oldView.isBottomView ?? false,
+              transparency: oldView.transparency ?? 50,
+            } as HomeView;
           }
         }
         setHomeViews(migratedHomeViews);
@@ -14093,6 +14115,7 @@ function App() {
         viewFlipX={viewFlipX}
         setViewFlipX={setViewFlipX}
         contentBorder={CONTENT_BORDER}
+        setTransparency={setTransparency}
       />
 
       {/* Set Size Dialog */}

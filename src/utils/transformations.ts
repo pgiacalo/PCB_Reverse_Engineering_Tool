@@ -416,18 +416,21 @@ export function applyViewTransform(
   rotation: number = 0,
   flipX: boolean = false
 ): void {
-  // Apply view rotation (if any)
-  if (rotation !== 0) {
-    ctx.rotate(degToRad(rotation));
-  }
-  
-  // Apply view flip (if any) - flip horizontally around the vertical axis of the canvas
+  // Apply view flip FIRST - flip horizontally around the vertical axis of the canvas
+  // This must happen before rotation to ensure flip occurs around canvas vertical axis,
+  // not the rotated coordinate system's axis
   // At this point in the transformation chain, the origin (0,0) is at the camera center
   // in world coordinates, so we can flip around the origin to flip around the vertical axis
   if (flipX) {
     // Flip around vertical axis (scale -1 on X)
     // This flips around the origin, which is at the camera center after pan/scale
     ctx.scale(-1, 1);
+  }
+  
+  // Apply view rotation AFTER flip
+  // This ensures the flip always occurs around the canvas vertical axis, regardless of rotation
+  if (rotation !== 0) {
+    ctx.rotate(degToRad(rotation));
   }
 }
 

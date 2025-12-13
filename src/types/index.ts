@@ -535,6 +535,10 @@ export interface HomeView {
   x: number;      // World X coordinate of view center
   y: number;      // World Y coordinate of view center
   zoom: number;   // Zoom level (viewScale)
+  viewRotation?: number;  // View rotation in degrees (optional for backward compatibility)
+  viewFlipX?: boolean;    // View horizontal flip (optional for backward compatibility)
+  isBottomView?: boolean;  // Whether in bottom view (optional for backward compatibility)
+  transparency?: number;   // Transparency slider value (0-100) (optional for backward compatibility)
   // Layer visibility settings
   showTopImage: boolean;
   showBottomImage: boolean;
