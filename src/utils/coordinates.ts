@@ -26,6 +26,7 @@
 
 import type { Point, Via } from '../types';
 import { SNAP_DISTANCE } from '../constants';
+import { atan2, radToDeg } from './transformations';
 
 /**
  * Convert screen coordinates to canvas coordinates
@@ -235,7 +236,7 @@ export function constrainLine(
 ): Point {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
-  const angle = Math.abs(Math.atan2(dy, dx) * 180 / Math.PI);
+  const angle = Math.abs(radToDeg(atan2(dy, dx)));
 
   // Check if close to horizontal (0° or 180°)
   if (angle < threshold || angle > 180 - threshold) {

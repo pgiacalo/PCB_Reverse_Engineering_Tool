@@ -25,6 +25,9 @@ import type { PCBImage } from '../../hooks/useImage';
 import type { PCBComponent } from '../../types';
 import type { DrawingStroke } from '../../hooks/useDrawing';
 import type { PowerSymbol, GroundSymbol } from '../../hooks/usePowerGround';
+import {
+  addAngles,
+} from '../../utils/transformations';
 
 export interface TransformAllDialogProps {
   visible: boolean;
@@ -73,41 +76,49 @@ export interface TransformAllDialogProps {
   cameraWorldCenter: { x: number; y: number };
   setCameraWorldCenter: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   viewScale: number;
+  viewRotation: number;
+  setViewRotation: React.Dispatch<React.SetStateAction<number>>;
+  viewFlipX: boolean;
+  setViewFlipX: React.Dispatch<React.SetStateAction<boolean>>;
   contentBorder: number;
 }
 
 export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   visible,
   onClose,
-  topImage,
-  bottomImage,
-  setTopImage,
-  setBottomImage,
+  topImage: _topImage,
+  bottomImage: _bottomImage,
+  setTopImage: _setTopImage,
+  setBottomImage: _setBottomImage,
   componentsTop: _componentsTop,
   componentsBottom: _componentsBottom,
-  setComponentsTop,
-  setComponentsBottom,
+  setComponentsTop: _setComponentsTop,
+  setComponentsBottom: _setComponentsBottom,
   drawingStrokes: _drawingStrokes,
-  setDrawingStrokes,
+  setDrawingStrokes: _setDrawingStrokes,
   powerSymbols: _powerSymbols,
   groundSymbols: _groundSymbols,
-  setPowerSymbols,
-  setGroundSymbols,
-  canvasRef,
+  setPowerSymbols: _setPowerSymbols,
+  setGroundSymbols: _setGroundSymbols,
+  canvasRef: _canvasRef,
   isBottomView,
   setIsBottomView,
-  originalTopFlipX,
-  setOriginalTopFlipX,
-  originalBottomFlipX,
-  setOriginalBottomFlipX,
-  originalTopFlipY,
-  setOriginalTopFlipY,
-  originalBottomFlipY,
-  setOriginalBottomFlipY,
-  cameraWorldCenter,
-  setCameraWorldCenter,
-  viewScale,
-  contentBorder,
+  originalTopFlipX: _originalTopFlipX,
+  setOriginalTopFlipX: _setOriginalTopFlipX,
+  originalBottomFlipX: _originalBottomFlipX,
+  setOriginalBottomFlipX: _setOriginalBottomFlipX,
+  originalTopFlipY: _originalTopFlipY,
+  setOriginalTopFlipY: _setOriginalTopFlipY,
+  originalBottomFlipY: _originalBottomFlipY,
+  setOriginalBottomFlipY: _setOriginalBottomFlipY,
+  cameraWorldCenter: _cameraWorldCenter,
+  setCameraWorldCenter: _setCameraWorldCenter,
+  viewScale: _viewScale,
+  viewRotation: _viewRotation,
+  setViewRotation,
+  viewFlipX: _viewFlipX,
+  setViewFlipX,
+  contentBorder: _contentBorder,
 }) => {
   // Dialog position state - start on the right side of the screen
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -180,370 +191,27 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
     };
   }, [isDragging]);
 
-  // Calculate center point for transformations in world coordinates
-  // Use the top image's center as the reference point to ensure consistent
-  // transformations that are not affected by the offset between top and bottom images
-  const getCenterPoint = (): { x: number; y: number } => {
-    // Use top image center as reference (or bottom if top doesn't exist)
-    // This ensures the center point is consistent and not affected by image offset
-    if (topImage) {
-      return {
-        x: topImage.x,
-        y: topImage.y,
-      };
-    }
-    if (bottomImage) {
-      return {
-        x: bottomImage.x,
-        y: bottomImage.y,
-      };
-    }
-    
-    // If no images, use (0, 0) as the center
-    return { x: 0, y: 0 };
-  };
-
   // Switch to Bottom View (flip horizontal)
+  // This now modifies the VIEW transform, not object properties
   const handleSwitchToBottomView = useCallback(() => {
     if (isBottomView) return; // Already in bottom view
-    
-    const center = getCenterPoint();
-    const centerX = center.x;
-    
-    // Helper function to flip image around vertical axis in world coordinates
-    // Transformation order: translate -> rotate -> scale(flipX, flipY)
-    // To flip around vertical axis in world (world X axis), we need to flip around
-    // the axis that is horizontal in world coordinates after rotation.
-    // At 0° or 180°: local X is horizontal in world -> flipX
-    // At 90° or 270°: local Y is horizontal in world -> flipY
-    const flipImageVertical = (image: PCBImage | null) => {
-      if (!image) return null;
-      const rotation = (image.rotation || 0) % 360;
-      const normalizedRotation = rotation < 0 ? rotation + 360 : rotation;
-      
-      // Use tolerance for floating point comparisons (within 1 degree)
-      const tolerance = 1;
-      
-      // At 0° or 180°: flip around X axis (horizontal flip in local = horizontal flip in world)
-      if ((normalizedRotation >= 0 && normalizedRotation < tolerance) || 
-          (normalizedRotation >= 180 - tolerance && normalizedRotation < 180 + tolerance) ||
-          (normalizedRotation >= 360 - tolerance)) {
-        return { ...image, flipX: !image.flipX };
-      } 
-      // At 90° or 270°: flip around Y axis (vertical flip in local = horizontal flip in world)
-      else if ((normalizedRotation >= 90 - tolerance && normalizedRotation < 90 + tolerance) ||
-               (normalizedRotation >= 270 - tolerance && normalizedRotation < 270 + tolerance)) {
-        return { ...image, flipY: !image.flipY };
-      } 
-      // For other rotations, determine which axis is more horizontal in world coordinates
-      else {
-        // Calculate which local axis is more aligned with world horizontal
-        const rad = (normalizedRotation * Math.PI) / 180;
-        const cosR = Math.cos(rad);
-        const sinR = Math.sin(rad);
-        
-        // Local X axis direction in world coordinates after rotation
-        const localXWorldX = cosR;
-        // Local Y axis direction in world coordinates after rotation (Y axis rotated 90° from X)
-        const localYWorldX = -sinR;
-        
-        // Use the axis that is more horizontal (larger absolute X component in world)
-        if (Math.abs(localXWorldX) > Math.abs(localYWorldX)) {
-          return { ...image, flipX: !image.flipX };
-        } else {
-          return { ...image, flipY: !image.flipY };
-        }
-      }
-    };
-    
-    // Save original flipX and flipY state before applying bottom view transform
-    // Flip images: toggle flip flags AND flip bottom image position around center to maintain relative offset
-    if (topImage) {
-      setOriginalTopFlipX(topImage.flipX || false);
-      setOriginalTopFlipY(topImage.flipY || false);
-      setTopImage(prev => prev ? flipImageVertical(prev) : null);
-    } else {
-      setOriginalTopFlipX(null);
-      setOriginalTopFlipY(null);
-    }
-    if (bottomImage) {
-      setOriginalBottomFlipX(bottomImage.flipX || false);
-      setOriginalBottomFlipY(bottomImage.flipY || false);
-      const flipped = flipImageVertical(bottomImage);
-      if (flipped) {
-        // Flip bottom image's X position around center to maintain relative offset with top image
-        setBottomImage({
-          ...flipped,
-          x: centerX - (bottomImage.x - centerX), // Flip x around center
-        });
-      }
-    } else {
-      setOriginalBottomFlipX(null);
-      setOriginalBottomFlipY(null);
-    }
-    
-    // Flip components horizontally (flip x coordinates around center)
-    setComponentsTop(prev => prev.map(comp => ({
-      ...comp,
-      x: centerX - (comp.x - centerX), // Flip x around center
-      orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0, // Flip orientation
-    })));
-    
-    setComponentsBottom(prev => prev.map(comp => ({
-      ...comp,
-      x: centerX - (comp.x - centerX), // Flip x around center
-      orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0, // Flip orientation
-    })));
-    
-    // Flip drawing strokes horizontally (flip all points' x coordinates around center)
-    setDrawingStrokes(prev => prev.map(stroke => ({
-      ...stroke,
-      points: stroke.points.map(point => ({
-        ...point,
-        x: centerX - (point.x - centerX), // Flip x around center
-      })),
-    })));
-    
-    // Flip power symbols horizontally (flip x coordinates around center and toggle flipX)
-    setPowerSymbols(prev => prev.map(p => ({
-      ...p,
-      x: centerX - (p.x - centerX), // Flip x around center
-      flipX: !p.flipX, // Toggle flipX
-    })));
-    
-    // Flip ground symbols horizontally (flip x coordinates around center and toggle flipX)
-    setGroundSymbols(prev => prev.map(g => ({
-      ...g,
-      x: centerX - (g.x - centerX), // Flip x around center
-      flipX: !g.flipX, // Toggle flipX
-    })));
-    
-    // Flip camera center around the same center point to maintain the same visible region
-    setCameraWorldCenter(prev => ({
-      x: centerX - (prev.x - centerX), // Flip camera center X around same center as objects
-      y: prev.y, // Y stays the same for horizontal flip
-    }));
-    
+    setViewFlipX(true);
     setIsBottomView(true);
-  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, setOriginalTopFlipX, setOriginalBottomFlipX, setOriginalTopFlipY, setOriginalBottomFlipY, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
+  }, [isBottomView, setViewFlipX, setIsBottomView]);
 
   // Switch to Top View (reset flip)
+  // This now modifies the VIEW transform, not object properties
   const handleSwitchToTopView = useCallback(() => {
     if (!isBottomView) return; // Already in top view
-    
-    const center = getCenterPoint();
-    const centerX = center.x;
-    
-    // Helper function to flip image back around vertical axis in world coordinates
-    // Use the same logic as when switching to bottom view - flip using the same method
-    const flipImageVertical = (image: PCBImage | null) => {
-      if (!image) return null;
-      const rotation = (image.rotation || 0) % 360;
-      const normalizedRotation = rotation < 0 ? rotation + 360 : rotation;
-      
-      // Use tolerance for floating point comparisons (within 1 degree)
-      const tolerance = 1;
-      
-      // At 0° or 180°: flip around X axis (horizontal flip in local = horizontal flip in world)
-      if ((normalizedRotation >= 0 && normalizedRotation < tolerance) || 
-          (normalizedRotation >= 180 - tolerance && normalizedRotation < 180 + tolerance) ||
-          (normalizedRotation >= 360 - tolerance)) {
-        return { ...image, flipX: !image.flipX };
-      } 
-      // At 90° or 270°: flip around Y axis (vertical flip in local = horizontal flip in world)
-      else if ((normalizedRotation >= 90 - tolerance && normalizedRotation < 90 + tolerance) ||
-               (normalizedRotation >= 270 - tolerance && normalizedRotation < 270 + tolerance)) {
-        return { ...image, flipY: !image.flipY };
-      } 
-      // For other rotations, determine which axis is more horizontal in world coordinates
-      else {
-        // Calculate which local axis is more aligned with world horizontal
-        const rad = (normalizedRotation * Math.PI) / 180;
-        const cosR = Math.cos(rad);
-        const sinR = Math.sin(rad);
-        
-        // Local X axis direction in world coordinates after rotation
-        const localXWorldX = cosR;
-        // Local Y axis direction in world coordinates after rotation (Y axis rotated 90° from X)
-        const localYWorldX = -sinR;
-        
-        // Use the axis that is more horizontal (larger absolute X component in world)
-        if (Math.abs(localXWorldX) > Math.abs(localYWorldX)) {
-          return { ...image, flipX: !image.flipX };
-        } else {
-          return { ...image, flipY: !image.flipY };
-        }
-      }
-    };
-    
-    // Flip back using the same logic (don't just restore - flip again to undo)
-    // Flip images: toggle flip flags AND flip bottom image position around center to maintain relative offset
-    if (topImage) {
-      setTopImage(prev => prev ? flipImageVertical(prev) : null);
-    }
-    if (bottomImage) {
-      const flipped = flipImageVertical(bottomImage);
-      if (flipped) {
-        // Flip bottom image's X position around center to maintain relative offset with top image
-        setBottomImage({
-          ...flipped,
-          x: centerX - (bottomImage.x - centerX), // Flip x around center
-        });
-      }
-    }
-    
-    // Flip components back (flip x coordinates around center again)
-    setComponentsTop(prev => prev.map(comp => ({
-      ...comp,
-      x: centerX - (comp.x - centerX), // Flip x around center again
-      orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0, // Flip orientation back
-    })));
-    
-    setComponentsBottom(prev => prev.map(comp => ({
-      ...comp,
-      x: centerX - (comp.x - centerX), // Flip x around center again
-      orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0, // Flip orientation back
-    })));
-    
-    // Flip drawing strokes back
-    setDrawingStrokes(prev => prev.map(stroke => ({
-      ...stroke,
-      points: stroke.points.map(point => ({
-        ...point,
-        x: centerX - (point.x - centerX), // Flip x around center again
-      })),
-    })));
-    
-    // Flip power symbols back (flip x coordinates around center again and toggle flipX)
-    setPowerSymbols(prev => prev.map(p => ({
-      ...p,
-      x: centerX - (p.x - centerX), // Flip x around center again
-      flipX: !p.flipX, // Toggle flipX back
-    })));
-    
-    // Flip ground symbols back (flip x coordinates around center again and toggle flipX)
-    setGroundSymbols(prev => prev.map(g => ({
-      ...g,
-      x: centerX - (g.x - centerX), // Flip x around center again
-      flipX: !g.flipX, // Toggle flipX back
-    })));
-    
-    // Flip camera center back around the same center point to maintain the same visible region
-    setCameraWorldCenter(prev => ({
-      x: centerX - (prev.x - centerX), // Flip camera center X around same center as objects
-      y: prev.y, // Y stays the same for horizontal flip
-    }));
-    
+    setViewFlipX(false);
     setIsBottomView(false);
-  }, [isBottomView, topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, originalTopFlipX, originalBottomFlipX, originalTopFlipY, originalBottomFlipY, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
+  }, [isBottomView, setViewFlipX, setIsBottomView]);
 
   // Rotate by specified angle (clockwise)
+  // This now modifies the VIEW transform, not object properties
   const handleRotate = useCallback((angle: number) => {
-    const center = getCenterPoint();
-    const centerX = center.x;
-    const centerY = center.y;
-    const radians = (angle * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    
-    // Rotate point around center (used for both images and components)
-    const rotatePoint = (x: number, y: number): { x: number; y: number } => {
-      const dx = x - centerX;
-      const dy = y - centerY;
-      return {
-        x: centerX + dx * cos - dy * sin,
-        y: centerY + dx * sin + dy * cos,
-      };
-    };
-    
-    // Rotate images - rotate their position around canvas center AND add to rotation
-    if (topImage) {
-      const rotatedPos = rotatePoint(topImage.x, topImage.y);
-      const newRotation = ((topImage.rotation || 0) + angle) % 360;
-      setTopImage(prev => prev ? { 
-        ...prev, 
-        x: rotatedPos.x,
-        y: rotatedPos.y,
-        rotation: newRotation 
-      } : null);
-    }
-    if (bottomImage) {
-      const rotatedPos = rotatePoint(bottomImage.x, bottomImage.y);
-      const newRotation = ((bottomImage.rotation || 0) + angle) % 360;
-      setBottomImage(prev => prev ? { 
-        ...prev, 
-        x: rotatedPos.x,
-        y: rotatedPos.y,
-        rotation: newRotation 
-      } : null);
-    }
-    
-    // Rotate camera center around the same center point to maintain the same visible region
-    const rotatedCamera = rotatePoint(cameraWorldCenter.x, cameraWorldCenter.y);
-    setCameraWorldCenter(rotatedCamera);
-    
-    // Rotate components
-    
-    setComponentsTop(prev => prev.map(comp => {
-      const rotated = rotatePoint(comp.x, comp.y);
-      const newOrientation = comp.orientation ? ((comp.orientation + angle) % 360) : angle;
-      return {
-        ...comp,
-        x: rotated.x,
-        y: rotated.y,
-        orientation: newOrientation,
-      };
-    }));
-    
-    setComponentsBottom(prev => prev.map(comp => {
-      const rotated = rotatePoint(comp.x, comp.y);
-      const newOrientation = comp.orientation ? ((comp.orientation + angle) % 360) : angle;
-      return {
-        ...comp,
-        x: rotated.x,
-        y: rotated.y,
-        orientation: newOrientation,
-      };
-    }));
-    
-    // Rotate drawing strokes
-    setDrawingStrokes(prev => prev.map(stroke => ({
-      ...stroke,
-      points: stroke.points.map(point => {
-        const rotated = rotatePoint(point.x, point.y);
-        return {
-          ...point,
-          x: rotated.x,
-          y: rotated.y,
-        };
-      }),
-    })));
-    
-    // Rotate power symbols
-    setPowerSymbols(prev => prev.map(p => {
-      const rotated = rotatePoint(p.x, p.y);
-      const newRotation = ((p.rotation || 0) + angle) % 360;
-      return {
-        ...p,
-        x: rotated.x,
-        y: rotated.y,
-        rotation: newRotation,
-      };
-    }));
-    
-    // Rotate ground symbols
-    setGroundSymbols(prev => prev.map(g => {
-      const rotated = rotatePoint(g.x, g.y);
-      const newRotation = ((g.rotation || 0) + angle) % 360;
-      return {
-        ...g,
-        x: rotated.x,
-        y: rotated.y,
-        rotation: newRotation,
-      };
-    }));
-    
-  }, [topImage, bottomImage, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, canvasRef, cameraWorldCenter, setCameraWorldCenter, viewScale, contentBorder]);
+    setViewRotation(prev => addAngles(prev, angle));
+  }, [setViewRotation, addAngles]);
 
   if (!visible) return null;
 

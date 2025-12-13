@@ -30,12 +30,18 @@ export function useView() {
   const [viewScale, setViewScale] = useState(1);
   // Camera center position in world coordinates (what the camera is looking at)
   const [cameraWorldCenter, setCameraWorldCenter] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // View rotation in degrees (applied to entire view, not individual objects)
+  const [viewRotation, setViewRotation] = useState(0);
+  // View horizontal flip (applied to entire view, not individual objects)
+  const [viewFlipX, setViewFlipX] = useState(false);
   const [isShiftConstrained, setIsShiftConstrained] = useState(false);
   const [showBothLayers, setShowBothLayers] = useState(false);
 
   const resetView = useCallback(() => {
     setViewScale(1);
     setCameraWorldCenter({ x: 0, y: 0 });
+    setViewRotation(0);
+    setViewFlipX(false);
   }, []);
 
   const zoomIn = useCallback((factor: number = 1.2) => {
@@ -81,6 +87,10 @@ export function useView() {
     setViewScale,
     cameraWorldCenter,
     setCameraWorldCenter,
+    viewRotation,
+    setViewRotation,
+    viewFlipX,
+    setViewFlipX,
     isShiftConstrained,
     setIsShiftConstrained,
     showBothLayers,

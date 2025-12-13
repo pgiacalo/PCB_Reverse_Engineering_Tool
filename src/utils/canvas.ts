@@ -31,6 +31,7 @@ import type {
   PCBComponent, 
   GroundSymbol
 } from '../types';
+import { TWO_PI } from './transformations';
 import { 
   VIA, 
   GROUND_SYMBOL, 
@@ -59,7 +60,7 @@ export function drawVia(
     ctx.strokeStyle = SELECTION_COLOR;
     ctx.lineWidth = SELECTION_LINE_WIDTH;
     ctx.beginPath();
-    ctx.arc(via.x, via.y, outerRadius + 3, 0, Math.PI * 2);
+    ctx.arc(via.x, via.y, outerRadius + 3, 0, TWO_PI);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -68,13 +69,13 @@ export function drawVia(
   ctx.strokeStyle = via.color;
   ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
   ctx.beginPath();
-  ctx.arc(via.x, via.y, outerRadius, 0, Math.PI * 2);
+  ctx.arc(via.x, via.y, outerRadius, 0, TWO_PI);
   ctx.stroke();
 
   // Inner filled circle
   ctx.fillStyle = via.color;
   ctx.beginPath();
-  ctx.arc(via.x, via.y, innerRadius, 0, Math.PI * 2);
+  ctx.arc(via.x, via.y, innerRadius, 0, TWO_PI);
   ctx.fill();
 
   ctx.restore();
@@ -121,7 +122,7 @@ export function drawTrace(
     // Single point - draw as circle
     const pt = stroke.points[0];
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, stroke.size / 2, 0, TWO_PI);
     ctx.fill();
   } else {
     // Multiple points - draw as polyline
@@ -136,7 +137,7 @@ export function drawTrace(
     if (showCornerDots) {
     for (const pt of stroke.points) {
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, stroke.size / 2, 0, TWO_PI);
       ctx.fill();
       }
     }

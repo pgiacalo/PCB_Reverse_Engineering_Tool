@@ -112,6 +112,8 @@ export function createComponent(
     pinCount: getDefaultPinCount(componentType),
     pinConnections: [],
     orientation: 0, // Default orientation: 0 degrees
+    flipX: false, // Default: no horizontal flip
+    flipY: false, // Default: no vertical flip
   };
 
   // Initialize pinConnections array with empty strings

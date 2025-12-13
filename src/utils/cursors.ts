@@ -25,6 +25,7 @@
 // ============================================================================
 
 import type { Tool } from '../types';
+import { TWO_PI, degToRad } from './transformations';
 
 /**
  * Generate a custom cursor for the select tool
@@ -47,7 +48,7 @@ export function generateDrawCursor(size: number, color: string): string {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(radius + 1, radius + 1, radius, 0, Math.PI * 2);
+      ctx.arc(radius + 1, radius + 1, radius, 0, TWO_PI);
   ctx.stroke();
   
   const dataUrl = canvas.toDataURL();
@@ -69,7 +70,7 @@ export function generateEraserCursor(size: number): string {
   // Draw tilted pink eraser
   ctx.save();
   ctx.translate(halfSize + 1, halfSize + 1);
-  ctx.rotate(-Math.PI / 6); // 30 degrees tilt
+      ctx.rotate(degToRad(-30)); // 30 degrees tilt
   
   // Pink eraser body
   ctx.fillStyle = '#FFB6C1';
@@ -107,7 +108,7 @@ export function generateMagnifyCursor(isZoomOut: boolean): string {
   const radius = 7;
   
   ctx.beginPath();
-  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, radius, 0, TWO_PI);
   ctx.fill();
   ctx.stroke();
   

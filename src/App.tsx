@@ -23,6 +23,16 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
+import {
+  applyTransform,
+  applySimpleTransform,
+  applyViewTransform,
+  addAngles,
+  degToRad,
+  angleFromVectorRaw,
+  tan,
+  TWO_PI,
+} from './utils/transformations';
 import { 
   COMPONENT_TYPE_INFO,
   formatComponentTypeName,
@@ -241,6 +251,10 @@ function App() {
   const {
     viewScale,
     setViewScale,
+    viewRotation,
+    setViewRotation,
+    viewFlipX,
+    setViewFlipX,
     cameraWorldCenter,
     setCameraWorldCenter,
     isShiftConstrained,
@@ -993,6 +1007,7 @@ function App() {
   // Transform All dialog state
   const [transformAllDialogVisible, setTransformAllDialogVisible] = useState(false);
   const [isBottomView, setIsBottomView] = useState(false);
+  const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
   const [originalTopFlipX, setOriginalTopFlipX] = useState<boolean | null>(null);
   const [originalBottomFlipX, setOriginalBottomFlipX] = useState<boolean | null>(null);
   const [originalTopFlipY, setOriginalTopFlipY] = useState<boolean | null>(null);
@@ -1304,281 +1319,27 @@ function App() {
     console.log(`Selected ${connectionKeys.size} component connection lines`);
   }, [componentsTop, componentsBottom, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
-  // Helper function to get center point for perspective switching (same logic as TransformAllDialog)
-  const getCenterPointForPerspective = useCallback((): { x: number; y: number } => {
-    // Use top image center as reference (or bottom if top doesn't exist)
-    if (topImage) {
-      return { x: topImage.x, y: topImage.y };
-    }
-    if (bottomImage) {
-      return { x: bottomImage.x, y: bottomImage.y };
-    }
-    return { x: 0, y: 0 };
-  }, [topImage, bottomImage]);
-
   // Switch perspective (toggle between top and bottom view)
+  // This now modifies the VIEW transform, not object properties
+  // Objects maintain their world coordinates and properties unchanged
   const switchPerspective = useCallback(() => {
-    const center = getCenterPointForPerspective();
-    const centerX = center.x;
-
-    // Helper function to flip image around vertical axis in world coordinates
-    const flipImageVertical = (image: PCBImage | null) => {
-      if (!image) return null;
-      const rotation = (image.rotation || 0) % 360;
-      const normalizedRotation = rotation < 0 ? rotation + 360 : rotation;
-      const tolerance = 1;
-
-      if ((normalizedRotation >= 0 && normalizedRotation < tolerance) || 
-          (normalizedRotation >= 180 - tolerance && normalizedRotation < 180 + tolerance) ||
-          (normalizedRotation >= 360 - tolerance)) {
-        return { ...image, flipX: !image.flipX };
-      } else if ((normalizedRotation >= 90 - tolerance && normalizedRotation < 90 + tolerance) ||
-                 (normalizedRotation >= 270 - tolerance && normalizedRotation < 270 + tolerance)) {
-        return { ...image, flipY: !image.flipY };
-      } else {
-        const rad = (normalizedRotation * Math.PI) / 180;
-        const cosR = Math.cos(rad);
-        const sinR = Math.sin(rad);
-        const localXWorldX = cosR;
-        const localYWorldX = -sinR;
-        if (Math.abs(localXWorldX) > Math.abs(localYWorldX)) {
-          return { ...image, flipX: !image.flipX };
-        } else {
-          return { ...image, flipY: !image.flipY };
-        }
-      }
-    };
-
     if (isBottomView) {
-      // Switch to Top View (reset flip)
-      if (topImage && originalTopFlipX !== null) {
-        setTopImage({ ...topImage, flipX: originalTopFlipX, flipY: originalTopFlipY || false });
-      }
-      if (bottomImage && originalBottomFlipX !== null) {
-        const flipped = flipImageVertical(bottomImage);
-        if (flipped) {
-          setBottomImage({
-            ...flipped,
-            x: centerX - (bottomImage.x - centerX),
-            flipX: originalBottomFlipX,
-            flipY: originalBottomFlipY || false,
-          });
-        }
-      }
-
-      // Flip components back
-      setComponentsTop(prev => prev.map(comp => ({
-        ...comp,
-        x: centerX - (comp.x - centerX),
-        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
-      })));
-      setComponentsBottom(prev => prev.map(comp => ({
-        ...comp,
-        x: centerX - (comp.x - centerX),
-        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
-      })));
-
-      // Flip drawing strokes back
-      setDrawingStrokes(prev => prev.map(stroke => ({
-        ...stroke,
-        points: stroke.points.map(point => ({
-          ...point,
-          x: centerX - (point.x - centerX),
-        })),
-      })));
-
-      // Flip power and ground symbols back
-      setPowerSymbols(prev => prev.map(p => ({
-        ...p,
-        x: centerX - (p.x - centerX),
-        flipX: !p.flipX,
-      })));
-      setGroundSymbols(prev => prev.map(g => ({
-        ...g,
-        x: centerX - (g.x - centerX),
-        flipX: !g.flipX,
-      })));
-
-      // Flip camera center back
-      setCameraWorldCenter(prev => ({
-        x: centerX - (prev.x - centerX),
-        y: prev.y,
-      }));
-
+      // Switch to Top View - remove view flip
+      setViewFlipX(false);
       setIsBottomView(false);
     } else {
-      // Switch to Bottom View (flip horizontal)
-      if (topImage) {
-        setOriginalTopFlipX(topImage.flipX || false);
-        setOriginalTopFlipY(topImage.flipY || false);
-        setTopImage(flipImageVertical(topImage));
-      } else {
-        setOriginalTopFlipX(null);
-        setOriginalTopFlipY(null);
-      }
-      if (bottomImage) {
-        setOriginalBottomFlipX(bottomImage.flipX || false);
-        setOriginalBottomFlipY(bottomImage.flipY || false);
-        const flipped = flipImageVertical(bottomImage);
-        if (flipped) {
-          setBottomImage({
-            ...flipped,
-            x: centerX - (bottomImage.x - centerX),
-          });
-        }
-      } else {
-        setOriginalBottomFlipX(null);
-        setOriginalBottomFlipY(null);
-      }
-
-      // Flip components horizontally
-      setComponentsTop(prev => prev.map(comp => ({
-        ...comp,
-        x: centerX - (comp.x - centerX),
-        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
-      })));
-      setComponentsBottom(prev => prev.map(comp => ({
-        ...comp,
-        x: centerX - (comp.x - centerX),
-        orientation: comp.orientation ? (360 - comp.orientation) % 360 : 0,
-      })));
-
-      // Flip drawing strokes horizontally
-      setDrawingStrokes(prev => prev.map(stroke => ({
-        ...stroke,
-        points: stroke.points.map(point => ({
-          ...point,
-          x: centerX - (point.x - centerX),
-        })),
-      })));
-
-      // Flip power and ground symbols horizontally
-      setPowerSymbols(prev => prev.map(p => ({
-        ...p,
-        x: centerX - (p.x - centerX),
-        flipX: !p.flipX,
-      })));
-      setGroundSymbols(prev => prev.map(g => ({
-        ...g,
-        x: centerX - (g.x - centerX),
-        flipX: !g.flipX,
-      })));
-
-      // Flip camera center
-      setCameraWorldCenter(prev => ({
-        x: centerX - (prev.x - centerX),
-        y: prev.y,
-      }));
-
+      // Switch to Bottom View - apply view flip
+      setViewFlipX(true);
       setIsBottomView(true);
     }
-  }, [isBottomView, topImage, bottomImage, originalTopFlipX, originalTopFlipY, originalBottomFlipX, originalBottomFlipY, getCenterPointForPerspective, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, setOriginalTopFlipX, setOriginalTopFlipY, setOriginalBottomFlipX, setOriginalBottomFlipY, setCameraWorldCenter, setIsBottomView]);
+  }, [isBottomView, setViewFlipX, setIsBottomView]);
 
   // Rotate perspective by specified angle (clockwise)
+  // This now modifies the VIEW transform, not object properties
+  // Objects maintain their world coordinates and properties unchanged
   const rotatePerspective = useCallback((angle: number) => {
-    const center = getCenterPointForPerspective();
-    const centerX = center.x;
-    const centerY = center.y;
-    const radians = (angle * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    
-    // Rotate point around center (used for both images and components)
-    const rotatePoint = (x: number, y: number): { x: number; y: number } => {
-      const dx = x - centerX;
-      const dy = y - centerY;
-      return {
-        x: centerX + dx * cos - dy * sin,
-        y: centerY + dx * sin + dy * cos,
-      };
-    };
-    
-    // Rotate images - rotate their position around center AND add to rotation
-    if (topImage) {
-      const rotatedPos = rotatePoint(topImage.x, topImage.y);
-      const newRotation = (((topImage.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
-      setTopImage(prev => prev ? { 
-        ...prev, 
-        x: rotatedPos.x,
-        y: rotatedPos.y,
-        rotation: newRotation 
-      } : null);
-    }
-    if (bottomImage) {
-      const rotatedPos = rotatePoint(bottomImage.x, bottomImage.y);
-      const newRotation = (((bottomImage.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
-      setBottomImage(prev => prev ? { 
-        ...prev, 
-        x: rotatedPos.x,
-        y: rotatedPos.y,
-        rotation: newRotation 
-      } : null);
-    }
-    
-    // Rotate camera center around the same center point to maintain the same visible region
-    const rotatedCamera = rotatePoint(cameraWorldCenter.x, cameraWorldCenter.y);
-    setCameraWorldCenter(rotatedCamera);
-    
-    // Rotate components
-    setComponentsTop(prev => prev.map(comp => {
-      const rotated = rotatePoint(comp.x, comp.y);
-      const newOrientation = comp.orientation ? (((comp.orientation + angle) % 360 + 360) % 360) : ((angle % 360 + 360) % 360);
-      return {
-        ...comp,
-        x: rotated.x,
-        y: rotated.y,
-        orientation: newOrientation,
-      };
-    }));
-    
-    setComponentsBottom(prev => prev.map(comp => {
-      const rotated = rotatePoint(comp.x, comp.y);
-      const newOrientation = comp.orientation ? (((comp.orientation + angle) % 360 + 360) % 360) : ((angle % 360 + 360) % 360);
-      return {
-        ...comp,
-        x: rotated.x,
-        y: rotated.y,
-        orientation: newOrientation,
-      };
-    }));
-    
-    // Rotate drawing strokes
-    setDrawingStrokes(prev => prev.map(stroke => ({
-      ...stroke,
-      points: stroke.points.map(point => {
-        const rotated = rotatePoint(point.x, point.y);
-        return {
-          ...point,
-          x: rotated.x,
-          y: rotated.y,
-        };
-      }),
-    })));
-    
-    // Rotate power symbols
-    setPowerSymbols(prev => prev.map(p => {
-      const rotated = rotatePoint(p.x, p.y);
-      const newRotation = (((p.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
-      return {
-        ...p,
-        x: rotated.x,
-        y: rotated.y,
-        rotation: newRotation,
-      };
-    }));
-    
-    // Rotate ground symbols
-    setGroundSymbols(prev => prev.map(g => {
-      const rotated = rotatePoint(g.x, g.y);
-      const newRotation = (((g.rotation || 0) + angle) % 360 + 360) % 360; // Normalize to 0-360 range
-      return {
-        ...g,
-        x: rotated.x,
-        y: rotated.y,
-        rotation: newRotation,
-      };
-    }));
-  }, [getCenterPointForPerspective, topImage, bottomImage, cameraWorldCenter, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setDrawingStrokes, setPowerSymbols, setGroundSymbols, setCameraWorldCenter]);
+    setViewRotation(prev => addAngles(prev, angle));
+  }, [setViewRotation]);
 
   // Generic function to center any object at given world coordinates
   const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
@@ -3544,7 +3305,7 @@ function App() {
     const dy = y - start.y;
     if (dx === 0 && dy === 0) return { x, y };
     // Determine nearest orientation among 0°, 45°, 90° based on initial direction
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI; // -180..180
+    const angle = angleFromVectorRaw(dx, dy); // -180..180
     const abs180 = ((angle % 180) + 180) % 180; // 0..180
     // Nearest among 0,45,90
     const candidates = [0, 45, 90];
@@ -3584,6 +3345,9 @@ function App() {
     const contentCanvasY = canvasY - CONTENT_BORDER;
     const x = (contentCanvasX - viewPan.x) / viewScale;
     const y = (contentCanvasY - viewPan.y) / viewScale;
+    
+    // Update mouse world position for display
+    setMouseWorldPos({ x, y });
 
     // Track mouse position for trace preview line
     if (currentTool === 'draw' && drawingMode === 'trace' && currentStroke.length > 0) {
@@ -3959,9 +3723,11 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey, saveSnapshot, powerSymbols, groundSymbols]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey, saveSnapshot, powerSymbols, groundSymbols, setMouseWorldPos]);
 
   const handleCanvasMouseUp = useCallback(() => {
+    // Clear mouse world position when mouse leaves canvas
+    setMouseWorldPos(null);
     // Finalize selection if active
     if (currentTool === 'select' && isSelecting) {
       const rectSel = selectRect;
@@ -4438,7 +4204,7 @@ function App() {
     setIsTransforming(false);
     setTransformStartPos(null);
     setIsShiftConstrained(false);
-  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer]);
+  }, [isDrawing, currentStroke, currentTool, brushColor, brushSize, selectedDrawingLayer, selectRect, selectStart, isSelecting, drawingStrokes, viewScale, isShiftPressed, selectedIds, powers, grounds, componentsTop, componentsBottom, selectedComponentIds, selectedPowerIds, selectedGroundIds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, setMouseWorldPos]);
 
   // Allow panning to continue even when the pointer leaves the canvas while the button is held
   React.useEffect(() => {
@@ -4518,7 +4284,7 @@ function App() {
       let current = base;
 
       if (Math.abs(keystoneV) > 1e-6) {
-        const tanV = Math.tan(keystoneV);
+        const tanV = tan(keystoneV);
         const topScale = Math.max(0.2, 1 - tanV);
         const bottomScale = Math.max(0.2, 1 + tanV);
         const maxScale = Math.max(topScale, bottomScale);
@@ -4539,7 +4305,7 @@ function App() {
       }
 
       if (Math.abs(keystoneH) > 1e-6) {
-        const tanH = Math.tan(keystoneH);
+        const tanH = tan(keystoneH);
         const leftScale = Math.max(0.2, 1 - tanH);
         const rightScale = Math.max(0.2, 1 + tanH);
         const maxScale = Math.max(leftScale, rightScale);
@@ -4562,9 +4328,15 @@ function App() {
       ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
     };
 
-    // Apply global view transform once (pan then scale)
+    // Apply global view transform: pan, scale, rotation, flip
+    // This ensures all objects are transformed consistently by the view perspective
     ctx.translate(viewPan.x, viewPan.y);
     ctx.scale(viewScale, viewScale);
+    // Apply view rotation and flip using unified library
+    // Flip around the vertical axis of the canvas (camera center) to ensure perspective change
+    // doesn't affect world coordinates. At this point, the origin (0,0) is at the camera center
+    // after pan/scale, so flipping around the origin flips around the vertical axis.
+    applyViewTransform(ctx, viewRotation, viewFlipX);
     
     // Draw images with transformations (locked and unlocked use same coordinate system)
     // Locked images just can't be transformed, but they appear in the same position
@@ -4588,18 +4360,19 @@ function App() {
         filters.push('grayscale(100%)');
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
-      // Apply per-image transformations
+      // Apply per-image transformations using unified library
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
-        ctx.translate(topImage.x, topImage.y);
-      ctx.rotate((topImage.rotation * Math.PI) / 180);
-      // Apply skew (keystone) if any
-      if (topImage.skewX || topImage.skewY) {
-        const sx = Math.tan(topImage.skewX || 0);
-        const sy = Math.tan(topImage.skewY || 0);
-        ctx.transform(1, sy, sx, 1, 0, 0);
-      }
-      ctx.scale(topImage.scale * (topImage.flipX ? -1 : 1), topImage.scale * (topImage.flipY ? -1 : 1));
+        applyTransform(ctx, {
+          x: topImage.x,
+          y: topImage.y,
+          rotation: topImage.rotation || 0,
+          scale: topImage.scale || 1,
+          flipX: topImage.flipX || false,
+          flipY: topImage.flipY || false,
+          skewX: topImage.skewX || 0,
+          skewY: topImage.skewY || 0,
+        });
       const scaledWidth = bmp.width * 1; // already accounted by ctx.scale above
       const scaledHeight = bmp.height * 1;
       const sourceToDraw: CanvasImageSource = bmp;
@@ -4628,18 +4401,19 @@ function App() {
         filters.push('grayscale(100%)');
       }
       ctx.filter = filters.length > 0 ? filters.join(' ') : 'none';
-      // Apply per-image transformations
+      // Apply per-image transformations using unified library
         // Images are stored with x,y values that are updated during transforms in world coordinates
         // So we can use them directly as world coordinates (the view transform is already applied)
-        ctx.translate(bottomImage.x, bottomImage.y);
-      ctx.rotate((bottomImage.rotation * Math.PI) / 180);
-      // Apply skew (keystone) if any
-      if (bottomImage.skewX || bottomImage.skewY) {
-        const sx = Math.tan(bottomImage.skewX || 0);
-        const sy = Math.tan(bottomImage.skewY || 0);
-        ctx.transform(1, sy, sx, 1, 0, 0);
-      }
-      ctx.scale(bottomImage.scale * (bottomImage.flipX ? -1 : 1), bottomImage.scale * (bottomImage.flipY ? -1 : 1));
+        applyTransform(ctx, {
+          x: bottomImage.x,
+          y: bottomImage.y,
+          rotation: bottomImage.rotation || 0,
+          scale: bottomImage.scale || 1,
+          flipX: bottomImage.flipX || false,
+          flipY: bottomImage.flipY || false,
+          skewX: bottomImage.skewX || 0,
+          skewY: bottomImage.skewY || 0,
+        });
       const scaledWidth = bmp.width * 1;
       const scaledHeight = bmp.height * 1;
       const sourceToDrawB: CanvasImageSource = bmp;
@@ -4658,14 +4432,15 @@ function App() {
     if (showPowerLayer && powers.length > 0) {
       const drawPower = (p: PowerSymbol) => {
         ctx.save();
-        // Apply transformations: translate, rotate, flip
-        ctx.translate(p.x, p.y);
-        if (p.rotation !== undefined && p.rotation !== 0) {
-          ctx.rotate((p.rotation * Math.PI) / 180);
-        }
-        if (p.flipX) {
-          ctx.scale(-1, 1);
-        }
+        // Apply transformations using unified library
+        applySimpleTransform(
+          ctx,
+          p.x,
+          p.y,
+          p.rotation ?? 0,
+          p.flipX ?? false,
+          false // Power symbols don't have flipY
+        );
         
         // Find the power bus to get its voltage and color
         const bus = powerBuses.find(b => b.id === p.powerBusId);
@@ -4682,7 +4457,7 @@ function App() {
           ctx.strokeStyle = '#0066ff';
           ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(0, 0, radius + lineExtension + 3, 0, Math.PI * 2);
+          ctx.arc(0, 0, radius + lineExtension + 3, 0, TWO_PI);
           ctx.stroke();
         }
         
@@ -4690,7 +4465,7 @@ function App() {
         ctx.strokeStyle = powerColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, radius, 0, TWO_PI);
         ctx.stroke();
         
         // Draw vertical line extending above and below the circle
@@ -4722,14 +4497,15 @@ function App() {
     if (showGroundLayer && grounds.length > 0) {
       const drawGround = (g: GroundSymbol) => {
         ctx.save();
-        // Apply transformations: translate, rotate, flip
-        ctx.translate(g.x, g.y);
-        if (g.rotation !== undefined && g.rotation !== 0) {
-          ctx.rotate((g.rotation * Math.PI) / 180);
-        }
-        if (g.flipX) {
-          ctx.scale(-1, 1);
-        }
+        // Apply transformations using unified library
+        applySimpleTransform(
+          ctx,
+          g.x,
+          g.y,
+          g.rotation ?? 0,
+          g.flipX ?? false,
+          false // Ground symbols don't have flipY
+        );
         
         const isSelected = selectedGroundIds.has(g.id);
         
@@ -4793,7 +4569,7 @@ function App() {
           ctx.strokeStyle = '#0066ff';
           ctx.lineWidth = Math.max(1, 4 / Math.max(viewScale, 0.001));
           ctx.beginPath();
-          ctx.arc(0, 0, radius + lineExtension + 3, 0, Math.PI * 2);
+          ctx.arc(0, 0, radius + lineExtension + 3, 0, TWO_PI);
           ctx.stroke();
         }
         
@@ -4801,7 +4577,7 @@ function App() {
         ctx.strokeStyle = groundColor;
         ctx.lineWidth = Math.max(1, (isSelected ? 3 : 2) / Math.max(viewScale, 0.001));
         ctx.beginPath();
-        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.arc(0, 0, radius, 0, TWO_PI);
         ctx.stroke();
         
         // Draw vertical line extending above and below the circle
@@ -4840,6 +4616,17 @@ function App() {
       const size = Math.max(10, c.size || 18);
       const half = size / 2;
       ctx.save();
+      
+      // Apply transformations using unified library (same as images for consistency)
+      applySimpleTransform(
+        ctx,
+        c.x,
+        c.y,
+        c.orientation ?? 0,
+        c.flipX ?? false,
+        c.flipY ?? false
+      );
+      
       ctx.strokeStyle = c.color || '#111';
       ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
       
@@ -4852,7 +4639,7 @@ function App() {
       // Fill background: #B2DF8A if all pins connected, white otherwise
       ctx.fillStyle = allPinsConnected ? 'rgba(178, 223, 138, 0.85)' : 'rgba(255,255,255,0.85)';
       ctx.beginPath();
-      ctx.rect(c.x - half, c.y - half, size, size);
+      ctx.rect(-half, -half, size, size);
       ctx.fill();
       ctx.stroke();
       
@@ -4877,7 +4664,7 @@ function App() {
         
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-        ctx.fillText(designator, c.x, c.y);
+        ctx.fillText(designator, 0, 0);
       }
       
       // selection highlight
@@ -4886,7 +4673,7 @@ function App() {
         ctx.setLineDash([4, 3]);
         ctx.strokeStyle = '#00bfff';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(c.x - half - 3, c.y - half - 3, size + 6, size + 6);
+        ctx.strokeRect(-half - 3, -half - 3, size + 6, size + 6);
         ctx.setLineDash([]);
       }
       ctx.restore();
@@ -5032,7 +4819,7 @@ function App() {
     }
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -5148,13 +4935,13 @@ function App() {
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
-          ctx.arc(p.x, p.y, r + 3, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, r + 3, 0, TWO_PI);
           ctx.stroke();
           ctx.setLineDash([]);
         }
         ctx.fillStyle = stroke.color;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, r, 0, TWO_PI);
         ctx.fill();
       } else {
         if (selectedIds.has(stroke.id)) {
@@ -5193,7 +4980,7 @@ function App() {
           ctx.fillStyle = '#000000';
           for (const pt of stroke.points) {
             ctx.beginPath();
-            ctx.arc(pt.x, pt.y, stroke.size / 2, 0, Math.PI * 2);
+            ctx.arc(pt.x, pt.y, stroke.size / 2, 0, TWO_PI);
             ctx.fill();
           }
         }
@@ -5230,7 +5017,7 @@ function App() {
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
-          ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+          ctx.arc(c.x, c.y, rOuter, 0, TWO_PI);
           ctx.stroke();
           ctx.setLineDash([]);
         } else if (stroke.type === 'pad') {
@@ -5267,9 +5054,9 @@ function App() {
         ctx.fillStyle = stroke.color;
         ctx.beginPath();
         // Outer circle
-        ctx.arc(c.x, c.y, rOuter, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, rOuter, 0, TWO_PI);
         // Inner circle (creates the hole with even-odd fill rule)
-        ctx.arc(c.x, c.y, rInner, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, rInner, 0, TWO_PI);
         ctx.fill('evenodd');
         
         // Draw medium gray crosshairs
@@ -5372,9 +5159,9 @@ function App() {
             ctx.fillStyle = brushColor;
             ctx.beginPath();
             // Outer circle
-            ctx.arc(center.x, center.y, rOuter, 0, Math.PI * 2);
+            ctx.arc(center.x, center.y, rOuter, 0, TWO_PI);
             // Inner circle (creates the hole with even-odd fill rule)
-            ctx.arc(center.x, center.y, rInner, 0, Math.PI * 2);
+            ctx.arc(center.x, center.y, rInner, 0, TWO_PI);
             ctx.fill('evenodd');
             
             // Draw medium gray crosshairs
@@ -5457,7 +5244,7 @@ function App() {
               const r = Math.max(0.5, traceSize / 2);
               ctx.fillStyle = traceColor;
               ctx.beginPath();
-              ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+              ctx.arc(p.x, p.y, r, 0, TWO_PI);
               ctx.fill();
               // Draw preview line from first point to mouse position
               if (tracePreviewMousePos) {
@@ -6156,7 +5943,7 @@ function App() {
     }
     
     // Arrow keys: Perspective controls when NOT in transform mode
-    // Left/Right: Switch perspective (front/back) OR move selected components
+    // Left/Right: Always switch perspective (top/bottom view)
     // Up/Down: Rotate perspective in 90-degree increments (when not in transform mode)
     if (!(currentTool === 'transform' && selectedImageForTransform)) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -6167,46 +5954,11 @@ function App() {
         rotatePerspective(angle);
         return;
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        // If components are selected, move them; otherwise switch perspective
-        if (selectedComponentIds.size > 0) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          // Movement step size (in world coordinates)
-          const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
-          
-          const deltaX = e.key === 'ArrowLeft' ? -stepSize : stepSize;
-          
-          // Move all selected components
-          for (const compId of selectedComponentIds) {
-            const topComp = componentsTop.find(c => c.id === compId);
-            if (topComp) {
-              const newX = topComp.x + deltaX;
-              // Truncate coordinates to 4 decimal places for exact matching
-              const truncated = truncatePoint({ x: newX, y: topComp.y });
-              setComponentsTop(prev => prev.map(c => 
-                c.id === compId ? { ...c, x: truncated.x } : c
-              ));
-            } else {
-              const bottomComp = componentsBottom.find(c => c.id === compId);
-              if (bottomComp) {
-                const newX = bottomComp.x + deltaX;
-                // Truncate coordinates to 4 decimal places for exact matching
-                const truncated = truncatePoint({ x: newX, y: bottomComp.y });
-                setComponentsBottom(prev => prev.map(c => 
-                  c.id === compId ? { ...c, x: truncated.x } : c
-                ));
-              }
-            }
-          }
-          return;
-        } else {
-          // No components selected - switch perspective
-          e.preventDefault();
-          e.stopPropagation();
-          switchPerspective();
-          return;
-        }
+        // Always switch perspective (top/bottom view)
+        e.preventDefault();
+        e.stopPropagation();
+        switchPerspective();
+        return;
       }
     } else {
       // In transform mode - handle component movement separately if components are selected
@@ -6984,7 +6736,7 @@ function App() {
         }
 
         if (skewXDeltaDeg !== 0 || skewYDeltaDeg !== 0) {
-          const toRad = (deg: number) => (deg * Math.PI) / 180;
+          const toRad = degToRad;
           const clamp = (v: number) => Math.max(-0.7, Math.min(0.7, v)); // clamp to ~±40° to avoid extremes
           
           // Explicitly check which image(s) to skew based on selectedImageForTransform
@@ -7055,7 +6807,7 @@ function App() {
         }
 
         if (kHDeltaDeg !== 0 || kVDeltaDeg !== 0) {
-          const toRad = (deg: number) => (deg * Math.PI) / 180;
+          const toRad = degToRad;
           const clamp = (v: number) => Math.max(-0.35, Math.min(0.35, v)); // clamp to ~±20° to avoid extremes
           
           // Explicitly check which image(s) to apply keystone based on selectedImageForTransform
@@ -7130,7 +6882,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -8265,9 +8017,9 @@ function App() {
       ctx.fillStyle = viaColor;
       ctx.beginPath();
       // Outer circle
-      ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
+      ctx.arc(cx, cy, rOuter, 0, TWO_PI);
       // Inner circle (creates the hole with even-odd fill rule)
-      ctx.arc(cx, cy, rInner, 0, Math.PI * 2);
+      ctx.arc(cx, cy, rInner, 0, TWO_PI);
       ctx.fill('evenodd');
       
       // Draw medium gray crosshairs
@@ -8326,7 +8078,7 @@ function App() {
       const traceColor = traceInstance.color;
       ctx.fillStyle = traceColor;
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r, 0, TWO_PI);
       ctx.fill();
     } else if (kind === 'testPoint') {
       // Use tool instance directly (single source of truth)
@@ -8346,7 +8098,7 @@ function App() {
       
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(-35 * Math.PI / 180); // Rotate -35 degrees to match toolbar icon
+      ctx.rotate(degToRad(-35)); // Rotate -35 degrees to match toolbar icon
       
       // Draw main eraser body (rounded rectangle)
       ctx.fillStyle = '#f5a3b3'; // Pink color matching toolbar
@@ -8383,7 +8135,7 @@ function App() {
       ctx.lineWidth = 2;
       // Lens
       ctx.beginPath();
-      ctx.arc(cx - 2, cy - 2, lensR, 0, Math.PI * 2);
+      ctx.arc(cx - 2, cy - 2, lensR, 0, TWO_PI);
       ctx.stroke();
       // Handle
       const hx1 = cx + lensR * 0.6;
@@ -8445,7 +8197,7 @@ function App() {
       
       // Draw empty circle (not filled)
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r, 0, TWO_PI);
       ctx.stroke();
       
       // Draw vertical line extending above and below the circle
@@ -8472,7 +8224,7 @@ function App() {
       
       // Draw empty circle (not filled)
       ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.arc(cx, cy, r, 0, TWO_PI);
       ctx.stroke();
       
       // Draw vertical line extending above and below the circle
@@ -13135,6 +12887,28 @@ function App() {
             }}
           />
           
+          {/* Mouse world coordinates display */}
+          {mouseWorldPos && (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${244 + canvasSize.width - 120}px`, // Right edge of canvas minus width of display
+                top: `${6 + canvasSize.height + 4}px`, // Below canvas border (6px top + canvas height + 4px gap)
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: '#333',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                border: '1px solid #ccc',
+                pointerEvents: 'none',
+                zIndex: 1000,
+              }}
+            >
+              ({mouseWorldPos.x.toFixed(3)}, {mouseWorldPos.y.toFixed(3)})
+            </div>
+          )}
+          
           {/* Component Properties Editor Dialog */}
           <ComponentEditor
             componentEditor={componentEditor}
@@ -14093,6 +13867,10 @@ function App() {
         cameraWorldCenter={cameraWorldCenter}
         setCameraWorldCenter={setCameraWorldCenter}
         viewScale={viewScale}
+        viewRotation={viewRotation}
+        setViewRotation={setViewRotation}
+        viewFlipX={viewFlipX}
+        setViewFlipX={setViewFlipX}
         contentBorder={CONTENT_BORDER}
       />
 

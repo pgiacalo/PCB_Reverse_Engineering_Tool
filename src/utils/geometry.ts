@@ -20,6 +20,8 @@
  * SOFTWARE.
  */
 
+import { degToRad, cos, sin } from './transformations';
+
 export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 export function mergeBounds(a: Bounds | null, b: Bounds | null): Bounds | null {
@@ -52,17 +54,17 @@ export function rectTransformedBounds(
     { x: hw, y: hh },
     { x: -hw, y: hh },
   ];
-  const rad = (rotationDeg * Math.PI) / 180;
-  const sin = Math.sin(rad);
-  const cos = Math.cos(rad);
+  const rad = degToRad(rotationDeg);
+  const sinVal = sin(rad);
+  const cosVal = cos(rad);
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const p of points) {
     // scale (with flipping encoded by negative scale), then rotate
     const sx = p.x * scaleX;
     const sy = p.y * scaleY;
-    const rx = sx * cos - sy * sin;
-    const ry = sx * sin + sy * cos;
+    const rx = sx * cosVal - sy * sinVal;
+    const ry = sx * sinVal + sy * cosVal;
     // translate into canvas space (relative to canvas center)
     const fx = centerX + translateX + rx;
     const fy = centerY + translateY + ry;
