@@ -431,3 +431,41 @@ export function applyViewTransform(
   }
 }
 
+/**
+ * Convert a canvas coordinate delta to world coordinate delta
+ * Accounts for view rotation and flip so that mouse movement direction
+ * matches world coordinate movement direction
+ * 
+ * @param canvasDeltaX Canvas coordinate delta X
+ * @param canvasDeltaY Canvas coordinate delta Y
+ * @param viewScale View scale factor
+ * @param viewRotation View rotation in degrees
+ * @param viewFlipX Whether view is flipped horizontally
+ * @returns World coordinate delta { x, y }
+ */
+export function canvasDeltaToWorldDelta(
+  canvasDeltaX: number,
+  canvasDeltaY: number,
+  viewScale: number,
+  viewRotation: number = 0,
+  viewFlipX: boolean = false
+): { x: number; y: number } {
+  // First, undo the scaling
+  let worldX = canvasDeltaX / viewScale;
+  let worldY = canvasDeltaY / viewScale;
+  
+  // Then, undo the rotation (rotate by negative angle)
+  if (viewRotation !== 0) {
+    const rotated = rotatePoint(worldX, worldY, -viewRotation);
+    worldX = rotated.x;
+    worldY = rotated.y;
+  }
+  
+  // Finally, undo the flip (if flipped, X is negated)
+  if (viewFlipX) {
+    worldX = -worldX;
+  }
+  
+  return { x: worldX, y: worldY };
+}
+

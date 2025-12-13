@@ -32,6 +32,7 @@ import {
   angleFromVectorRaw,
   tan,
   TWO_PI,
+  canvasDeltaToWorldDelta,
 } from './utils/transformations';
 import { 
   COMPONENT_TYPE_INFO,
@@ -39,7 +40,7 @@ import {
   COMPONENT_CATEGORIES,
   COLOR_PALETTE,
 } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId, worldToCanvas } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
@@ -1044,8 +1045,44 @@ function App() {
   const transparencyCycleRafRef = useRef<number | null>(null);
   const transparencyCycleStartRef = useRef<number | null>(null);
   const [isPanning, setIsPanning] = useState(false);
-  const panStartRef = useRef<{ startCX: number; startCY: number; panX: number; panY: number; cameraCenterX: number; cameraCenterY: number } | null>(null);
-  const panClientStartRef = useRef<{ startClientX: number; startClientY: number; panX: number; panY: number; cameraCenterX: number; cameraCenterY: number } | null>(null);
+  const panStartRef = useRef<{ 
+    startCX: number; 
+    startCY: number; 
+    panX: number; 
+    panY: number; 
+    objectStartPositions?: {
+      topImageX: number;
+      topImageY: number;
+      bottomImageX: number;
+      bottomImageY: number;
+      componentsTop?: Record<string, { x: number; y: number }>;
+      componentsBottom?: Record<string, { x: number; y: number }>;
+      powerSymbols?: Record<string, { x: number; y: number }>;
+      groundSymbols?: Record<string, { x: number; y: number }>;
+      drawingStrokes?: Array<{ points: Array<{ x: number; y: number }> }>;
+      vias?: Array<{ x: number; y: number }>;
+      pads?: Array<{ x: number; y: number }>;
+    };
+  } | null>(null);
+  const panClientStartRef = useRef<{ 
+    startClientX: number; 
+    startClientY: number; 
+    panX: number; 
+    panY: number; 
+    objectStartPositions?: {
+      topImageX: number;
+      topImageY: number;
+      bottomImageX: number;
+      bottomImageY: number;
+      componentsTop?: Record<string, { x: number; y: number }>;
+      componentsBottom?: Record<string, { x: number; y: number }>;
+      powerSymbols?: Record<string, { x: number; y: number }>;
+      groundSymbols?: Record<string, { x: number; y: number }>;
+      drawingStrokes?: Array<{ points: Array<{ x: number; y: number }> }>;
+      vias?: Array<{ x: number; y: number }>;
+      pads?: Array<{ x: number; y: number }>;
+    };
+  } | null>(null);
   // Component movement is now handled via keyboard arrow keys
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   // Home Views feature: allows user to set up to 10 custom view locations (0-9) that can be recalled
@@ -2357,14 +2394,30 @@ function App() {
       setViewScale(newScale);
       return;
     } else if (currentTool === 'pan') {
-      // Start panning - track starting camera center in world coordinates
+      // Start panning - track starting positions of all objects in world coordinates
+      // Store object positions so we can translate them while keeping origin fixed
+      const objectStartPositions = {
+        topImageX: topImage?.x ?? 0,
+        topImageY: topImage?.y ?? 0,
+        bottomImageX: bottomImage?.x ?? 0,
+        bottomImageY: bottomImage?.y ?? 0,
+        componentsTop: Object.fromEntries(componentsTop.map(c => [c.id, { x: c.x, y: c.y }])),
+        componentsBottom: Object.fromEntries(componentsBottom.map(c => [c.id, { x: c.x, y: c.y }])),
+        powerSymbols: Object.fromEntries(powerSymbols.map(p => [p.id, { x: p.x, y: p.y }])),
+        groundSymbols: Object.fromEntries(groundSymbols.map(g => [g.id, { x: g.x, y: g.y }])),
+        drawingStrokes: drawingStrokes.map(stroke => ({
+          points: stroke.points.map(p => ({ x: p.x, y: p.y }))
+        })),
+        vias: vias.map(v => ({ x: v.x, y: v.y })),
+        pads: pads.map(p => ({ x: p.x, y: p.y }))
+      };
+      
       panStartRef.current = { 
         startCX: contentCanvasX, 
         startCY: contentCanvasY, 
         panX: viewPan.x, 
         panY: viewPan.y,
-        cameraCenterX: cameraWorldCenter.x,
-        cameraCenterY: cameraWorldCenter.y,
+        objectStartPositions,
       };
       // Also track client coordinates for out-of-canvas drags
       panClientStartRef.current = { 
@@ -2372,8 +2425,7 @@ function App() {
         startClientY: e.clientY, 
         panX: viewPan.x, 
         panY: viewPan.y,
-        cameraCenterX: cameraWorldCenter.x,
-        cameraCenterY: cameraWorldCenter.y,
+        objectStartPositions,
       };
       setIsPanning(true);
       return;
@@ -3484,13 +3536,84 @@ function App() {
       const sy = selectStart.y;
       setSelectRect({ x: Math.min(sx, x), y: Math.min(sy, y), width: Math.abs(x - sx), height: Math.abs(y - sy) });
     } else if (currentTool === 'pan' && isPanning && panStartRef.current) {
-      const { startCX, startCY, cameraCenterX, cameraCenterY } = panStartRef.current;
+      const { startCX, startCY, objectStartPositions } = panStartRef.current;
       const dx = contentCanvasX - startCX;
       const dy = contentCanvasY - startCY;
-      // Convert canvas delta to world delta and update camera center
-      const worldDeltaX = -dx / viewScale; // Negative because moving canvas right moves view left
-      const worldDeltaY = -dy / viewScale; // Negative because moving canvas down moves view up
-      setCameraCenter(cameraCenterX + worldDeltaX, cameraCenterY + worldDeltaY);
+      // Convert canvas delta to world delta accounting for view rotation and flip
+      // This ensures objects move the same distance and direction as the mouse
+      const worldDelta = canvasDeltaToWorldDelta(dx, dy, viewScale, viewRotation, viewFlipX);
+      const worldDeltaX = worldDelta.x;
+      const worldDeltaY = worldDelta.y;
+      
+      // Move all objects by the world delta (keep origin fixed at center)
+      if (objectStartPositions) {
+        // Move images
+        if (topImage) {
+          setTopImage({ ...topImage, x: objectStartPositions.topImageX + worldDeltaX, y: objectStartPositions.topImageY + worldDeltaY });
+        }
+        if (bottomImage) {
+          setBottomImage({ ...bottomImage, x: objectStartPositions.bottomImageX + worldDeltaX, y: objectStartPositions.bottomImageY + worldDeltaY });
+        }
+        
+        // Move components
+        setComponentsTop(componentsTop.map(comp => ({
+          ...comp,
+          x: (objectStartPositions.componentsTop?.[comp.id]?.x ?? comp.x) + worldDeltaX,
+          y: (objectStartPositions.componentsTop?.[comp.id]?.y ?? comp.y) + worldDeltaY
+        })));
+        setComponentsBottom(componentsBottom.map(comp => ({
+          ...comp,
+          x: (objectStartPositions.componentsBottom?.[comp.id]?.x ?? comp.x) + worldDeltaX,
+          y: (objectStartPositions.componentsBottom?.[comp.id]?.y ?? comp.y) + worldDeltaY
+        })));
+        
+        // Move power symbols
+        setPowerSymbols(powerSymbols.map(p => ({
+          ...p,
+          x: (objectStartPositions.powerSymbols?.[p.id]?.x ?? p.x) + worldDeltaX,
+          y: (objectStartPositions.powerSymbols?.[p.id]?.y ?? p.y) + worldDeltaY
+        })));
+        
+        // Move ground symbols
+        setGroundSymbols(groundSymbols.map(g => ({
+          ...g,
+          x: (objectStartPositions.groundSymbols?.[g.id]?.x ?? g.x) + worldDeltaX,
+          y: (objectStartPositions.groundSymbols?.[g.id]?.y ?? g.y) + worldDeltaY
+        })));
+        
+        // Move drawing strokes (all points in each stroke)
+        setDrawingStrokes(drawingStrokes.map((stroke, idx) => ({
+          ...stroke,
+          points: stroke.points.map((point, pointIdx) => {
+            const startPoint = objectStartPositions.drawingStrokes?.[idx]?.points?.[pointIdx];
+            return {
+              ...point,
+              x: (startPoint?.x ?? point.x) + worldDeltaX,
+              y: (startPoint?.y ?? point.y) + worldDeltaY
+            };
+          })
+        })));
+        
+        // Move vias
+        setVias(vias.map((via, idx) => {
+          const startVia = objectStartPositions.vias?.[idx];
+          return {
+            ...via,
+            x: (startVia?.x ?? via.x) + worldDeltaX,
+            y: (startVia?.y ?? via.y) + worldDeltaY
+          };
+        }));
+        
+        // Move pads
+        setPads(pads.map((pad, idx) => {
+          const startPad = objectStartPositions.pads?.[idx];
+          return {
+            ...pad,
+            x: (startPad?.x ?? pad.x) + worldDeltaX,
+            y: (startPad?.y ?? pad.y) + worldDeltaY
+          };
+        }));
+      }
     } else if (isDrawing && currentStroke.length > 0) {
       if (currentTool === 'draw') {
         if (isShiftConstrained) {
@@ -4215,13 +4338,84 @@ function App() {
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
-      const { startClientX, startClientY, cameraCenterX, cameraCenterY } = panClientStartRef.current!;
+      const { startClientX, startClientY, objectStartPositions } = panClientStartRef.current!;
       const dx = (e.clientX - startClientX) * scaleX;
       const dy = (e.clientY - startClientY) * scaleY;
-      // Convert canvas delta to world delta and update camera center
-      const worldDeltaX = -dx / viewScale; // Negative because moving canvas right moves view left
-      const worldDeltaY = -dy / viewScale; // Negative because moving canvas down moves view up
-      setCameraCenter(cameraCenterX + worldDeltaX, cameraCenterY + worldDeltaY);
+      // Convert canvas delta to world delta accounting for view rotation and flip
+      // This ensures objects move the same distance and direction as the mouse
+      const worldDelta = canvasDeltaToWorldDelta(dx, dy, viewScale, viewRotation, viewFlipX);
+      const worldDeltaX = worldDelta.x;
+      const worldDeltaY = worldDelta.y;
+      
+      // Move all objects by the world delta (keep origin fixed at center)
+      if (objectStartPositions) {
+        // Move images
+        if (topImage) {
+          setTopImage({ ...topImage, x: objectStartPositions.topImageX + worldDeltaX, y: objectStartPositions.topImageY + worldDeltaY });
+        }
+        if (bottomImage) {
+          setBottomImage({ ...bottomImage, x: objectStartPositions.bottomImageX + worldDeltaX, y: objectStartPositions.bottomImageY + worldDeltaY });
+        }
+        
+        // Move components
+        setComponentsTop(componentsTop.map(comp => ({
+          ...comp,
+          x: (objectStartPositions.componentsTop?.[comp.id]?.x ?? comp.x) + worldDeltaX,
+          y: (objectStartPositions.componentsTop?.[comp.id]?.y ?? comp.y) + worldDeltaY
+        })));
+        setComponentsBottom(componentsBottom.map(comp => ({
+          ...comp,
+          x: (objectStartPositions.componentsBottom?.[comp.id]?.x ?? comp.x) + worldDeltaX,
+          y: (objectStartPositions.componentsBottom?.[comp.id]?.y ?? comp.y) + worldDeltaY
+        })));
+        
+        // Move power symbols
+        setPowerSymbols(powerSymbols.map(p => ({
+          ...p,
+          x: (objectStartPositions.powerSymbols?.[p.id]?.x ?? p.x) + worldDeltaX,
+          y: (objectStartPositions.powerSymbols?.[p.id]?.y ?? p.y) + worldDeltaY
+        })));
+        
+        // Move ground symbols
+        setGroundSymbols(groundSymbols.map(g => ({
+          ...g,
+          x: (objectStartPositions.groundSymbols?.[g.id]?.x ?? g.x) + worldDeltaX,
+          y: (objectStartPositions.groundSymbols?.[g.id]?.y ?? g.y) + worldDeltaY
+        })));
+        
+        // Move drawing strokes (all points in each stroke)
+        setDrawingStrokes(drawingStrokes.map((stroke, idx) => ({
+          ...stroke,
+          points: stroke.points.map((point, pointIdx) => {
+            const startPoint = objectStartPositions.drawingStrokes?.[idx]?.points?.[pointIdx];
+            return {
+              ...point,
+              x: (startPoint?.x ?? point.x) + worldDeltaX,
+              y: (startPoint?.y ?? point.y) + worldDeltaY
+            };
+          })
+        })));
+        
+        // Move vias
+        setVias(vias.map((via, idx) => {
+          const startVia = objectStartPositions.vias?.[idx];
+          return {
+            ...via,
+            x: (startVia?.x ?? via.x) + worldDeltaX,
+            y: (startVia?.y ?? via.y) + worldDeltaY
+          };
+        }));
+        
+        // Move pads
+        setPads(pads.map((pad, idx) => {
+          const startPad = objectStartPositions.pads?.[idx];
+          return {
+            ...pad,
+            x: (startPad?.x ?? pad.x) + worldDeltaX,
+            y: (startPad?.y ?? pad.y) + worldDeltaY
+          };
+        }));
+      }
     };
     const onUp = () => {
       setIsPanning(false);
@@ -4236,7 +4430,7 @@ function App() {
       window.removeEventListener('mousemove', onMove, true);
       window.removeEventListener('mouseup', onUp, true);
     };
-  }, [currentTool, isPanning]);
+  }, [currentTool, isPanning, viewScale, viewRotation, viewFlipX, topImage, bottomImage, componentsTop, componentsBottom, powerSymbols, groundSymbols, drawingStrokes, vias, pads, setTopImage, setBottomImage, setComponentsTop, setComponentsBottom, setPowerSymbols, setGroundSymbols, setDrawingStrokes, setVias, setPads]);
 
 
   const drawCanvas = useCallback(() => {
@@ -4817,9 +5011,57 @@ function App() {
       ctx.setLineDash([]);
       ctx.restore();
     }
+    
+    // Draw coordinate axes at world origin (0, 0) AFTER view transform
+    // This ensures axes rotate and flip with perspective changes
+    ctx.save();
+    // After view transform, (0,0) in current coords is at cameraWorldCenter in world coords
+    // Translate to world origin (0,0) so axes appear at world origin
+    ctx.translate(-cameraWorldCenter.x, -cameraWorldCenter.y);
+    
+    // Axes length and width - reduced for better appearance
+    const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
+    const screenLineWidth = 2; // 2 pixels - thinner
+    const lineWidthInWorld = screenLineWidth / viewScale;
+    
+    // Draw +X axis (horizontal, positive X direction) in red
+    ctx.strokeStyle = '#FF0000'; // Bright red
+    ctx.lineWidth = lineWidthInWorld;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0); // Start at world origin (0,0)
+    ctx.lineTo(axisLength, 0); // Draw to the right (positive X)
+    ctx.stroke();
+    
+    // Label +X axis
+    ctx.fillStyle = '#FF0000'; // Red text
+    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
+    
+    // Draw +Y axis (vertical, positive Y direction) in blue
+    ctx.strokeStyle = '#0000FF'; // Bright blue
+    ctx.lineWidth = lineWidthInWorld;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, 0); // Start at world origin (0,0)
+    ctx.lineTo(0, axisLength); // Draw in positive Y direction (downward)
+    ctx.stroke();
+    
+    // Label +Y axis
+    ctx.fillStyle = '#0000FF'; // Blue text
+    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
+    ctx.restore();
+    
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, cameraWorldCenter]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -6138,40 +6380,19 @@ function App() {
       e.preventDefault();
       e.stopPropagation();
       
-      // 'O' key recalls home view 0 (the default home view)
-      const homeView = homeViews[0];
-      if (homeView) {
-        // Restore to saved home view location and zoom
-        // homeView.x and homeView.y are already in world coordinates
-        setViewScale(homeView.zoom);
-        setCameraWorldCenter({ x: homeView.x, y: homeView.y });
-        
-        // Restore all layer visibility settings
-        setShowTopImage(homeView.showTopImage);
-        setShowBottomImage(homeView.showBottomImage);
-        setShowViasLayer(homeView.showViasLayer);
-        setShowTopTracesLayer(homeView.showTopTracesLayer);
-        setShowBottomTracesLayer(homeView.showBottomTracesLayer);
-        setShowTopPadsLayer(homeView.showTopPadsLayer);
-        setShowBottomPadsLayer(homeView.showBottomPadsLayer);
-        setShowTopTestPointsLayer(homeView.showTopTestPointsLayer);
-        setShowBottomTestPointsLayer(homeView.showBottomTestPointsLayer);
-        setShowTopComponents(homeView.showTopComponents);
-        setShowBottomComponents(homeView.showBottomComponents);
-        setShowPowerLayer(homeView.showPowerLayer);
-        setShowGroundLayer(homeView.showGroundLayer);
-        setShowConnectionsLayer(homeView.showConnectionsLayer);
-      } else {
-        // Default behavior: reset view settings (no home view 0 saved)
-        setViewScale(1);
-        setCameraCenter(0, 0);
-        // Reset browser zoom to 100%
-        if (document.body) {
-          document.body.style.zoom = '1';
-        }
-        if (document.documentElement) {
-          document.documentElement.style.zoom = '1';
-        }
+      // 'O' key resets to Top View perspective with (0,0) centered
+      // Return to original/starting view with camera looking down at (0,0)
+      setViewScale(1);
+      setCameraWorldCenter({ x: 0, y: 0 });
+      setViewRotation(0);
+      setViewFlipX(false);
+      setIsBottomView(false);
+      // Reset browser zoom to 100%
+      if (document.body) {
+        document.body.style.zoom = '1';
+      }
+      if (document.documentElement) {
+        document.documentElement.style.zoom = '1';
       }
       setCurrentView('overlay');
       // Clear all selections
@@ -12905,7 +13126,7 @@ function App() {
                 zIndex: 1000,
               }}
             >
-              ({mouseWorldPos.x.toFixed(3)}, {mouseWorldPos.y.toFixed(3)})
+              ({mouseWorldPos.x.toFixed(1)}mm, {mouseWorldPos.y.toFixed(1)}mm)
             </div>
           )}
           
