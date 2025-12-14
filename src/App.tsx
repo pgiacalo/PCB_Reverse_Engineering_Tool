@@ -6308,32 +6308,23 @@ function App() {
       return;
     }
     
-    // Arrow keys: Perspective controls when NOT in transform mode
-    // Left/Right: Always switch perspective (top/bottom view)
-    // Up/Down: Rotate perspective in 90-degree increments (when not in transform mode)
-    if (!(currentTool === 'transform' && selectedImageForTransform)) {
-      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        // Rotate perspective: Up = counter-clockwise (-90°), Down = clockwise (+90°)
-        e.preventDefault();
-        e.stopPropagation();
-        const angle = e.key === 'ArrowUp' ? -90 : 90;
-        rotatePerspective(angle);
-        return;
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        // Always switch perspective (top/bottom view)
-        e.preventDefault();
-        e.stopPropagation();
-        switchPerspective();
-        return;
-      }
-    } else {
-      // In transform mode - handle component movement separately if components are selected
-      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') && selectedComponentIds.size > 0) {
+    // Arrow keys: Handle perspective controls and component movement
+    // Check if Shift is pressed or Caps Lock is on (for perspective changes)
+    const isShiftOrCapsLock = e.shiftKey || e.getModifierState('CapsLock');
+    
+    // Check if we're in transform mode with an image selected (for image transformations)
+    const isTransformModeWithImage = currentTool === 'transform' && selectedImageForTransform;
+    
+    // Handle arrow keys
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      // Priority 1: Component movement (when components are selected - takes precedence over perspective)
+      if (selectedComponentIds.size > 0) {
         e.preventDefault();
         e.stopPropagation();
         
         // Movement step size (in world coordinates)
-        const stepSize = e.shiftKey ? 10 : 1; // Shift = larger steps
+        // Shift key = larger steps (10 units), otherwise 1 unit
+        const stepSize = e.shiftKey ? 10 : 1;
         
         let deltaX = 0;
         let deltaY = 0;
@@ -6373,6 +6364,28 @@ function App() {
         }
         return;
       }
+      
+      // Priority 2: Perspective controls (when Shift/Caps Lock is pressed and NOT in transform mode with image)
+      // Only trigger if no components are selected (components take priority)
+      if (isShiftOrCapsLock && !isTransformModeWithImage && selectedComponentIds.size === 0) {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          // Rotate perspective: Up = counter-clockwise (-90°), Down = clockwise (+90°)
+          e.preventDefault();
+          e.stopPropagation();
+          const angle = e.key === 'ArrowUp' ? -90 : 90;
+          rotatePerspective(angle);
+          return;
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          // Switch perspective (top/bottom view)
+          e.preventDefault();
+          e.stopPropagation();
+          switchPerspective();
+          return;
+        }
+      }
+      
+      // Priority 3: Image transformations (when in transform mode with image selected)
+      // This is handled later in the code for transform mode
     }
     
     // Detailed Information: Display properties of selected objects (I)

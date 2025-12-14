@@ -316,6 +316,9 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
           >
             {isBottomView ? 'Switch to Top View' : 'Switch to Bottom View'}
           </button>
+          <div style={{ fontSize: '10px', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+            Shortcut: Shift-Left/Right Arrow Keys
+          </div>
         </div>
 
         <div style={{ height: 1, background: '#444', margin: '16px 0' }} />
@@ -349,6 +352,9 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
           >
             Rotate 270°
           </button>
+          <div style={{ fontSize: '10px', color: '#666', marginTop: '6px', fontStyle: 'italic' }}>
+            Shortcut: Shift-Up/Down Arrow Keys
+          </div>
         </div>
 
         <div style={{ height: 1, background: '#444', margin: '16px 0' }} />
