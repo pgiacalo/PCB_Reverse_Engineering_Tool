@@ -271,17 +271,18 @@ function App() {
   
   // Tool-specific layer defaults (persist until tool re-selected)
   // Initialize to null so radio buttons default to neither selected, forcing user to make a choice
-  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom' | null>(null);
-  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom' | null>(null);
-  const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom' | null>(null);
-  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom' | null>(null);
+  // Tool layer defaults - default to 'top' for new projects, persisted per tool
+  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
+  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
+  const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom'>('top');
+  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
   
   // Refs to track current layer immediately (synchronously) for size/color updates
   // These are updated immediately when layer chooser buttons are clicked, before React state updates
-  const traceToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
-  const padToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
-  const testPointToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
-  const componentToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
+  const traceToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const padToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const testPointToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const componentToolLayerRef = React.useRef<'top' | 'bottom'>('top');
   
   // Sync refs with state when state changes
   React.useEffect(() => {
@@ -712,44 +713,98 @@ function App() {
       return prev;
     });
   }, [brushColor, brushSize, currentTool, drawingMode, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, getCurrentToolDef, saveDefaultColor, saveDefaultSize, saveToolLayerSettings, setTopTraceColor, setBottomTraceColor, setTopTraceSize, setBottomTraceSize, setTopPadColor, setBottomPadColor, setTopPadSize, setBottomPadSize, setTopTestPointColor, setBottomTestPointColor, setTopTestPointSize, setBottomTestPointSize, setTopComponentColor, setBottomComponentColor, setTopComponentSize, setBottomComponentSize]);
-  // Show trace layer chooser when trace tool is selected
-  // When a tool is clicked, this triggers the tool state management process:
-  // Step 1: Which tool was selected? (currentTool, drawingMode)
-  // Step 2: Which layer was selected? (traceToolLayer, defaults to 'top' if not yet selected)
-  // The layer chooser appears, and the tool state management determines the correct tool instance
+  // Apply trace tool layer default when trace tool is selected
+  // Automatically turns on the layer visibility based on the current default
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'trace') {
+      const layer = traceToolLayer; // Use current default (always 'top' or 'bottom', never null)
+      setSelectedDrawingLayer(layer);
+      setBrushColor(layer === 'top' ? topTraceColor : bottomTraceColor);
+      setBrushSize(layer === 'top' ? topTraceSize : bottomTraceSize);
+      // Automatically enable layer visibility
+      if (layer === 'top') {
+        setShowTopImage(true);
+        setShowTopTracesLayer(true);
+      } else {
+        setShowBottomImage(true);
+        setShowBottomTracesLayer(true);
+      }
+      // Show chooser to allow switching layers
       setShowTraceLayerChooser(true);
     } else {
       setShowTraceLayerChooser(false);
     }
-  }, [currentTool, drawingMode]);
+  }, [currentTool, drawingMode, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize]);
 
-  // Show pad layer chooser when pad tool is selected
-  // When a tool is clicked, this triggers the tool state management process:
-  // Step 1: Which tool was selected? (currentTool, drawingMode)
-  // Step 2: Which layer was selected? (padToolLayer, defaults to 'top' if not yet selected)
-  // The layer chooser appears, and the tool state management determines the correct tool instance
+  // Apply pad tool layer default when pad tool is selected
+  // Automatically turns on the layer visibility based on the current default
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'pad') {
+      const layer = padToolLayer; // Use current default (always 'top' or 'bottom', never null)
+      setSelectedDrawingLayer(layer);
+      const padInstance = toolInstanceManager.get(layer === 'top' ? 'padTop' : 'padBottom');
+      setBrushColor(padInstance.color);
+      setBrushSize(padInstance.size);
+      // Automatically enable layer visibility
+      if (layer === 'top') {
+        setShowTopImage(true);
+        setShowTopPadsLayer(true);
+      } else {
+        setShowBottomImage(true);
+        setShowBottomPadsLayer(true);
+      }
+      // Show chooser to allow switching layers
       setShowPadLayerChooser(true);
     } else {
       setShowPadLayerChooser(false);
     }
-  }, [currentTool, drawingMode]);
+  }, [currentTool, drawingMode, padToolLayer]);
 
-  // Show test point layer chooser when test point tool is selected
-  // When a tool is clicked, this triggers the tool state management process:
-  // Step 1: Which tool was selected? (currentTool, drawingMode)
-  // Step 2: Which layer was selected? (testPointToolLayer, defaults to 'top' if not yet selected)
-  // The layer chooser appears, and the tool state management determines the correct tool instance
+  // Apply test point tool layer default when test point tool is selected
+  // Automatically turns on the layer visibility based on the current default
   React.useEffect(() => {
     if (currentTool === 'draw' && drawingMode === 'testPoint') {
+      const layer = testPointToolLayer; // Use current default (always 'top' or 'bottom', never null)
+      setSelectedDrawingLayer(layer);
+      setBrushColor(layer === 'top' ? topTestPointColor : bottomTestPointColor);
+      setBrushSize(layer === 'top' ? topTestPointSize : bottomTestPointSize);
+      // Automatically enable layer visibility
+      if (layer === 'top') {
+        setShowTopImage(true);
+        setShowTopTestPointsLayer(true);
+      } else {
+        setShowBottomImage(true);
+        setShowBottomTestPointsLayer(true);
+      }
+      // Show chooser to allow switching layers
       setShowTestPointLayerChooser(true);
     } else {
       setShowTestPointLayerChooser(false);
     }
-  }, [currentTool, drawingMode]);
+  }, [currentTool, drawingMode, testPointToolLayer, topTestPointColor, bottomTestPointColor, topTestPointSize, bottomTestPointSize]);
+
+  // Apply component tool layer default when component tool is selected
+  // Automatically turns on the layer visibility based on the current default
+  React.useEffect(() => {
+    if (currentTool === 'component') {
+      const layer = componentToolLayer; // Use current default (always 'top' or 'bottom', never null)
+      setSelectedDrawingLayer(layer);
+      setBrushColor(layer === 'top' ? topComponentColor : bottomComponentColor);
+      setBrushSize(layer === 'top' ? topComponentSize : bottomComponentSize);
+      // Automatically enable layer visibility
+      if (layer === 'top') {
+        setShowTopImage(true);
+        setShowTopComponents(true);
+      } else {
+        setShowBottomImage(true);
+        setShowBottomComponents(true);
+      }
+      // Show chooser to allow switching layers
+      setShowComponentLayerChooser(true);
+    } else {
+      setShowComponentLayerChooser(false);
+    }
+  }, [currentTool, componentToolLayer, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]);
 
   // Sync brushColor and brushSize with active tool instance (centralized state management)
   // This ensures brushColor/brushSize always reflect the current tool's attributes
@@ -6924,11 +6979,7 @@ function App() {
             clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('pad');
             setCurrentTool('draw');
-            // Reset layer selection to null so radio buttons default to neither selected
-            setPadToolLayer(null);
-            padToolLayerRef.current = null;
-            setSelectedDrawingLayer(padToolLayer || 'top');
-            // The useEffect hook will automatically show the layer chooser
+            // The useEffect hook will automatically apply the default layer and show the layer chooser
             return;
           case 'y':
           case 'Y':
@@ -6936,11 +6987,7 @@ function App() {
             clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('testPoint');
             setCurrentTool('draw');
-            // Reset layer selection to null so radio buttons default to neither selected
-            setTestPointToolLayer(null);
-            testPointToolLayerRef.current = null;
-            setSelectedDrawingLayer(testPointToolLayer || 'top');
-            // The useEffect hook will automatically show the layer chooser
+            // The useEffect hook will automatically apply the default layer and show the layer chooser
             return;
           case 't':
           case 'T':
@@ -6948,21 +6995,14 @@ function App() {
             clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('trace');
             setCurrentTool('draw');
-            // Reset layer selection to null so radio buttons default to neither selected
-            setTraceToolLayer(null);
-            traceToolLayerRef.current = null;
-            setSelectedDrawingLayer(traceToolLayer || 'top');
-            // The useEffect hook will automatically show the layer chooser
+            // The useEffect hook will automatically apply the default layer and show the layer chooser
             return;
           case 'c':
           case 'C':
             e.preventDefault();
             clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('component');
-            // Reset layer selection to null so radio buttons default to neither selected
-            setComponentToolLayer(null);
-            componentToolLayerRef.current = null;
-            // Use current global layer setting (selectedDrawingLayer is the source of truth)
+            // The useEffect hook will automatically apply the default layer
             // Restore last selected component type if available, otherwise show '?' (null)
             if (lastSelectedComponentTypeRef.current) {
               setSelectedComponentType(lastSelectedComponentTypeRef.current);
@@ -7641,17 +7681,17 @@ function App() {
     // === STEP 11: Reset tool state ===
     setCurrentTool('select');
     setDrawingMode('trace');
-    // Initialize layer selections to null so radio buttons default to neither selected
-    setTraceToolLayer(null);
-    setPadToolLayer(null);
-    setTestPointToolLayer(null);
-    setComponentToolLayer(null);
+    // Reset tool layer defaults to 'top' for new projects
+    setTraceToolLayer('top');
+    setPadToolLayer('top');
+    setTestPointToolLayer('top');
+    setComponentToolLayer('top');
     
-    // Reset tool layer refs to null so radio buttons default to neither selected
-    traceToolLayerRef.current = null;
-    padToolLayerRef.current = null;
-    testPointToolLayerRef.current = null;
-    componentToolLayerRef.current = null;
+    // Reset tool layer refs to 'top' for new projects
+    traceToolLayerRef.current = 'top';
+    padToolLayerRef.current = 'top';
+    testPointToolLayerRef.current = 'top';
+    componentToolLayerRef.current = 'top';
     
     // === STEP 12: Reset designator counters ===
     sessionDesignatorCountersRef.current = {};
@@ -9230,7 +9270,12 @@ function App() {
       },
       componentConnectionColor: componentConnectionColor,
       componentConnectionSize: componentConnectionSize,
-      traceToolLayer, // Save last layer choice
+      toolLayerDefaults: {
+        trace: traceToolLayer,
+        pad: padToolLayer,
+        testPoint: testPointToolLayer,
+        component: componentToolLayer,
+      },
       toolSettings: {
         // Convert Map to plain object for JSON serialization
         trace: toolRegistry.get('trace')?.settings || { color: '#ff0000', size: 6 },
@@ -9277,7 +9322,7 @@ function App() {
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
+  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -10552,22 +10597,20 @@ function App() {
         saveDefaultSize('component', topSize, 'top');
         saveDefaultSize('component', bottomSize, 'bottom');
       }
-      if (project.traceToolLayer) {
+      // Load tool layer defaults (new format) or migrate from old format
+      if (project.toolLayerDefaults) {
+        // New format: load all tool layer defaults
+        if (project.toolLayerDefaults.trace) setTraceToolLayer(project.toolLayerDefaults.trace);
+        if (project.toolLayerDefaults.pad) setPadToolLayer(project.toolLayerDefaults.pad);
+        if (project.toolLayerDefaults.testPoint) setTestPointToolLayer(project.toolLayerDefaults.testPoint);
+        if (project.toolLayerDefaults.component) setComponentToolLayer(project.toolLayerDefaults.component);
+      } else if (project.traceToolLayer) {
+        // Old format: migrate traceToolLayer to new format
         setTraceToolLayer(project.traceToolLayer);
-        // If trace tool is active, update brush color and size to match the restored layer
-        if (currentTool === 'draw' && drawingMode === 'trace') {
-          const layer = project.traceToolLayer;
-          setBrushColor(layer === 'top' ? (project.traceColors?.top || topTraceColor) : (project.traceColors?.bottom || bottomTraceColor));
-          // Use defaults (6) if values are missing
-          // Ensure bottom size is at least 6 (migration for old projects)
-          const topSize = project.traceSizes?.top != null && project.traceSizes.top > 0 ? project.traceSizes.top : 6;
-          let bottomSize = project.traceSizes?.bottom != null && project.traceSizes.bottom > 0 ? project.traceSizes.bottom : 6;
-          if (bottomSize < 6) {
-            bottomSize = 6;
-          }
-          setBrushSize(layer === 'top' ? topSize : bottomSize);
-        }
+        // Other tools default to 'top' (already set by initial state)
       }
+      // Note: The useEffect hooks will automatically apply the default layer and update brush color/size
+      // when the tool becomes active, so we don't need to handle that here
       // Restore tool settings
       if (project.toolSettings) {
         setToolRegistry(prev => {
@@ -12018,11 +12061,7 @@ function App() {
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('pad'); 
                   setCurrentTool('draw'); 
-                  // Reset layer selection to null so radio buttons default to neither selected
-                  setPadToolLayer(null);
-                  padToolLayerRef.current = null;
-                  // Explicitly show the layer chooser on every click
-                  setShowPadLayerChooser(true);
+                  // The useEffect hook will automatically apply the default layer and show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updatePadChooserPosition(), 0);
                 } 
@@ -12047,7 +12086,7 @@ function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   // Use tool instance directly (single source of truth) to match cursor color
-                  const padLayer = padToolLayer || 'top';
+                  const padLayer = padToolLayer; // Always 'top' or 'bottom', never null
                   const padInstanceId = padLayer === 'top' ? 'padTop' : 'padBottom';
                   const padColor = toolInstanceManager.get(padInstanceId).color;
                   // Fixed icon size for toolbar (constant, regardless of actual pad size) - made larger
@@ -12078,11 +12117,7 @@ function App() {
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('testPoint'); 
                   setCurrentTool('draw'); 
-                  // Reset layer selection to null so radio buttons default to neither selected
-                  setTestPointToolLayer(null);
-                  testPointToolLayerRef.current = null;
-                  // Explicitly show the layer chooser on every click
-                  setShowTestPointLayerChooser(true);
+                  // The useEffect hook will automatically apply the default layer and show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTestPointChooserPosition(), 0);
                 } 
@@ -12107,7 +12142,7 @@ function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
                 {(() => {
                   // Use tool instance directly (single source of truth) to match cursor color
-                  const testPointLayer = testPointToolLayer || 'top';
+                  const testPointLayer = testPointToolLayer; // Always 'top' or 'bottom', never null
                   const testPointInstanceId = testPointLayer === 'top' ? 'testPointTop' : 'testPointBottom';
                   const testPointColor = toolInstanceManager.get(testPointInstanceId).color;
                   // Draw diamond shape (bright yellow-filled with black border) - made larger
@@ -12145,11 +12180,7 @@ function App() {
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('trace'); 
                   setCurrentTool('draw'); 
-                  // Reset layer selection to null so radio buttons default to neither selected
-                  setTraceToolLayer(null);
-                  traceToolLayerRef.current = null;
-                  // Explicitly show the layer chooser on every click
-                  setShowTraceLayerChooser(true);
+                  // The useEffect hook will automatically apply the default layer and show the layer chooser
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTraceChooserPosition(), 0);
                 }
@@ -12173,7 +12204,7 @@ function App() {
             >
               <PenLine size={14} color={(() => {
                 // Use tool instance directly (single source of truth) to match cursor color
-                const layer = traceToolLayer || 'top';
+                const layer = traceToolLayer; // Always 'top' or 'bottom', never null
                 const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
                 return toolInstanceManager.get(traceInstanceId).color;
               })()} />
@@ -12192,11 +12223,7 @@ function App() {
                   console.log('Component tool clicked');
                   clearAllSelections(); // Clear all selections when tool is selected
                   setCurrentTool('component');
-                  // Reset layer selection to null so radio buttons default to neither selected
-                  setComponentToolLayer(null);
-                  componentToolLayerRef.current = null;
-                  // Show layer chooser first (like trace/pad pattern)
-                  setShowComponentLayerChooser(true);
+                  // The useEffect hook will automatically apply the default layer and show the layer chooser
                   setShowComponentTypeChooser(false);
                   setSelectedComponentType(null);
                 }
@@ -13122,7 +13149,7 @@ function App() {
           {(currentTool === 'component' && showComponentLayerChooser) && (
             <div ref={componentLayerChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
               <label className="radio-label" style={{ marginRight: 6 }}>
-                <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'top'} onClick={() => { 
+                <input type="radio" name="componentToolLayer" checked={componentToolLayer === 'top'} onChange={() => { 
                   console.log('Component tool Top clicked');
                   // Update ref immediately (synchronously) so size/color updates use correct layer
                   componentToolLayerRef.current = 'top';
@@ -13149,7 +13176,7 @@ function App() {
                 <span>Top</span>
               </label>
               <label className="radio-label">
-                <input type="radio" name="componentToolLayer" checked={selectedDrawingLayer === 'bottom'} onClick={() => { 
+                <input type="radio" name="componentToolLayer" checked={componentToolLayer === 'bottom'} onChange={() => { 
                   console.log('Component tool Bottom clicked');
                   // Update ref immediately (synchronously) so size/color updates use correct layer
                   componentToolLayerRef.current = 'bottom';
