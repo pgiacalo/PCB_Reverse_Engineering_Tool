@@ -35,6 +35,7 @@ import {
   canvasDeltaToWorldDelta,
   applyInverseViewTransform,
   contentCanvasToWorld,
+  darkenColor,
 } from './utils/transformations';
 import { 
   COMPONENT_TYPE_INFO,
@@ -5026,30 +5027,36 @@ function App() {
                              (comp as any).dielectric === 'Tantalum';
         const isPolarized = (hasPolarity || isTantalumCap) && comp.pinPolarities;
         
-        // Collect unique node IDs with their polarity info to avoid drawing duplicate lines
-        const connectedNodes = new Map<string, boolean>(); // Map<nodeId, isNegative>
+        // Collect unique node IDs with their polarity and Pin 1 info to avoid drawing duplicate lines
+        // Map<nodeId, { isNegative: boolean, hasPin1: boolean }>
+        const connectedNodes = new Map<string, { isNegative: boolean; hasPin1: boolean }>();
         for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
           const connection = pinConnections[pinIndex];
           if (connection && connection.trim() !== '') {
             const nodeIdStr = connection.trim();
+            const isPin1 = pinIndex === 0; // Pin 1 is at index 0
             // Check if this pin is negative (for polarized components)
             const isNegative: boolean = Boolean(isPolarized && 
                              comp.pinPolarities && 
                              pinIndex < comp.pinPolarities.length &&
                              comp.pinPolarities[pinIndex] === '-');
             // If node already exists, keep the negative flag if either connection is negative
+            // and keep hasPin1 if any connection is Pin 1
             const existingValue = connectedNodes.get(nodeIdStr);
             if (existingValue !== undefined) {
-              // existingValue is guaranteed to be boolean here (Map<string, boolean>)
-              connectedNodes.set(nodeIdStr, existingValue || isNegative);
+              connectedNodes.set(nodeIdStr, {
+                isNegative: existingValue.isNegative || isNegative,
+                hasPin1: existingValue.hasPin1 || isPin1
+              });
             } else {
-              connectedNodes.set(nodeIdStr, isNegative);
+              connectedNodes.set(nodeIdStr, { isNegative, hasPin1: isPin1 });
             }
           }
         }
         
         // Draw one line per unique connected node, from component center to node center
-        for (const [nodeIdStr, isNegative] of connectedNodes) {
+        for (const [nodeIdStr, nodeInfo] of connectedNodes) {
+          const { isNegative, hasPin1 } = nodeInfo;
           const nodePos = findNodeCoordinates(nodeIdStr);
           if (nodePos) {
             // Use component center as starting point
@@ -5061,15 +5068,24 @@ function App() {
             const isSelected = selectedComponentConnections.has(connectionKey);
             
             ctx.save();
-            // Use black for negative connections of polarized components, otherwise use component connection color
+            // Use black for negative connections of polarized components
+            // Use darkened color for Pin 1 connections (for integrated circuits)
+            // Otherwise use component connection color
             // If selected, use highlight color (cyan) and thicker line
             if (isSelected) {
               ctx.strokeStyle = '#00bfff'; // Cyan highlight
               ctx.lineWidth = Math.max(2, (componentConnectionSize * 1.5) / Math.max(viewScale, 0.001));
               ctx.setLineDash([4, 3]);
             } else {
-            ctx.strokeStyle = isNegative ? 'rgba(0, 0, 0, 0.8)' : componentConnectionColor;
-            ctx.lineWidth = Math.max(1, componentConnectionSize / Math.max(viewScale, 0.001));
+              if (isNegative) {
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+              } else if (hasPin1) {
+                // Pin 1 gets a darker version of the component connection color
+                ctx.strokeStyle = darkenColor(componentConnectionColor, 0.4);
+              } else {
+                ctx.strokeStyle = componentConnectionColor;
+              }
+              ctx.lineWidth = Math.max(1, componentConnectionSize / Math.max(viewScale, 0.001));
             }
             ctx.beginPath();
             ctx.moveTo(compCenter.x, compCenter.y);

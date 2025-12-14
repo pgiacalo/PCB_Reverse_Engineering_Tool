@@ -580,3 +580,47 @@ export function contentCanvasToWorld(
   return { x, y };
 }
 
+/**
+ * Darken a color by reducing its brightness
+ * @param color - Color in hex format (e.g., '#E69F00' or 'rgb(230, 159, 0)')
+ * @param factor - Darkening factor (0-1), where 0.5 means 50% darker. Default is 0.4 (40% darker)
+ * @returns Darkened color in the same format as input
+ */
+export function darkenColor(color: string, factor: number = 0.4): string {
+  // Handle hex colors
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    
+    const darkenedR = Math.max(0, Math.floor(r * (1 - factor)));
+    const darkenedG = Math.max(0, Math.floor(g * (1 - factor)));
+    const darkenedB = Math.max(0, Math.floor(b * (1 - factor)));
+    
+    return `#${darkenedR.toString(16).padStart(2, '0')}${darkenedG.toString(16).padStart(2, '0')}${darkenedB.toString(16).padStart(2, '0')}`;
+  }
+  
+  // Handle rgb/rgba colors
+  const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)/);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1], 10);
+    const g = parseInt(rgbMatch[2], 10);
+    const b = parseInt(rgbMatch[3], 10);
+    const alpha = rgbMatch[4] ? rgbMatch[4].trim() : '';
+    
+    const darkenedR = Math.max(0, Math.floor(r * (1 - factor)));
+    const darkenedG = Math.max(0, Math.floor(g * (1 - factor)));
+    const darkenedB = Math.max(0, Math.floor(b * (1 - factor)));
+    
+    if (color.includes('rgba')) {
+      return `rgba(${darkenedR}, ${darkenedG}, ${darkenedB}${alpha ? `, ${alpha}` : ', 1'})`;
+    } else {
+      return `rgb(${darkenedR}, ${darkenedG}, ${darkenedB})`;
+    }
+  }
+  
+  // If we can't parse it, return original color
+  return color;
+}
+
