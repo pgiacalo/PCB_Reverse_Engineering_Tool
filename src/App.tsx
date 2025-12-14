@@ -33,6 +33,7 @@ import {
   tan,
   TWO_PI,
   canvasDeltaToWorldDelta,
+  applyInverseViewTransform,
 } from './utils/transformations';
 import { 
   COMPONENT_TYPE_INFO,
@@ -267,17 +268,18 @@ function App() {
   } = view;
   
   // Tool-specific layer defaults (persist until tool re-selected)
-  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom'>('top');
-  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom'>('top');
-  const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom'>('top');
-  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom'>('top');
+  // Initialize to null so radio buttons default to neither selected, forcing user to make a choice
+  const [traceToolLayer, setTraceToolLayer] = useState<'top' | 'bottom' | null>(null);
+  const [padToolLayer, setPadToolLayer] = useState<'top' | 'bottom' | null>(null);
+  const [testPointToolLayer, setTestPointToolLayer] = useState<'top' | 'bottom' | null>(null);
+  const [componentToolLayer, setComponentToolLayer] = useState<'top' | 'bottom' | null>(null);
   
   // Refs to track current layer immediately (synchronously) for size/color updates
   // These are updated immediately when layer chooser buttons are clicked, before React state updates
-  const traceToolLayerRef = React.useRef<'top' | 'bottom'>('top');
-  const padToolLayerRef = React.useRef<'top' | 'bottom'>('top');
-  const testPointToolLayerRef = React.useRef<'top' | 'bottom'>('top');
-  const componentToolLayerRef = React.useRef<'top' | 'bottom'>('top');
+  const traceToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
+  const padToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
+  const testPointToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
+  const componentToolLayerRef = React.useRef<'top' | 'bottom' | null>(null);
   
   // Sync refs with state when state changes
   React.useEffect(() => {
@@ -1130,6 +1132,15 @@ function App() {
   const [selectedPowerBusId, setSelectedPowerBusId] = useState<string | null>(null);
   // Component connection selection: Set of "componentId:pointId" strings
   const [selectedComponentConnections, setSelectedComponentConnections] = useState<Set<string>>(new Set());
+
+  // Helper function to clear all selections
+  const clearAllSelections = useCallback(() => {
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
+  }, [setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setSelectedComponentConnections]);
   // Ground bus management (similar to power buses)
   const [showGroundBusManager, setShowGroundBusManager] = useState(false);
   const [editingGroundBusId, setEditingGroundBusId] = useState<string | null>(null);
@@ -4813,15 +4824,23 @@ function App() {
       const half = size / 2;
       ctx.save();
       
-      // Apply transformations using unified library (same as images for consistency)
-      applySimpleTransform(
-        ctx,
-        c.x,
-        c.y,
-        c.orientation ?? 0,
-        c.flipX ?? false,
-        c.flipY ?? false
-      );
+      // Translate to component position first (in world coordinates, already transformed by view)
+      ctx.translate(c.x, c.y);
+      
+      // Apply inverse view transform to keep component upright relative to canvas
+      // This undoes the view rotation and flip so components remain readable
+      applyInverseViewTransform(ctx, viewRotation, viewFlipX);
+      
+      // Apply component's own rotation and flip
+      if (c.orientation !== undefined && c.orientation !== 0) {
+        ctx.rotate(degToRad(c.orientation));
+      }
+      if (c.flipX) {
+        ctx.scale(-1, 1);
+      }
+      if (c.flipY) {
+        ctx.scale(1, -1);
+      }
       
       ctx.strokeStyle = c.color || '#111';
       ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
@@ -6042,12 +6061,9 @@ function App() {
 
   // Helper function to switch to Select tool and deselect all icons
   const switchToSelectTool = useCallback(() => {
+    clearAllSelections(); // Clear all selections when tool is selected
     setCurrentTool('select');
-    setSelectedIds(new Set());
-    setSelectedComponentIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedGroundIds(new Set());
-  }, [setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+  }, [clearAllSelections]);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // FIRST: Handle Escape key for checkboxes/radio buttons before other checks
@@ -6104,19 +6120,31 @@ function App() {
           homeViewTimeoutRef.current = null;
         }
         
-        // Save current camera center in world coordinates
+        // Save current PCB position - use top image center as reference (or bottom image if no top image)
+        // Since camera is fixed at (0,0), we save where the PCB objects are positioned
         const canvas = canvasRef.current;
         if (canvas) {
-          // Use current camera center in world coordinates
-          const centerWorldX = cameraWorldCenter.x;
-          const centerWorldY = cameraWorldCenter.y;
+          // Use top image center as reference point (or bottom image if no top image)
+          let pcbRefX = 0;
+          let pcbRefY = 0;
+          if (topImage) {
+            pcbRefX = topImage.x;
+            pcbRefY = topImage.y;
+          } else if (bottomImage) {
+            pcbRefX = bottomImage.x;
+            pcbRefY = bottomImage.y;
+          }
+          // If no images, use (0,0) as reference
           
           // Save the view to the specified slot (including all layer visibility settings and view state)
           setHomeViews(prev => ({
             ...prev,
             [numKey]: {
-              x: centerWorldX,
-              y: centerWorldY,
+              pcbReferenceX: pcbRefX,
+              pcbReferenceY: pcbRefY,
+              // Legacy fields for backward compatibility (always 0,0 since camera is fixed)
+              x: 0,
+              y: 0,
               zoom: viewScale,
               viewRotation,
               viewFlipX,
@@ -6150,16 +6178,96 @@ function App() {
       // If not in center tool mode, recall the home view for this number (if it exists)
       const homeView = homeViews[numKey];
       if (homeView) {
-        // Restore to saved home view location and zoom
-        // homeView.x and homeView.y are already in world coordinates
+        // Restore zoom and view perspective state first
         setViewScale(homeView.zoom);
-        setCameraWorldCenter({ x: homeView.x, y: homeView.y });
-        
-        // Restore view perspective state
         setViewRotation(homeView.viewRotation ?? 0);
         setViewFlipX(homeView.viewFlipX ?? false);
         setIsBottomView(homeView.isBottomView ?? false);
         setTransparency(homeView.transparency ?? 50);
+        
+        // Restore PCB position by moving all objects so the reference point is back at saved position
+        // Use new format (pcbReferenceX/Y) if available, otherwise fall back to legacy (x/y)
+        const savedRefX = homeView.pcbReferenceX ?? homeView.x ?? 0;
+        const savedRefY = homeView.pcbReferenceY ?? homeView.y ?? 0;
+        
+        // Calculate current reference point (top image center, or bottom if no top, or 0,0 if no images)
+        let currentRefX = 0;
+        let currentRefY = 0;
+        if (topImage) {
+          currentRefX = topImage.x;
+          currentRefY = topImage.y;
+        } else if (bottomImage) {
+          currentRefX = bottomImage.x;
+          currentRefY = bottomImage.y;
+        }
+        
+        // Calculate delta needed to move PCB back to saved position
+        const deltaX = savedRefX - currentRefX;
+        const deltaY = savedRefY - currentRefY;
+        
+        // Move all objects by the delta (same as Hand tool does)
+        if (Math.abs(deltaX) > 0.001 || Math.abs(deltaY) > 0.001) {
+          // Move images
+          if (topImage) {
+            setTopImage({ ...topImage, x: topImage.x + deltaX, y: topImage.y + deltaY });
+          }
+          if (bottomImage) {
+            setBottomImage({ ...bottomImage, x: bottomImage.x + deltaX, y: bottomImage.y + deltaY });
+          }
+          
+          // Move components
+          setComponentsTop(componentsTop.map(comp => ({
+            ...comp,
+            x: comp.x + deltaX,
+            y: comp.y + deltaY
+          })));
+          setComponentsBottom(componentsBottom.map(comp => ({
+            ...comp,
+            x: comp.x + deltaX,
+            y: comp.y + deltaY
+          })));
+          
+          // Move power symbols
+          setPowerSymbols(powerSymbols.map(p => ({
+            ...p,
+            x: p.x + deltaX,
+            y: p.y + deltaY
+          })));
+          
+          // Move ground symbols
+          setGroundSymbols(groundSymbols.map(g => ({
+            ...g,
+            x: g.x + deltaX,
+            y: g.y + deltaY
+          })));
+          
+          // Move drawing strokes (all points in each stroke)
+          setDrawingStrokes(drawingStrokes.map(stroke => ({
+            ...stroke,
+            points: stroke.points.map(point => ({
+              ...point,
+              x: point.x + deltaX,
+              y: point.y + deltaY
+            }))
+          })));
+          
+          // Move vias
+          setVias(vias.map(via => ({
+            ...via,
+            x: via.x + deltaX,
+            y: via.y + deltaY
+          })));
+          
+          // Move pads
+          setPads(pads.map(pad => ({
+            ...pad,
+            x: pad.x + deltaX,
+            y: pad.y + deltaY
+          })));
+        }
+        
+        // Ensure camera is at (0,0) - it should always be, but enforce it
+        setCameraWorldCenter({ x: 0, y: 0 });
         
         // Restore all layer visibility settings
         setShowTopImage(homeView.showTopImage);
@@ -6392,13 +6500,124 @@ function App() {
       e.preventDefault();
       e.stopPropagation();
       
-      // 'O' key resets to Top View perspective with (0,0) centered
-      // Return to original/starting view with camera looking down at (0,0)
-      setViewScale(1);
+      // 'O' key recalls the origin view (saved when Transform Images dialog closes)
+      // If origin view exists, restore it; otherwise use default origin view
+      const originView = homeViews[0]; // Slot 0 is the origin view
+      if (originView) {
+        // Restore saved origin view
+        setViewScale(originView.zoom);
+        setViewRotation(originView.viewRotation ?? 0);
+        setViewFlipX(originView.viewFlipX ?? false);
+        setIsBottomView(originView.isBottomView ?? false);
+        setTransparency(originView.transparency ?? 50);
+        
+        // Restore PCB position by moving all objects so the reference point is back at saved position
+        const savedRefX = originView.pcbReferenceX ?? originView.x ?? 0;
+        const savedRefY = originView.pcbReferenceY ?? originView.y ?? 0;
+        
+        // Calculate current reference point
+        let currentRefX = 0;
+        let currentRefY = 0;
+        if (topImage) {
+          currentRefX = topImage.x;
+          currentRefY = topImage.y;
+        } else if (bottomImage) {
+          currentRefX = bottomImage.x;
+          currentRefY = bottomImage.y;
+        }
+        
+        // Calculate delta needed to move PCB back to saved position
+        const deltaX = savedRefX - currentRefX;
+        const deltaY = savedRefY - currentRefY;
+        
+        // Move all objects by the delta (same as Hand tool does)
+        if (Math.abs(deltaX) > 0.001 || Math.abs(deltaY) > 0.001) {
+          // Move images
+          if (topImage) {
+            setTopImage({ ...topImage, x: topImage.x + deltaX, y: topImage.y + deltaY });
+          }
+          if (bottomImage) {
+            setBottomImage({ ...bottomImage, x: bottomImage.x + deltaX, y: bottomImage.y + deltaY });
+          }
+          
+          // Move components
+          setComponentsTop(componentsTop.map(comp => ({
+            ...comp,
+            x: comp.x + deltaX,
+            y: comp.y + deltaY
+          })));
+          setComponentsBottom(componentsBottom.map(comp => ({
+            ...comp,
+            x: comp.x + deltaX,
+            y: comp.y + deltaY
+          })));
+          
+          // Move power symbols
+          setPowerSymbols(powerSymbols.map(p => ({
+            ...p,
+            x: p.x + deltaX,
+            y: p.y + deltaY
+          })));
+          
+          // Move ground symbols
+          setGroundSymbols(groundSymbols.map(g => ({
+            ...g,
+            x: g.x + deltaX,
+            y: g.y + deltaY
+          })));
+          
+          // Move drawing strokes
+          setDrawingStrokes(drawingStrokes.map(stroke => ({
+            ...stroke,
+            points: stroke.points.map(point => ({
+              ...point,
+              x: point.x + deltaX,
+              y: point.y + deltaY
+            }))
+          })));
+          
+          // Move vias
+          setVias(vias.map(via => ({
+            ...via,
+            x: via.x + deltaX,
+            y: via.y + deltaY
+          })));
+          
+          // Move pads
+          setPads(pads.map(pad => ({
+            ...pad,
+            x: pad.x + deltaX,
+            y: pad.y + deltaY
+          })));
+        }
+        
+        // Restore layer visibility
+        setShowTopImage(originView.showTopImage);
+        setShowBottomImage(originView.showBottomImage);
+        setShowViasLayer(originView.showViasLayer);
+        setShowTopTracesLayer(originView.showTopTracesLayer);
+        setShowBottomTracesLayer(originView.showBottomTracesLayer);
+        setShowTopPadsLayer(originView.showTopPadsLayer);
+        setShowBottomPadsLayer(originView.showBottomPadsLayer);
+        setShowTopTestPointsLayer(originView.showTopTestPointsLayer);
+        setShowBottomTestPointsLayer(originView.showBottomTestPointsLayer);
+        setShowTopComponents(originView.showTopComponents);
+        setShowBottomComponents(originView.showBottomComponents);
+        setShowPowerLayer(originView.showPowerLayer);
+        setShowGroundLayer(originView.showGroundLayer);
+        setShowConnectionsLayer(originView.showConnectionsLayer);
+      } else {
+        // No saved origin view - use default origin view
+        setViewScale(1);
+        setViewRotation(0);
+        setViewFlipX(false);
+        setIsBottomView(false);
+        setTransparency(0); // Top view = 0 transparency
+      }
+      
+      // Ensure camera is at (0,0)
       setCameraWorldCenter({ x: 0, y: 0 });
-      setViewRotation(0);
-      setViewFlipX(false);
-      setIsBottomView(false);
+      
       // Reset browser zoom to 100%
       if (document.body) {
         document.body.style.zoom = '1';
@@ -6609,16 +6828,19 @@ function App() {
           case 's':
           case 'S':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             switchToSelectTool();
             return;
           case 'b':
           case 'B':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             if (powerBuses.length === 1) {
               // Single bus: auto-select and switch to power tool
               setSelectedPowerBusId(powerBuses[0].id);
               setCurrentTool('power');
               setShowPowerBusSelector(false);
+              setShowPowerLayer(true); // Automatically enable power layer visibility
             } else if (powerBuses.length > 1) {
               // Multiple buses: show selector but don't switch tool until selection
               setShowPowerBusSelector(true);
@@ -6627,16 +6849,19 @@ function App() {
               // No buses: show selector
               setShowPowerBusSelector(true);
               setCurrentTool('power');
+              setShowPowerLayer(true); // Automatically enable power layer visibility
             }
             return;
           case 'g':
           case 'G':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             if (groundBuses.length === 1) {
               // Single bus: auto-select and switch to ground tool
               setSelectedGroundBusId(groundBuses[0].id);
               setCurrentTool('ground');
               setShowGroundBusSelector(false);
+              setShowGroundLayer(true); // Automatically enable ground layer visibility
             } else if (groundBuses.length > 1) {
               // Multiple buses: show selector but don't switch tool until selection
               setShowGroundBusSelector(true);
@@ -6645,49 +6870,62 @@ function App() {
               // No buses: show selector
               setShowGroundBusSelector(true);
               setCurrentTool('ground');
+              setShowGroundLayer(true); // Automatically enable ground layer visibility
             }
             return;
           case 'v':
           case 'V':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('via');
             setCurrentTool('draw');
+            setShowViasLayer(true); // Automatically enable vias layer visibility
             // The useEffect hook will load via tool settings automatically
             return;
           case 'p':
           case 'P':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('pad');
             setCurrentTool('draw');
-            // Default to Top layer, but use last choice if available
-            const padLayerToUse = padToolLayer || 'top';
+            // Reset layer selection to null so radio buttons default to neither selected
+            setPadToolLayer(null);
+            padToolLayerRef.current = null;
             setSelectedDrawingLayer(padLayerToUse);
             // The useEffect hook will automatically show the layer chooser
             return;
           case 'y':
           case 'Y':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('testPoint');
             setCurrentTool('draw');
-            // Default to Top layer, but use last choice if available
-            const testPointLayerToUse = testPointToolLayer || 'top';
+            // Reset layer selection to null so radio buttons default to neither selected
+            setTestPointToolLayer(null);
+            testPointToolLayerRef.current = null;
             setSelectedDrawingLayer(testPointLayerToUse);
             // The useEffect hook will automatically show the layer chooser
             return;
           case 't':
           case 'T':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('trace');
             setCurrentTool('draw');
-            // Default to Top layer, but use last choice if available
-            const layerToUse = traceToolLayer || 'top';
+            // Reset layer selection to null so radio buttons default to neither selected
+            setTraceToolLayer(null);
+            traceToolLayerRef.current = null;
             setSelectedDrawingLayer(layerToUse);
             // The useEffect hook will automatically show the layer chooser
             return;
           case 'c':
           case 'C':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('component');
+            // Reset layer selection to null so radio buttons default to neither selected
+            setComponentToolLayer(null);
+            componentToolLayerRef.current = null;
             // Use current global layer setting (selectedDrawingLayer is the source of truth)
             // Restore last selected component type if available, otherwise show '?' (null)
             if (lastSelectedComponentTypeRef.current) {
@@ -6704,16 +6942,19 @@ function App() {
           case 'e':
           case 'E':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('erase');
             return;
           case 'h':
           case 'H':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('pan');
             return;
           case 'x':
           case 'X':
             e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('center');
             // Start waiting for number key with 2-second timeout
             setIsWaitingForHomeViewKey(true);
@@ -6733,6 +6974,7 @@ function App() {
             // Select Magnify tool (default to zoom-in)
             if (!e.ctrlKey) {
               e.preventDefault();
+              clearAllSelections(); // Clear all selections when tool is selected
               setIsShiftPressed(false);
               setCurrentTool('magnify');
               return;
@@ -7115,7 +7357,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
@@ -7363,16 +7605,17 @@ function App() {
     // === STEP 11: Reset tool state ===
     setCurrentTool('select');
     setDrawingMode('trace');
-    setTraceToolLayer('top');
-    setPadToolLayer('top');
-    setTestPointToolLayer('top');
-    setComponentToolLayer('top');
+    // Initialize layer selections to null so radio buttons default to neither selected
+    setTraceToolLayer(null);
+    setPadToolLayer(null);
+    setTestPointToolLayer(null);
+    setComponentToolLayer(null);
     
-    // Reset tool layer refs
-    traceToolLayerRef.current = 'top';
-    padToolLayerRef.current = 'top';
-    testPointToolLayerRef.current = 'top';
-    componentToolLayerRef.current = 'top';
+    // Reset tool layer refs to null so radio buttons default to neither selected
+    traceToolLayerRef.current = null;
+    padToolLayerRef.current = null;
+    testPointToolLayerRef.current = null;
+    componentToolLayerRef.current = null;
     
     // === STEP 12: Reset designator counters ===
     sessionDesignatorCountersRef.current = {};
@@ -10144,18 +10387,33 @@ function App() {
         if (project.view.selectedDrawingLayer) setSelectedDrawingLayer(project.view.selectedDrawingLayer);
       }
       // Restore home views (multiple saved view locations)
-      // Migrate old homeViews format (without layer settings or view state) to new format
+      // Migrate old homeViews format to new format with PCB reference position
       if (project.homeViews) {
         const migratedHomeViews: Record<number, HomeView> = {};
         for (const [key, view] of Object.entries(project.homeViews)) {
           const slot = parseInt(key, 10);
           const oldView = view as any;
+          
+          // Determine PCB reference position
+          // If new format has pcbReferenceX/Y, use those
+          // Otherwise, if old format has x/y (camera center), use those as PCB reference
+          // (This assumes the old format was saving camera center, which we'll treat as PCB reference)
+          let pcbRefX = oldView.pcbReferenceX;
+          let pcbRefY = oldView.pcbReferenceY;
+          if (pcbRefX === undefined || pcbRefY === undefined) {
+            // Migrate from old format: use x/y as PCB reference (legacy camera center)
+            pcbRefX = oldView.x ?? 0;
+            pcbRefY = oldView.y ?? 0;
+          }
+          
           // Check if this is an old format view (missing layer settings)
           if (oldView.showTopImage === undefined) {
             // Migrate old format: use current layer visibility and view state as defaults
             migratedHomeViews[slot] = {
-              x: oldView.x,
-              y: oldView.y,
+              pcbReferenceX: pcbRefX,
+              pcbReferenceY: pcbRefY,
+              x: 0, // Legacy field, always 0 now
+              y: 0, // Legacy field, always 0 now
               zoom: oldView.zoom,
               viewRotation: viewRotation, // Use current view rotation
               viewFlipX: viewFlipX, // Use current view flip
@@ -10177,9 +10435,13 @@ function App() {
               showConnectionsLayer: showConnectionsLayer,
             };
           } else {
-            // Already in new format, but may be missing new view state fields
+            // Already in new format, but may be missing new fields
             migratedHomeViews[slot] = {
               ...oldView,
+              pcbReferenceX: pcbRefX,
+              pcbReferenceY: pcbRefY,
+              x: 0, // Legacy field, always 0 now
+              y: 0, // Legacy field, always 0 now
               viewRotation: oldView.viewRotation ?? 0,
               viewFlipX: oldView.viewFlipX ?? false,
               isBottomView: oldView.isBottomView ?? false,
@@ -11684,8 +11946,10 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   console.log('Via tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('via'); 
-                  setCurrentTool('draw'); 
+                  setCurrentTool('draw');
+                  setShowViasLayer(true); // Automatically enable vias layer visibility 
                 } 
               }} 
               disabled={isReadOnlyMode}
@@ -11727,13 +11991,14 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   console.log('Pad tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('pad'); 
                   setCurrentTool('draw'); 
+                  // Reset layer selection to null so radio buttons default to neither selected
+                  setPadToolLayer(null);
+                  padToolLayerRef.current = null;
                   // Explicitly show the layer chooser on every click
                   setShowPadLayerChooser(true);
-                  // Default to Top layer, but use last choice if available
-                  const padLayerToUse = padToolLayer || 'top';
-                  setSelectedDrawingLayer(padLayerToUse);
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updatePadChooserPosition(), 0);
                 } 
@@ -11786,13 +12051,14 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   console.log('Test Point tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('testPoint'); 
                   setCurrentTool('draw'); 
+                  // Reset layer selection to null so radio buttons default to neither selected
+                  setTestPointToolLayer(null);
+                  testPointToolLayerRef.current = null;
                   // Explicitly show the layer chooser on every click
                   setShowTestPointLayerChooser(true);
-                  // Default to Top layer, but use last choice if available
-                  const testPointLayerToUse = testPointToolLayer || 'top';
-                  setSelectedDrawingLayer(testPointLayerToUse);
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTestPointChooserPosition(), 0);
                 } 
@@ -11852,13 +12118,14 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   console.log('Trace tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('trace'); 
                   setCurrentTool('draw'); 
+                  // Reset layer selection to null so radio buttons default to neither selected
+                  setTraceToolLayer(null);
+                  traceToolLayerRef.current = null;
                   // Explicitly show the layer chooser on every click
                   setShowTraceLayerChooser(true);
-                  // Default to Top layer, but use last choice if available
-                  const layerToUse = traceToolLayer || 'top';
-                  setSelectedDrawingLayer(layerToUse);
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTraceChooserPosition(), 0);
                 }
@@ -11899,8 +12166,11 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   console.log('Component tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setCurrentTool('component');
-                  // Use current global layer setting (selectedDrawingLayer is the source of truth)
+                  // Reset layer selection to null so radio buttons default to neither selected
+                  setComponentToolLayer(null);
+                  componentToolLayerRef.current = null;
                   // Show layer chooser first (like trace/pad pattern)
                   setShowComponentLayerChooser(true);
                   setShowComponentTypeChooser(false);
@@ -11961,6 +12231,7 @@ function App() {
               onClick={() => { 
                 if (!isReadOnlyMode) {
                   console.log('Power tool clicked');
+                  clearAllSelections(); // Clear all selections when tool is selected
                   // Always close ground selector when power button is clicked
                   setShowGroundBusSelector(false);
                   if (powerBuses.length === 1) {
@@ -11968,6 +12239,7 @@ function App() {
                     setSelectedPowerBusId(powerBuses[0].id);
                     setCurrentTool('power');
                     setShowPowerBusSelector(false);
+                    setShowPowerLayer(true); // Automatically enable power layer visibility
                   } else if (powerBuses.length > 1) {
                     // Multiple buses: show selector but don't switch tool until selection
                     setShowPowerBusSelector(true);
@@ -11976,6 +12248,7 @@ function App() {
                     // No buses: show selector
                     setShowPowerBusSelector(true);
                     setCurrentTool('power');
+                    setShowPowerLayer(true); // Automatically enable power layer visibility
                   }
                 }
               }} 
@@ -12016,6 +12289,7 @@ function App() {
                     setSelectedGroundBusId(groundBuses[0].id);
                     setCurrentTool('ground');
                     setShowGroundBusSelector(false);
+                    setShowGroundLayer(true); // Automatically enable ground layer visibility
                   } else if (groundBuses.length > 1) {
                     // Multiple buses: show selector but don't switch tool until selection
                     setShowGroundBusSelector(true);
@@ -12024,6 +12298,7 @@ function App() {
                     // No buses: show selector
                     setShowGroundBusSelector(true);
                     setCurrentTool('ground');
+                    setShowGroundLayer(true); // Automatically enable ground layer visibility
                   }
                 }
               }} 
@@ -12062,7 +12337,12 @@ function App() {
             <div style={{ height: 72 }} />
             {/* Move tool (H) - moved above Set Home */}
               <button 
-                onClick={() => { if (!isReadOnlyMode) setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan'); }} 
+                onClick={() => { 
+                  if (!isReadOnlyMode) {
+                    clearAllSelections(); // Clear all selections when tool is selected
+                    setCurrentTool(prev => prev === 'pan' ? 'draw' : 'pan');
+                  }
+                }} 
                 disabled={isReadOnlyMode}
                 title="Move (H)" 
                 style={{ 
@@ -12095,7 +12375,11 @@ function App() {
             </button>
             {/* Magnify tool (M) - moved above Set Home */}
             <button 
-              onClick={() => { setIsShiftPressed(false); setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify'); }} 
+              onClick={() => { 
+                clearAllSelections(); // Clear all selections when tool is selected
+                setIsShiftPressed(false); 
+                setCurrentTool(prev => prev === 'magnify' ? 'draw' : 'magnify');
+              }} 
               title={`Magnify (M)`} 
               style={{ 
                 width: '100%', 
@@ -12171,6 +12455,7 @@ function App() {
             <button 
               onClick={() => { 
                 if (!isReadOnlyMode) {
+                  clearAllSelections(); // Clear all selections when tool is selected
                   setCurrentTool('center');
                   // Start waiting for number key with 2-second timeout
                   setIsWaitingForHomeViewKey(true);
@@ -12215,7 +12500,12 @@ function App() {
             </button>
             {/* Erase tool - HIDDEN (code kept for potential future use)
             <button 
-              onClick={() => { if (!isReadOnlyMode) setCurrentTool('erase'); }} 
+              onClick={() => { 
+                if (!isReadOnlyMode) {
+                  clearAllSelections(); // Clear all selections when tool is selected
+                  setCurrentTool('erase');
+                }
+              }} 
               disabled={isReadOnlyMode}
               title="Erase (E)" 
               style={{ 
@@ -12481,7 +12771,8 @@ function App() {
                     return updated;
                   });
                   setShowTraceLayerChooser(false); 
-                  setShowTopImage(true); 
+                  setShowTopImage(true);
+                  setShowTopTracesLayer(true); // Automatically enable top traces layer visibility 
                 }} />
                 <span>Top</span>
               </label>
@@ -12505,7 +12796,8 @@ function App() {
                     return updated;
                   });
                   setShowTraceLayerChooser(false); 
-                  setShowBottomImage(true); 
+                  setShowBottomImage(true);
+                  setShowBottomTracesLayer(true); // Automatically enable bottom traces layer visibility 
                 }} />
                 <span>Bottom</span>
               </label>
@@ -12535,7 +12827,8 @@ function App() {
                     return updated;
                   });
                   setShowPadLayerChooser(false); 
-                  setShowTopImage(true); 
+                  setShowTopImage(true);
+                  setShowTopPadsLayer(true); // Automatically enable top pads layer visibility 
                 }} />
                 <span>Top</span>
               </label>
@@ -12560,7 +12853,8 @@ function App() {
                     return updated;
                   });
                   setShowPadLayerChooser(false); 
-                  setShowBottomImage(true); 
+                  setShowBottomImage(true);
+                  setShowBottomPadsLayer(true); // Automatically enable bottom pads layer visibility 
                 }} />
                 <span>Bottom</span>
               </label>
@@ -12589,7 +12883,8 @@ function App() {
                     return updated;
                   });
                   setShowTestPointLayerChooser(false); 
-                  setShowTopImage(true); 
+                  setShowTopImage(true);
+                  setShowTopTestPointsLayer(true); // Automatically enable top test points layer visibility 
                 }} />
                 <span>Top</span>
               </label>
@@ -12613,7 +12908,8 @@ function App() {
                     return updated;
                   });
                   setShowTestPointLayerChooser(false); 
-                  setShowBottomImage(true); 
+                  setShowBottomImage(true);
+                  setShowBottomTestPointsLayer(true); // Automatically enable bottom test points layer visibility 
                 }} />
                 <span>Bottom</span>
               </label>
@@ -12669,7 +12965,9 @@ function App() {
                       setSelectedPowerBusId(bus.id);
                       // Only set tool if not already power (to avoid triggering unnecessary useEffect)
                       if (currentTool !== 'power') {
+                        clearAllSelections(); // Clear all selections when tool is selected
                         setCurrentTool('power');
+                        setShowPowerLayer(true); // Automatically enable power layer visibility
                       }
                       setShowPowerBusSelector(false);
                     }}
@@ -12733,7 +13031,9 @@ function App() {
                         setSelectedGroundBusId(bus.id);
                         // Only set tool if not already ground (to avoid triggering unnecessary useEffect)
                         if (currentTool !== 'ground') {
+                          clearAllSelections(); // Clear all selections when tool is selected
                           setCurrentTool('ground');
+                          setShowGroundLayer(true); // Automatically enable ground layer visibility
                         }
                         setShowGroundBusSelector(false);
                       }}
@@ -12818,6 +13118,7 @@ function App() {
                   });
                   setShowComponentLayerChooser(false); 
                   setShowTopImage(true);
+                  setShowTopComponents(true); // Automatically enable top components layer visibility
                   // Always show component type chooser after layer button is clicked
                   setShowComponentTypeChooser(true);
                 }} />
@@ -12844,6 +13145,7 @@ function App() {
                   });
                   setShowComponentLayerChooser(false); 
                   setShowBottomImage(true);
+                  setShowBottomComponents(true); // Automatically enable bottom components layer visibility
                   // Always show component type chooser after layer button is clicked
                   setShowComponentTypeChooser(true);
                 }} />
@@ -14064,7 +14366,53 @@ function App() {
 
       <TransformImagesDialog
         visible={transformImagesDialogVisible}
-        onClose={() => setTransformImagesDialogVisible(false)}
+        onClose={() => {
+          // Save current view as origin view when dialog closes
+          // Use top image center as reference (or bottom image if no top image)
+          let pcbRefX = 0;
+          let pcbRefY = 0;
+          if (topImage) {
+            pcbRefX = topImage.x;
+            pcbRefY = topImage.y;
+          } else if (bottomImage) {
+            pcbRefX = bottomImage.x;
+            pcbRefY = bottomImage.y;
+          }
+          
+          // Save as origin view (we'll use a special marker or slot 0)
+          // For now, we'll use a convention: if pcbReferenceX/Y are undefined, it's the origin view
+          // Or we could use slot -1 or a special property. Let's use slot 0 as the origin view.
+          setHomeViews(prev => ({
+            ...prev,
+            0: { // Slot 0 is the origin view
+              pcbReferenceX: pcbRefX,
+              pcbReferenceY: pcbRefY,
+              x: 0, // Legacy field
+              y: 0, // Legacy field
+              zoom: viewScale,
+              viewRotation,
+              viewFlipX,
+              isBottomView,
+              transparency,
+              showTopImage,
+              showBottomImage,
+              showViasLayer,
+              showTopTracesLayer,
+              showBottomTracesLayer,
+              showTopPadsLayer,
+              showBottomPadsLayer,
+              showTopTestPointsLayer,
+              showBottomTestPointsLayer,
+              showTopComponents,
+              showBottomComponents,
+              showPowerLayer,
+              showGroundLayer,
+              showConnectionsLayer,
+            }
+          }));
+          
+          setTransformImagesDialogVisible(false);
+        }}
         topImage={topImage}
         bottomImage={bottomImage}
         selectedImageForTransform={selectedImageForTransform}

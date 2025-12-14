@@ -435,6 +435,52 @@ export function applyViewTransform(
 }
 
 /**
+ * Apply the inverse of view-level transformations to keep objects upright.
+ * This undoes the view rotation and flip so that objects appear
+ * in their original orientation relative to the canvas.
+ * 
+ * Since applyViewTransform does: flip first, then rotate,
+ * and canvas applies transforms in reverse order (last called = first applied),
+ * the actual effect is: rotate first, then flip.
+ * 
+ * To undo this, we must undo in the same order as the effect:
+ * 1. Undo flip first (apply flip again, since scale(-1,1) applied twice = identity)
+ * 2. Then undo rotation (rotate by negative angle)
+ * 
+ * Special case: When both flip and ±90° rotation are present, the combination
+ * results in a net vertical flip, so we need an additional 180° rotation to keep
+ * indicators upright.
+ * 
+ * @param ctx Canvas rendering context
+ * @param rotation View rotation in degrees (to be undone)
+ * @param flipX View horizontal flip (to be undone)
+ */
+export function applyInverseViewTransform(
+  ctx: CanvasRenderingContext2D,
+  rotation: number = 0,
+  flipX: boolean = false
+): void {
+  // Check if we have both flip and ±90° rotation (special case)
+  // When flip + 90° rotation are combined, the net effect is a vertical flip
+  // which requires an additional 180° rotation to keep indicators upright
+  const normalizedRotation = normalizeAngle(rotation);
+  const is90Rotation = normalizedRotation === 90 || normalizedRotation === 270;
+  
+  // Always undo in the same order: flip first, then rotation
+  if (flipX) {
+    ctx.scale(-1, 1);
+  }
+  if (rotation !== 0) {
+    ctx.rotate(degToRad(-rotation));
+  }
+  
+  // Special case: if both flip and ±90° rotation are present, add 180° to correct
+  if (flipX && is90Rotation) {
+    ctx.rotate(degToRad(180));
+  }
+}
+
+/**
  * Convert a canvas coordinate delta to world coordinate delta
  * Accounts for view rotation and flip so that mouse movement direction
  * matches world coordinate movement direction

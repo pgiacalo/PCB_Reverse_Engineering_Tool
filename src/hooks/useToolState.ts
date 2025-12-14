@@ -57,13 +57,13 @@ export interface UseToolStateProps {
   /** Current drawing mode */
   drawingMode?: 'trace' | 'via' | 'pad' | 'testPoint';
   /** Trace tool layer */
-  traceToolLayer?: 'top' | 'bottom';
+  traceToolLayer?: 'top' | 'bottom' | null;
   /** Pad tool layer */
-  padToolLayer?: 'top' | 'bottom';
+  padToolLayer?: 'top' | 'bottom' | null;
   /** Test Point tool layer */
-  testPointToolLayer?: 'top' | 'bottom';
+  testPointToolLayer?: 'top' | 'bottom' | null;
   /** Component tool layer */
-  componentToolLayer?: 'top' | 'bottom';
+  componentToolLayer?: 'top' | 'bottom' | null;
 }
 
 /**

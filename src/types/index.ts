@@ -532,8 +532,14 @@ export type TransformMode = 'nudge' | 'scale' | 'rotate' | 'slant' | 'keystone';
 
 /** A saved view location with position and zoom level */
 export interface HomeView {
-  x: number;      // World X coordinate of view center
-  y: number;      // World Y coordinate of view center
+  // PCB position reference - position of top image center (or bottom image if no top image)
+  // This represents where the PCB is positioned in world coordinates
+  // When restoring, all objects are moved so this reference point is back at this position
+  pcbReferenceX?: number;  // World X coordinate of PCB reference point (top image center, or bottom if no top)
+  pcbReferenceY?: number;  // World Y coordinate of PCB reference point
+  // Legacy fields for backward compatibility (camera center - should always be 0,0 now)
+  x?: number;      // Legacy: World X coordinate of view center (deprecated, use pcbReferenceX)
+  y?: number;      // Legacy: World Y coordinate of view center (deprecated, use pcbReferenceY)
   zoom: number;   // Zoom level (viewScale)
   viewRotation?: number;  // View rotation in degrees (optional for backward compatibility)
   viewFlipX?: boolean;    // View horizontal flip (optional for backward compatibility)
