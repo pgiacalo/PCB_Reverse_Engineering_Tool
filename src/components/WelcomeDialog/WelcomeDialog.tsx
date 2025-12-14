@@ -51,7 +51,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
       maxWidth: '500px'
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-        Reverse Engineering & Troubleshooting Tool
+        PCB Tracer
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
         Supports Multilayer PCBs

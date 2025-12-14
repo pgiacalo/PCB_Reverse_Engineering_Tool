@@ -34,6 +34,7 @@ import {
   TWO_PI,
   canvasDeltaToWorldDelta,
   applyInverseViewTransform,
+  contentCanvasToWorld,
 } from './utils/transformations';
 import { 
   COMPONENT_TYPE_INFO,
@@ -782,33 +783,37 @@ function App() {
   
   // Calculate viewPan from cameraWorldCenter for drawing (backward compatibility)
   // Use useMemo to recalculate when canvas size or camera changes
+  // Note: viewPan is in content area coordinates (after CONTENT_BORDER translate)
   const viewPan = React.useMemo(() => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
-    const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
-    const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
-    return getViewPan(canvasCenterX, canvasCenterY);
+    // Content area center in content area coordinates (after CONTENT_BORDER translate)
+    const contentCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2;
+    const contentCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2;
+    return getViewPan(contentCenterX, contentCenterY);
   }, [canvasRef.current?.width, canvasRef.current?.height, cameraWorldCenter, viewScale, getViewPan]);
   
   // Helper function to set viewPan (converts from canvas coords to world coords for camera)
+  // Note: viewPan is in content area coordinates (after CONTENT_BORDER translate)
   const setViewPan = React.useCallback((panOrUpdater: { x: number; y: number } | ((prev: { x: number; y: number }) => { x: number; y: number })) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
-    const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+    // Content area center in content area coordinates (after CONTENT_BORDER translate)
+    const contentCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2;
+    const contentCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2;
     
     // Get current viewPan value
-    const currentViewPan = getViewPan(canvasCenterX, canvasCenterY);
+    const currentViewPan = getViewPan(contentCenterX, contentCenterY);
     
     // Calculate new viewPan
     const newViewPan = typeof panOrUpdater === 'function' 
       ? panOrUpdater(currentViewPan)
       : panOrUpdater;
     
-    // Convert viewPan (canvas coords) to cameraWorldCenter (world coords)
-    // Formula: cameraWorldCenter.x = (canvasCenterX - viewPan.x) / viewScale
-    const cameraWorldX = (canvasCenterX - newViewPan.x) / viewScale;
-    const cameraWorldY = (canvasCenterY - newViewPan.y) / viewScale;
+    // Convert viewPan (content area coords) to cameraWorldCenter (world coords)
+    // Formula: cameraWorldCenter.x = (contentCenterX - viewPan.x) / viewScale
+    const cameraWorldX = (contentCenterX - newViewPan.x) / viewScale;
+    const cameraWorldY = (contentCenterY - newViewPan.y) / viewScale;
     
     setCameraWorldCenter({ x: cameraWorldX, y: cameraWorldY });
   }, [getViewPan, viewScale, setCameraWorldCenter]);
@@ -1977,8 +1982,10 @@ function App() {
     // Convert to content world coords (subtract fixed border first)
     const contentCanvasX = canvasX - CONTENT_BORDER;
     const contentCanvasY = canvasY - CONTENT_BORDER;
-    const x = (contentCanvasX - viewPan.x) / viewScale;
-    const y = (contentCanvasY - viewPan.y) / viewScale;
+    // Convert to world coordinates accounting for view rotation and flip
+    const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
+    const x = worldPos.x;
+    const y = worldPos.y;
 
     // Handle setting home view location - when center tool is active and user clicks,
     // start waiting for a number key (0-9) to assign this view to that slot
@@ -3116,7 +3123,7 @@ function App() {
       }
       return;
     }
-  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, isSnapDisabled, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, testPointToolLayer, powers, grounds, determineViaType, determinePadType, determineTestPointType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
+  }, [currentTool, selectedImageForTransform, brushSize, brushColor, drawingMode, selectedDrawingLayer, drawingStrokes, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, isSnapDisabled, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, selectedComponentType, toolRegistry, padToolLayer, traceToolLayer, testPointToolLayer, powers, grounds, determineViaType, determinePadType, determineTestPointType, showViasLayer, showTopPadsLayer, showBottomPadsLayer]);
 
   const handleCanvasWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (currentTool !== 'magnify') return;
@@ -3130,10 +3137,14 @@ function App() {
     const offY = (e.nativeEvent as any).offsetY as number | undefined;
     const cssX = typeof offX === 'number' ? offX : (e.clientX - rect.left);
     const cssY = typeof offY === 'number' ? offY : (e.clientY - rect.top);
-    const canvasX = cssX * dprX;
-    const canvasY = cssY * dprY;
-    const worldX = ((canvasX - CONTENT_BORDER) - viewPan.x) / viewScale;
-    const worldY = ((canvasY - CONTENT_BORDER) - viewPan.y) / viewScale;
+      const canvasX = cssX * dprX;
+      const canvasY = cssY * dprY;
+      const contentCanvasX = canvasX - CONTENT_BORDER;
+      const contentCanvasY = canvasY - CONTENT_BORDER;
+      // Convert to world coordinates accounting for view rotation and flip
+      const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
+      const worldX = worldPos.x;
+      const worldY = worldPos.y;
 
     const stepIn = 1.2; // zoom in factor per wheel step
     const stepOut = 1 / stepIn;
@@ -3142,7 +3153,7 @@ function App() {
     // Keep the world point under cursor at the same position - center camera on it
     setCameraCenter(worldX, worldY);
     setViewScale(newScale);
-  }, [currentTool, viewScale, viewPan.x, viewPan.y]);
+  }, [currentTool, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX]);
 
   const handleCanvasDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     // Handle trace finalization
@@ -3214,8 +3225,10 @@ function App() {
       const canvasY = cssY * dprY;
       const contentCanvasX = canvasX - CONTENT_BORDER;
       const contentCanvasY = canvasY - CONTENT_BORDER;
-      const x = (contentCanvasX - viewPan.x) / viewScale;
-      const y = (contentCanvasY - viewPan.y) / viewScale;
+      // Convert to world coordinates accounting for view rotation and flip
+      const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
+      const x = worldPos.x;
+      const y = worldPos.y;
       
     // Check for test point hit
     const hitTolerance = Math.max(8 / viewScale, 4); // Zoom-aware hit tolerance
@@ -3302,7 +3315,7 @@ function App() {
         openComponentEditor(comp, layer);
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setNotesDialogVisible, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, openComponentEditor]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setNotesDialogVisible, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, openComponentEditor]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -3412,8 +3425,10 @@ function App() {
     const canvasY = screenY * scaleY;
     const contentCanvasX = canvasX - CONTENT_BORDER;
     const contentCanvasY = canvasY - CONTENT_BORDER;
-    const x = (contentCanvasX - viewPan.x) / viewScale;
-    const y = (contentCanvasY - viewPan.y) / viewScale;
+    // Convert to world coordinates accounting for view rotation and flip
+    const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
+    const x = worldPos.x;
+    const y = worldPos.y;
     
     // Update mouse world position for display
     setMouseWorldPos({ x, y });
@@ -3863,7 +3878,7 @@ function App() {
         return;
       }
     }
-  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey, saveSnapshot, powerSymbols, groundSymbols, setMouseWorldPos]);
+  }, [isDrawing, currentStroke, currentTool, brushSize, isTransforming, transformStartPos, selectedImageForTransform, topImage, bottomImage, isShiftConstrained, snapConstrainedPoint, selectedDrawingLayer, setDrawingStrokes, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, isSelecting, selectStart, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, arePowerNodesLocked, areGroundNodesLocked, componentsTop, componentsBottom, setComponentsTop, setComponentsBottom, isOptionPressed, setHoverComponent, isSnapDisabled, drawingStrokes, powers, grounds, currentStroke, drawingMode, tracePreviewMousePos, setTracePreviewMousePos, isPanning, panStartRef, setViewPan, CONTENT_BORDER, viewPan, generatePointId, truncatePoint, setCurrentTool, setIsWaitingForHomeViewKey, saveSnapshot, powerSymbols, groundSymbols, setMouseWorldPos]);
 
   const handleCanvasMouseUp = useCallback(() => {
     // Clear mouse world position when mouse leaves canvas
@@ -5039,49 +5054,58 @@ function App() {
     
     // Draw coordinate axes at world origin (0, 0) AFTER view transform
     // This ensures axes rotate and flip with perspective changes
+    // After the view transform (pan, scale, rotation, flip), the world origin (0,0) 
+    // should already be positioned at the canvas center (when cameraWorldCenter = {x: 0, y: 0})
     ctx.save();
-    // After view transform, (0,0) in current coords is at cameraWorldCenter in world coords
-    // Translate to world origin (0,0) so axes appear at world origin
-    ctx.translate(-cameraWorldCenter.x, -cameraWorldCenter.y);
+    // Draw axes at world origin (0,0) - no additional translation needed
+    // The view transform has already positioned the world origin correctly
     
     // Axes length and width - reduced for better appearance
     const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
     const screenLineWidth = 2; // 2 pixels - thinner
     const lineWidthInWorld = screenLineWidth / viewScale;
     
-    // Draw +X axis (horizontal, positive X direction) in red
+    // Draw X axis (horizontal, symmetric about origin) in red
     ctx.strokeStyle = '#FF0000'; // Bright red
     ctx.lineWidth = lineWidthInWorld;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(0, 0); // Start at world origin (0,0)
-    ctx.lineTo(axisLength, 0); // Draw to the right (positive X)
+    ctx.moveTo(-axisLength, 0); // Start at negative X
+    ctx.lineTo(axisLength, 0); // Draw to positive X (symmetric)
     ctx.stroke();
     
-    // Label +X axis
+    // Label +X axis (positive direction)
     ctx.fillStyle = '#FF0000'; // Red text
     ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
     
-    // Draw +Y axis (vertical, positive Y direction) in blue
+    // Label -X axis (negative direction)
+    ctx.textAlign = 'right';
+    ctx.fillText('-X', -axisLength - 2 / viewScale, 2 / viewScale);
+    
+    // Draw Y axis (vertical, symmetric about origin) in blue
     ctx.strokeStyle = '#0000FF'; // Bright blue
     ctx.lineWidth = lineWidthInWorld;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(0, 0); // Start at world origin (0,0)
-    ctx.lineTo(0, axisLength); // Draw in positive Y direction (downward)
+    ctx.moveTo(0, -axisLength); // Start at negative Y
+    ctx.lineTo(0, axisLength); // Draw to positive Y (symmetric)
     ctx.stroke();
     
-    // Label +Y axis
+    // Label +Y axis (positive direction)
     ctx.fillStyle = '#0000FF'; // Blue text
     ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
+    
+    // Label -Y axis (negative direction)
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('-Y', 2 / viewScale, -axisLength - 2 / viewScale);
     ctx.restore();
     
     // Restore after view scaling
@@ -5141,31 +5165,26 @@ function App() {
       height = Math.max(355, height - 20);
       
       setCanvasSize(prev => {
-        // If canvas size is changing, adjust viewPan to maintain the same world-to-screen mapping
-        if (prev.width !== width || prev.height !== height) {
-          const oldContentWidth = prev.width - 2 * CONTENT_BORDER;
-          const oldContentHeight = prev.height - 2 * CONTENT_BORDER;
-          const newContentWidth = width - 2 * CONTENT_BORDER;
-          const newContentHeight = height - 2 * CONTENT_BORDER;
-          
-          // Calculate scale factors for content area
-          const scaleX = oldContentWidth > 0 ? newContentWidth / oldContentWidth : 1;
-          const scaleY = oldContentHeight > 0 ? newContentHeight / oldContentHeight : 1;
-          
-          // Adjust viewPan proportionally to maintain the same visual position
-          // This ensures world coordinates stay aligned with images when canvas resizes
-          setViewPan(prevPan => ({
-            x: prevPan.x * scaleX,
-            y: prevPan.y * scaleY,
-          }));
+        const isFirstSize = prev.width === 0 && prev.height === 0;
+        const sizeChanged = prev.width !== width || prev.height !== height;
+        
+        // If this is the first time setting canvas size, ensure origin is centered
+        if (isFirstSize && sizeChanged) {
+          // Use a small delay to ensure the canvas ref is updated
+          setTimeout(() => {
+            setCameraWorldCenter({ x: 0, y: 0 });
+          }, 0);
         }
+        
+        // The viewPan will be recalculated automatically from cameraWorldCenter via useMemo
+        // So we don't need to adjust it here - just let it recalculate
         return (prev.width === width && prev.height === height) ? prev : { width, height };
       });
     };
     computeSize();
     window.addEventListener('resize', computeSize);
     return () => window.removeEventListener('resize', computeSize);
-  }, [setViewPan]);
+  }, [setViewPan, setCameraWorldCenter]);
 
   // Stop any active transform and clear image selections when images are locked
   React.useEffect(() => {
@@ -7730,9 +7749,10 @@ function App() {
   const initializeApplication = useCallback(() => {
     // First, set all defaults
     initializeApplicationDefaults();
-    // Use setTimeout to ensure DOM is ready and refs are available
+    // Use setTimeout to ensure DOM is ready, canvas is sized, and refs are available
     setTimeout(() => {
       // Reset view to center origin (0,0) on canvas
+      // This must happen after canvas sizing to ensure correct centering
       setViewScale(1);
       setCameraWorldCenter({ x: 0, y: 0 }); // Center of canvas at 0,0 in world coordinates
       // Reset browser zoom to 100%
@@ -7747,7 +7767,7 @@ function App() {
       setSelectedComponentIds(new Set());
       setSelectedPowerIds(new Set());
       setSelectedGroundIds(new Set());
-    }, 100); // Small delay to ensure DOM is ready
+    }, 200); // Increased delay to ensure canvas sizing is complete
   }, [initializeApplicationDefaults, setViewScale, setCameraWorldCenter]);
 
   // Initialize application on first load
@@ -7962,8 +7982,10 @@ function App() {
       const canvasY = cssY * dprY;
       const contentCanvasX = canvasX - CONTENT_BORDER;
       const contentCanvasY = canvasY - CONTENT_BORDER;
-      const x = (contentCanvasX - viewPan.x) / viewScale;
-      const y = (contentCanvasY - viewPan.y) / viewScale;
+      // Convert to world coordinates accounting for view rotation and flip
+      const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
+      const x = worldPos.x;
+      const y = worldPos.y;
       
       // Find nearest via or pad
       let bestDist = Infinity;
@@ -8121,7 +8143,7 @@ function App() {
       document.addEventListener('mousedown', handlePinConnectionClick, true);
       return () => document.removeEventListener('mousedown', handlePinConnectionClick, true);
     }
-  }, [connectingPin, componentsTop, componentsBottom, drawingStrokes, viewScale, viewPan.x, viewPan.y]);
+  }, [connectingPin, componentsTop, componentsBottom, drawingStrokes, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX]);
 
   // Helper function to constrain dialog position within window boundaries
   const constrainDialogPosition = useCallback((x: number, y: number, dialogWidth: number, dialogHeight: number): { x: number; y: number } => {
@@ -10369,15 +10391,16 @@ function App() {
           // New format: camera center in world coordinates
           setCameraWorldCenter(project.view.cameraWorldCenter);
         } else if (project.view.viewPan) {
-          // Old format: convert viewPan (canvas coords) to cameraWorldCenter (world coords)
+          // Old format: convert viewPan (content area coords) to cameraWorldCenter (world coords)
           const canvas = canvasRef.current;
           if (canvas) {
-            const canvasCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
-            const canvasCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2 + CONTENT_BORDER;
+            // Content area center in content area coordinates (after CONTENT_BORDER translate)
+            const contentCenterX = (canvas.width - 2 * CONTENT_BORDER) / 2;
+            const contentCenterY = (canvas.height - 2 * CONTENT_BORDER) / 2;
             const viewScale = project.view.viewScale ?? 1;
-            // Convert: cameraWorldCenter.x = (canvasCenterX - viewPan.x) / viewScale
-            const cameraWorldX = (canvasCenterX - project.view.viewPan.x) / viewScale;
-            const cameraWorldY = (canvasCenterY - project.view.viewPan.y) / viewScale;
+            // Convert: cameraWorldCenter.x = (contentCenterX - viewPan.x) / viewScale
+            const cameraWorldX = (contentCenterX - project.view.viewPan.x) / viewScale;
+            const cameraWorldY = (contentCenterY - project.view.viewPan.y) / viewScale;
             setCameraWorldCenter({ x: cameraWorldX, y: cameraWorldY });
           } else {
             // Fallback if canvas not available yet
@@ -11778,7 +11801,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 Worms: An Electronics Toolkit (v2.8)</h1>
+        <h1>🔧 PCB Tracer (v2.8)</h1>
       </header>
 
       {/* Application menu bar */}
@@ -13487,12 +13510,40 @@ function App() {
             const icType = comp.componentType === 'IntegratedCircuit' && 'icType' in comp ? comp.icType : null;
             // Get detailed component information
             const componentDetails = getComponentDetails(comp);
+            
+            // Calculate tooltip position near mouse pointer with smart positioning
+            // Offset from mouse cursor (smaller offset for closer positioning)
+            const offsetX = 8;
+            const offsetY = 8;
+            // Estimated tooltip dimensions (will be adjusted by browser)
+            const tooltipWidth = 200; // Approximate width
+            const tooltipHeight = 150; // Approximate height
+            const margin = 10; // Margin from screen edges
+            
+            // Start with mouse position + offset
+            let tooltipX = hoverComponent.x + offsetX;
+            let tooltipY = hoverComponent.y + offsetY;
+            
+            // Adjust if tooltip would go off right edge
+            if (tooltipX + tooltipWidth + margin > window.innerWidth) {
+              tooltipX = hoverComponent.x - tooltipWidth - offsetX;
+            }
+            
+            // Adjust if tooltip would go off bottom edge
+            if (tooltipY + tooltipHeight + margin > window.innerHeight) {
+              tooltipY = hoverComponent.y - tooltipHeight - offsetY;
+            }
+            
+            // Ensure tooltip stays within screen bounds
+            tooltipX = Math.max(margin, Math.min(tooltipX, window.innerWidth - tooltipWidth - margin));
+            tooltipY = Math.max(margin, Math.min(tooltipY, window.innerHeight - tooltipHeight - margin));
+            
             return (
               <div
                 style={{
                   position: 'fixed',
-                  left: `${hoverComponent.x + 10}px`,
-                  top: `${hoverComponent.y + 10}px`,
+                  left: `${tooltipX}px`,
+                  top: `${tooltipY}px`,
                   background: 'rgba(0, 0, 0, 0.85)',
                   color: '#fff',
                   padding: '8px 12px',

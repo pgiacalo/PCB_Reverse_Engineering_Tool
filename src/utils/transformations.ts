@@ -518,3 +518,65 @@ export function canvasDeltaToWorldDelta(
   return { x: worldX, y: worldY };
 }
 
+/**
+ * Convert content canvas coordinates to world coordinates
+ * Accounts for view pan, scale, rotation, and flip
+ * 
+ * The view transform is applied in this order (in code):
+ * 1. translate(viewPan.x, viewPan.y)
+ * 2. scale(viewScale, viewScale)
+ * 3. applyViewTransform(ctx, viewRotation, viewFlipX) which does:
+ *    - if flipX: ctx.scale(-1, 1)
+ *    - if rotation: ctx.rotate(degToRad(rotation))
+ * 
+ * Canvas applies transforms in reverse order (last called = first applied), so the actual effect is:
+ * 1. First: rotate(rotation)
+ * 2. Then: scale(-1, 1) if flipX
+ * 3. Then: scale(viewScale, viewScale)
+ * 4. Then: translate(viewPan.x, viewPan.y)
+ * 
+ * To convert from content canvas coordinates to world coordinates, we undo in reverse order:
+ * 1. Undo translate: subtract viewPan
+ * 2. Undo scale: divide by viewScale
+ * 3. Undo flip: if flipX, negate X
+ * 4. Undo rotation: rotate by -viewRotation
+ * 
+ * @param contentCanvasX X coordinate in content canvas space (after CONTENT_BORDER)
+ * @param contentCanvasY Y coordinate in content canvas space (after CONTENT_BORDER)
+ * @param viewPan View pan offset in content canvas coordinates
+ * @param viewScale View scale factor
+ * @param viewRotation View rotation in degrees
+ * @param viewFlipX Whether view is flipped horizontally
+ * @returns World coordinates { x, y }
+ */
+export function contentCanvasToWorld(
+  contentCanvasX: number,
+  contentCanvasY: number,
+  viewPan: { x: number; y: number },
+  viewScale: number,
+  viewRotation: number = 0,
+  viewFlipX: boolean = false
+): { x: number; y: number } {
+  // Step 1: Undo translate (subtract viewPan)
+  let x = contentCanvasX - viewPan.x;
+  let y = contentCanvasY - viewPan.y;
+  
+  // Step 2: Undo scale (divide by viewScale)
+  x = x / viewScale;
+  y = y / viewScale;
+  
+  // Step 3: Undo flip (if flipped, X is negated)
+  if (viewFlipX) {
+    x = -x;
+  }
+  
+  // Step 4: Undo rotation (rotate by negative angle)
+  if (viewRotation !== 0) {
+    const rotated = rotatePoint(x, y, -viewRotation);
+    x = rotated.x;
+    y = rotated.y;
+  }
+  
+  return { x, y };
+}
+
