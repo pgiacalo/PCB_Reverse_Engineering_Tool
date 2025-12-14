@@ -43,7 +43,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
       transform: 'translate(-50%, -50%)',
       textAlign: 'center',
       padding: '24px 32px',
-      background: 'rgba(255, 255, 255, 0.95)',
+      background: 'rgba(255, 255, 255, 0.85)',
       borderRadius: 8,
       border: '2px solid #4CAF50',
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',

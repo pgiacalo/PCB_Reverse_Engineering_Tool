@@ -75,10 +75,10 @@ export function useToolRegistry(
   bottomComponentColor: string,
   topComponentSize: number,
   bottomComponentSize: number,
-  traceToolLayer: 'top' | 'bottom',
-  padToolLayer: 'top' | 'bottom',
-  testPointToolLayer: 'top' | 'bottom',
-  componentToolLayer: 'top' | 'bottom'
+  traceToolLayer: 'top' | 'bottom' | null,
+  padToolLayer: 'top' | 'bottom' | null,
+  testPointToolLayer: 'top' | 'bottom' | null,
+  componentToolLayer: 'top' | 'bottom' | null
 ) {
   // Suppress unused parameter warnings
   void topTestPointColor;

@@ -155,10 +155,10 @@ export interface MenuBarProps {
   // Current tool state (to determine if size change should affect brushSize immediately)
   currentTool: Tool;
   drawingMode: 'trace' | 'via' | 'pad' | 'testPoint';
-  traceToolLayer: 'top' | 'bottom';
-  padToolLayer: 'top' | 'bottom';
-  testPointToolLayer: 'top' | 'bottom';
-  componentToolLayer: 'top' | 'bottom';
+  traceToolLayer: 'top' | 'bottom' | null;
+  padToolLayer: 'top' | 'bottom' | null;
+  testPointToolLayer: 'top' | 'bottom' | null;
+  componentToolLayer: 'top' | 'bottom' | null;
   
   // Layer-specific size setters
   setTopTraceSize: (size: number) => void;

@@ -41,7 +41,7 @@ import {
   COMPONENT_CATEGORIES,
   COLOR_PALETTE,
 } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId, worldToCanvas } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
@@ -259,6 +259,7 @@ function App() {
     setViewFlipX,
     cameraWorldCenter,
     setCameraWorldCenter,
+    resetView,
     isShiftConstrained,
     setIsShiftConstrained,
     showBothLayers,
@@ -2835,6 +2836,9 @@ function App() {
       } else {
         // Project-local mode: use session counters (starts empty, gets updated as components are created)
         counters = { ...sessionDesignatorCountersRef.current };
+      }
+      if (!componentToolLayer) {
+        return; // Wait for user to select a layer
       }
       const comp = createComponent(
         selectedComponentType,
@@ -6891,7 +6895,7 @@ function App() {
             // Reset layer selection to null so radio buttons default to neither selected
             setPadToolLayer(null);
             padToolLayerRef.current = null;
-            setSelectedDrawingLayer(padLayerToUse);
+            setSelectedDrawingLayer(padToolLayer || 'top');
             // The useEffect hook will automatically show the layer chooser
             return;
           case 'y':
@@ -6903,7 +6907,7 @@ function App() {
             // Reset layer selection to null so radio buttons default to neither selected
             setTestPointToolLayer(null);
             testPointToolLayerRef.current = null;
-            setSelectedDrawingLayer(testPointLayerToUse);
+            setSelectedDrawingLayer(testPointToolLayer || 'top');
             // The useEffect hook will automatically show the layer chooser
             return;
           case 't':
@@ -6915,7 +6919,7 @@ function App() {
             // Reset layer selection to null so radio buttons default to neither selected
             setTraceToolLayer(null);
             traceToolLayerRef.current = null;
-            setSelectedDrawingLayer(layerToUse);
+            setSelectedDrawingLayer(traceToolLayer || 'top');
             // The useEffect hook will automatically show the layer chooser
             return;
           case 'c':
@@ -7715,31 +7719,9 @@ function App() {
     initializeApplicationDefaults();
     // Use setTimeout to ensure DOM is ready and refs are available
     setTimeout(() => {
-      // Execute 'o' shortcut: Reset view and selection
+      // Reset view to center origin (0,0) on canvas
       setViewScale(1);
-      const canvas = canvasRef.current;
-      const container = canvasContainerRef.current;
-      if (canvas && container) {
-        // Get the actual visible bounding rectangles
-        const contentWidth = canvas.width - 2 * CONTENT_BORDER;
-        const contentHeight = canvas.height - 2 * CONTENT_BORDER;
-        
-        // Image center in canvas content coordinates
-        const imageCenterX = contentWidth / 2;
-        const imageCenterY = contentHeight / 2;
-        
-        // Calculate world position of visible center
-        // visibleCenterContentX = cameraWorldCenter.x * viewScale + viewPan.x
-        // So: cameraWorldCenter.x = (visibleCenterContentX - viewPan.x) / viewScale
-        // But we want the image center to be at the visible center
-        // imageCenterX in world coords = (imageCenterX - viewPan.x) / viewScale
-        // We want cameraWorldCenter.x = imageCenterX in world coords
-        const imageCenterWorldX = (imageCenterX - viewPan.x) / viewScale;
-        const imageCenterWorldY = (imageCenterY - viewPan.y) / viewScale;
-        setCameraCenter(imageCenterWorldX, imageCenterWorldY);
-      } else {
-        setCameraCenter(0, 0);
-      }
+      setCameraWorldCenter({ x: 0, y: 0 }); // Center of canvas at 0,0 in world coordinates
       // Reset browser zoom to 100%
       if (document.body) {
         document.body.style.zoom = '1';
@@ -7753,7 +7735,7 @@ function App() {
       setSelectedPowerIds(new Set());
       setSelectedGroundIds(new Set());
     }, 100); // Small delay to ensure DOM is ready
-  }, [initializeApplicationDefaults]);
+  }, [initializeApplicationDefaults, setViewScale, setCameraWorldCenter]);
 
   // Initialize application on first load
   React.useEffect(() => {
@@ -10151,6 +10133,12 @@ function App() {
     // Use consolidated initialization function for all defaults
     initializeApplicationDefaults();
     
+    // Reset view to origin (0,0) with Top View perspective
+    // Use resetView from useView hook to properly center origin on canvas
+    resetView();
+    setIsBottomView(false);
+    setTransparency(0); // Show only top image
+    
     // Save the project file immediately with project name and timestamp
     try {
       const { project, timestamp } = buildProjectData();
@@ -10175,7 +10163,7 @@ function App() {
       console.error('Failed to save new project:', e);
       alert('Failed to save new project file. See console for details.');
     }
-  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject]);
+  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject, resetView, setIsBottomView, setTransparency]);
 
   // Handle canceling new project setup
   const handleNewProjectSetupCancel = useCallback(() => {
@@ -11777,7 +11765,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 Worms: An Electronics Toolkit (v2.7)</h1>
+        <h1>🔧 Worms: An Electronics Toolkit (v2.8)</h1>
       </header>
 
       {/* Application menu bar */}
