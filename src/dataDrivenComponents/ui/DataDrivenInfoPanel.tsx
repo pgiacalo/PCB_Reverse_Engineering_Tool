@@ -34,7 +34,7 @@ export const DataDrivenInfoPanel: React.FC<DataDrivenInfoPanelProps> = ({ compon
         {definition.description}
       </div>
       {/* Debug / inspection: show which JSON definition was resolved - can be removed in production */}
-      {process.env.NODE_ENV === 'development' && (
+      {import.meta.env.DEV && (
         <div style={{ fontSize: 10, color: '#999', marginBottom: 6, padding: 4, background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2 }}>
           <div><strong>Key:</strong> {keyValue}</div>
           <div><strong>Category:</strong> {definition.category} / {definition.subcategory}</div>

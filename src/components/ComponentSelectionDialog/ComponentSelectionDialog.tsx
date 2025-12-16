@@ -192,7 +192,7 @@ const mapDesignatorToMetadata = (designators: string[]): ComponentSelectionMetad
 export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> = ({
   visible,
   selectedLayer,
-  selectedComponentType,
+  selectedComponentType: _selectedComponentType,
   selectedComponentKey,
   onLayerChange,
   onComponentTypeChange,

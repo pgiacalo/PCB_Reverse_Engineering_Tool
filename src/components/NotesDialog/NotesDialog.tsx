@@ -256,14 +256,14 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
     setComponentsTop(prev => prev.map(c => {
       if (selectedComponentIds.has(c.id) && notesMap.has(c.id)) {
         const notes = notesMap.get(c.id) || '';
-        return { ...c, notes: notes.trim() === '' ? null : notes.trim() };
+        return { ...c, notes: notes.trim() === '' ? undefined : notes.trim() };
       }
       return c;
     }));
     setComponentsBottom(prev => prev.map(c => {
       if (selectedComponentIds.has(c.id) && notesMap.has(c.id)) {
         const notes = notesMap.get(c.id) || '';
-        return { ...c, notes: notes.trim() === '' ? null : notes.trim() };
+        return { ...c, notes: notes.trim() === '' ? undefined : notes.trim() };
       }
       return c;
     }));

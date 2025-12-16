@@ -1,6 +1,5 @@
 import type { PCBComponent } from '../../types';
 import type { DataDrivenComponentDefinition, BaseComponentKind } from '../definitions/schema';
-import { COMPONENT_TYPE_INFO } from '../../constants';
 
 export interface DesignatorCounters {
   [prefix: string]: number;

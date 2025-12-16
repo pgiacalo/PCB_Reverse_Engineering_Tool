@@ -217,7 +217,7 @@ export const COMPONENT_CATEGORIES = componentCategoriesMap as Record<string, Rec
 
 // Export new structure for direct access
 export const COMPONENT_DEFINITIONS = componentDefinitions;
-export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.components;
+export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.components as ComponentDefinition[];
 
 // ============================================================================
 // Ground Symbol Dimensions

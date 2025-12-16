@@ -109,33 +109,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
         setComponentEditor({ ...componentEditor, [unitKey]: val });
       };
 
-      // Handle boolean fields (checkboxes)
-      if (field.type === 'boolean') {
-        // Get value from componentEditor, component, or definition properties (in that order)
-        const boolValue = (componentEditor as any)[valueKey] !== undefined 
-          ? (componentEditor as any)[valueKey]
-          : (comp as any)[valueKey] !== undefined
-            ? (comp as any)[valueKey]
-            : def?.properties?.[valueKey] !== undefined
-              ? def.properties[valueKey]
-              : false;
-        return (
-          <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-              {field.label}:
-            </label>
-            <input
-              type="checkbox"
-              checked={typeof boolValue === 'boolean' ? boolValue : boolValue === 'true' || boolValue === true}
-              onChange={(e) => setComponentEditor({ ...componentEditor, [valueKey]: e.target.checked })}
-              disabled={areComponentsLocked}
-              style={{ opacity: areComponentsLocked ? 0.6 : 1, cursor: areComponentsLocked ? 'not-allowed' : 'pointer' }}
-            />
-          </div>
-        );
-      }
-
-      const hasUnits = field.units && field.units.length > 0;
+      const hasUnits = Boolean(field.units && field.units.length > 0);
       const fieldWidth = getFieldWidth(field.name, field.type, hasUnits);
 
       return (
@@ -164,7 +138,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
               placeholder={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
             />
           )}
-          {hasUnits && (
+          {hasUnits && field.units && (
             <select
               value={unit || field.defaultUnit || field.units[0]}
               onChange={(e) => onUnitChange(e.target.value)}

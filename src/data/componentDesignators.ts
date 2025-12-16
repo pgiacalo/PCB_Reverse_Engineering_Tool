@@ -35,7 +35,7 @@ import type { ComponentDefinition } from './componentDefinitions.d';
 export const COMPONENT_DEFINITIONS = componentDefinitions;
 
 // Export individual components array for easy access
-export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.components;
+export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.components as ComponentDefinition[];
 
 // Export categories for UI organization
 export const COMPONENT_CATEGORIES_STRUCTURE = componentDefinitions.categories;
@@ -57,17 +57,17 @@ export const COMPONENT_DESIGNATORS: ComponentDesignatorEntry[] = componentDefini
 
 // Helper function: Find component by designator
 export function findComponentByDesignator(designator: string): ComponentDefinition | undefined {
-  return componentDefinitions.components.find(comp => comp.designators.includes(designator));
+  return componentDefinitions.components.find(comp => comp.designators.includes(designator)) as ComponentDefinition | undefined;
 }
 
 // Helper function: Find components by category
 export function findComponentsByCategory(category: string): ComponentDefinition[] {
-  return componentDefinitions.components.filter(comp => comp.category === category);
+  return componentDefinitions.components.filter(comp => comp.category === category) as ComponentDefinition[];
 }
 
 // Helper function: Find components by type
 export function findComponentsByType(type: string): ComponentDefinition[] {
-  return componentDefinitions.components.filter(comp => comp.type === type);
+  return componentDefinitions.components.filter(comp => comp.type === type) as ComponentDefinition[];
 }
 
 // Helper function: Search components (searches searchText field)
@@ -80,7 +80,8 @@ export function searchComponents(searchTerm: string): ComponentDefinition[] {
     comp.category.toLowerCase().includes(searchLower) ||
     comp.subcategory.toLowerCase().includes(searchLower) ||
     comp.designators.some(d => d.toLowerCase().includes(searchLower))
-  );
+  ) as ComponentDefinition[];
 }
+
 
 

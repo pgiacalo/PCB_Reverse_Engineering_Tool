@@ -70,7 +70,6 @@ import { SetSizeDialog } from './components/SetSizeDialog';
 import { AutoSaveDialog } from './components/AutoSaveDialog';
 import { AutoSavePromptDialog } from './components/AutoSavePromptDialog';
 import { PastMachineDialog } from './components/PastMachineDialog';
-import { DataDrivenInfoPanel } from './dataDrivenComponents/ui/DataDrivenInfoPanel';
 import { resolveComponentDefinition } from './utils/componentDefinitionResolver';
 import {
   useDrawing,
