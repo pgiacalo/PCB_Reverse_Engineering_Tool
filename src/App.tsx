@@ -70,6 +70,8 @@ import { SetSizeDialog } from './components/SetSizeDialog';
 import { AutoSaveDialog } from './components/AutoSaveDialog';
 import { AutoSavePromptDialog } from './components/AutoSavePromptDialog';
 import { PastMachineDialog } from './components/PastMachineDialog';
+import { DataDrivenInfoPanel } from './dataDrivenComponents/ui/DataDrivenInfoPanel';
+import { resolveComponentDefinition } from './utils/componentDefinitionResolver';
 import {
   useDrawing,
   useSelection,
@@ -94,8 +96,6 @@ import {
   type GroundSymbol,
   type Tool,
 } from './hooks';
-import { DataDrivenInfoPanel } from './dataDrivenComponents/ui/DataDrivenInfoPanel';
-import { resolveComponentDefinition } from './utils/componentDefinitionResolver';
 import './App.css';
 
 // Independent stacks for saved/managed drawing objects
@@ -1634,7 +1634,6 @@ function App() {
         }
         break;
       case 'Diode':
-      case 'ZenerDiode':
         if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
           return `${comp.voltage} ${comp.voltageUnit}`;
         }
@@ -1758,18 +1757,6 @@ function App() {
         }
         if ('current' in comp && comp.current && 'currentUnit' in comp && comp.currentUnit) {
           details.push(`Current: ${comp.current} ${comp.currentUnit}`);
-        }
-        break;
-        
-      case 'ZenerDiode':
-        if ('voltage' in comp && comp.voltage && 'voltageUnit' in comp && comp.voltageUnit) {
-          details.push(`Voltage: ${comp.voltage} ${comp.voltageUnit}`);
-        }
-        if ('power' in comp && comp.power) {
-          details.push(`Power: ${comp.power}`);
-        }
-        if ('tolerance' in comp && comp.tolerance) {
-          details.push(`Tolerance: ${comp.tolerance}`);
         }
         break;
         
@@ -2916,28 +2903,45 @@ function App() {
       if (!componentToolLayer) {
         return; // Wait for user to select a layer
       }
+      
       // Use v2 runtime if metadata with componentDefinition is available
       let comp: PCBComponent;
-      if (selectedComponentMetadata?.componentDefinition) {
-        // Get v2 definition from the legacy definition
-        const legacyDef = selectedComponentMetadata.componentDefinition;
-        const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
-        const v2Definition = getDefinitionByKey(v2Key);
-        
-        if (v2Definition) {
-          // Use v2 runtime
-          comp = createComponentInstance({
-            definition: v2Definition,
-            layer: componentToolLayer,
-            x: truncatedPos.x,
-            y: truncatedPos.y,
-            color: componentColor,
-            size: componentSize,
-            existingComponents: allExistingComponents,
-            counters: autoAssignDesignators ? counters : {},
-          });
+      try {
+        if (selectedComponentMetadata?.componentDefinition) {
+          // Get v2 definition from the legacy definition
+          const legacyDef = selectedComponentMetadata.componentDefinition;
+          const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
+          const v2Definition = getDefinitionByKey(v2Key);
+          
+          if (v2Definition) {
+            // Use v2 runtime
+            comp = createComponentInstance({
+              definition: v2Definition,
+              layer: componentToolLayer,
+              x: truncatedPos.x,
+              y: truncatedPos.y,
+              color: componentColor,
+              size: componentSize,
+              existingComponents: allExistingComponents,
+              counters: autoAssignDesignators ? counters : {},
+            });
+          } else {
+            // Fallback to legacy createComponent if v2 definition not found
+            comp = createComponent(
+              selectedComponentType,
+              componentToolLayer,
+              truncatedPos.x,
+              truncatedPos.y,
+              componentColor,
+              componentSize,
+              allExistingComponents,
+              counters,
+              autoAssignDesignators,
+              selectedComponentMetadata || undefined
+            );
+          }
         } else {
-          // Fallback to legacy createComponent if v2 definition not found
+          // Fallback to legacy createComponent if no metadata
           comp = createComponent(
             selectedComponentType,
             componentToolLayer,
@@ -2951,8 +2955,9 @@ function App() {
             selectedComponentMetadata || undefined
           );
         }
-      } else {
-        // Fallback to legacy createComponent if no metadata
+      } catch (error) {
+        console.error('[Component Creation] Error creating component:', error);
+        // Fallback to legacy on any error
         comp = createComponent(
           selectedComponentType,
           componentToolLayer,
@@ -2972,6 +2977,7 @@ function App() {
       
       // IMPORTANT: Update counters immediately after component creation so the next component gets the correct number
       // This ensures that when placing multiple components rapidly, each gets a unique sequential designator
+      // Extract prefix from actual designator (works for both v2 and legacy components)
       if (autoAssignDesignators && comp.designator) {
         // Extract prefix and number from designator (e.g., "CE1" -> prefix="CE", number=1)
         const match = comp.designator.match(/^([A-Za-z]+)(\d+)$/);
@@ -2992,12 +2998,6 @@ function App() {
           }
         }
       }
-      
-      // Ensure component was created successfully
-      if (!comp) {
-        return;
-      }
-      
       
       // Save snapshot before adding new component
       saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
@@ -5085,21 +5085,27 @@ function App() {
                              (comp as any).dielectric === 'Tantalum';
         const isPolarized = (hasPolarity || isTantalumCap) && comp.pinPolarities;
         
+        // Check if this is an Integrated Circuit in the Semiconductors category
+        const compDef = resolveComponentDefinition(comp as any);
+        const isICSemiconductor = compDef?.category === 'Semiconductors' && comp.componentType === 'IntegratedCircuit';
+        
         // Collect unique node IDs with their polarity and Pin 1 info to avoid drawing duplicate lines
         // Map<nodeId, { isNegative: boolean, hasPin1: boolean }>
+        // Note: hasPin1 is ONLY set for Integrated Circuits in Semiconductors category
         const connectedNodes = new Map<string, { isNegative: boolean; hasPin1: boolean }>();
         for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
           const connection = pinConnections[pinIndex];
           if (connection && connection.trim() !== '') {
             const nodeIdStr = connection.trim();
-            const isPin1 = pinIndex === 0; // Pin 1 is at index 0
+            // Only mark Pin 1 for Integrated Circuits in Semiconductors category
+            const isPin1 = isICSemiconductor && pinIndex === 0;
             // Check if this pin is negative (for polarized components)
             const isNegative: boolean = Boolean(isPolarized && 
                              comp.pinPolarities && 
                              pinIndex < comp.pinPolarities.length &&
                              comp.pinPolarities[pinIndex] === '-');
             // If node already exists, keep the negative flag if either connection is negative
-            // and keep hasPin1 if any connection is Pin 1
+            // and keep hasPin1 if any connection is Pin 1 (only for ICs) (only for ICs)
             const existingValue = connectedNodes.get(nodeIdStr);
             if (existingValue !== undefined) {
               connectedNodes.set(nodeIdStr, {
@@ -5127,7 +5133,8 @@ function App() {
             
             ctx.save();
             // Use black for negative connections of polarized components
-            // Use darkened color for Pin 1 connections (for integrated circuits)
+            // Use darkened color for Pin 1 connections (ONLY for Integrated Circuits in Semiconductors category)
+            // hasPin1 is already set correctly for ICs in Semiconductors category
             // Otherwise use component connection color
             // If selected, use highlight color (cyan) and thicker line
             if (isSelected) {
@@ -5139,6 +5146,7 @@ function App() {
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
               } else if (hasPin1) {
                 // Pin 1 gets a darker version of the component connection color
+                // Only for Integrated Circuits in the Semiconductors category
                 ctx.strokeStyle = darkenColor(componentConnectionColor, 0.4);
               } else {
                 ctx.strokeStyle = componentConnectionColor;
@@ -9285,7 +9293,7 @@ function App() {
       powerBuses, // Save power bus definitions
       groundBuses, // Save ground bus definitions
       pointIdCounter: getPointIdCounter(), // Save the point ID counter to preserve uniqueness
-      designatorCounters: loadDesignatorCounters(), // Save designator counters for each prefix
+      designatorCounters: { ...sessionDesignatorCountersRef.current }, // Save designator counters for each prefix
       autoAssignDesignators, // Save auto-designator assignment setting
       useGlobalDesignatorCounters, // Save global designator counter setting
       // Save layer-specific tool settings from tool registry (project-specific)
@@ -11124,7 +11132,7 @@ function App() {
       // Restore designator counters from project file
       if (project.designatorCounters && typeof project.designatorCounters === 'object') {
         const savedCounters = project.designatorCounters as Record<string, number>;
-        saveDesignatorCounters(savedCounters);
+        sessionDesignatorCountersRef.current = { ...savedCounters };
       } else {
         // Project file missing designator counters - start with empty counters
         sessionDesignatorCountersRef.current = {};
@@ -11141,9 +11149,6 @@ function App() {
       } else {
         setUseGlobalDesignatorCounters(false); // Default to OFF
       }
-      
-      // Reset session counters when loading a project
-      sessionDesignatorCountersRef.current = {};
       
       // Load ground symbols
       if (project.drawing?.grounds) {
@@ -12303,9 +12308,26 @@ function App() {
                 const componentColor = toolInstanceManager.get(componentInstanceId).color;
                 return selectedComponentType ? (
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
-                    {/* Square icon with text - show default abbreviation based on component type */}
+                    {/* Square icon with text - show specific designator prefix from metadata (e.g., CE, CF, Z, LED) */}
                     <rect x="4" y="4" width="16" height="16" fill="rgba(255,255,255,0.9)" stroke={componentColor} strokeWidth="1.5" />
-                    <text x="12" y="14" textAnchor="middle" fontSize="7" fill={componentColor} fontWeight="bold" fontFamily="monospace">{getDefaultAbbreviation(selectedComponentType)}</text>
+                    <text x="12" y="14" textAnchor="middle" fontSize="7" fill={componentColor} fontWeight="bold" fontFamily="monospace">{
+                      (() => {
+                        // Prefer designator from componentDefinition (most specific)
+                        const designator = selectedComponentMetadata?.componentDefinition?.designators?.[0];
+                        if (designator) {
+                          // Show up to 3 characters for multi-letter designators (CE, CF, LED, etc.)
+                          return designator.length <= 3 ? designator : designator.substring(0, 3);
+                        }
+                        // Fallback to designator from metadata
+                        if (selectedComponentMetadata?.designator) {
+                          return selectedComponentMetadata.designator.length <= 3 
+                            ? selectedComponentMetadata.designator 
+                            : selectedComponentMetadata.designator.substring(0, 3);
+                        }
+                        // Last resort: use default abbreviation
+                        return getDefaultAbbreviation(selectedComponentType);
+                      })()
+                    }</text>
                   </svg>
                 ) : (
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0 }}>
@@ -13417,36 +13439,14 @@ function App() {
             areComponentsLocked={areComponentsLocked}
             setSelectedComponentIds={setSelectedComponentIds}
             setNotesDialogVisible={setNotesDialogVisible}
+            componentDefinition={componentEditor ? (() => {
+              // Find the component being edited to resolve its definition
+              const comp = componentsTop.find(c => c.id === componentEditor.id) || 
+                          componentsBottom.find(c => c.id === componentEditor.id);
+              return comp ? resolveComponentDefinition(comp as any) : undefined;
+            })() : undefined}
           />
 
-          {/* Data-Driven Preview (v2) */}
-          {selectedComponentIds.size === 1 && (() => {
-            const selectedId = Array.from(selectedComponentIds)[0];
-            const allComponents = [...componentsTop, ...componentsBottom];
-            const comp = allComponents.find(c => c.id === selectedId);
-            if (!comp) return null;
-
-            // Use legacy resolver to get (category, subcategory, type) triple
-            const legacyDef = resolveComponentDefinition(comp as any);
-            
-            // Construct v2 key and get v2 definition
-            let v2Definition = null;
-            if (legacyDef) {
-              const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
-              v2Definition = getDefinitionByKey(v2Key) ?? null;
-            } else {
-            }
-
-            return (
-              <div style={{ position: 'absolute', top: 100, right: 16, maxWidth: 260, zIndex: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: '#333' }}>
-                  Data-Driven Preview (v2)
-                </div>
-                <DataDrivenInfoPanel component={comp} definition={v2Definition} />
-              </div>
-            );
-          })()}
-          
           {/* Component Hover Tooltip (only shown when Option key is held) */}
           {hoverComponent && isOptionPressed && (() => {
             const comp = hoverComponent.component;
@@ -14471,6 +14471,7 @@ function App() {
         visible={showComponentSelectionDialog}
         selectedLayer={componentToolLayer}
         selectedComponentType={selectedComponentType}
+        selectedComponentKey={selectedComponentKey}
         onLayerChange={(layer) => {
           setComponentToolLayer(layer);
           componentToolLayerRef.current = layer;
@@ -14523,14 +14524,14 @@ function App() {
         onSkip={handleAutoSavePromptSkip}
       />
 
-      {/* Donate Button - fixed position in lower right corner */}
+      {/* Donate Button - fixed position in lower left corner */}
         <div 
           style={{
             position: 'fixed',
-          bottom: 8,
-          right: 8,
-          zIndex: 100,
-              }}
+            bottom: 8,
+            left: 8,
+            zIndex: 100,
+          }}
       >
               <button
           onClick={() => {
