@@ -8858,7 +8858,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedComponentMetadata, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedComponentMetadata, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
@@ -10340,26 +10340,7 @@ function App() {
     setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
   }, []);
 
-  // Open Save As dialog
-  const openSaveAsDialog = useCallback(() => {
-    // Default filename based on current project name or generate one
-    const defaultFilename = projectName ? `${projectName}.json` : '';
-    setSaveAsDialog({ 
-      visible: true, 
-      filename: defaultFilename,
-      locationPath: '',
-      locationHandle: null,
-    });
-    // Focus the filename input after a short delay to allow dialog to render
-    setTimeout(() => {
-      saveAsFilenameInputRef.current?.focus();
-      if (saveAsFilenameInputRef.current && defaultFilename) {
-        // Select the filename part (without extension) for easy editing
-        const nameWithoutExt = defaultFilename.replace(/\.json$/i, '');
-        saveAsFilenameInputRef.current.setSelectionRange(0, nameWithoutExt.length);
-      }
-    }, 100);
-  }, [projectName]);
+  // Save As dialog removed - feature no longer supported
 
   // Handle browsing for Save As location
   const handleSaveAsBrowseLocation = useCallback(async () => {
@@ -11947,7 +11928,6 @@ function App() {
         onNewProject={newProject}
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}
-        onSaveAs={openSaveAsDialog}
         onPrint={handlePrint}
         onExportBOM={handleExportBOM}
         bomExportFormat={bomExportFormat}
@@ -12012,7 +11992,6 @@ function App() {
         selectGroundNodesByName={selectGroundNodesByName}
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
-        setShowDesignatorManager={setShowDesignatorManager}
         setShowPastMachine={setShowPastMachine}
         toolRegistry={toolRegistry}
         updateToolSettings={updateToolSettings}

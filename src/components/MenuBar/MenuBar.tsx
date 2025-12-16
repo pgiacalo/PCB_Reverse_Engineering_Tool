@@ -49,7 +49,6 @@ export interface MenuBarProps {
   onNewProject: () => void;
   onOpenProject: () => Promise<void>;
   onSaveProject: () => Promise<void>;
-  onSaveAs: () => void;
   onPrint: () => void;
   onExportBOM: () => Promise<void>;
   hasUnsavedChanges: () => boolean;
@@ -137,8 +136,6 @@ export interface MenuBarProps {
   setShowPowerBusManager: (show: boolean) => void;
   // Ground bus
   setShowGroundBusManager: (show: boolean) => void;
-  // Designator management
-  setShowDesignatorManager: (show: boolean) => void;
   // PastMachine
   setShowPastMachine: (show: boolean) => void;
   
@@ -218,7 +215,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onNewProject,
   onOpenProject,
   onSaveProject,
-  onSaveAs,
   onPrint,
   onExportBOM,
   hasUnsavedChanges,
@@ -283,7 +279,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   selectGroundNodesByName,
   setShowPowerBusManager,
   setShowGroundBusManager,
-  setShowDesignatorManager,
   setShowPastMachine,
   toolRegistry,
   updateToolSettings,
@@ -864,13 +859,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Save Project…
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode) { requireProject(() => { onSaveAs(); setOpenMenu(null); }); } }} 
-              disabled={isReadOnlyMode || !isProjectActive}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
-            >
-              Save As…
-            </button>
-            <button 
               onClick={() => { 
                 if (!isReadOnlyMode) { 
                   requireProject(() => {
@@ -1249,9 +1237,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Manage Ground Buses…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { setShowDesignatorManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
-              Manage Designators…
-            </button>
             <button 
               onClick={() => { setShowTraceCornerDots(!showTraceCornerDots); setOpenMenu(null); }} 
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
