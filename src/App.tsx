@@ -39,9 +39,10 @@ import {
   contentCanvasToWorld,
   darkenColor,
 } from './utils/transformations';
-import { 
+import {
   formatComponentTypeName,
   COLOR_PALETTE,
+  COMPONENT_ICON,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
@@ -8569,10 +8570,27 @@ function App() {
         ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : drawingMode === 'testPoint' ? 'testPoint' : 'trace')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
-    // Scale cursor size to match what will be drawn on canvas
-    // Tool sizes are in world coordinates (pixels), so multiply by viewScale to get screen pixels
+
+    // Scale cursor size to match what will be drawn on canvas.
+    // Tool sizes are in world coordinates (pixels), so multiply by viewScale to get screen pixels.
     const scale = viewScale;
-    const diameterPx = kind === 'magnify' ? 18 : kind === 'component' ? Math.max(16, Math.round(brushSize * scale)) : kind === 'power' || kind === 'ground' ? Math.max(12, Math.round(brushSize * scale)) : Math.max(6, Math.round(brushSize * scale));
+
+    let diameterPx: number;
+    if (kind === 'magnify') {
+      diameterPx = 18;
+    } else if (kind === 'component') {
+      // Use component tool instance size (single source of truth), not generic brushSize.
+      const layer = componentToolLayer || 'top';
+      const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
+      const componentInstance = toolInstanceManager.get(componentInstanceId);
+      const worldSize = componentInstance.size || COMPONENT_ICON.DEFAULT_SIZE;
+      diameterPx = Math.max(16, Math.round(worldSize * scale));
+    } else if (kind === 'power' || kind === 'ground') {
+      diameterPx = Math.max(12, Math.round(brushSize * scale));
+    } else {
+      diameterPx = Math.max(6, Math.round(brushSize * scale));
+    }
+
     const pad = 4;
     const size = diameterPx + pad * 2 + (kind === 'magnify' ? 8 : 0); // extra room for handle/plus
     const canvas = document.createElement('canvas');
@@ -13249,7 +13267,7 @@ function App() {
               </div>
               <canvas ref={bottomThumbRef} width={60} height={40} style={{ width: '60px', height: '40px' }} />
             </div>
-            <div style={{ height: 1, background: '#e9e9ef', margin: '2px 0' }} />
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox" checked={showViasLayer} onChange={(e) => setShowViasLayer(e.target.checked)} />
               <span>Vias</span>
@@ -13301,7 +13319,7 @@ function App() {
               <input type="checkbox" checked={showConnectionsLayer} onChange={(e) => setShowConnectionsLayer(e.target.checked)} />
               <span>Connections</span>
             </label>
-            <div style={{ height: 1, background: '#e9e9ef', margin: '2px 0' }} />
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <input 
                 type="checkbox" 
@@ -13324,6 +13342,7 @@ function App() {
               />
               <span style={{ fontWeight: 600, fontSize: 11 }}>Select All Layers</span>
             </label>
+            <div style={{ height: 1, background: '#000', margin: '4px 0' }} />
             <div style={{ marginTop: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <label style={{ fontSize: 10, color: '#333' }}>Transparency: {transparency}%</label>

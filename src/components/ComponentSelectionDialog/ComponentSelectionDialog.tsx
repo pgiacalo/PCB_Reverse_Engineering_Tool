@@ -208,10 +208,10 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   // Initialize position when dialog becomes visible
   useEffect(() => {
     if (visible && position === null) {
-      // Position dialog on the right side, below the menu bar
+      // Position dialog on the right side, below the menu bar and file name
       const dialogWidth = 400;
-      const rightMargin = 20;
-      const topMargin = 80; // Below menu bar
+      const rightMargin = 8; // Slight margin from right edge
+      const topMargin = 130; // Below menu bar + filename area
       
       setPosition({
         x: window.innerWidth - dialogWidth - rightMargin,
