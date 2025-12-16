@@ -62,11 +62,45 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
 
   // Dynamic rendering from component definition fields (if available)
   if (fields && fields.length > 0) {
+    // Helper function to determine optimal field width based on field name and type
+    const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
+      if (hasUnits) {
+        // Fields with units - optimize width based on typical value ranges
+        if (fieldName === 'capacitance' || fieldName === 'resistance' || fieldName === 'voltage' || fieldName === 'current') {
+          return '80px'; // Medium numeric values: "1000", "10.5", etc.
+        }
+        if (fieldName === 'power' || fieldName === 'inductance' || fieldName === 'impedance') {
+          return '70px'; // Smaller numeric values: "1/4", "10", etc.
+        }
+        if (fieldName === 'esr' || fieldName === 'ripple' || fieldName === 'leakageCurrent') {
+          return '70px'; // Smaller values
+        }
+        return '80px'; // Default for fields with units
+      }
+      
+      // Fields without units
+      if (fieldName === 'tolerance' || fieldName === 'pinCount') {
+        return '60px'; // Short values: "±5%", "2", etc.
+      }
+      if (fieldName === 'partNumber' || fieldName === 'manufacturer') {
+        return '150px'; // Medium text fields
+      }
+      if (fieldName === 'description' || fieldName === 'operatingTemperature') {
+        return '180px'; // Longer text fields
+      }
+      if (fieldType === 'string' && !fieldName.includes('Unit')) {
+        return '150px'; // Default for string fields
+      }
+      return '120px'; // Default width
+    };
+
     const renderField = (field: ComponentFieldDefinition) => {
       const valueKey = field.name;
       const unitKey = `${field.name}Unit`;
-      const value = (componentEditor as any)[valueKey] ?? field.defaultValue ?? '';
-      const unit = (componentEditor as any)[unitKey] ?? field.defaultUnit ?? '';
+      // Get value from componentEditor, component, or field default
+      const value = (componentEditor as any)[valueKey] ?? (comp as any)[valueKey] ?? field.defaultValue ?? '';
+      // Get unit from componentEditor, component, or field defaultUnit (prioritize field.defaultUnit if units exist)
+      const unit = (componentEditor as any)[unitKey] ?? (comp as any)[unitKey] ?? (field.units && field.defaultUnit ? field.defaultUnit : '');
 
       const onValueChange = (val: string) => {
         setComponentEditor({ ...componentEditor, [valueKey]: val });
@@ -74,6 +108,35 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       const onUnitChange = (val: string) => {
         setComponentEditor({ ...componentEditor, [unitKey]: val });
       };
+
+      // Handle boolean fields (checkboxes)
+      if (field.type === 'boolean') {
+        // Get value from componentEditor, component, or definition properties (in that order)
+        const boolValue = (componentEditor as any)[valueKey] !== undefined 
+          ? (componentEditor as any)[valueKey]
+          : (comp as any)[valueKey] !== undefined
+            ? (comp as any)[valueKey]
+            : def?.properties?.[valueKey] !== undefined
+              ? def.properties[valueKey]
+              : false;
+        return (
+          <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+            <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+              {field.label}:
+            </label>
+            <input
+              type="checkbox"
+              checked={typeof boolValue === 'boolean' ? boolValue : boolValue === 'true' || boolValue === true}
+              onChange={(e) => setComponentEditor({ ...componentEditor, [valueKey]: e.target.checked })}
+              disabled={areComponentsLocked}
+              style={{ opacity: areComponentsLocked ? 0.6 : 1, cursor: areComponentsLocked ? 'not-allowed' : 'pointer' }}
+            />
+          </div>
+        );
+      }
+
+      const hasUnits = field.units && field.units.length > 0;
+      const fieldWidth = getFieldWidth(field.name, field.type, hasUnits);
 
       return (
         <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
@@ -85,7 +148,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
               disabled={areComponentsLocked}
-              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+              style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
             >
               {(field.enumValues || []).map(opt => (
                 <option key={opt} value={opt}>{opt}</option>
@@ -97,16 +160,16 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
               value={value}
               onChange={(e) => onValueChange(e.target.value)}
               disabled={areComponentsLocked}
-              style={{ flex: field.units ? '0 0 90px' : 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: field.units ? '12px' : '0' }}
+              style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: hasUnits ? '8px' : '0' }}
               placeholder={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
             />
           )}
-          {field.units && (
+          {hasUnits && (
             <select
-              value={unit}
+              value={unit || field.defaultUnit || field.units[0]}
               onChange={(e) => onUnitChange(e.target.value)}
               disabled={areComponentsLocked}
-              style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '70px', marginRight: '12px' }}
+              style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, flexShrink: 0 }}
             >
               {field.units.map(u => (
                 <option key={u} value={u}>{u}</option>
@@ -120,18 +183,6 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     return (
       <>
         {fields.map(renderField)}
-        {/* Fallback basic fields that are always useful */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>Notes:</label>
-          <input
-            type="text"
-            value={(componentEditor as any).notes || ''}
-            onChange={(e) => setComponentEditor({ ...componentEditor, notes: e.target.value })}
-            disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-            placeholder=""
-          />
-        </div>
       </>
     );
   }
@@ -324,11 +375,15 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-polarity-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Polarity:</label>
-            <select id={`component-polarity-${comp.id}`} value={componentEditor.polarityCapacitor || (comp as any).polarity || 'Positive'} onChange={(e) => setComponentEditor({ ...componentEditor, polarityCapacitor: e.target.value as 'Positive' | 'Negative' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="Positive">Positive</option>
-              <option value="Negative">Negative</option>
-            </select>
+            <label htmlFor={`component-polarized-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Polarized:</label>
+            <input
+              id={`component-polarized-${comp.id}`}
+              type="checkbox"
+              checked={componentEditor.polarized !== undefined ? componentEditor.polarized : (comp as any).polarized !== undefined ? (comp as any).polarized : false}
+              onChange={(e) => setComponentEditor({ ...componentEditor, polarized: e.target.checked })}
+              disabled={areComponentsLocked}
+              style={{ opacity: areComponentsLocked ? 0.6 : 1, cursor: areComponentsLocked ? 'not-allowed' : 'pointer' }}
+            />
           </div>
         </>
       )}

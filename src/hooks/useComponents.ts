@@ -132,7 +132,7 @@ export function useComponents() {
     voltageUnit?: string; // V, mV, kV
     dielectric?: string;
     // Electrolytic Capacitor
-    polarityCapacitor?: 'Positive' | 'Negative'; // renamed to avoid conflict with Transistor polarity
+    polarized?: boolean; // true if component is polarized (has positive/negative pins)
     esr?: string;
     esrUnit?: string; // unit, e.g., "mΩ"
     temperature?: string;
@@ -287,7 +287,7 @@ export function useComponents() {
       editor.voltage = voltage.value;
       editor.voltageUnit = voltage.unit;
       editor.tolerance = c.tolerance || '±20%';
-      editor.polarityCapacitor = c.polarity || 'Positive';
+      editor.polarized = (c as any).polarized !== undefined ? (c as any).polarized : true; // Default to true for electrolytic capacitors
       const esr = readValueAndUnit(c, 'esr', 'esrUnit', getDefaultUnit('esr'));
       editor.esr = esr.value;
       editor.esrUnit = esr.unit;

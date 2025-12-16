@@ -202,7 +202,7 @@ export interface ElectrolyticCapacitor extends PCBComponentBase {
   voltage?: string; // value only, e.g., "25"
   voltageUnit?: string; // unit, e.g., "V"
   tolerance?: string; // e.g., "±20%"
-  polarity?: 'Positive' | 'Negative'; // which pin is positive (important for orientation)
+  polarized?: boolean; // true if component is polarized (has positive/negative pins), false if non-polarized
   esr?: string; // value only, e.g., "50"
   esrUnit?: string; // unit, e.g., "mΩ"
   temperature?: string; // operating temperature range, e.g., "-40°C to +85°C"

@@ -8851,7 +8851,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, selectedComponentType, selectedComponentMetadata, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId, toolState.color, toolState.size]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {

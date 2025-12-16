@@ -7,7 +7,9 @@
       "displayName": "Capacitor",
       "description": "General purpose capacitor",
       "searchText": "capacitor general",
-      "designators": ["C"],
+      "designators": [
+        "C"
+      ],
       "defaultPins": 2,
       "properties": {
         "capacitorType": "General"
@@ -17,7 +19,13 @@
           "name": "capacitance",
           "label": "Capacitance",
           "type": "number",
-          "units": ["pF", "nF", "µF", "mF", "F"],
+          "units": [
+            "pF",
+            "nF",
+            "µF",
+            "mF",
+            "F"
+          ],
           "defaultUnit": "µF",
           "required": false
         },
@@ -25,7 +33,11 @@
           "name": "voltage",
           "label": "Voltage Rating",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -55,13 +67,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "storageTemperature",
-          "label": "Storage Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -69,13 +75,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -87,18 +91,26 @@
       "displayName": "Electrolytic",
       "description": "Electrolytic capacitor",
       "searchText": "electrolytic capacitor",
-      "designators": ["CE"],
+      "designators": [
+        "CE"
+      ],
       "defaultPins": 2,
       "properties": {
         "capacitorType": "Electrolytic",
-        "polarity": "Positive"
+        "polarized": true
       },
       "fields": [
         {
           "name": "capacitance",
           "label": "Capacitance",
           "type": "number",
-          "units": ["pF", "nF", "µF", "mF", "F"],
+          "units": [
+            "pF",
+            "nF",
+            "µF",
+            "mF",
+            "F"
+          ],
           "defaultUnit": "µF",
           "required": false
         },
@@ -106,7 +118,11 @@
           "name": "voltage",
           "label": "Voltage Rating",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -118,18 +134,19 @@
           "required": false
         },
         {
-          "name": "polarity",
-          "label": "Polarity",
-          "type": "enum",
-          "enumValues": ["Positive", "Negative"],
-          "defaultValue": "Positive",
+          "name": "polarized",
+          "label": "Polarized",
+          "type": "boolean",
           "required": false
         },
         {
           "name": "esr",
           "label": "ESR",
           "type": "number",
-          "units": ["mΩ", "Ω"],
+          "units": [
+            "mΩ",
+            "Ω"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -143,7 +160,10 @@
           "name": "ripple",
           "label": "Ripple Current",
           "type": "number",
-          "units": ["mA", "A"],
+          "units": [
+            "mA",
+            "A"
+          ],
           "defaultUnit": "mA",
           "required": false
         },
@@ -151,7 +171,10 @@
           "name": "leakageCurrent",
           "label": "Leakage Current",
           "type": "number",
-          "units": ["µA", "mA"],
+          "units": [
+            "µA",
+            "mA"
+          ],
           "defaultUnit": "µA",
           "required": false
         },
@@ -169,13 +192,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "storageTemperature",
-          "label": "Storage Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -183,13 +200,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -201,7 +216,9 @@
       "displayName": "Film",
       "description": "Film capacitor",
       "searchText": "film capacitor",
-      "designators": ["CF"],
+      "designators": [
+        "CF"
+      ],
       "defaultPins": 2,
       "properties": {
         "capacitorType": "Film"
@@ -211,7 +228,13 @@
           "name": "capacitance",
           "label": "Capacitance",
           "type": "number",
-          "units": ["pF", "nF", "µF", "mF", "F"],
+          "units": [
+            "pF",
+            "nF",
+            "µF",
+            "mF",
+            "F"
+          ],
           "defaultUnit": "nF",
           "required": false
         },
@@ -219,7 +242,11 @@
           "name": "voltage",
           "label": "Voltage Rating",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -234,7 +261,13 @@
           "name": "filmType",
           "label": "Film Type",
           "type": "enum",
-          "enumValues": ["Polyester", "Polypropylene", "Polyethylene", "Polystyrene", "Teflon"],
+          "enumValues": [
+            "Polyester",
+            "Polypropylene",
+            "Polyethylene",
+            "Polystyrene",
+            "Teflon"
+          ],
           "defaultValue": "Polyester",
           "required": false
         },
@@ -252,13 +285,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "storageTemperature",
-          "label": "Storage Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -266,13 +293,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -284,18 +309,27 @@
       "displayName": "Tantalum",
       "description": "Tantalum capacitor",
       "searchText": "tantalum capacitor",
-      "designators": ["C"],
+      "designators": [
+        "C"
+      ],
       "defaultPins": 2,
       "properties": {
         "capacitorType": "Tantalum",
-        "dielectric": "Tantalum"
+        "dielectric": "Tantalum",
+        "polarized": true
       },
       "fields": [
         {
           "name": "capacitance",
           "label": "Capacitance",
           "type": "number",
-          "units": ["pF", "nF", "µF", "mF", "F"],
+          "units": [
+            "pF",
+            "nF",
+            "µF",
+            "mF",
+            "F"
+          ],
           "defaultUnit": "µF",
           "required": false
         },
@@ -303,7 +337,11 @@
           "name": "voltage",
           "label": "Voltage Rating",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -314,18 +352,19 @@
           "required": false
         },
         {
-          "name": "polarity",
-          "label": "Polarity",
-          "type": "enum",
-          "enumValues": ["Positive", "Negative"],
-          "defaultValue": "Positive",
+          "name": "polarized",
+          "label": "Polarized",
+          "type": "boolean",
           "required": false
         },
         {
           "name": "esr",
           "label": "ESR",
           "type": "number",
-          "units": ["mΩ", "Ω"],
+          "units": [
+            "mΩ",
+            "Ω"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -333,7 +372,10 @@
           "name": "leakageCurrent",
           "label": "Leakage Current",
           "type": "number",
-          "units": ["µA", "mA"],
+          "units": [
+            "µA",
+            "mA"
+          ],
           "defaultUnit": "µA",
           "required": false
         },
@@ -351,13 +393,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "storageTemperature",
-          "label": "Storage Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -365,13 +401,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -383,18 +417,25 @@
       "displayName": "Diode",
       "description": "Standard diode",
       "searchText": "diode standard",
-      "designators": ["D"],
+      "designators": [
+        "D"
+      ],
       "defaultPins": 2,
       "subtype": "Standard",
       "properties": {
-        "diodeType": "Standard"
+        "diodeType": "Standard",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -402,7 +443,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -420,13 +465,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -439,18 +478,25 @@
       "displayName": "Zener",
       "description": "Zener diode",
       "searchText": "zener diode",
-      "designators": ["Z"],
+      "designators": [
+        "Z"
+      ],
       "defaultPins": 2,
       "subtype": "Zener",
       "properties": {
-        "diodeType": "Zener"
+        "diodeType": "Zener",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Zener Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -458,7 +504,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "mA",
           "required": false
         },
@@ -466,7 +516,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -484,13 +538,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -503,18 +551,24 @@
       "displayName": "LED",
       "description": "LED diode",
       "searchText": "led diode",
-      "designators": ["LED"],
+      "designators": [
+        "LED"
+      ],
       "defaultPins": 2,
       "subtype": "LED",
       "properties": {
-        "diodeType": "LED"
+        "diodeType": "LED",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Forward Voltage",
           "type": "number",
-          "units": ["mV", "V"],
+          "units": [
+            "mV",
+            "V"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -522,7 +576,10 @@
           "name": "current",
           "label": "Forward Current",
           "type": "number",
-          "units": ["mA", "A"],
+          "units": [
+            "mA",
+            "A"
+          ],
           "defaultUnit": "mA",
           "required": false
         },
@@ -552,13 +609,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -571,18 +622,25 @@
       "displayName": "Schottky",
       "description": "Schottky diode",
       "searchText": "schottky diode",
-      "designators": ["D"],
+      "designators": [
+        "D"
+      ],
       "defaultPins": 2,
       "subtype": "Schottky",
       "properties": {
-        "diodeType": "Schottky"
+        "diodeType": "Schottky",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -590,7 +648,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -608,13 +670,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -627,18 +683,24 @@
       "displayName": "Infrared",
       "description": "Infrared diode",
       "searchText": "infrared diode",
-      "designators": ["IR"],
+      "designators": [
+        "IR"
+      ],
       "defaultPins": 2,
       "subtype": "Infrared",
       "properties": {
-        "diodeType": "Infrared"
+        "diodeType": "Infrared",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V"],
+          "units": [
+            "mV",
+            "V"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -646,7 +708,10 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["mA", "A"],
+          "units": [
+            "mA",
+            "A"
+          ],
           "defaultUnit": "mA",
           "required": false
         },
@@ -670,13 +735,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -689,18 +748,24 @@
       "displayName": "Photodiode",
       "description": "Photodiode",
       "searchText": "photodiode diode",
-      "designators": ["PD"],
+      "designators": [
+        "PD"
+      ],
       "defaultPins": 2,
       "subtype": "Photodiode",
       "properties": {
-        "diodeType": "Photodiode"
+        "diodeType": "Photodiode",
+        "polarized": true
       },
       "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V"],
+          "units": [
+            "mV",
+            "V"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -708,7 +773,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "µA",
           "required": false
         },
@@ -732,13 +801,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -751,7 +814,9 @@
       "displayName": "Resistor",
       "description": "Standard resistor",
       "searchText": "resistor standard",
-      "designators": ["R"],
+      "designators": [
+        "R"
+      ],
       "defaultPins": 2,
       "properties": {
         "resistorType": "Standard"
@@ -761,7 +826,12 @@
           "name": "resistance",
           "label": "Resistance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ",
+            "MΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -769,7 +839,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -794,7 +868,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -802,13 +876,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -820,7 +892,9 @@
       "displayName": "Resistor Network",
       "description": "Resistor network",
       "searchText": "resistor network",
-      "designators": ["RN"],
+      "designators": [
+        "RN"
+      ],
       "defaultPins": 8,
       "properties": {
         "resistorType": "Network"
@@ -830,7 +904,12 @@
           "name": "resistance",
           "label": "Resistance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ",
+            "MΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -838,7 +917,11 @@
           "name": "configuration",
           "label": "Configuration",
           "type": "enum",
-          "enumValues": ["Isolated", "Bussed", "Dual Terminator"],
+          "enumValues": [
+            "Isolated",
+            "Bussed",
+            "Dual Terminator"
+          ],
           "defaultValue": "Isolated",
           "required": false
         },
@@ -856,7 +939,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -864,13 +947,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -882,7 +963,9 @@
       "displayName": "Thermistor",
       "description": "Thermistor resistor",
       "searchText": "thermistor resistor",
-      "designators": ["RT"],
+      "designators": [
+        "RT"
+      ],
       "defaultPins": 2,
       "properties": {
         "resistorType": "Thermistor"
@@ -892,7 +975,12 @@
           "name": "resistance",
           "label": "Resistance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ",
+            "MΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -900,7 +988,10 @@
           "name": "thermistorType",
           "label": "Thermistor Type",
           "type": "enum",
-          "enumValues": ["NTC", "PTC"],
+          "enumValues": [
+            "NTC",
+            "PTC"
+          ],
           "defaultValue": "NTC",
           "required": false
         },
@@ -924,13 +1015,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -943,7 +1028,9 @@
       "displayName": "Variable Resistor",
       "description": "Variable resistor",
       "searchText": "variable resistor",
-      "designators": ["VR"],
+      "designators": [
+        "VR"
+      ],
       "defaultPins": 3,
       "subtype": "Potentiometer",
       "properties": {
@@ -955,7 +1042,12 @@
           "name": "resistance",
           "label": "Resistance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ",
+            "MΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -963,7 +1055,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -971,7 +1067,10 @@
           "name": "taper",
           "label": "Taper",
           "type": "enum",
-          "enumValues": ["Linear", "Logarithmic"],
+          "enumValues": [
+            "Linear",
+            "Logarithmic"
+          ],
           "defaultValue": "Linear",
           "required": false
         },
@@ -989,7 +1088,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -997,13 +1096,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1015,7 +1112,9 @@
       "displayName": "Varistor",
       "description": "Varistor resistor",
       "searchText": "varistor resistor",
-      "designators": ["RV"],
+      "designators": [
+        "RV"
+      ],
       "defaultPins": 3,
       "subtype": "Varistor",
       "properties": {
@@ -1027,7 +1126,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1035,7 +1138,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1043,7 +1150,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -1061,13 +1172,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1080,7 +1185,9 @@
       "displayName": "Transistor",
       "description": "Transistor",
       "searchText": "transistor",
-      "designators": ["Q"],
+      "designators": [
+        "Q"
+      ],
       "defaultPins": 3,
       "properties": {
         "semiconductorType": "Transistor"
@@ -1090,22 +1197,30 @@
           "name": "transistorType",
           "label": "Transistor Type",
           "type": "enum",
-          "enumValues": ["BJT", "FET", "MOSFET", "JFET"],
+          "enumValues": [
+            "BJT",
+            "FET",
+            "MOSFET",
+            "JFET"
+          ],
           "defaultValue": "BJT",
           "required": false
         },
         {
-          "name": "polarity",
-          "label": "Polarity",
-          "type": "enum",
-          "enumValues": ["NPN", "PNP", "N-Channel", "P-Channel"],
+          "name": "polarized",
+          "label": "Polarized",
+          "type": "boolean",
           "required": false
         },
         {
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1113,7 +1228,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1131,13 +1250,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1150,7 +1263,9 @@
       "displayName": "Integrated Circuit",
       "description": "Integrated circuit",
       "searchText": "integrated circuit semiconductor ic",
-      "designators": ["U"],
+      "designators": [
+        "U"
+      ],
       "defaultPins": 8,
       "properties": {
         "semiconductorType": "IntegratedCircuit"
@@ -1178,7 +1293,15 @@
           "name": "packageType",
           "label": "Package Type",
           "type": "enum",
-          "enumValues": ["DIP", "SOIC", "QFP", "BGA", "TQFP", "SSOP", "TSOP"],
+          "enumValues": [
+            "DIP",
+            "SOIC",
+            "QFP",
+            "BGA",
+            "TQFP",
+            "SSOP",
+            "TSOP"
+          ],
           "required": false
         },
         {
@@ -1195,13 +1318,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1214,7 +1331,9 @@
       "displayName": "Inductor",
       "description": "Inductor",
       "searchText": "inductor",
-      "designators": ["L"],
+      "designators": [
+        "L"
+      ],
       "defaultPins": 2,
       "properties": {
         "passiveType": "Inductor"
@@ -1224,7 +1343,12 @@
           "name": "inductance",
           "label": "Inductance",
           "type": "number",
-          "units": ["nH", "µH", "mH", "H"],
+          "units": [
+            "nH",
+            "µH",
+            "mH",
+            "H"
+          ],
           "defaultUnit": "µH",
           "required": false
         },
@@ -1232,7 +1356,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1240,7 +1368,12 @@
           "name": "resistance",
           "label": "DC Resistance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ",
+            "MΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -1258,7 +1391,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -1266,13 +1399,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1284,7 +1415,9 @@
       "displayName": "Ferrite Bead",
       "description": "Ferrite bead",
       "searchText": "ferrite bead passive",
-      "designators": ["FB"],
+      "designators": [
+        "FB"
+      ],
       "defaultPins": 2,
       "properties": {
         "passiveType": "FerriteBead"
@@ -1294,7 +1427,11 @@
           "name": "impedance",
           "label": "Impedance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -1302,7 +1439,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1320,7 +1461,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         },
@@ -1328,13 +1469,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1346,7 +1485,9 @@
       "displayName": "Crystal",
       "description": "Crystal oscillator",
       "searchText": "crystal oscillator passive",
-      "designators": ["X"],
+      "designators": [
+        "X"
+      ],
       "defaultPins": 2,
       "properties": {
         "passiveType": "Crystal"
@@ -1384,13 +1525,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1403,7 +1538,9 @@
       "displayName": "Battery",
       "description": "Battery or battery holder",
       "searchText": "battery power energy",
-      "designators": ["B"],
+      "designators": [
+        "B"
+      ],
       "defaultPins": 2,
       "properties": {
         "powerType": "Battery"
@@ -1413,7 +1550,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1421,7 +1562,10 @@
           "name": "capacity",
           "label": "Capacity",
           "type": "number",
-          "units": ["mAh", "Ah"],
+          "units": [
+            "mAh",
+            "Ah"
+          ],
           "defaultUnit": "mAh",
           "required": false
         },
@@ -1429,7 +1573,13 @@
           "name": "chemistry",
           "label": "Chemistry",
           "type": "enum",
-          "enumValues": ["Li-ion", "Alkaline", "NiMH", "NiCd", "Lead-acid"],
+          "enumValues": [
+            "Li-ion",
+            "Alkaline",
+            "NiMH",
+            "NiCd",
+            "Lead-acid"
+          ],
           "required": false
         },
         {
@@ -1446,13 +1596,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1465,7 +1609,9 @@
       "displayName": "Power Supply",
       "description": "Power supply",
       "searchText": "power supply energy",
-      "designators": ["PS"],
+      "designators": [
+        "PS"
+      ],
       "defaultPins": 4,
       "properties": {
         "powerType": "PowerSupply"
@@ -1475,7 +1621,11 @@
           "name": "inputVoltage",
           "label": "Input Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1483,7 +1633,11 @@
           "name": "outputVoltage",
           "label": "Output Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1491,7 +1645,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1521,13 +1679,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1540,7 +1692,9 @@
       "displayName": "Fuse",
       "description": "Fuse",
       "searchText": "fuse power energy",
-      "designators": ["F"],
+      "designators": [
+        "F"
+      ],
       "defaultPins": 2,
       "properties": {
         "powerType": "Fuse"
@@ -1550,7 +1704,11 @@
           "name": "current",
           "label": "Current Rating",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1558,7 +1716,11 @@
           "name": "voltage",
           "label": "Voltage Rating",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1566,7 +1728,11 @@
           "name": "fuseType",
           "label": "Fuse Type",
           "type": "enum",
-          "enumValues": ["Fast-blow", "Slow-blow", "Time-delay"],
+          "enumValues": [
+            "Fast-blow",
+            "Slow-blow",
+            "Time-delay"
+          ],
           "defaultValue": "Fast-blow",
           "required": false
         },
@@ -1584,13 +1750,7 @@
         },
         {
           "name": "operatingTemperature",
-          "label": "Operating Temperature",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
+          "label": "Operating Temp",
           "type": "string",
           "required": false
         }
@@ -1603,7 +1763,9 @@
       "displayName": "Connector",
       "description": "Connector",
       "searchText": "connector",
-      "designators": ["J"],
+      "designators": [
+        "J"
+      ],
       "defaultPins": 4,
       "properties": {
         "connectorType": "Connector"
@@ -1619,7 +1781,11 @@
           "name": "gender",
           "label": "Gender",
           "type": "enum",
-          "enumValues": ["Male", "Female", "N/A"],
+          "enumValues": [
+            "Male",
+            "Female",
+            "N/A"
+          ],
           "defaultValue": "N/A",
           "required": false
         },
@@ -1639,13 +1805,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1657,7 +1821,9 @@
       "displayName": "Jumper",
       "description": "Jumper link",
       "searchText": "jumper link",
-      "designators": ["JP"],
+      "designators": [
+        "JP"
+      ],
       "defaultPins": 3,
       "properties": {
         "connectorType": "Jumper"
@@ -1685,13 +1851,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1703,7 +1867,9 @@
       "displayName": "Switch",
       "description": "Switch",
       "searchText": "switch",
-      "designators": ["S"],
+      "designators": [
+        "S"
+      ],
       "defaultPins": 2,
       "properties": {
         "switchType": "Switch"
@@ -1719,7 +1885,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1727,7 +1897,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1747,13 +1921,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1765,7 +1937,9 @@
       "displayName": "Relay",
       "description": "Relay or contactor",
       "searchText": "relay contactor",
-      "designators": ["K"],
+      "designators": [
+        "K"
+      ],
       "defaultPins": 5,
       "properties": {
         "switchType": "Relay"
@@ -1775,7 +1949,11 @@
           "name": "coilVoltage",
           "label": "Coil Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1789,7 +1967,11 @@
           "name": "current",
           "label": "Contact Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1809,13 +1991,11 @@
           "name": "mountingType",
           "label": "Mounting Type",
           "type": "enum",
-          "enumValues": ["Through-hole", "SMD", "Surface mount"],
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
+          "enumValues": [
+            "Through-hole",
+            "SMD",
+            "Surface mount"
+          ],
           "required": false
         }
       ]
@@ -1827,14 +2007,20 @@
       "displayName": "Transformer",
       "description": "Transformer",
       "searchText": "transformer",
-      "designators": ["TR"],
+      "designators": [
+        "TR"
+      ],
       "defaultPins": 4,
       "fields": [
         {
           "name": "primaryVoltage",
           "label": "Primary Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1842,7 +2028,11 @@
           "name": "secondaryVoltage",
           "label": "Secondary Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1850,7 +2040,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -1871,12 +2065,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -1887,14 +2075,20 @@
       "displayName": "Speaker",
       "description": "Loudspeaker or buzzer",
       "searchText": "speaker loudspeaker buzzer",
-      "designators": ["LS"],
+      "designators": [
+        "LS"
+      ],
       "defaultPins": 2,
       "fields": [
         {
           "name": "impedance",
           "label": "Impedance",
           "type": "number",
-          "units": ["Ω", "mΩ", "kΩ"],
+          "units": [
+            "Ω",
+            "mΩ",
+            "kΩ"
+          ],
           "defaultUnit": "Ω",
           "required": false
         },
@@ -1902,7 +2096,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -1917,12 +2115,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -1933,7 +2125,9 @@
       "displayName": "Motor",
       "description": "Motor",
       "searchText": "motor",
-      "designators": ["M"],
+      "designators": [
+        "M"
+      ],
       "defaultPins": 2,
       "fields": [
         {
@@ -1946,7 +2140,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -1954,7 +2152,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -1969,12 +2171,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -1985,18 +2181,14 @@
       "displayName": "Test Point",
       "description": "Test point",
       "searchText": "test point",
-      "designators": ["TP"],
+      "designators": [
+        "TP"
+      ],
       "defaultPins": 1,
       "fields": [
         {
           "name": "signal",
           "label": "Signal",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
           "type": "string",
           "required": false
         }
@@ -2009,7 +2201,9 @@
       "displayName": "Vacuum Tube",
       "description": "Vacuum tube",
       "searchText": "vacuum tube",
-      "designators": ["V"],
+      "designators": [
+        "V"
+      ],
       "defaultPins": 5,
       "fields": [
         {
@@ -2029,12 +2223,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -2045,7 +2233,9 @@
       "displayName": "Attenuator",
       "description": "Attenuator or isolator",
       "searchText": "attenuator isolator component",
-      "designators": ["AT"],
+      "designators": [
+        "AT"
+      ],
       "defaultPins": 2,
       "subtype": "Attenuator",
       "fields": [
@@ -2053,7 +2243,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -2061,7 +2255,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -2069,7 +2267,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -2082,12 +2284,6 @@
         {
           "name": "manufacturer",
           "label": "Manufacturer",
-          "type": "string",
-          "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
           "type": "string",
           "required": false
         }
@@ -2100,7 +2296,9 @@
       "displayName": "Circuit Breaker",
       "description": "Circuit breaker",
       "searchText": "circuit breaker component",
-      "designators": ["CB"],
+      "designators": [
+        "CB"
+      ],
       "defaultPins": 2,
       "subtype": "CircuitBreaker",
       "fields": [
@@ -2108,7 +2306,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -2116,7 +2318,11 @@
           "name": "current",
           "label": "Current",
           "type": "number",
-          "units": ["µA", "mA", "A"],
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
           "defaultUnit": "A",
           "required": false
         },
@@ -2124,7 +2330,11 @@
           "name": "power",
           "label": "Power",
           "type": "number",
-          "units": ["W", "mW", "kW"],
+          "units": [
+            "W",
+            "mW",
+            "kW"
+          ],
           "defaultUnit": "W",
           "required": false
         },
@@ -2139,12 +2349,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -2155,7 +2359,9 @@
       "displayName": "Thermocouple",
       "description": "Thermocouple",
       "searchText": "thermocouple component",
-      "designators": ["TC"],
+      "designators": [
+        "TC"
+      ],
       "defaultPins": 2,
       "subtype": "Thermocouple",
       "fields": [
@@ -2169,7 +2375,11 @@
           "name": "voltage",
           "label": "Voltage",
           "type": "number",
-          "units": ["mV", "V", "kV"],
+          "units": [
+            "mV",
+            "V",
+            "kV"
+          ],
           "defaultUnit": "V",
           "required": false
         },
@@ -2184,12 +2394,6 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     },
@@ -2200,7 +2404,9 @@
       "displayName": "Tuner",
       "description": "Tuner",
       "searchText": "tuner component",
-      "designators": ["TUN"],
+      "designators": [
+        "TUN"
+      ],
       "defaultPins": 2,
       "subtype": "Tuner",
       "fields": [
@@ -2221,42 +2427,78 @@
           "label": "Manufacturer",
           "type": "string",
           "required": false
-        },
-        {
-          "name": "notes",
-          "label": "Notes",
-          "type": "string",
-          "required": false
         }
       ]
     }
   ],
   "categories": {
     "Capacitors": {
-      "subcategories": ["General", "Electrolytic", "Film", "Tantalum"]
+      "subcategories": [
+        "General",
+        "Electrolytic",
+        "Film",
+        "Tantalum"
+      ]
     },
     "Diodes": {
-      "subcategories": ["Standard", "Zener", "LED", "Schottky", "Infrared", "Photodiode"]
+      "subcategories": [
+        "Standard",
+        "Zener",
+        "LED",
+        "Schottky",
+        "Infrared",
+        "Photodiode"
+      ]
     },
     "Resistors": {
-      "subcategories": ["Standard", "Network", "Thermistor", "Variable", "Varistor"]
+      "subcategories": [
+        "Standard",
+        "Network",
+        "Thermistor",
+        "Variable",
+        "Varistor"
+      ]
     },
     "Semiconductors": {
-      "subcategories": ["Transistor", "Integrated Circuit"]
+      "subcategories": [
+        "Transistor",
+        "Integrated Circuit"
+      ]
     },
     "Passive Components": {
-      "subcategories": ["Inductor", "Ferrite Bead", "Crystal"]
+      "subcategories": [
+        "Inductor",
+        "Ferrite Bead",
+        "Crystal"
+      ]
     },
     "Power & Energy": {
-      "subcategories": ["Battery", "Power Supply", "Fuse"]
+      "subcategories": [
+        "Battery",
+        "Power Supply",
+        "Fuse"
+      ]
     },
     "Connectors & Switches": {
-      "subcategories": ["Connector", "Jumper", "Switch", "Relay"]
+      "subcategories": [
+        "Connector",
+        "Jumper",
+        "Switch",
+        "Relay"
+      ]
     },
     "Other": {
-      "subcategories": ["Transformer", "Speaker", "Motor", "Test Point", "Vacuum Tube", "Attenuator", "Circuit Breaker", "Thermocouple", "Tuner"]
+      "subcategories": [
+        "Transformer",
+        "Speaker",
+        "Motor",
+        "Test Point",
+        "Vacuum Tube",
+        "Attenuator",
+        "Circuit Breaker",
+        "Thermocouple",
+        "Tuner"
+      ]
     }
   }
 }
-
-

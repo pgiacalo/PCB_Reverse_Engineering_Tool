@@ -30,6 +30,7 @@ import type { PCBComponent } from '../../types';
 import type { ComponentDefinition } from '../../data/componentDefinitions.d';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
+import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: string): string => {
@@ -197,7 +198,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).voltage = componentEditor.voltage || undefined;
       (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
       (updated as any).tolerance = componentEditor.tolerance || undefined;
-      (updated as any).polarity = componentEditor.polarityCapacitor || undefined;
+      (updated as any).polarized = componentEditor.polarized !== undefined ? componentEditor.polarized : undefined;
       (updated as any).esr = componentEditor.esr || undefined;
       (updated as any).esrUnit = componentEditor.esrUnit || undefined;
       (updated as any).temperature = componentEditor.temperature || undefined;
@@ -434,8 +435,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         borderRadius: 4,
         boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
         zIndex: 1000,
-        minWidth: '175px',
-        maxWidth: '250px',
+        minWidth: '350px',
+        width: '350px',
         maxHeight: '40vh',
         display: 'flex',
         flexDirection: 'column',
@@ -506,34 +507,64 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         flex: 1,
         minHeight: 0,
       }}>
-        {/* Type (read-only) - on one line */}
+        {/* Category and Type (read-only) - at the top for clarity */}
+        {(() => {
+          // Resolve component definition if not provided as prop
+          const def = componentDefinition || resolveComponentDefinition(comp as any);
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                Category:
+              </label>
+              <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
+                {def?.category || 'N/A'}
+              </div>
+            </div>
+          );
+        })()}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Type:
           </label>
-          <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
-            {/* Always show the base component type, not the subtype */}
-            {/* For Diode, always show "Diode" regardless of diodeType (Standard, Zener, LED, etc.) */}
-            {/* For VariableResistor, always show "Variable Resistor" regardless of vrType */}
-            {/* For GenericComponent, always show "Generic Component" regardless of genericType */}
-            {/* For Tantalum Capacitor, show "Tantalum Capacitor" instead of just "Capacitor" */}
-            {formatComponentTypeName(
-              comp.componentType === 'Diode'
-                ? 'Diode' // Always show "Diode" for all diode types
-                : comp.componentType === 'VariableResistor'
-                  ? 'VariableResistor' // Always show "Variable Resistor" for all variable resistor types
-                  : comp.componentType === 'GenericComponent'
-                    ? 'GenericComponent' // Always show "Generic Component" for all generic types
-                    : comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum'
-                      ? 'Tantalum Capacitor'
-                      : comp.componentType
-            )}
+          <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
+            {(() => {
+              // Resolve component definition if not provided as prop
+              const def = componentDefinition || resolveComponentDefinition(comp as any);
+              // Prefer definition.displayName if available (most accurate) - same logic as Information dialog
+              if (def?.displayName) {
+                // For capacitors, append "Capacitor" if displayName doesn't already include it
+                if (comp.componentType === 'Capacitor' && !def.displayName.toLowerCase().includes('capacitor')) {
+                  return `${def.displayName} Capacitor`;
+                }
+                return def.displayName;
+              }
+              // Fallback to legacy logic for components without definitions
+              if (comp.componentType === 'GenericComponent' && (comp as any).genericType) {
+                return formatComponentTypeName((comp as any).genericType);
+              }
+              if (comp.componentType === 'Diode' && (comp as any).diodeType && (comp as any).diodeType !== 'Standard') {
+                return formatComponentTypeName((comp as any).diodeType);
+              }
+              if (comp.componentType === 'VariableResistor' && (comp as any).vrType && (comp as any).vrType !== 'Potentiometer') {
+                return formatComponentTypeName((comp as any).vrType);
+              }
+              if (comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum') {
+                return 'Tantalum Capacitor';
+              }
+              if (comp.componentType === 'Capacitor' && (comp as any).capacitorType === 'Electrolytic') {
+                return 'Electrolytic Capacitor';
+              }
+              if (comp.componentType === 'Capacitor' && (comp as any).capacitorType === 'Film') {
+                return 'Film Capacitor';
+              }
+              return formatComponentTypeName(comp.componentType);
+            })()}
           </div>
         </div>
         
         {/* Layer (editable) - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Layer:
           </label>
           <select
@@ -542,7 +573,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.layer}
             onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           >
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
@@ -551,7 +582,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Orientation - moved near top for easy access */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Orientation:
           </label>
           <select
@@ -577,7 +608,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               }
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           >
             <option value="0">0°</option>
             <option value="90">90°</option>
@@ -601,7 +632,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Designator - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Designator:
           </label>
           <input
@@ -616,14 +647,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder="e.g., U2, R7, C1"
           />
         </div>
         
         {/* Description/Part Name - for all components */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Description:
           </label>
           <input
@@ -636,14 +667,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, description: e.target.value });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder=""
           />
         </div>
         
         {/* Notes - single line, clickable to open Notes dialog */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-notes-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-notes-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Notes:
           </label>
           <input
@@ -661,7 +692,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             }}
             disabled={areComponentsLocked}
             style={{ 
-              flex: 1, 
+              width: '180px', 
               padding: '2px 3px', 
               background: '#f5f5f5', 
               border: '1px solid #ddd', 
@@ -682,7 +713,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         {/* Pin Count - on one line (only for non-IC components; ICs show it under IC Properties) */}
         {comp.componentType !== 'IntegratedCircuit' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
               Pin Count:
             </label>
             <input
@@ -727,14 +758,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                 }
               }}
               disabled={areComponentsLocked}
-              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+              style={{ width: '60px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             />
           </div>
         )}
         
         {/* X - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-x-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-x-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             X:
           </label>
           <input
@@ -747,13 +778,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, x: val });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
         {/* Y - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-y-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-y-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Y:
           </label>
           <input
@@ -766,13 +797,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, y: val });
             }}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
         {/* Manufacturer - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-manufacturer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-manufacturer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Manufacturer:
           </label>
           <input
@@ -782,13 +813,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.manufacturer}
             onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
         {/* Part Number - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-partnumber-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
+          <label htmlFor={`component-partnumber-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Part Number:
           </label>
           <input
@@ -798,7 +829,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.partNumber}
             onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
             disabled={areComponentsLocked}
-            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         

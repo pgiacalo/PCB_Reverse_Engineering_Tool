@@ -136,12 +136,13 @@ export function createComponent(
   // Initialize pinConnections array with empty strings
   baseComponent.pinConnections = new Array(baseComponent.pinCount).fill('');
   
-  // Initialize pinPolarities for components that have polarity
-  const hasPolarity = metadata?.componentDefinition?.properties?.polarity ||
-                     componentType === 'Electrolytic Capacitor' || 
-                     componentType === 'Diode' || 
-                     componentType === 'Battery';
-  if (hasPolarity) {
+  // Initialize pinPolarities for components that are polarized
+  const isPolarized = metadata?.componentDefinition?.properties?.polarized !== undefined 
+                     ? metadata.componentDefinition.properties.polarized
+                     : componentType === 'Electrolytic Capacitor' || 
+                       componentType === 'Diode' || 
+                       componentType === 'Battery';
+  if (isPolarized) {
     baseComponent.pinPolarities = new Array(baseComponent.pinCount).fill('');
   }
 
@@ -172,7 +173,7 @@ export function createComponent(
       return { ...baseComponent, componentType: 'Capacitor' } as Capacitor;
     
     case 'Electrolytic Capacitor':
-      return { ...baseComponent, componentType: 'Electrolytic Capacitor', polarity: 'Positive' } as ElectrolyticCapacitor;
+      return { ...baseComponent, componentType: 'Electrolytic Capacitor', polarized: true } as ElectrolyticCapacitor;
     
     case 'Film Capacitor':
       return { ...baseComponent, componentType: 'Film Capacitor', filmType: 'Polyester' } as FilmCapacitor;

@@ -281,53 +281,89 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
 
               return (
               <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
-                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
-                    <div style={{
-                      color: '#fff',
-                      padding: '4px 8px',
-                      fontSize: '12px',
-                      fontWeight: 500
-                    }}>
-                      {comp.componentType === 'GenericComponent' && (comp as any).genericType
-                        ? formatComponentTypeName((comp as any).genericType)
-                        : comp.componentType === 'Diode' && (comp as any).diodeType && (comp as any).diodeType !== 'Standard'
-                          ? formatComponentTypeName((comp as any).diodeType)
-                          : comp.componentType === 'VariableResistor' && (comp as any).vrType && (comp as any).vrType !== 'Potentiometer'
-                            ? formatComponentTypeName((comp as any).vrType)
-                            : comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum'
-                              ? 'Tantalum Capacitor'
-                              : formatComponentTypeName(comp.componentType)}
+                <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '4px', padding: '8px 12px', minHeight: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Category:</label>
+                      <div style={{
+                        color: '#fff',
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {definition?.category || 'N/A'}
+                      </div>
                     </div>
                   </div>
-                  {onFindComponent && (
-                    <button
-                      onClick={() => {
-                        onFindComponent(comp.id, comp.x, comp.y);
-                      }}
-                      style={{
-                        padding: '2px 8px',
-                        fontSize: '10px',
-                        backgroundColor: '#4CAF50',
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <label style={{ fontSize: '11px', color: '#fff', marginRight: '8px' }}>Type:</label>
+                      <div style={{
                         color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: 500,
-                        whiteSpace: 'nowrap',
-                        marginLeft: '8px',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#45a049';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#4CAF50';
-                      }}
-                    >
-                      Find
-                    </button>
-                  )}
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        fontWeight: 500
+                      }}>
+                        {(() => {
+                          // Prefer definition.displayName if available (most accurate)
+                          if (definition?.displayName) {
+                            // For capacitors, append "Capacitor" if displayName doesn't already include it
+                            if (comp.componentType === 'Capacitor' && !definition.displayName.toLowerCase().includes('capacitor')) {
+                              return `${definition.displayName} Capacitor`;
+                            }
+                            return definition.displayName;
+                          }
+                          // Fallback to legacy logic for components without definitions
+                          if (comp.componentType === 'GenericComponent' && (comp as any).genericType) {
+                            return formatComponentTypeName((comp as any).genericType);
+                          }
+                          if (comp.componentType === 'Diode' && (comp as any).diodeType && (comp as any).diodeType !== 'Standard') {
+                            return formatComponentTypeName((comp as any).diodeType);
+                          }
+                          if (comp.componentType === 'VariableResistor' && (comp as any).vrType && (comp as any).vrType !== 'Potentiometer') {
+                            return formatComponentTypeName((comp as any).vrType);
+                          }
+                          if (comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum') {
+                            return 'Tantalum Capacitor';
+                          }
+                          if (comp.componentType === 'Capacitor' && (comp as any).capacitorType === 'Electrolytic') {
+                            return 'Electrolytic Capacitor';
+                          }
+                          if (comp.componentType === 'Capacitor' && (comp as any).capacitorType === 'Film') {
+                            return 'Film Capacitor';
+                          }
+                          return formatComponentTypeName(comp.componentType);
+                        })()}
+                      </div>
+                    </div>
+                    {onFindComponent && (
+                      <button
+                        onClick={() => {
+                          onFindComponent(comp.id, comp.x, comp.y);
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: '10px',
+                          backgroundColor: '#4CAF50',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 500,
+                          whiteSpace: 'nowrap',
+                          marginLeft: '8px',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#45a049';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#4CAF50';
+                        }}
+                      >
+                        Find
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
                   {dynamicFields}
@@ -525,7 +561,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       {/* Essential electrolytic capacitor properties - right after Capacitance */}
                       {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
                       {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
-                      {(comp as any).polarity && <div>Polarity: {(comp as any).polarity}</div>}
+                      {(comp as any).polarized !== undefined && <div>Polarized: {(comp as any).polarized ? 'Yes' : 'No'}</div>}
                       {(comp as any).esr && <div>ESR: {(comp as any).esr}</div>}
                       {(comp as any).temperature && <div>Temperature: {(comp as any).temperature}</div>}
                     </>
@@ -674,7 +710,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   {comp.componentType === 'Transistor' && (
                     <>
                       {(comp as any).transistorType && <div>Type: {(comp as any).transistorType}</div>}
-                      {(comp as any).polarity && <div>Polarity: {(comp as any).polarity}</div>}
+                      {(comp as any).polarized !== undefined && <div>Polarized: {(comp as any).polarized ? 'Yes' : 'No'}</div>}
                       {(comp as any).voltage && <div>Voltage: {(comp as any).voltage}</div>}
                       {(comp as any).current && <div>Current: {(comp as any).current}</div>}
                     </>
