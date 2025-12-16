@@ -132,3 +132,4 @@ interface ComponentDefinition {
 - By type: Find component where `type === 'Film Capacitor'`
 - By category: Filter where `category === 'Capacitors'`
 
+
