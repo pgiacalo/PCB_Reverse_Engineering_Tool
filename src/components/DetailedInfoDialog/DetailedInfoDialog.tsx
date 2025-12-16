@@ -266,9 +266,11 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     const val = (comp as any)[field.name];
                     if (val === undefined || val === null || val === '') return null;
                     const unit = (comp as any)[`${field.name}Unit`];
+                    // Format boolean values as "Yes"/"No" instead of "true"/"false"
+                    const displayValue = typeof val === 'boolean' ? (val ? 'Yes' : 'No') : val;
                     return (
                       <div key={field.name} style={{ fontSize: '11px', color: '#444', marginBottom: '2px' }}>
-                        {field.label}: {val}{unit ? ` ${unit}` : ''}
+                        {field.label}: {displayValue}{unit ? ` ${unit}` : ''}
                       </div>
                     );
                   })}

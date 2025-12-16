@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { COMPONENT_CATEGORIES, COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { COMPONENT_DESIGNATORS, COMPONENT_LIST } from '../../data/componentDesignators';
 import type { ComponentType } from '../../types';
@@ -199,6 +199,82 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   onClose,
 }) => {
   const [searchText, setSearchText] = useState('');
+  // Dialog position and dragging state
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Initialize position when dialog becomes visible
+  useEffect(() => {
+    if (visible && position === null) {
+      // Position dialog on the right side, below the menu bar
+      const dialogWidth = 400;
+      const rightMargin = 20;
+      const topMargin = 80; // Below menu bar
+      
+      setPosition({
+        x: window.innerWidth - dialogWidth - rightMargin,
+        y: topMargin,
+      });
+    }
+  }, [visible, position]);
+
+  // Reset position when dialog is closed
+  useEffect(() => {
+    if (!visible) {
+      setPosition(null);
+    }
+  }, [visible]);
+
+  // Handle drag start
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // Only start dragging if clicking on the header (not buttons/inputs)
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button') || target.closest('input')) {
+      return;
+    }
+    if (dialogRef.current) {
+      const rect = dialogRef.current.getBoundingClientRect();
+      dragOffset.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+      setIsDragging(true);
+      e.preventDefault();
+    }
+  }, []);
+
+  // Handle drag move
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newX = e.clientX - dragOffset.current.x;
+      const newY = e.clientY - dragOffset.current.y;
+      
+      // Keep dialog within viewport bounds
+      const dialogWidth = dialogRef.current?.offsetWidth || 400;
+      const dialogHeight = dialogRef.current?.offsetHeight || 600;
+      
+      const clampedX = Math.max(0, Math.min(newX, window.innerWidth - dialogWidth));
+      const clampedY = Math.max(0, Math.min(newY, window.innerHeight - dialogHeight));
+      
+      setPosition({ x: clampedX, y: clampedY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
   
   // Helper function to check if search text matches any of the searchable fields
   const matchesSearch = useMemo(() => {
@@ -285,8 +361,6 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'flex-end',
-    paddingRight: '20px',
-    paddingTop: '80px',
     zIndex: 10005,
     pointerEvents: 'none',
   };
@@ -300,10 +374,12 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   return (
     <div style={dialogStyle} onClick={(e) => e.stopPropagation()}>
       <div
+        ref={dialogRef}
         onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
         style={{
           position: 'fixed',
+          top: position ? `${position.y}px` : undefined,
+          left: position ? `${position.x}px` : undefined,
           backgroundColor: '#fff',
           borderRadius: 8,
           minWidth: '300px',
@@ -316,10 +392,12 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
           display: 'flex',
           flexDirection: 'column',
           pointerEvents: 'auto',
+          transform: 'none', // Position from top-left corner, not centered
         }}
       >
-        {/* Fixed header - matches Information dialog style */}
+        {/* Fixed header - draggable title bar */}
         <div 
+          onMouseDown={handleDragStart}
           style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
@@ -327,6 +405,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
             padding: '6px',
             borderBottom: '1px solid #e0e0e0',
             background: '#888', // Medium gray background for grabbable window border
+            cursor: isDragging ? 'grabbing' : 'grab',
             userSelect: 'none',
             flexShrink: 0,
           }}
@@ -646,9 +725,9 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                       {entries.map(({ type, subcategory, designator, subtype }, index) => {
                         const info = COMPONENT_TYPE_INFO[type as keyof typeof COMPONENT_TYPE_INFO];
                         if (!info) return null;
-                        // Create a unique key for this entry: designator-type or type-subcategory
-                        // Use designator-type as it's more specific and handles cases where same type has different designators
-                        const uniqueKey = `${designator}-${type}`;
+                        // Create a unique key for this entry: designator-type-subcategory
+                        // Include subcategory to ensure uniqueness when same designator/type has different subtypes
+                        const uniqueKey = `${designator}-${type}-${subcategory}`;
                         // Only this specific entry should be selected, not all entries with the same type
                         const isSelected = selectedComponentKey === uniqueKey;
                         const typeName = formatComponentTypeName(type);
@@ -702,10 +781,6 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                               name={`componentType-${category}`}
                               checked={isSelected}
                               onChange={() => onComponentTypeChange(type as ComponentType, uniqueKey, metadata)}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onComponentTypeChange(type as ComponentType, uniqueKey, metadata);
-                              }}
                               onMouseDown={(e) => e.stopPropagation()}
                               style={{ 
                                 marginRight: '10px',
