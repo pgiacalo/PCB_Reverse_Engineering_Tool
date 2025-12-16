@@ -1625,8 +1625,6 @@ export function generateSimpleSchematic(
       case 'Electrolytic Capacitor':
         return 'simple:Capacitor';
       case 'Diode':
-      case 'ZenerDiode':
-        return 'simple:Diode';
       case 'Switch':
         return 'simple:Switch';
       case 'Transistor':
@@ -1746,7 +1744,7 @@ export function generateSimpleSchematic(
     const symbolLibId = getSymbolLibId(comp.componentType);
     
     // Note: Polarity information could be used for future symbol variants (e.g., polarized capacitor symbol)
-    // Components with polarity: Electrolytic Capacitor, Diode, Battery, ZenerDiode
+    // Components with polarity: Electrolytic Capacitor, Diode, Battery
     // Tantalum capacitors also have polarity
     
     // Calculate rotation from connected pad/via positions to preserve PCB layout

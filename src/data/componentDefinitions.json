@@ -1,0 +1,2262 @@
+{
+  "components": [
+    {
+      "category": "Capacitors",
+      "subcategory": "General",
+      "type": "Capacitor",
+      "displayName": "Capacitor",
+      "description": "General purpose capacitor",
+      "searchText": "capacitor general",
+      "designators": ["C"],
+      "defaultPins": 2,
+      "properties": {
+        "capacitorType": "General"
+      },
+      "fields": [
+        {
+          "name": "capacitance",
+          "label": "Capacitance",
+          "type": "number",
+          "units": ["pF", "nF", "µF", "mF", "F"],
+          "defaultUnit": "µF",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage Rating",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "dielectric",
+          "label": "Dielectric",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "storageTemperature",
+          "label": "Storage Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Capacitors",
+      "subcategory": "Electrolytic",
+      "type": "Capacitor",
+      "displayName": "Electrolytic",
+      "description": "Electrolytic capacitor",
+      "searchText": "electrolytic capacitor",
+      "designators": ["CE"],
+      "defaultPins": 2,
+      "properties": {
+        "capacitorType": "Electrolytic",
+        "polarity": "Positive"
+      },
+      "fields": [
+        {
+          "name": "capacitance",
+          "label": "Capacitance",
+          "type": "number",
+          "units": ["pF", "nF", "µF", "mF", "F"],
+          "defaultUnit": "µF",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage Rating",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "defaultValue": "±20%",
+          "required": false
+        },
+        {
+          "name": "polarity",
+          "label": "Polarity",
+          "type": "enum",
+          "enumValues": ["Positive", "Negative"],
+          "defaultValue": "Positive",
+          "required": false
+        },
+        {
+          "name": "esr",
+          "label": "ESR",
+          "type": "number",
+          "units": ["mΩ", "Ω"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "temperature",
+          "label": "Temperature Range",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "ripple",
+          "label": "Ripple Current",
+          "type": "number",
+          "units": ["mA", "A"],
+          "defaultUnit": "mA",
+          "required": false
+        },
+        {
+          "name": "leakageCurrent",
+          "label": "Leakage Current",
+          "type": "number",
+          "units": ["µA", "mA"],
+          "defaultUnit": "µA",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "storageTemperature",
+          "label": "Storage Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Capacitors",
+      "subcategory": "Film",
+      "type": "Capacitor",
+      "displayName": "Film",
+      "description": "Film capacitor",
+      "searchText": "film capacitor",
+      "designators": ["CF"],
+      "defaultPins": 2,
+      "properties": {
+        "capacitorType": "Film"
+      },
+      "fields": [
+        {
+          "name": "capacitance",
+          "label": "Capacitance",
+          "type": "number",
+          "units": ["pF", "nF", "µF", "mF", "F"],
+          "defaultUnit": "nF",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage Rating",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "defaultValue": "±10%",
+          "required": false
+        },
+        {
+          "name": "filmType",
+          "label": "Film Type",
+          "type": "enum",
+          "enumValues": ["Polyester", "Polypropylene", "Polyethylene", "Polystyrene", "Teflon"],
+          "defaultValue": "Polyester",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "storageTemperature",
+          "label": "Storage Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Capacitors",
+      "subcategory": "Tantalum",
+      "type": "Capacitor",
+      "displayName": "Tantalum",
+      "description": "Tantalum capacitor",
+      "searchText": "tantalum capacitor",
+      "designators": ["C"],
+      "defaultPins": 2,
+      "properties": {
+        "capacitorType": "Tantalum",
+        "dielectric": "Tantalum"
+      },
+      "fields": [
+        {
+          "name": "capacitance",
+          "label": "Capacitance",
+          "type": "number",
+          "units": ["pF", "nF", "µF", "mF", "F"],
+          "defaultUnit": "µF",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage Rating",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "polarity",
+          "label": "Polarity",
+          "type": "enum",
+          "enumValues": ["Positive", "Negative"],
+          "defaultValue": "Positive",
+          "required": false
+        },
+        {
+          "name": "esr",
+          "label": "ESR",
+          "type": "number",
+          "units": ["mΩ", "Ω"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "leakageCurrent",
+          "label": "Leakage Current",
+          "type": "number",
+          "units": ["µA", "mA"],
+          "defaultUnit": "µA",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "storageTemperature",
+          "label": "Storage Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "Standard",
+      "type": "Diode",
+      "displayName": "Diode",
+      "description": "Standard diode",
+      "searchText": "diode standard",
+      "designators": ["D"],
+      "defaultPins": 2,
+      "subtype": "Standard",
+      "properties": {
+        "diodeType": "Standard"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "Zener",
+      "type": "Diode",
+      "displayName": "Zener",
+      "description": "Zener diode",
+      "searchText": "zener diode",
+      "designators": ["Z"],
+      "defaultPins": 2,
+      "subtype": "Zener",
+      "properties": {
+        "diodeType": "Zener"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Zener Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "mA",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "LED",
+      "type": "Diode",
+      "displayName": "LED",
+      "description": "LED diode",
+      "searchText": "led diode",
+      "designators": ["LED"],
+      "defaultPins": 2,
+      "subtype": "LED",
+      "properties": {
+        "diodeType": "LED"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Forward Voltage",
+          "type": "number",
+          "units": ["mV", "V"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Forward Current",
+          "type": "number",
+          "units": ["mA", "A"],
+          "defaultUnit": "mA",
+          "required": false
+        },
+        {
+          "name": "ledColor",
+          "label": "Color",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "wavelength",
+          "label": "Wavelength",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "Schottky",
+      "type": "Diode",
+      "displayName": "Schottky",
+      "description": "Schottky diode",
+      "searchText": "schottky diode",
+      "designators": ["D"],
+      "defaultPins": 2,
+      "subtype": "Schottky",
+      "properties": {
+        "diodeType": "Schottky"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "Infrared",
+      "type": "Diode",
+      "displayName": "Infrared",
+      "description": "Infrared diode",
+      "searchText": "infrared diode",
+      "designators": ["IR"],
+      "defaultPins": 2,
+      "subtype": "Infrared",
+      "properties": {
+        "diodeType": "Infrared"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["mA", "A"],
+          "defaultUnit": "mA",
+          "required": false
+        },
+        {
+          "name": "wavelength",
+          "label": "Wavelength",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Diodes",
+      "subcategory": "Photodiode",
+      "type": "Diode",
+      "displayName": "Photodiode",
+      "description": "Photodiode",
+      "searchText": "photodiode diode",
+      "designators": ["PD"],
+      "defaultPins": 2,
+      "subtype": "Photodiode",
+      "properties": {
+        "diodeType": "Photodiode"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "µA",
+          "required": false
+        },
+        {
+          "name": "wavelength",
+          "label": "Wavelength",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Resistors",
+      "subcategory": "Standard",
+      "type": "Resistor",
+      "displayName": "Resistor",
+      "description": "Standard resistor",
+      "searchText": "resistor standard",
+      "designators": ["R"],
+      "defaultPins": 2,
+      "properties": {
+        "resistorType": "Standard"
+      },
+      "fields": [
+        {
+          "name": "resistance",
+          "label": "Resistance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "defaultValue": "±5%",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Resistors",
+      "subcategory": "Network",
+      "type": "Resistor",
+      "displayName": "Resistor Network",
+      "description": "Resistor network",
+      "searchText": "resistor network",
+      "designators": ["RN"],
+      "defaultPins": 8,
+      "properties": {
+        "resistorType": "Network"
+      },
+      "fields": [
+        {
+          "name": "resistance",
+          "label": "Resistance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "configuration",
+          "label": "Configuration",
+          "type": "enum",
+          "enumValues": ["Isolated", "Bussed", "Dual Terminator"],
+          "defaultValue": "Isolated",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Resistors",
+      "subcategory": "Thermistor",
+      "type": "Resistor",
+      "displayName": "Thermistor",
+      "description": "Thermistor resistor",
+      "searchText": "thermistor resistor",
+      "designators": ["RT"],
+      "defaultPins": 2,
+      "properties": {
+        "resistorType": "Thermistor"
+      },
+      "fields": [
+        {
+          "name": "resistance",
+          "label": "Resistance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "thermistorType",
+          "label": "Thermistor Type",
+          "type": "enum",
+          "enumValues": ["NTC", "PTC"],
+          "defaultValue": "NTC",
+          "required": false
+        },
+        {
+          "name": "beta",
+          "label": "Beta Value",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Resistors",
+      "subcategory": "Variable",
+      "type": "Resistor",
+      "displayName": "Variable Resistor",
+      "description": "Variable resistor",
+      "searchText": "variable resistor",
+      "designators": ["VR"],
+      "defaultPins": 3,
+      "subtype": "Potentiometer",
+      "properties": {
+        "resistorType": "Variable",
+        "vrType": "Potentiometer"
+      },
+      "fields": [
+        {
+          "name": "resistance",
+          "label": "Resistance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "taper",
+          "label": "Taper",
+          "type": "enum",
+          "enumValues": ["Linear", "Logarithmic"],
+          "defaultValue": "Linear",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Resistors",
+      "subcategory": "Varistor",
+      "type": "Resistor",
+      "displayName": "Varistor",
+      "description": "Varistor resistor",
+      "searchText": "varistor resistor",
+      "designators": ["RV"],
+      "defaultPins": 3,
+      "subtype": "Varistor",
+      "properties": {
+        "resistorType": "Variable",
+        "vrType": "Varistor"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Semiconductors",
+      "subcategory": "Transistor",
+      "type": "Semiconductor",
+      "displayName": "Transistor",
+      "description": "Transistor",
+      "searchText": "transistor",
+      "designators": ["Q"],
+      "defaultPins": 3,
+      "properties": {
+        "semiconductorType": "Transistor"
+      },
+      "fields": [
+        {
+          "name": "transistorType",
+          "label": "Transistor Type",
+          "type": "enum",
+          "enumValues": ["BJT", "FET", "MOSFET", "JFET"],
+          "defaultValue": "BJT",
+          "required": false
+        },
+        {
+          "name": "polarity",
+          "label": "Polarity",
+          "type": "enum",
+          "enumValues": ["NPN", "PNP", "N-Channel", "P-Channel"],
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Semiconductors",
+      "subcategory": "Integrated Circuit",
+      "type": "Semiconductor",
+      "displayName": "Integrated Circuit",
+      "description": "Integrated circuit",
+      "searchText": "integrated circuit semiconductor ic",
+      "designators": ["U"],
+      "defaultPins": 8,
+      "properties": {
+        "semiconductorType": "IntegratedCircuit"
+      },
+      "fields": [
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "icType",
+          "label": "IC Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "packageType",
+          "label": "Package Type",
+          "type": "enum",
+          "enumValues": ["DIP", "SOIC", "QFP", "BGA", "TQFP", "SSOP", "TSOP"],
+          "required": false
+        },
+        {
+          "name": "description",
+          "label": "Description",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "datasheet",
+          "label": "Datasheet URL",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Passive Components",
+      "subcategory": "Inductor",
+      "type": "Inductor",
+      "displayName": "Inductor",
+      "description": "Inductor",
+      "searchText": "inductor",
+      "designators": ["L"],
+      "defaultPins": 2,
+      "properties": {
+        "passiveType": "Inductor"
+      },
+      "fields": [
+        {
+          "name": "inductance",
+          "label": "Inductance",
+          "type": "number",
+          "units": ["nH", "µH", "mH", "H"],
+          "defaultUnit": "µH",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "resistance",
+          "label": "DC Resistance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ", "MΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Passive Components",
+      "subcategory": "Ferrite Bead",
+      "type": "FerriteBead",
+      "displayName": "Ferrite Bead",
+      "description": "Ferrite bead",
+      "searchText": "ferrite bead passive",
+      "designators": ["FB"],
+      "defaultPins": 2,
+      "properties": {
+        "passiveType": "FerriteBead"
+      },
+      "fields": [
+        {
+          "name": "impedance",
+          "label": "Impedance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Passive Components",
+      "subcategory": "Crystal",
+      "type": "Crystal",
+      "displayName": "Crystal",
+      "description": "Crystal oscillator",
+      "searchText": "crystal oscillator passive",
+      "designators": ["X"],
+      "defaultPins": 2,
+      "properties": {
+        "passiveType": "Crystal"
+      },
+      "fields": [
+        {
+          "name": "frequency",
+          "label": "Frequency",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "loadCapacitance",
+          "label": "Load Capacitance",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "tolerance",
+          "label": "Tolerance",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Power & Energy",
+      "subcategory": "Battery",
+      "type": "PowerEnergy",
+      "displayName": "Battery",
+      "description": "Battery or battery holder",
+      "searchText": "battery power energy",
+      "designators": ["B"],
+      "defaultPins": 2,
+      "properties": {
+        "powerType": "Battery"
+      },
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "capacity",
+          "label": "Capacity",
+          "type": "number",
+          "units": ["mAh", "Ah"],
+          "defaultUnit": "mAh",
+          "required": false
+        },
+        {
+          "name": "chemistry",
+          "label": "Chemistry",
+          "type": "enum",
+          "enumValues": ["Li-ion", "Alkaline", "NiMH", "NiCd", "Lead-acid"],
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Power & Energy",
+      "subcategory": "Power Supply",
+      "type": "PowerEnergy",
+      "displayName": "Power Supply",
+      "description": "Power supply",
+      "searchText": "power supply energy",
+      "designators": ["PS"],
+      "defaultPins": 4,
+      "properties": {
+        "powerType": "PowerSupply"
+      },
+      "fields": [
+        {
+          "name": "inputVoltage",
+          "label": "Input Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "outputVoltage",
+          "label": "Output Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "efficiency",
+          "label": "Efficiency",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "ripple",
+          "label": "Ripple",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Power & Energy",
+      "subcategory": "Fuse",
+      "type": "PowerEnergy",
+      "displayName": "Fuse",
+      "description": "Fuse",
+      "searchText": "fuse power energy",
+      "designators": ["F"],
+      "defaultPins": 2,
+      "properties": {
+        "powerType": "Fuse"
+      },
+      "fields": [
+        {
+          "name": "current",
+          "label": "Current Rating",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage Rating",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "fuseType",
+          "label": "Fuse Type",
+          "type": "enum",
+          "enumValues": ["Fast-blow", "Slow-blow", "Time-delay"],
+          "defaultValue": "Fast-blow",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temperature",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Connectors & Switches",
+      "subcategory": "Connector",
+      "type": "Connector",
+      "displayName": "Connector",
+      "description": "Connector",
+      "searchText": "connector",
+      "designators": ["J"],
+      "defaultPins": 4,
+      "properties": {
+        "connectorType": "Connector"
+      },
+      "fields": [
+        {
+          "name": "connectorType",
+          "label": "Connector Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "gender",
+          "label": "Gender",
+          "type": "enum",
+          "enumValues": ["Male", "Female", "N/A"],
+          "defaultValue": "N/A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Connectors & Switches",
+      "subcategory": "Jumper",
+      "type": "Jumper",
+      "displayName": "Jumper",
+      "description": "Jumper link",
+      "searchText": "jumper link",
+      "designators": ["JP"],
+      "defaultPins": 3,
+      "properties": {
+        "connectorType": "Jumper"
+      },
+      "fields": [
+        {
+          "name": "positions",
+          "label": "Positions",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Connectors & Switches",
+      "subcategory": "Switch",
+      "type": "Switch",
+      "displayName": "Switch",
+      "description": "Switch",
+      "searchText": "switch",
+      "designators": ["S"],
+      "defaultPins": 2,
+      "properties": {
+        "switchType": "Switch"
+      },
+      "fields": [
+        {
+          "name": "switchType",
+          "label": "Switch Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Connectors & Switches",
+      "subcategory": "Relay",
+      "type": "Relay",
+      "displayName": "Relay",
+      "description": "Relay or contactor",
+      "searchText": "relay contactor",
+      "designators": ["K"],
+      "defaultPins": 5,
+      "properties": {
+        "switchType": "Relay"
+      },
+      "fields": [
+        {
+          "name": "coilVoltage",
+          "label": "Coil Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "contactType",
+          "label": "Contact Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Contact Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "mountingType",
+          "label": "Mounting Type",
+          "type": "enum",
+          "enumValues": ["Through-hole", "SMD", "Surface mount"],
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Transformer",
+      "type": "Transformer",
+      "displayName": "Transformer",
+      "description": "Transformer",
+      "searchText": "transformer",
+      "designators": ["TR"],
+      "defaultPins": 4,
+      "fields": [
+        {
+          "name": "primaryVoltage",
+          "label": "Primary Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "secondaryVoltage",
+          "label": "Secondary Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "turns",
+          "label": "Turns Ratio",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Speaker",
+      "type": "Speaker",
+      "displayName": "Speaker",
+      "description": "Loudspeaker or buzzer",
+      "searchText": "speaker loudspeaker buzzer",
+      "designators": ["LS"],
+      "defaultPins": 2,
+      "fields": [
+        {
+          "name": "impedance",
+          "label": "Impedance",
+          "type": "number",
+          "units": ["Ω", "mΩ", "kΩ"],
+          "defaultUnit": "Ω",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Motor",
+      "type": "Motor",
+      "displayName": "Motor",
+      "description": "Motor",
+      "searchText": "motor",
+      "designators": ["M"],
+      "defaultPins": 2,
+      "fields": [
+        {
+          "name": "motorType",
+          "label": "Motor Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Test Point",
+      "type": "TestPoint",
+      "displayName": "Test Point",
+      "description": "Test point",
+      "searchText": "test point",
+      "designators": ["TP"],
+      "defaultPins": 1,
+      "fields": [
+        {
+          "name": "signal",
+          "label": "Signal",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Vacuum Tube",
+      "type": "VacuumTube",
+      "displayName": "Vacuum Tube",
+      "description": "Vacuum tube",
+      "searchText": "vacuum tube",
+      "designators": ["V"],
+      "defaultPins": 5,
+      "fields": [
+        {
+          "name": "tubeType",
+          "label": "Tube Type",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Attenuator",
+      "type": "GenericComponent",
+      "displayName": "Attenuator",
+      "description": "Attenuator or isolator",
+      "searchText": "attenuator isolator component",
+      "designators": ["AT"],
+      "defaultPins": 2,
+      "subtype": "Attenuator",
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Circuit Breaker",
+      "type": "GenericComponent",
+      "displayName": "Circuit Breaker",
+      "description": "Circuit breaker",
+      "searchText": "circuit breaker component",
+      "designators": ["CB"],
+      "defaultPins": 2,
+      "subtype": "CircuitBreaker",
+      "fields": [
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": ["µA", "mA", "A"],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "power",
+          "label": "Power",
+          "type": "number",
+          "units": ["W", "mW", "kW"],
+          "defaultUnit": "W",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Thermocouple",
+      "type": "GenericComponent",
+      "displayName": "Thermocouple",
+      "description": "Thermocouple",
+      "searchText": "thermocouple component",
+      "designators": ["TC"],
+      "defaultPins": 2,
+      "subtype": "Thermocouple",
+      "fields": [
+        {
+          "name": "model",
+          "label": "Model",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": ["mV", "V", "kV"],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Other",
+      "subcategory": "Tuner",
+      "type": "GenericComponent",
+      "displayName": "Tuner",
+      "description": "Tuner",
+      "searchText": "tuner component",
+      "designators": ["TUN"],
+      "defaultPins": 2,
+      "subtype": "Tuner",
+      "fields": [
+        {
+          "name": "frequency",
+          "label": "Frequency",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "label": "Notes",
+          "type": "string",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "categories": {
+    "Capacitors": {
+      "subcategories": ["General", "Electrolytic", "Film", "Tantalum"]
+    },
+    "Diodes": {
+      "subcategories": ["Standard", "Zener", "LED", "Schottky", "Infrared", "Photodiode"]
+    },
+    "Resistors": {
+      "subcategories": ["Standard", "Network", "Thermistor", "Variable", "Varistor"]
+    },
+    "Semiconductors": {
+      "subcategories": ["Transistor", "Integrated Circuit"]
+    },
+    "Passive Components": {
+      "subcategories": ["Inductor", "Ferrite Bead", "Crystal"]
+    },
+    "Power & Energy": {
+      "subcategories": ["Battery", "Power Supply", "Fuse"]
+    },
+    "Connectors & Switches": {
+      "subcategories": ["Connector", "Jumper", "Switch", "Relay"]
+    },
+    "Other": {
+      "subcategories": ["Transformer", "Speaker", "Motor", "Test Point", "Vacuum Tube", "Attenuator", "Circuit Breaker", "Thermocouple", "Tuner"]
+    }
+  }
+}
+
+

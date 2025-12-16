@@ -23,6 +23,8 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
 import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
+import { createComponentInstance } from './dataDrivenComponents/runtime/instanceFactory';
+import { getDefinitionByKey } from './dataDrivenComponents/definitions/loader';
 import {
   applyTransform,
   applySimpleTransform,
@@ -38,9 +40,7 @@ import {
   darkenColor,
 } from './utils/transformations';
 import { 
-  COMPONENT_TYPE_INFO,
   formatComponentTypeName,
-  COMPONENT_CATEGORIES,
   COLOR_PALETTE,
 } from './constants';
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
@@ -61,6 +61,7 @@ import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardD
 import { TransformImagesDialog } from './components/TransformImagesDialog';
 import { TransformAllDialog } from './components/TransformAllDialog';
 import { ComponentEditor } from './components/ComponentEditor';
+import { ComponentSelectionDialog, type ComponentSelectionMetadata } from './components/ComponentSelectionDialog';
 import { PowerBusManagerDialog } from './components/PowerBusManagerDialog';
 import { GroundBusManagerDialog } from './components/GroundBusManagerDialog';
 import { DesignatorManagerDialog } from './components/DesignatorManagerDialog';
@@ -93,6 +94,8 @@ import {
   type GroundSymbol,
   type Tool,
 } from './hooks';
+import { DataDrivenInfoPanel } from './dataDrivenComponents/ui/DataDrivenInfoPanel';
+import { resolveComponentDefinition } from './utils/componentDefinitionResolver';
 import './App.css';
 
 // Independent stacks for saved/managed drawing objects
@@ -784,8 +787,7 @@ function App() {
     }
   }, [currentTool, drawingMode, testPointToolLayer, topTestPointColor, bottomTestPointColor, topTestPointSize, bottomTestPointSize]);
 
-  // Apply component tool layer default when component tool is selected
-  // Automatically turns on the layer visibility based on the current default
+  // Show component selection dialog when component tool is selected
   React.useEffect(() => {
     if (currentTool === 'component') {
       const layer = componentToolLayer; // Use current default (always 'top' or 'bottom', never null)
@@ -800,12 +802,22 @@ function App() {
         setShowBottomImage(true);
         setShowBottomComponents(true);
       }
-      // Show chooser to allow switching layers
-      setShowComponentLayerChooser(true);
+      // Show component selection dialog
+      setShowComponentSelectionDialog(true);
     } else {
-      setShowComponentLayerChooser(false);
+      setShowComponentSelectionDialog(false);
     }
   }, [currentTool, componentToolLayer, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]);
+  
+  // Update layer-specific settings when componentToolLayer changes
+  React.useEffect(() => {
+    if (currentTool === 'component') {
+      const layer = componentToolLayer;
+      setSelectedDrawingLayer(layer);
+      setBrushColor(layer === 'top' ? topComponentColor : bottomComponentColor);
+      setBrushSize(layer === 'top' ? topComponentSize : bottomComponentSize);
+    }
+  }, [componentToolLayer, currentTool, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]);
 
   // Sync brushColor and brushSize with active tool instance (centralized state management)
   // This ensures brushColor/brushSize always reflect the current tool's attributes
@@ -1861,14 +1873,12 @@ function App() {
   // Power Bus selector
   const powerBusSelectorRef = useRef<HTMLDivElement>(null);
   const groundBusSelectorRef = useRef<HTMLDivElement>(null);
-  // Component type selection (appears after clicking to set position)
-  const [showComponentTypeChooser, setShowComponentTypeChooser] = useState(false);
-  const [showComponentLayerChooser, setShowComponentLayerChooser] = useState(false);
+  // Component selection dialog
+  const [showComponentSelectionDialog, setShowComponentSelectionDialog] = useState(false);
   const [selectedComponentType, setSelectedComponentType] = useState<ComponentType | null>(null);
+  const [selectedComponentKey, setSelectedComponentKey] = useState<string | null>(null);
+  const [selectedComponentMetadata, setSelectedComponentMetadata] = useState<ComponentSelectionMetadata | null>(null);
   const lastSelectedComponentTypeRef = React.useRef<ComponentType | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  const componentTypeChooserRef = useRef<HTMLDivElement>(null);
-  const componentLayerChooserRef = useRef<HTMLDivElement>(null);
   const traceButtonRef = useRef<HTMLButtonElement>(null);
   const padButtonRef = useRef<HTMLButtonElement>(null);
   const testPointButtonRef = useRef<HTMLButtonElement>(null);
@@ -2885,9 +2895,12 @@ function App() {
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
-      // Use brushColor and brushSize (which are synced with tool registry) for immediate updates
-      const componentColor = brushColor || (componentToolLayer === 'top' ? topComponentColor : bottomComponentColor);
-      const componentSize = brushSize || (componentToolLayer === 'top' ? topComponentSize : bottomComponentSize);
+      // Use tool instance directly (single source of truth) for consistent size/color
+      const layer = componentToolLayer || 'top';
+      const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
+      const componentInstance = toolInstanceManager.get(componentInstanceId);
+      const componentColor = componentInstance.color;
+      const componentSize = componentInstance.size;
       // Pass all existing components for designator auto-assignment
       const allExistingComponents = [...componentsTop, ...componentsBottom];
       
@@ -2903,17 +2916,56 @@ function App() {
       if (!componentToolLayer) {
         return; // Wait for user to select a layer
       }
-      const comp = createComponent(
-        selectedComponentType,
-        componentToolLayer, // Use componentToolLayer instead of selectedDrawingLayer
-        truncatedPos.x,
-        truncatedPos.y,
-        componentColor,
-        componentSize,
-        allExistingComponents,
-        counters, // Pass counters based on useGlobalDesignatorCounters setting
-        autoAssignDesignators // Pass auto-assignment setting
-      );
+      // Use v2 runtime if metadata with componentDefinition is available
+      let comp: PCBComponent;
+      if (selectedComponentMetadata?.componentDefinition) {
+        // Get v2 definition from the legacy definition
+        const legacyDef = selectedComponentMetadata.componentDefinition;
+        const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
+        const v2Definition = getDefinitionByKey(v2Key);
+        
+        if (v2Definition) {
+          // Use v2 runtime
+          comp = createComponentInstance({
+            definition: v2Definition,
+            layer: componentToolLayer,
+            x: truncatedPos.x,
+            y: truncatedPos.y,
+            color: componentColor,
+            size: componentSize,
+            existingComponents: allExistingComponents,
+            counters: autoAssignDesignators ? counters : {},
+          });
+        } else {
+          // Fallback to legacy createComponent if v2 definition not found
+          comp = createComponent(
+            selectedComponentType,
+            componentToolLayer,
+            truncatedPos.x,
+            truncatedPos.y,
+            componentColor,
+            componentSize,
+            allExistingComponents,
+            counters,
+            autoAssignDesignators,
+            selectedComponentMetadata || undefined
+          );
+        }
+      } else {
+        // Fallback to legacy createComponent if no metadata
+        comp = createComponent(
+          selectedComponentType,
+          componentToolLayer,
+          truncatedPos.x,
+          truncatedPos.y,
+          componentColor,
+          componentSize,
+          allExistingComponents,
+          counters,
+          autoAssignDesignators,
+          selectedComponentMetadata || undefined
+        );
+      }
       
       // Initialize abbreviation to default based on component type prefix
       (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentType);
@@ -2921,10 +2973,11 @@ function App() {
       // IMPORTANT: Update counters immediately after component creation so the next component gets the correct number
       // This ensures that when placing multiple components rapidly, each gets a unique sequential designator
       if (autoAssignDesignators && comp.designator) {
-        const prefix = getDefaultPrefix(selectedComponentType);
-        const match = comp.designator.match(new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\d+)$`));
+        // Extract prefix and number from designator (e.g., "CE1" -> prefix="CE", number=1)
+        const match = comp.designator.match(/^([A-Za-z]+)(\d+)$/);
         if (match) {
-          const number = parseInt(match[1], 10);
+          const prefix = match[1];
+          const number = parseInt(match[2], 10);
           if (useGlobalDesignatorCounters) {
             // Update global counters in localStorage
             const currentCounters = loadDesignatorCounters();
@@ -2939,6 +2992,12 @@ function App() {
           }
         }
       }
+      
+      // Ensure component was created successfully
+      if (!comp) {
+        return;
+      }
+      
       
       // Save snapshot before adding new component
       saveSnapshot(drawingStrokes, componentsTop, componentsBottom, powerSymbols, groundSymbols);
@@ -3371,7 +3430,7 @@ function App() {
         openComponentEditor(comp, layer);
       }
     }
-  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, selectedComponentType, showComponentTypeChooser, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setNotesDialogVisible, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, openComponentEditor]);
+  }, [currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, componentsTop, componentsBottom, powers, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, selectedComponentType, isSnapDisabled, drawingStrokes, selectedImageForTransform, isPanning, pendingComponentPosition, connectingPin, toolRegistry, currentStroke, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, setNotesDialogVisible, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, openComponentEditor]);
 
   // Helper to finalize an in-progress trace via keyboard or clicks outside canvas
   const finalizeTraceIfAny = useCallback(() => {
@@ -5020,8 +5079,7 @@ function App() {
         // Check if component has polarity
         const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
                            comp.componentType === 'Diode' || 
-                           comp.componentType === 'Battery' || 
-                           comp.componentType === 'ZenerDiode';
+                           comp.componentType === 'Battery';
         const isTantalumCap = comp.componentType === 'Capacitor' && 
                              'dielectric' in comp && 
                              (comp as any).dielectric === 'Tantalum';
@@ -6759,8 +6817,6 @@ function App() {
       setShowTraceLayerChooser(false);
       setShowPadLayerChooser(false);
       setShowTestPointLayerChooser(false);
-      setShowComponentLayerChooser(false);
-      setShowComponentTypeChooser(false);
       setShowPowerBusSelector(false);
       setShowColorPicker(false);
       // Clear any pending component position
@@ -7018,16 +7074,11 @@ function App() {
             e.preventDefault();
             clearAllSelections(); // Clear all selections when tool is selected
             setCurrentTool('component');
-            // The useEffect hook will automatically apply the default layer
-            // Restore last selected component type if available, otherwise show '?' (null)
+            // The useEffect hook will show the component selection dialog
+            // Restore last selected component type if available
             if (lastSelectedComponentTypeRef.current) {
               setSelectedComponentType(lastSelectedComponentTypeRef.current);
-              setShowComponentLayerChooser(false);
-              setShowComponentTypeChooser(false);
             } else {
-              // No previous selection - show layer chooser first (like trace/pad pattern)
-              setShowComponentLayerChooser(true);
-              setShowComponentTypeChooser(false);
               setSelectedComponentType(null);
             }
             return;
@@ -7863,9 +7914,6 @@ function App() {
       if (!canvas) return;
       
       // Don't close component layer chooser if click is on the chooser itself
-      if (componentLayerChooserRef.current && componentLayerChooserRef.current.contains(e.target as Node)) {
-        return;
-      }
       if (e.target instanceof Node && canvas.contains(e.target)) return;
       // Otherwise, finalize any in-progress trace
       finalizeTraceIfAny();
@@ -7874,21 +7922,6 @@ function App() {
         const el = traceChooserRef.current;
         if (!el || !(e.target instanceof Node) || !el.contains(e.target)) {
           setShowTraceLayerChooser(false);
-        }
-      }
-      if (showComponentLayerChooser) {
-        const el2 = componentLayerChooserRef.current;
-        if (!el2 || !(e.target instanceof Node) || !el2.contains(e.target)) {
-          setShowComponentLayerChooser(false);
-          // Switch back to select tool if layer chooser is closed
-          setCurrentTool('select');
-        }
-      }
-      if (showComponentTypeChooser) {
-        const el3 = componentTypeChooserRef.current;
-        if (!el3 || !(e.target instanceof Node) || !el3.contains(e.target)) {
-          setShowComponentTypeChooser(false);
-          setPendingComponentPosition(null);
         }
       }
       // Close color picker when clicking outside it
@@ -7902,7 +7935,7 @@ function App() {
     };
     document.addEventListener('mousedown', onDocMouseDown, true);
     return () => document.removeEventListener('mousedown', onDocMouseDown, true);
-  }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showComponentLayerChooser, showComponentTypeChooser, showColorPicker]);
+  }, [finalizeTraceIfAny, showTraceLayerChooser, showPadLayerChooser, showColorPicker]);
 
   // Helper function to get button position and calculate dialog position
   // Positions dialog to the right of the button, aligned with button's top
@@ -7976,13 +8009,6 @@ function App() {
     }
   }, [showTestPointLayerChooser, updateTestPointChooserPosition]);
 
-  React.useEffect(() => {
-    if (showComponentLayerChooser && componentLayerChooserRef.current && componentButtonRef.current) {
-      const pos = getDialogPosition(componentButtonRef as React.RefObject<HTMLButtonElement | null>);
-      componentLayerChooserRef.current.style.top = `${pos.top}px`;
-      componentLayerChooserRef.current.style.left = `${pos.left}px`;
-    }
-  }, [showComponentLayerChooser]);
 
   React.useEffect(() => {
     if (showPowerBusSelector && powerBusSelectorRef.current && powerButtonRef.current) {
@@ -8804,8 +8830,19 @@ function App() {
       ctx.rect(cx - half, cy - half, compSize, compSize);
       ctx.fill();
       ctx.stroke();
-      // Draw abbreviation text (use selected type if available, otherwise show generic '?')
-      const abbrev = selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '?';
+      // Draw abbreviation text - use specific designator from metadata if available
+      const abbrev = (() => {
+        if (selectedComponentMetadata?.componentDefinition?.designators?.[0]) {
+          const designator = selectedComponentMetadata.componentDefinition.designators[0];
+          return designator.length <= 3 ? designator : designator.substring(0, 3);
+        }
+        if (selectedComponentMetadata?.designator) {
+          return selectedComponentMetadata.designator.length <= 3 
+            ? selectedComponentMetadata.designator 
+            : selectedComponentMetadata.designator.substring(0, 3);
+        }
+        return selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '?';
+      })();
       ctx.fillStyle = componentColor;
       ctx.font = `bold ${Math.max(8, compSize * 0.35)}px sans-serif`;
       ctx.textAlign = 'center';
@@ -12239,9 +12276,7 @@ function App() {
                   console.log('Component tool clicked');
                   clearAllSelections(); // Clear all selections when tool is selected
                   setCurrentTool('component');
-                  // The useEffect hook will automatically apply the default layer and show the layer chooser
-                  setShowComponentTypeChooser(false);
-                  setSelectedComponentType(null);
+                  // The useEffect hook will show the component selection dialog
                 }
               }} 
               disabled={isReadOnlyMode}
@@ -13162,164 +13197,6 @@ function App() {
             </div>
           )}
           {/* Active tool layer chooser for Component */}
-          {(currentTool === 'component' && showComponentLayerChooser) && (
-            <div ref={componentLayerChooserRef} style={{ position: 'absolute', padding: '4px 6px', background: '#fff', border: '2px solid #000', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 25 }}>
-              <label className="radio-label" style={{ marginRight: 6 }}>
-                <input type="radio" name="componentToolLayer" checked={componentToolLayer === 'top'} onChange={() => { 
-                  console.log('Component tool Top clicked');
-                  // Update ref immediately (synchronously) so size/color updates use correct layer
-                  componentToolLayerRef.current = 'top';
-                  setComponentToolLayer('top'); 
-                  setSelectedDrawingLayer('top'); 
-                  // Use layer-specific component colors and sizes
-                  setBrushColor(topComponentColor);
-                  setBrushSize(topComponentSize);
-                  // Update toolRegistry to reflect current layer's color (like pad pattern)
-                  setToolRegistry(prev => {
-                    const updated = new Map(prev);
-                    const componentDef = updated.get('component');
-                    if (componentDef) {
-                      updated.set('component', { ...componentDef, settings: { color: topComponentColor, size: topComponentSize } });
-                    }
-                    return updated;
-                  });
-                  setShowComponentLayerChooser(false); 
-                  setShowTopImage(true);
-                  setShowTopComponents(true); // Automatically enable top components layer visibility
-                  // Always show component type chooser after layer button is clicked
-                  setShowComponentTypeChooser(true);
-                }} />
-                <span>Top</span>
-              </label>
-              <label className="radio-label">
-                <input type="radio" name="componentToolLayer" checked={componentToolLayer === 'bottom'} onChange={() => { 
-                  console.log('Component tool Bottom clicked');
-                  // Update ref immediately (synchronously) so size/color updates use correct layer
-                  componentToolLayerRef.current = 'bottom';
-                  setComponentToolLayer('bottom'); 
-                  setSelectedDrawingLayer('bottom'); 
-                  // Use layer-specific component colors and sizes
-                  setBrushColor(bottomComponentColor);
-                  setBrushSize(bottomComponentSize);
-                  // Update toolRegistry to reflect current layer's color (like pad pattern)
-                  setToolRegistry(prev => {
-                    const updated = new Map(prev);
-                    const componentDef = updated.get('component');
-                    if (componentDef) {
-                      updated.set('component', { ...componentDef, settings: { color: bottomComponentColor, size: bottomComponentSize } });
-                    }
-                    return updated;
-                  });
-                  setShowComponentLayerChooser(false); 
-                  setShowBottomImage(true);
-                  setShowBottomComponents(true); // Automatically enable bottom components layer visibility
-                  // Always show component type chooser after layer button is clicked
-                  setShowComponentTypeChooser(true);
-                }} />
-                <span>Bottom</span>
-              </label>
-            </div>
-          )}
-          {/* Component Type Chooser - hierarchical menu */}
-          {currentTool === 'component' && showComponentTypeChooser && (
-            <div ref={componentTypeChooserRef} style={{ position: 'absolute', top: 44, left: 52, padding: '8px', background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 26, maxHeight: '500px', overflowY: 'auto', minWidth: '250px', maxWidth: '350px' }}>
-              <div style={{ marginBottom: '8px', fontWeight: 600, fontSize: '13px', color: '#333', borderBottom: '1px solid #eee', paddingBottom: '6px' }}>Select Component Type:</div>
-              {Object.entries(COMPONENT_CATEGORIES).map(([category, subcategories]) => {
-                const isExpanded = expandedCategories.has(category);
-                return (
-                  <div key={category} style={{ marginBottom: '4px' }}>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setExpandedCategories(prev => {
-                          const next = new Set(prev);
-                          if (next.has(category)) {
-                            next.delete(category);
-                          } else {
-                            next.add(category);
-                          }
-                          return next;
-                        });
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '6px 8px',
-                        background: isExpanded ? '#f0f0f0' : '#fff',
-                        border: '1px solid #ddd',
-                        borderRadius: 4,
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: '#333',
-                      }}
-                    >
-                      <span style={{ marginRight: '6px', fontSize: '10px' }}>{isExpanded ? '▼' : '▶'}</span>
-                      {category}
-                    </button>
-                    {isExpanded && (
-                      <div style={{ marginLeft: '12px', marginTop: '2px', marginBottom: '4px' }}>
-                        {Object.entries(subcategories).map(([subcategory, types]: [string, readonly string[]]) => (
-                          <div key={subcategory} style={{ marginBottom: '2px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: 500, color: '#666', padding: '2px 4px', marginBottom: '2px' }}>{subcategory}:</div>
-                            {types.map((type: string) => {
-                              const info = COMPONENT_TYPE_INFO[type as keyof typeof COMPONENT_TYPE_INFO];
-                              if (!info) return null;
-                              return (
-                                <button
-                                  key={type}
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    // For special cases (LED, Schottky, Tantalum), we need to handle them differently
-                                    // For now, just set the base type - user can modify in properties dialog
-                                    const componentType = type as ComponentType;
-                                    setSelectedComponentType(componentType);
-                                    lastSelectedComponentTypeRef.current = componentType; // Store last selected type
-                                    setShowComponentTypeChooser(false);
-                                  }}
-                                  style={{
-                                    display: 'block',
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    padding: '4px 8px 4px 16px',
-                                    marginBottom: '2px',
-                                    background: selectedComponentType === type ? '#e6f0ff' : '#fff',
-                                    border: '1px solid #ddd',
-                                    borderRadius: 4,
-                                    cursor: 'pointer',
-                                    fontSize: '11px',
-                                    color: '#333',
-                                  }}
-                                >
-                                  {info.prefix.join(', ')} - {formatComponentTypeName(type)}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShowComponentTypeChooser(false);
-                  // Switch back to select tool if user cancels
-                  setCurrentTool('select');
-                }}
-                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '6px 10px', marginTop: '8px', background: '#f0f0f0', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', color: '#222' }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
 
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
           <div style={{ position: 'absolute', top: 6, left: 60, bottom: 6, width: 168, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
@@ -13542,6 +13419,34 @@ function App() {
             setNotesDialogVisible={setNotesDialogVisible}
           />
 
+          {/* Data-Driven Preview (v2) */}
+          {selectedComponentIds.size === 1 && (() => {
+            const selectedId = Array.from(selectedComponentIds)[0];
+            const allComponents = [...componentsTop, ...componentsBottom];
+            const comp = allComponents.find(c => c.id === selectedId);
+            if (!comp) return null;
+
+            // Use legacy resolver to get (category, subcategory, type) triple
+            const legacyDef = resolveComponentDefinition(comp as any);
+            
+            // Construct v2 key and get v2 definition
+            let v2Definition = null;
+            if (legacyDef) {
+              const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
+              v2Definition = getDefinitionByKey(v2Key) ?? null;
+            } else {
+            }
+
+            return (
+              <div style={{ position: 'absolute', top: 100, right: 16, maxWidth: 260, zIndex: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: '#333' }}>
+                  Data-Driven Preview (v2)
+                </div>
+                <DataDrivenInfoPanel component={comp} definition={v2Definition} />
+              </div>
+            );
+          })()}
+          
           {/* Component Hover Tooltip (only shown when Option key is held) */}
           {hoverComponent && isOptionPressed && (() => {
             const comp = hoverComponent.component;
@@ -14559,6 +14464,36 @@ function App() {
         setViewFlipX={setViewFlipX}
         contentBorder={CONTENT_BORDER}
         setTransparency={setTransparency}
+      />
+
+      {/* Component Selection Dialog */}
+      <ComponentSelectionDialog
+        visible={showComponentSelectionDialog}
+        selectedLayer={componentToolLayer}
+        selectedComponentType={selectedComponentType}
+        onLayerChange={(layer) => {
+          setComponentToolLayer(layer);
+          componentToolLayerRef.current = layer;
+          setSelectedDrawingLayer(layer);
+          setBrushColor(layer === 'top' ? topComponentColor : bottomComponentColor);
+          setBrushSize(layer === 'top' ? topComponentSize : bottomComponentSize);
+          if (layer === 'top') {
+            setShowTopImage(true);
+            setShowTopComponents(true);
+          } else {
+            setShowBottomImage(true);
+            setShowBottomComponents(true);
+          }
+        }}
+        onComponentTypeChange={(componentType, uniqueKey, metadata) => {
+          setSelectedComponentType(componentType);
+          setSelectedComponentKey(uniqueKey);
+          setSelectedComponentMetadata(metadata || null);
+          lastSelectedComponentTypeRef.current = componentType;
+        }}
+        onClose={() => {
+          setShowComponentSelectionDialog(false);
+        }}
       />
 
       {/* Set Size Dialog */}

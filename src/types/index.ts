@@ -121,6 +121,19 @@ export interface PCBComponentBase {
   flipX?: boolean; // Horizontal flip (mirror across vertical axis)
   flipY?: boolean; // Vertical flip (mirror across horizontal axis)
   description?: string; // Component description
+  /**
+   * Manufacturer name for this specific part instance (if known).
+   */
+  manufacturer?: string;
+  /**
+   * Manufacturer-specific ordering / part number (if known).
+   */
+  partNumber?: string;
+  /**
+   * URL to the component datasheet (if known).
+   * This can be a vendor link, PDF, or distributor page.
+   */
+  datasheetUrl?: string;
 }
 
 /**
@@ -131,7 +144,7 @@ export type ComponentType =
   | 'Capacitor'         // C (general)
   | 'Electrolytic Capacitor' // C (electrolytic - has polarity)
   | 'Film Capacitor'    // C, CF (film - non-polarized)
-  | 'Diode'             // D, CR (including Zener and LEDs)
+  | 'Diode'             // D, CR (including Zener, LEDs, Infrared, Photodiode)
   | 'Fuse'              // F
   | 'FerriteBead'       // FB
   | 'Connector'         // J, P
@@ -152,7 +165,7 @@ export type ComponentType =
   | 'VacuumTube'        // V
   | 'VariableResistor'  // VR (potentiometer, varistor, voltage regulator)
   | 'Crystal'           // X, XTAL, Y
-  | 'ZenerDiode';       // Z
+  | 'GenericComponent'; // AT, CB, TC, TUN
 
 /**
  * Battery or Cell (B, BT)
@@ -209,11 +222,11 @@ export interface FilmCapacitor extends PCBComponentBase {
 }
 
 /**
- * Diode (D, CR) - includes Zener diodes and LEDs
+ * Diode (D, CR) - includes Zener diodes, LEDs, Infrared diodes, and Photodiodes
  */
 export interface Diode extends PCBComponentBase {
   componentType: 'Diode';
-  diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other';
+  diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Infrared' | 'Photodiode' | 'Other';
   partNumber?: string;
   voltage?: string; // value only
   voltageUnit?: string; // unit, e.g., "V"
@@ -445,14 +458,20 @@ export interface Crystal extends PCBComponentBase {
 }
 
 /**
- * Zener Diode (Z)
+ * Generic Component - For simple components that don't need specialized interfaces
+ * Used for: Attenuator (AT), Circuit Breaker (CB), Thermocouple (TC), Tuner (TUN)
  */
-export interface ZenerDiode extends PCBComponentBase {
-  componentType: 'ZenerDiode';
+export interface GenericComponent extends PCBComponentBase {
+  componentType: 'GenericComponent';
+  genericType: 'Attenuator' | 'CircuitBreaker' | 'Thermocouple' | 'Tuner';
   voltage?: string; // value only
   voltageUnit?: string; // unit, e.g., "V"
-  power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
-  tolerance?: string;
+  current?: string; // value only
+  currentUnit?: string; // unit, e.g., "A"
+  power?: string; // combined value+unit (e.g., "1/4W", "1W")
+  frequency?: string; // for tuners, e.g., "100MHz"
+  model?: string; // part number or model
+  notes?: string; // additional notes
 }
 
 /**
@@ -484,7 +503,7 @@ export type PCBComponent =
   | VacuumTube
   | VariableResistor
   | Crystal
-  | ZenerDiode;
+  | GenericComponent;
 
 export interface GroundSymbol {
   id: string;

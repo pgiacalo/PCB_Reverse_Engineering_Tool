@@ -53,9 +53,10 @@ import type {
   VacuumTube,
   VariableResistor,
   Crystal,
-  ZenerDiode,
+  GenericComponent,
 } from '../types';
 import { COMPONENT_TYPE_INFO, COMPONENT_ICON } from '../constants';
+import type { ComponentDefinition, ComponentFieldDefinition } from '../data/componentDefinitions.d';
 import { generateUniqueId } from './coordinates';
 
 /**
@@ -83,15 +84,24 @@ export function createComponent(
   x: number,
   y: number,
   color: string,
-  size: number = COMPONENT_ICON.DEFAULT_SIZE,
+  size: number | undefined = undefined,
   existingComponents: PCBComponent[] = [],
   counters: DesignatorCounters = loadDesignatorCounters(),
-  autoAssign: boolean = true
+  autoAssign: boolean = true,
+  metadata?: {
+    designator?: string;
+    subtype?: string;
+    componentDefinition?: ComponentDefinition;
+  }
 ): PCBComponent {
+  // Ensure all components use the same default size if not specified or if size is invalid
+  // This ensures consistent icon sizes unless explicitly changed by the user
+  const componentSize = (size !== undefined && size > 0) ? size : COMPONENT_ICON.DEFAULT_SIZE;
   // Automatically assign designator if enabled
   let designator = '';
   if (autoAssign) {
-    const prefix = getDefaultPrefix(componentType);
+    // Use designator from metadata if provided, otherwise use default prefix
+    const prefix = metadata?.designator || getDefaultPrefix(componentType);
     const nextNumber = getNextDesignatorNumber(prefix, existingComponents, counters);
     designator = `${prefix}${nextNumber}`;
     
@@ -108,7 +118,7 @@ export function createComponent(
     x,
     y,
     color,
-    size,
+    size: componentSize,
     pinCount: getDefaultPinCount(componentType),
     pinConnections: [],
     orientation: 0, // Default orientation: 0 degrees
@@ -116,16 +126,41 @@ export function createComponent(
     flipY: false, // Default: no vertical flip
   };
 
+  // Store definition key for later lookup in dialogs
+  if (metadata?.componentDefinition) {
+    const def = metadata.componentDefinition;
+    const defKey = `${def.category}:${def.subcategory}:${def.type}`;
+    (baseComponent as any).componentDefinitionKey = defKey;
+  }
+
   // Initialize pinConnections array with empty strings
   baseComponent.pinConnections = new Array(baseComponent.pinCount).fill('');
   
   // Initialize pinPolarities for components that have polarity
-  const hasPolarity = componentType === 'Electrolytic Capacitor' || 
+  const hasPolarity = metadata?.componentDefinition?.properties?.polarity ||
+                     componentType === 'Electrolytic Capacitor' || 
                      componentType === 'Diode' || 
-                     componentType === 'Battery' || 
-                     componentType === 'ZenerDiode';
+                     componentType === 'Battery';
   if (hasPolarity) {
     baseComponent.pinPolarities = new Array(baseComponent.pinCount).fill('');
+  }
+
+  // Apply metadata-based properties and default field values
+  const componentDef = metadata?.componentDefinition;
+  if (componentDef?.properties) {
+    Object.assign(baseComponent as any, componentDef.properties);
+  }
+  if (componentDef?.fields) {
+    componentDef.fields.forEach((field: ComponentFieldDefinition) => {
+      // Set default value if provided
+      if (field.defaultValue !== undefined && field.defaultValue !== '') {
+        (baseComponent as any)[field.name] = field.defaultValue;
+      }
+      // Set default unit if provided
+      if (field.units && field.defaultUnit) {
+        (baseComponent as any)[`${field.name}Unit`] = field.defaultUnit;
+      }
+    });
   }
 
   // Create specific component type with default values
@@ -142,8 +177,16 @@ export function createComponent(
     case 'Film Capacitor':
       return { ...baseComponent, componentType: 'Film Capacitor', filmType: 'Polyester' } as FilmCapacitor;
     
-    case 'Diode':
-      return { ...baseComponent, componentType: 'Diode', diodeType: 'Standard' } as Diode;
+    case 'Diode': {
+      // Use subtype from metadata if provided, otherwise default to Standard
+      const diodeType = metadata?.subtype === 'LED' ? 'LED' :
+                       metadata?.subtype === 'Infrared' ? 'Infrared' :
+                       metadata?.subtype === 'Photodiode' ? 'Photodiode' :
+                       metadata?.subtype === 'Schottky' ? 'Schottky' :
+                       metadata?.subtype === 'Zener' ? 'Zener' :
+                       'Standard';
+      return { ...baseComponent, componentType: 'Diode', diodeType: diodeType as any } as Diode;
+    }
     
     case 'Fuse':
       return { ...baseComponent, componentType: 'Fuse' } as Fuse;
@@ -199,16 +242,39 @@ export function createComponent(
     case 'VacuumTube':
       return { ...baseComponent, componentType: 'VacuumTube' } as VacuumTube;
     
-    case 'VariableResistor':
-      return { ...baseComponent, componentType: 'VariableResistor', vrType: 'Potentiometer' } as VariableResistor;
+    case 'VariableResistor': {
+      // Use subtype from metadata if provided, otherwise default to Potentiometer
+      const vrType = metadata?.subtype === 'Varistor' ? 'Varistor' :
+                    metadata?.subtype === 'VoltageRegulator' ? 'VoltageRegulator' :
+                    'Potentiometer';
+      return { ...baseComponent, componentType: 'VariableResistor', vrType: vrType as any } as VariableResistor;
+    }
     
     case 'Crystal':
       return { ...baseComponent, componentType: 'Crystal' } as Crystal;
     
-    case 'ZenerDiode':
-      return { ...baseComponent, componentType: 'ZenerDiode' } as ZenerDiode;
+    case 'GenericComponent': {
+      // Use subtype from metadata if provided, otherwise infer from designator prefix
+      let genericType: 'Attenuator' | 'CircuitBreaker' | 'Thermocouple' | 'Tuner' = 'Attenuator';
+      if (metadata?.subtype) {
+        genericType = metadata.subtype as 'Attenuator' | 'CircuitBreaker' | 'Thermocouple' | 'Tuner';
+      } else if (designator) {
+        if (designator.startsWith('AT')) {
+          genericType = 'Attenuator';
+        } else if (designator.startsWith('CB')) {
+          genericType = 'CircuitBreaker';
+        } else if (designator.startsWith('TC')) {
+          genericType = 'Thermocouple';
+        } else if (designator.startsWith('TUN')) {
+          genericType = 'Tuner';
+        }
+      }
+      return { ...baseComponent, componentType: 'GenericComponent', genericType } as GenericComponent;
+    }
     
     default:
+      // Log warning if component type is not recognized
+      console.warn(`Unknown component type: ${componentType}, defaulting to Resistor`);
       return { ...baseComponent, componentType: 'Resistor' } as Resistor;
   }
 }
@@ -293,8 +359,7 @@ export function autoAssignPolarity(
   // Check if component has polarity
   const hasPolarity = component.componentType === 'Electrolytic Capacitor' || 
                      component.componentType === 'Diode' || 
-                     component.componentType === 'Battery' || 
-                     component.componentType === 'ZenerDiode';
+                     component.componentType === 'Battery';
   const isTantalumCap = component.componentType === 'Capacitor' && 
                        'dielectric' in component && 
                        (component as any).dielectric === 'Tantalum';
@@ -546,9 +611,6 @@ export function componentToBOM(component: PCBComponent): BOMEntry {
         ...base,
         partNumber: component.partNumber,
       };
-    
-    case 'ZenerDiode':
-      return base;
     
     default:
       return base;

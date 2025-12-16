@@ -165,8 +165,8 @@ export function useToolRegistry(
   }, [
     currentTool,
     drawingMode,
-    brushColor,
-    brushSize,
+    // Removed brushColor and brushSize - they're not used in the effect body and cause infinite loops
+    // The effect only reads from refs (prevBrushColorRef, prevBrushSizeRef)
     topTraceColor,
     bottomTraceColor,
     topTraceSize,

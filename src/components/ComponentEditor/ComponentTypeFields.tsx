@@ -28,10 +28,13 @@
 import React from 'react';
 import type { PCBComponent } from '../../types';
 import { getPropertyUnits, getDefaultUnit } from '../../constants';
+import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
+import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 
 export interface ComponentTypeFieldsProps {
   component: PCBComponent;
   componentEditor: any;
+  componentDefinition?: ComponentDefinition;
   setComponentEditor: (editor: any) => void;
   areComponentsLocked: boolean;
   componentsTop: PCBComponent[];
@@ -43,6 +46,7 @@ export interface ComponentTypeFieldsProps {
 export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   component: comp,
   componentEditor,
+  componentDefinition,
   setComponentEditor,
   areComponentsLocked,
   componentsTop,
@@ -50,6 +54,96 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   setComponentsTop,
   setComponentsBottom,
 }) => {
+  const def: ComponentDefinition | undefined =
+    componentDefinition ||
+    (componentEditor as any)?.componentDefinition ||
+    resolveComponentDefinition(comp as any);
+  const fields: ComponentFieldDefinition[] | undefined = def?.fields;
+
+  // Dynamic rendering from component definition fields (if available)
+  if (fields && fields.length > 0) {
+    const renderField = (field: ComponentFieldDefinition) => {
+      const valueKey = field.name;
+      const unitKey = `${field.name}Unit`;
+      const value = (componentEditor as any)[valueKey] ?? field.defaultValue ?? '';
+      const unit = (componentEditor as any)[unitKey] ?? field.defaultUnit ?? '';
+
+      const onValueChange = (val: string) => {
+        setComponentEditor({ ...componentEditor, [valueKey]: val });
+      };
+      const onUnitChange = (val: string) => {
+        setComponentEditor({ ...componentEditor, [unitKey]: val });
+      };
+
+      return (
+        <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+            {field.label}:
+          </label>
+          {field.type === 'enum' ? (
+            <select
+              value={value}
+              onChange={(e) => onValueChange(e.target.value)}
+              disabled={areComponentsLocked}
+              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+            >
+              {(field.enumValues || []).map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onValueChange(e.target.value)}
+              disabled={areComponentsLocked}
+              style={{ flex: field.units ? '0 0 90px' : 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: field.units ? '12px' : '0' }}
+              placeholder={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
+            />
+          )}
+          {field.units && (
+            <select
+              value={unit}
+              onChange={(e) => onUnitChange(e.target.value)}
+              disabled={areComponentsLocked}
+              style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '70px', marginRight: '12px' }}
+            >
+              {field.units.map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
+            </select>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <>
+        {fields.map(renderField)}
+        {/* Fallback basic fields that are always useful */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>Notes:</label>
+          <input
+            type="text"
+            value={(componentEditor as any).notes || ''}
+            onChange={(e) => setComponentEditor({ ...componentEditor, notes: e.target.value })}
+            disabled={areComponentsLocked}
+            style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            placeholder=""
+          />
+        </div>
+      </>
+    );
+  }
+  
+  // Fallback: definition missing
+  return (
+    <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '12px' }}>
+      Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
+    </div>
+  );
+
+  // Legacy rendering (unreachable because of return above, kept for reference if needed)
   return (
     <>
       {/* Resistor */}
@@ -277,11 +371,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-diodetype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Diode Type:</label>
-            <select id={`component-diodetype-${comp.id}`} value={componentEditor.diodeType || 'Standard'} onChange={(e) => setComponentEditor({ ...componentEditor, diodeType: e.target.value as 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Other' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+            <select id={`component-diodetype-${comp.id}`} value={componentEditor.diodeType || 'Standard'} onChange={(e) => setComponentEditor({ ...componentEditor, diodeType: e.target.value as 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Infrared' | 'Photodiode' | 'Other' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
               <option value="Standard">Standard</option>
               <option value="Zener">Zener</option>
               <option value="LED">LED</option>
               <option value="Schottky">Schottky</option>
+              <option value="Infrared">Infrared</option>
+              <option value="Photodiode">Photodiode</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -959,12 +1055,21 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
         </>
       )}
 
-      {/* ZenerDiode */}
-      {comp.componentType === 'ZenerDiode' && (
+      {/* GenericComponent */}
+      {comp.componentType === 'GenericComponent' && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Zener Voltage:</label>
-            <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 5.1" />
+            <label htmlFor={`component-generictype-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Type:</label>
+            <select id={`component-generictype-${comp.id}`} value={(comp as any).genericType || 'Attenuator'} onChange={(e) => setComponentEditor({ ...componentEditor, genericType: e.target.value as 'Attenuator' | 'CircuitBreaker' | 'Thermocouple' | 'Tuner' })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="Attenuator">Attenuator</option>
+              <option value="CircuitBreaker">Circuit Breaker</option>
+              <option value="Thermocouple">Thermocouple</option>
+              <option value="Tuner">Tuner</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-voltage-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Voltage:</label>
+            <input id={`component-voltage-${comp.id}`} type="text" value={componentEditor.voltage || ''} onChange={(e) => setComponentEditor({ ...componentEditor, voltage: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
             <select value={componentEditor.voltageUnit || getDefaultUnit('voltage')} onChange={(e) => setComponentEditor({ ...componentEditor, voltageUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
               {getPropertyUnits('voltage').map(unit => (
                 <option key={unit} value={unit}>{unit}</option>
@@ -972,37 +1077,31 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
-            <select id={`component-power-${comp.id}`} value={componentEditor.power || '1/4'} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '12px' }}>
-              <option value="1/20">1/20 W</option>
-              <option value="1/16">1/16 W</option>
-              <option value="1/10">1/10 W</option>
-              <option value="1/8">1/8 W</option>
-              <option value="1/4">1/4 W</option>
-              <option value="1/2">1/2 W</option>
-              <option value="1">1 W</option>
-              <option value="2">2 W</option>
-              <option value="3">3 W</option>
-              <option value="5">5 W</option>
-              <option value="10">10 W</option>
-              <option value="25">25 W</option>
-              <option value="50">50 W</option>
-              <option value="100">100 W</option>
+            <label htmlFor={`component-current-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Current:</label>
+            <input id={`component-current-${comp.id}`} type="text" value={componentEditor.current || ''} onChange={(e) => setComponentEditor({ ...componentEditor, current: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 1" />
+            <select value={componentEditor.currentUnit || getDefaultUnit('current')} onChange={(e) => setComponentEditor({ ...componentEditor, currentUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+              {getPropertyUnits('current').map(unit => (
+                <option key={unit} value={unit}>{unit}</option>
+              ))}
             </select>
           </div>
+          {(comp as any).genericType === 'Tuner' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label htmlFor={`component-frequency-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Frequency:</label>
+              <input id={`component-frequency-${comp.id}`} type="text" value={componentEditor.frequency || ''} onChange={(e) => setComponentEditor({ ...componentEditor, frequency: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }} placeholder="e.g., 100MHz" />
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±5%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="±0.5%">±0.5%</option>
-              <option value="±1%">±1%</option>
-              <option value="±2%">±2%</option>
-              <option value="±5%">±5%</option>
-              <option value="±10%">±10%</option>
-              <option value="±20%">±20%</option>
-            </select>
+            <label htmlFor={`component-power-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Power:</label>
+            <input id={`component-power-${comp.id}`} type="text" value={componentEditor.power || ''} onChange={(e) => setComponentEditor({ ...componentEditor, power: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }} placeholder="e.g., 1W" />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-model-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Model:</label>
+            <input id={`component-model-${comp.id}`} type="text" value={componentEditor.model || ''} onChange={(e) => setComponentEditor({ ...componentEditor, model: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }} placeholder="Part number or model" />
           </div>
         </>
       )}
+
     </>
   );
 };

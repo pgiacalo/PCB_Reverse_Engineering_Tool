@@ -164,83 +164,60 @@ export const COMPONENT_ICON = {
 // Component Type Metadata
 // ============================================================================
 
-export const COMPONENT_TYPE_INFO = {
-  Battery: { prefix: ['B', 'BT'], defaultPins: 2 },
-  Capacitor: { prefix: ['C'], defaultPins: 2 },
-  'Electrolytic Capacitor': { prefix: ['C', 'CE'], defaultPins: 2 },
-  'Film Capacitor': { prefix: ['C', 'CF'], defaultPins: 2 },
-  Diode: { prefix: ['D', 'CR'], defaultPins: 2 },
-  Fuse: { prefix: ['F'], defaultPins: 2 },
-  FerriteBead: { prefix: ['FB'], defaultPins: 2 },
-  Connector: { prefix: ['J', 'P'], defaultPins: 4 },
-  Jumper: { prefix: ['JP'], defaultPins: 3 },
-  Relay: { prefix: ['K'], defaultPins: 5 },
-  Inductor: { prefix: ['L'], defaultPins: 2 },
-  Speaker: { prefix: ['LS'], defaultPins: 2 },
-  Motor: { prefix: ['M'], defaultPins: 2 },
-  PowerSupply: { prefix: ['PS'], defaultPins: 4 },
-  Transistor: { prefix: ['Q'], defaultPins: 3 },
-  Resistor: { prefix: ['R'], defaultPins: 2 },
-  ResistorNetwork: { prefix: ['RN'], defaultPins: 8 },
-  Thermistor: { prefix: ['RT'], defaultPins: 2 },
-  Switch: { prefix: ['S', 'SW'], defaultPins: 2 },
-  Transformer: { prefix: ['T'], defaultPins: 4 },
-  TestPoint: { prefix: ['TP'], defaultPins: 1 },
-  IntegratedCircuit: { prefix: ['U', 'IC'], defaultPins: 8 },
-  VacuumTube: { prefix: ['V'], defaultPins: 5 },
-  VariableResistor: { prefix: ['VR'], defaultPins: 3 },
-  Crystal: { prefix: ['X', 'XTAL', 'Y'], defaultPins: 2 },
-  ZenerDiode: { prefix: ['Z'], defaultPins: 2 },
-} as const;
+// Import component definitions from externalized JSON file (bundled at build time)
+// Vite bundles JSON imports into the JavaScript bundle, making them available in memory at runtime
+import componentDefinitions from '../data/componentDefinitions.json';
+import type { ComponentDefinition } from '../data/componentDefinitions.d';
 
-// Hierarchical component categories for the component type chooser
-export const COMPONENT_CATEGORIES = {
-  'Capacitors': {
-    'General': ['Capacitor'],
-    'Electrolytic': ['Electrolytic Capacitor'],
-    'Film': ['Film Capacitor'],
-    'Tantalum': ['Capacitor'], // Special handling: check dielectric property
-  },
-  'Diodes': {
-    'Standard': ['Diode'],
-    'Zener': ['ZenerDiode'],
-    'LED': ['Diode'], // Special handling: check diodeType property
-    'Schottky': ['Diode'], // Special handling: check diodeType property
-  },
-  'Resistors': {
-    'Standard': ['Resistor'],
-    'Network': ['ResistorNetwork'],
-    'Thermistor': ['Thermistor'],
-    'Variable': ['VariableResistor'],
-  },
-  'Semiconductors': {
-    'Transistor': ['Transistor'],
-    'Integrated Circuit': ['IntegratedCircuit'],
-  },
-  'Passive Components': {
-    'Inductor': ['Inductor'],
-    'Ferrite Bead': ['FerriteBead'],
-    'Crystal': ['Crystal'],
-  },
-  'Power & Energy': {
-    'Battery': ['Battery'],
-    'Power Supply': ['PowerSupply'],
-    'Fuse': ['Fuse'],
-  },
-  'Connectors & Switches': {
-    'Connector': ['Connector'],
-    'Jumper': ['Jumper'],
-    'Switch': ['Switch'],
-    'Relay': ['Relay'],
-  },
-  'Other': {
-    'Transformer': ['Transformer'],
-    'Speaker': ['Speaker'],
-    'Motor': ['Motor'],
-    'Test Point': ['TestPoint'],
-    'Vacuum Tube': ['VacuumTube'],
-  },
-} as const;
+// Type definitions for component info
+export interface ComponentTypeInfo {
+  prefix: readonly string[];
+  defaultPins: number;
+}
+
+// Build COMPONENT_TYPE_INFO from new structure (for backward compatibility)
+// Maps component type to prefix and defaultPins
+const componentTypeInfoMap: Record<string, ComponentTypeInfo> = {};
+componentDefinitions.components.forEach(comp => {
+  if (!componentTypeInfoMap[comp.type]) {
+    componentTypeInfoMap[comp.type] = {
+      prefix: comp.designators as readonly string[],
+      defaultPins: comp.defaultPins
+    };
+  } else {
+    // Merge designators if type already exists
+    const existing = componentTypeInfoMap[comp.type];
+    const mergedPrefixes = [...new Set([...existing.prefix, ...comp.designators])];
+    componentTypeInfoMap[comp.type] = {
+      prefix: mergedPrefixes as readonly string[],
+      defaultPins: existing.defaultPins
+    };
+  }
+});
+export const COMPONENT_TYPE_INFO = componentTypeInfoMap as Record<string, ComponentTypeInfo>;
+
+// Build COMPONENT_CATEGORIES from new structure (for backward compatibility)
+// Converts flat components array to hierarchical category structure
+const componentCategoriesMap: Record<string, Record<string, readonly string[]>> = {};
+componentDefinitions.components.forEach(comp => {
+  if (!componentCategoriesMap[comp.category]) {
+    componentCategoriesMap[comp.category] = {};
+  }
+  if (!componentCategoriesMap[comp.category][comp.subcategory]) {
+    componentCategoriesMap[comp.category][comp.subcategory] = [comp.type] as readonly string[];
+  } else {
+    // Add type if not already in subcategory
+    const existing = componentCategoriesMap[comp.category][comp.subcategory];
+    if (!existing.includes(comp.type)) {
+      componentCategoriesMap[comp.category][comp.subcategory] = [...existing, comp.type] as readonly string[];
+    }
+  }
+});
+export const COMPONENT_CATEGORIES = componentCategoriesMap as Record<string, Record<string, readonly string[]>>;
+
+// Export new structure for direct access
+export const COMPONENT_DEFINITIONS = componentDefinitions;
+export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.components;
 
 // ============================================================================
 // Ground Symbol Dimensions
@@ -288,7 +265,7 @@ export const COMPONENT_PROPERTY_UNITS = {
     validUnits: ['pF', 'nF', 'µF', 'mF', 'F'],
     defaultUnit: 'µF',
   },
-  // Voltage (Capacitor, Electrolytic Capacitor, Diode, Battery, Fuse, Motor, PowerSupply, Transistor, Switch, ZenerDiode, Relay coilVoltage)
+  // Voltage (Capacitor, Electrolytic Capacitor, Diode, Battery, Fuse, Motor, PowerSupply, Transistor, Switch, Relay coilVoltage)
   voltage: {
     validUnits: ['mV', 'V', 'kV'],
     defaultUnit: 'V',
@@ -298,7 +275,7 @@ export const COMPONENT_PROPERTY_UNITS = {
     validUnits: ['µA', 'mA', 'A'],
     defaultUnit: 'A',
   },
-  // Power (Resistor, Speaker, Transformer, ZenerDiode, VariableResistor)
+  // Power (Resistor, Speaker, Transformer, VariableResistor)
   power: {
     validUnits: ['W', 'mW', 'kW'],
     defaultUnit: 'W',

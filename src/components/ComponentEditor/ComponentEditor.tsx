@@ -27,6 +27,7 @@
 
 import React from 'react';
 import type { PCBComponent } from '../../types';
+import type { ComponentDefinition } from '../../data/componentDefinitions.d';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 
@@ -57,6 +58,8 @@ export interface ComponentEditorProps {
     orientation?: number;
     [key: string]: any; // For type-specific fields
   } | null;
+  /** Component definition (metadata) */
+  componentDefinition?: ComponentDefinition;
   /** Set component editor state */
   setComponentEditor: (editor: any) => void;
   /** Components on top layer */
@@ -93,6 +96,7 @@ export interface ComponentEditorProps {
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   componentEditor,
+  componentDefinition,
   setComponentEditor,
   componentsTop,
   componentsBottom,
@@ -205,7 +209,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).tolerance = componentEditor.tolerance || undefined;
       (updated as any).filmType = componentEditor.filmType || undefined;
     } else if (comp.componentType === 'Diode') {
-      (updated as any).diodeType = componentEditor.diodeType || undefined;
+      // Pre-fill diodeType from component's diodeType property (set during creation from radio button selection)
+      (updated as any).diodeType = componentEditor.diodeType || (comp as any).diodeType || 'Standard';
       (updated as any).voltage = componentEditor.voltage || undefined;
       (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
       (updated as any).current = componentEditor.current || undefined;
@@ -326,12 +331,15 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).frequency = componentEditor.frequency || undefined;
       (updated as any).loadCapacitance = componentEditor.loadCapacitance || undefined;
       (updated as any).tolerance = componentEditor.tolerance || undefined;
-    } else if (comp.componentType === 'ZenerDiode') {
+    } else if (comp.componentType === 'GenericComponent') {
+      (updated as any).genericType = componentEditor.genericType || 'Attenuator';
       (updated as any).voltage = componentEditor.voltage || undefined;
       (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
-      (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).current = componentEditor.current || undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).power = componentEditor.power || undefined;
+      (updated as any).frequency = componentEditor.frequency || undefined;
+      (updated as any).model = componentEditor.model || undefined;
     }
     
     return updated;
@@ -504,7 +512,22 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             Type:
           </label>
           <div style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
-            {formatComponentTypeName(comp.componentType)}
+            {/* Always show the base component type, not the subtype */}
+            {/* For Diode, always show "Diode" regardless of diodeType (Standard, Zener, LED, etc.) */}
+            {/* For VariableResistor, always show "Variable Resistor" regardless of vrType */}
+            {/* For GenericComponent, always show "Generic Component" regardless of genericType */}
+            {/* For Tantalum Capacitor, show "Tantalum Capacitor" instead of just "Capacitor" */}
+            {formatComponentTypeName(
+              comp.componentType === 'Diode'
+                ? 'Diode' // Always show "Diode" for all diode types
+                : comp.componentType === 'VariableResistor'
+                  ? 'VariableResistor' // Always show "Variable Resistor" for all variable resistor types
+                  : comp.componentType === 'GenericComponent'
+                    ? 'GenericComponent' // Always show "Generic Component" for all generic types
+                    : comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum'
+                      ? 'Tantalum Capacitor'
+                      : comp.componentType
+            )}
           </div>
         </div>
         
@@ -565,8 +588,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Type-specific value fields - moved near top for easy access */}
         <ComponentTypeFields
-          component={comp}
-          componentEditor={componentEditor}
+            component={comp}
+            componentEditor={componentEditor}
+            componentDefinition={componentDefinition}
           setComponentEditor={setComponentEditor}
           areComponentsLocked={areComponentsLocked}
           componentsTop={componentsTop}
@@ -613,7 +637,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             }}
             disabled={areComponentsLocked}
             style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-            placeholder={comp.componentType === 'IntegratedCircuit' ? "e.g., Dual Op-Amp" : "e.g., Op Amp OP07"}
+            placeholder=""
           />
         </div>
         
@@ -792,8 +816,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             // Determine if this component type has polarity
             const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
                                comp.componentType === 'Diode' || 
-                               comp.componentType === 'Battery' || 
-                               comp.componentType === 'ZenerDiode';
+                               comp.componentType === 'Battery';
             const isTantalumCap = comp.componentType === 'Capacitor' && 
                                  'dielectric' in comp && 
                                  (comp as any).dielectric === 'Tantalum';

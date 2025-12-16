@@ -27,9 +27,12 @@
 
 import React from 'react';
 import type { PCBComponent } from '../../types';
+import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
 import { autoAssignPolarity } from '../../utils/components';
 import { formatComponentTypeName } from '../../constants';
+import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
+
 
 // DrawingStroke type matches App.tsx's local interface
 interface DrawingStroke {
@@ -254,7 +257,29 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
           {selectedComponentIds.size > 0 && (() => {
             // Check if there are any vias or pads in the selected items
             const hasViasOrPads = drawingStrokes.some(s => selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad'));
-            return [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => (
+            return [...componentsTop, ...componentsBottom].filter(c => selectedComponentIds.has(c.id)).map((comp) => {
+              const definition: ComponentDefinition | undefined = resolveComponentDefinition(comp as any);
+              const fields: ComponentFieldDefinition[] | undefined = definition?.fields;
+              const dynamicFields = (fields && fields.length > 0) ? (
+                <div style={{ marginTop: '6px', marginBottom: '6px', padding: '4px 0' }}>
+                  {fields.map((field) => {
+                    const val = (comp as any)[field.name];
+                    if (val === undefined || val === null || val === '') return null;
+                    const unit = (comp as any)[`${field.name}Unit`];
+                    return (
+                      <div key={field.name} style={{ fontSize: '11px', color: '#444', marginBottom: '2px' }}>
+                        {field.label}: {val}{unit ? ` ${unit}` : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: '6px 0', fontSize: '11px', color: '#856404', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, marginTop: '6px', marginBottom: '6px' }}>
+                  Component definition missing for this instance. Please ensure componentDefinitions.json entry and componentDefinitionKey are set.
+                </div>
+              );
+
+              return (
               <div key={comp.id} style={{ marginTop: '16px', padding: 0, backgroundColor: '#fff', borderRadius: 4, border: '1px solid #ddd' }}>
                 <div style={{ backgroundColor: '#000', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', minHeight: '32px' }}>
                   <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -265,7 +290,15 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       fontSize: '12px',
                       fontWeight: 500
                     }}>
-                      {formatComponentTypeName(comp.componentType)}
+                      {comp.componentType === 'GenericComponent' && (comp as any).genericType
+                        ? formatComponentTypeName((comp as any).genericType)
+                        : comp.componentType === 'Diode' && (comp as any).diodeType && (comp as any).diodeType !== 'Standard'
+                          ? formatComponentTypeName((comp as any).diodeType)
+                          : comp.componentType === 'VariableResistor' && (comp as any).vrType && (comp as any).vrType !== 'Potentiometer'
+                            ? formatComponentTypeName((comp as any).vrType)
+                            : comp.componentType === 'Capacitor' && (comp as any).dielectric === 'Tantalum'
+                              ? 'Tantalum Capacitor'
+                              : formatComponentTypeName(comp.componentType)}
                     </div>
                   </div>
                   {onFindComponent && (
@@ -297,6 +330,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   )}
                 </div>
                 <div style={{ fontSize: '11px', color: '#666', marginTop: '8px' }}>
+                  {dynamicFields}
                   <div>Layer: {comp.layer}</div>
                   {comp.componentType === 'IntegratedCircuit' && (
                     <>
@@ -457,7 +491,6 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       </button>
                     )}
                   </div>
-                  <div>Abbreviation: {(comp as any).abbreviation || '(empty)'}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>Color:</span>
                     <div style={{ width: '16px', height: '16px', backgroundColor: comp.color, border: '1px solid #ccc', borderRadius: 2 }}></div>
@@ -500,11 +533,9 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   
                   {comp.pinConnections && comp.pinConnections.length > 0 && (() => {
                     // Determine if this component type has polarity
-                    // Determine if this component type has polarity
                     const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
                                        comp.componentType === 'Diode' || // Includes LEDs
-                                       comp.componentType === 'Battery' || 
-                                       comp.componentType === 'ZenerDiode';
+                                       comp.componentType === 'Battery';
                     // Also check for tantalum capacitors
                     const isTantalumCap = comp.componentType === 'Capacitor' && 
                                          'dielectric' in comp && 
@@ -716,11 +747,14 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     </>
                   )}
                   
-                  {comp.componentType === 'ZenerDiode' && (
+                  {comp.componentType === 'GenericComponent' && (
                     <>
-                      {(comp as any).voltage && <div>Zener Voltage: {(comp as any).voltage}</div>}
+                      {(comp as any).genericType && <div>Type: {(comp as any).genericType}</div>}
+                      {(comp as any).voltage && <div>Voltage: {(comp as any).voltage} {(comp as any).voltageUnit || 'V'}</div>}
+                      {(comp as any).current && <div>Current: {(comp as any).current} {(comp as any).currentUnit || 'A'}</div>}
                       {(comp as any).power && <div>Power: {(comp as any).power}</div>}
-                      {(comp as any).tolerance && <div>Tolerance: {(comp as any).tolerance}</div>}
+                      {(comp as any).frequency && <div>Frequency: {(comp as any).frequency}</div>}
+                      {(comp as any).model && <div>Model: {(comp as any).model}</div>}
                     </>
                   )}
                   
@@ -730,7 +764,8 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   </div>
                 </div>
               </div>
-            ));
+              );
+            });
           })()}
 
           {/* Vias - Formatted UI */}
