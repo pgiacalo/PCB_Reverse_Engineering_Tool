@@ -133,3 +133,4 @@ interface ComponentDefinition {
 - By category: Filter where `category === 'Capacitors'`
 
 
+

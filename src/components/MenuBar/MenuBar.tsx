@@ -360,7 +360,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     // If action returns a Promise, handle it (but don't await - this is fire-and-forget)
     if (result instanceof Promise) {
       result.catch((e) => {
+        const errorMessage = e instanceof Error ? e.message : String(e);
         console.error('Error in requireProject action:', e);
+        // Show user-friendly error message
+        alert(`An error occurred:\n\n${errorMessage}\n\nSee console for details.`);
       });
     }
   };

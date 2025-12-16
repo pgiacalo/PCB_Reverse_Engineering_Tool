@@ -9421,16 +9421,18 @@ function App() {
 
   // Auto Save function - saves to a file handle with timestamped filename
   // Use refs to avoid recreating this function on every state change
-  // ALWAYS uses projectDirHandle (the directory from which the project was created or opened)
+  // Uses autoSaveDirHandle (set when auto-save is enabled) or falls back to projectDirHandle
+  // NOTE: Do NOT show success alerts - the green circle indicator (setHasUnsavedChangesState(false))
+  // is the only user feedback for auto-save completion
   const performAutoSave = useCallback(async () => {
     console.log('Auto save: performAutoSave called');
     
-    // ALWAYS use projectDirHandle - the directory from which the project was created or opened
-    // This ensures Auto Save always saves to the same directory as the project file
-    let dirHandle = projectDirHandleRef.current;
+    // Use autoSaveDirHandle if available, otherwise fall back to projectDirHandle
+    // This ensures Auto Save uses the directory configured for auto-save
+    let dirHandle = autoSaveDirHandleRef.current || projectDirHandleRef.current;
     let baseName = autoSaveBaseNameRef.current;
     
-    console.log(`Auto save: projectDirHandle=${dirHandle ? `set (${dirHandle.name})` : 'missing'}, baseName=${baseName || 'missing'}`);
+    console.log(`Auto save: dirHandle=${dirHandle ? `set (using ${autoSaveDirHandleRef.current ? 'autoSaveDirHandle' : 'projectDirHandle'})` : 'missing'}, baseName=${baseName || 'missing'}`);
     
     // If directory handle is missing, we cannot save
     // Directory should be set when project is created or opened (which is a user gesture)
@@ -9587,6 +9589,7 @@ function App() {
       // Reset the changes flag after successful save
       hasChangesSinceLastAutoSaveRef.current = false;
       // Clear the save status indicator (project is saved - green)
+      // This is the ONLY user feedback for auto-save - no alerts should be shown
       setHasUnsavedChangesState(false);
     } catch (e) {
       console.error('Auto save failed:', e);
@@ -9697,10 +9700,13 @@ function App() {
         // Reset save status indicator (project is saved - green)
         setHasUnsavedChangesState(false);
         hasChangesSinceLastAutoSaveRef.current = false;
-        console.log(`Project saved: ${projectName}/${filename}`);
+        console.log(`Project saved successfully: ${projectName}/${filename}`);
+        alert(`Project saved successfully!\n\nFile: ${filename}\nLocation: ${projectName}`);
         return;
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
         console.error('Failed to save to project directory:', e);
+        alert(`Failed to save project to directory.\n\nError: ${errorMessage}\n\nPlease try saving again or use Save As...`);
         // Directory handle may have been revoked - clear it so user can select a new one
         setProjectDirHandle(null);
         // Fall through to prompt user for directory
@@ -9724,11 +9730,14 @@ function App() {
           // Reset save status indicator (project is saved - green)
           setHasUnsavedChangesState(false);
           hasChangesSinceLastAutoSaveRef.current = false;
-          console.log(`Project saved: ${filename} in selected directory`);
+          console.log(`Project saved successfully: ${filename} in selected directory`);
+          alert(`Project saved successfully!\n\nFile: ${filename}`);
           return;
         } catch (e) {
           if ((e as any)?.name !== 'AbortError') {
+            const errorMessage = e instanceof Error ? e.message : String(e);
             console.error('Failed to get directory:', e);
+            alert(`Failed to select directory.\n\nError: ${errorMessage}\n\nFalling back to file picker...`);
           }
           // Fall through to file picker
         }
@@ -9800,11 +9809,15 @@ function App() {
           console.warn('Could not set up auto save for new file:', e);
         }
         
+        console.log(`Project saved successfully: ${savedFilename}`);
+        alert(`Project saved successfully!\n\nFile: ${savedFilename}`);
         return;
       } catch (e) {
         // If user cancels, fall back to download is unnecessary; just return
         if ((e as any)?.name === 'AbortError') return;
+        const errorMessage = e instanceof Error ? e.message : String(e);
         console.warn('showSaveFilePicker failed, falling back to download', e);
+        alert(`File picker unavailable.\n\nError: ${errorMessage}\n\nFalling back to browser download...`);
       }
     }
     // Fallback: regular download (browser save dialog)
@@ -9817,7 +9830,20 @@ function App() {
       URL.revokeObjectURL(a.href);
       document.body.removeChild(a);
     }, 0);
-  }, [buildProjectData]);
+    console.log(`Project downloaded: ${filename}`);
+    alert(`Project downloaded successfully!\n\nFile: ${filename}\n\nNote: For better project management, use File → New Project or File → Open Project.`);
+  }, [
+    buildProjectData,
+    projectDirHandle,
+    projectName,
+    setCurrentProjectFilePath,
+    setProjectDirHandle,
+    setHasUnsavedChangesState,
+    setProjectName,
+    setAutoSaveBaseName,
+    autoSaveDirHandle,
+    removeTimestampFromFilename,
+  ]);
 
   // Generate PDF from BOM data
   const generateBOMPDF = useCallback((bomData: BOMData): Blob => {
@@ -9986,8 +10012,10 @@ function App() {
       if (autoSaveEnabled && autoSaveInterval) {
         const intervalMs = autoSaveInterval * 60 * 1000; // Convert minutes to milliseconds
         
-        // Only set up interval if we have both directory handle and base name
-        if (autoSaveDirHandle && autoSaveBaseName) {
+        // Only set up interval if we have both directory handle (autoSaveDirHandle or projectDirHandle) and base name
+        // performAutoSave uses autoSaveDirHandleRef.current || projectDirHandleRef.current
+        const hasDirHandle = autoSaveDirHandle || projectDirHandle;
+        if (hasDirHandle && autoSaveBaseName) {
           console.log(`Auto save: Setting up interval for ${autoSaveInterval} minute(s) (${intervalMs}ms)`);
           
           // Only perform initial save when autosave transitions from disabled to enabled
@@ -10013,12 +10041,13 @@ function App() {
             performAutoSave();
           }, intervalMs);
           console.log(`Auto save: Interval set up for ${intervalMs}ms (${autoSaveInterval} minutes)`);
-          console.log(`  - Directory handle: ${autoSaveDirHandle ? 'set' : 'missing'}`);
+          console.log(`  - Auto save directory handle: ${autoSaveDirHandle ? 'set' : 'missing'}`);
+          console.log(`  - Project directory handle: ${projectDirHandle ? 'set' : 'missing'}`);
           console.log(`  - Base name: ${autoSaveBaseName || 'missing'}`);
         } else {
           // Auto save is enabled but directory handle or base name is missing
           // Disable auto save and clear interval
-          console.warn(`Auto save: Cannot set up interval - missing directory handle (${!autoSaveDirHandle}) or base name (${!autoSaveBaseName}). Disabling auto save.`);
+          console.warn(`Auto save: Cannot set up interval - missing directory handle (autoSaveDirHandle: ${!!autoSaveDirHandle}, projectDirHandle: ${!!projectDirHandle}) or base name (${!autoSaveBaseName}). Disabling auto save.`);
           setAutoSaveEnabled(false);
           if (autoSaveIntervalRef.current) {
             clearInterval(autoSaveIntervalRef.current);
@@ -10038,8 +10067,9 @@ function App() {
       }
     };
     // Only depend on configuration, not performAutoSave itself
+    // Include projectDirHandle as fallback since performAutoSave can use it
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoSaveEnabled, autoSaveInterval, autoSaveDirHandle, autoSaveBaseName]);
+  }, [autoSaveEnabled, autoSaveInterval, autoSaveDirHandle, autoSaveBaseName, projectDirHandle]);
 
   // Track changes to project data for auto save
   // Only track changes if auto save is enabled
