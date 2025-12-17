@@ -40,46 +40,48 @@ export const COMPONENT_LIST: ComponentDefinition[] = componentDefinitions.compon
 // Export categories for UI organization
 export const COMPONENT_CATEGORIES_STRUCTURE = componentDefinitions.categories;
 
-// Legacy interface for backward compatibility during transition
+// Simple mapping from a single designator prefix to a human-readable component description.
+// There is exactly one designator per (category, subcategory) combination in the JSON.
 export interface ComponentDesignatorEntry {
-  designators: string[];
+  designator: string;
   componentType: string;
 }
 
-// Create legacy format from new structure for backward compatibility
-// Maps designator to description (for search results view)
-export const COMPONENT_DESIGNATORS: ComponentDesignatorEntry[] = componentDefinitions.components.flatMap(comp => 
-  comp.designators.map(designator => ({
-    designators: [designator],
-    componentType: comp.description
-  }))
-);
+// Build a flat list of designators for search and any legacy consumers
+export const COMPONENT_DESIGNATORS: ComponentDesignatorEntry[] = COMPONENT_LIST.map(comp => ({
+  designator: comp.designator,
+  componentType: comp.description,
+}));
 
 // Helper function: Find component by designator
 export function findComponentByDesignator(designator: string): ComponentDefinition | undefined {
-  return componentDefinitions.components.find(comp => comp.designators.includes(designator)) as ComponentDefinition | undefined;
+  return COMPONENT_LIST.find(comp => 
+    comp.designator === designator ||
+    (Array.isArray(comp.designators) && comp.designators!.includes(designator))
+  ) as ComponentDefinition | undefined;
 }
 
 // Helper function: Find components by category
 export function findComponentsByCategory(category: string): ComponentDefinition[] {
-  return componentDefinitions.components.filter(comp => comp.category === category) as ComponentDefinition[];
+  return COMPONENT_LIST.filter(comp => comp.category === category) as ComponentDefinition[];
 }
 
 // Helper function: Find components by type
 export function findComponentsByType(type: string): ComponentDefinition[] {
-  return componentDefinitions.components.filter(comp => comp.type === type) as ComponentDefinition[];
+  return COMPONENT_LIST.filter(comp => comp.type === type) as ComponentDefinition[];
 }
 
 // Helper function: Search components (searches searchText field)
 export function searchComponents(searchTerm: string): ComponentDefinition[] {
   const searchLower = searchTerm.toLowerCase();
-  return componentDefinitions.components.filter(comp => 
+  return COMPONENT_LIST.filter(comp => 
     comp.searchText.toLowerCase().includes(searchLower) ||
     comp.displayName.toLowerCase().includes(searchLower) ||
     comp.description.toLowerCase().includes(searchLower) ||
     comp.category.toLowerCase().includes(searchLower) ||
     comp.subcategory.toLowerCase().includes(searchLower) ||
-    comp.designators.some(d => d.toLowerCase().includes(searchLower))
+    comp.designator.toLowerCase().includes(searchLower) ||
+    (Array.isArray(comp.designators) && comp.designators!.some((d: string) => d.toLowerCase().includes(searchLower)))
   ) as ComponentDefinition[];
 }
 

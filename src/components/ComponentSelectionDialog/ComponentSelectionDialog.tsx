@@ -21,17 +21,24 @@
  */
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { COMPONENT_CATEGORIES, COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
-import { COMPONENT_DESIGNATORS, COMPONENT_LIST } from '../../data/componentDesignators';
+import { formatComponentTypeName } from '../../constants';
+import { COMPONENT_LIST } from '../../data/componentDesignators';
 import type { ComponentType } from '../../types';
 import type { ComponentDefinition } from '../../data/componentDefinitions.d';
+import type { DataDrivenComponentDefinition } from '../../dataDrivenComponents/definitions/schema';
+import { getDefinitionByKey } from '../../dataDrivenComponents/definitions/loader';
 
 export interface ComponentSelectionMetadata {
   componentType: ComponentType;
   designator?: string; // The designator that was selected (e.g., 'PD', 'LED', 'IR')
   subtype?: string; // The subtype (e.g., 'Photodiode', 'LED', 'Infrared', 'Varistor', 'Attenuator', etc.)
   uniqueKey?: string; // Unique identifier for selection (type + subcategory)
-  componentDefinition?: ComponentDefinition; // Complete component definition from JSON with fields and properties
+  componentDefinition?: ComponentDefinition; // Complete legacy component definition from JSON with fields and properties
+  /**
+   * Data-driven definition used by the v2 runtime.
+   * This is the single source of truth for instance creation and designator assignment.
+   */
+  dataDrivenDefinition?: DataDrivenComponentDefinition;
 }
 
 export interface ComponentSelectionDialogProps {
@@ -44,150 +51,133 @@ export interface ComponentSelectionDialogProps {
   onClose: () => void;
 }
 
-// Map designators to ComponentType values and determine subtype
-const mapDesignatorToMetadata = (designators: string[]): ComponentSelectionMetadata | null => {
-  // Create a reverse mapping from designator prefixes to ComponentType
-  const designatorToType: Record<string, ComponentType> = {};
-  
-  Object.entries(COMPONENT_TYPE_INFO).forEach(([type, info]) => {
-    info.prefix.forEach(prefix => {
-      if (!designatorToType[prefix]) {
-        designatorToType[prefix] = type as ComponentType;
-      }
-    });
-  });
-  
-  // Try to find a matching ComponentType for any of the designators
-  for (const designator of designators) {
-    if (designatorToType[designator]) {
-      const componentType = designatorToType[designator];
-      // Determine subtype based on designator
+// Derive ComponentType and subtype for a given JSON definition.
+// All mapping logic from categories/subcategories to ComponentType lives here.
+const buildMetadataForDefinition = (def: ComponentDefinition): ComponentSelectionMetadata => {
+  const { category, subcategory, type, designator } = def;
+
+  let componentType: ComponentType;
       let subtype: string | undefined;
-      if (componentType === 'Diode') {
-        if (designator === 'LED') subtype = 'LED';
-        else if (designator === 'IR') subtype = 'Infrared';
-        else if (designator === 'PD') subtype = 'Photodiode';
-        else if (designator === 'D') subtype = 'Standard';
-      } else if (componentType === 'VariableResistor') {
-        if (designator === 'RV') subtype = 'Varistor';
-        else if (designator === 'VR') subtype = 'Potentiometer';
-      } else if (componentType === 'GenericComponent') {
-        if (designator === 'AT') subtype = 'Attenuator';
-        else if (designator === 'CB') subtype = 'CircuitBreaker';
-        else if (designator === 'TC') subtype = 'Thermocouple';
-        else if (designator === 'TUN') subtype = 'Tuner';
+
+  switch (category) {
+    case 'Capacitors':
+      if (subcategory === 'Electrolytic') {
+        componentType = 'Electrolytic Capacitor';
+      } else if (subcategory === 'Film') {
+        componentType = 'Film Capacitor';
+      } else {
+        componentType = 'Capacitor';
+        if (subcategory === 'Tantalum') {
+          subtype = 'Tantalum';
+        }
       }
-      return { componentType, designator, subtype };
-    }
+      break;
+
+    case 'Diodes':
+      componentType = 'Diode';
+      if (subcategory === 'LED') subtype = 'LED';
+      else if (subcategory === 'Infrared') subtype = 'Infrared';
+      else if (subcategory === 'Photodiode') subtype = 'Photodiode';
+      else if (subcategory === 'Schottky') subtype = 'Schottky';
+      else if (subcategory === 'Zener') subtype = 'Zener';
+      else subtype = 'Standard';
+      break;
+
+    case 'Resistors':
+      if (subcategory === 'Network') {
+        componentType = 'ResistorNetwork';
+        subtype = 'Network';
+      } else if (subcategory === 'Thermistor') {
+        componentType = 'Thermistor';
+        subtype = 'Thermistor';
+      } else if (subcategory === 'Variable') {
+        componentType = 'VariableResistor';
+        subtype = 'Potentiometer';
+      } else if (subcategory === 'Varistor') {
+        componentType = 'VariableResistor';
+        subtype = 'Varistor';
+      } else {
+        componentType = 'Resistor';
+      }
+      break;
+
+    case 'Semiconductors':
+      if (subcategory === 'Transistor') {
+        componentType = 'Transistor';
+      } else {
+        componentType = 'IntegratedCircuit';
   }
-  
-  // Special cases for designators that might map to multiple types or need special handling
-  // Check more specific designators first
-  if (designators.includes('CE')) {
-    return { componentType: 'Electrolytic Capacitor', designator: 'CE' };
+      break;
+
+    case 'Passive Components':
+      if (type === 'Inductor') componentType = 'Inductor';
+      else if (type === 'FerriteBead') componentType = 'FerriteBead';
+      else componentType = 'Crystal';
+      break;
+
+    case 'Power & Energy':
+      if (subcategory === 'Battery') componentType = 'Battery';
+      else if (subcategory === 'Power Supply') componentType = 'PowerSupply';
+      else componentType = 'Fuse';
+      break;
+
+    case 'Connectors & Switches':
+      if (subcategory === 'Connector') componentType = 'Connector';
+      else if (subcategory === 'Jumper') componentType = 'Jumper';
+      else if (subcategory === 'Switch') componentType = 'Switch';
+      else componentType = 'Relay';
+      break;
+
+    case 'Other':
+      if (subcategory === 'Transformer') componentType = 'Transformer';
+      else if (subcategory === 'Speaker') componentType = 'Speaker';
+      else if (subcategory === 'Motor') componentType = 'Motor';
+      else if (subcategory === 'Test Point') componentType = 'TestPoint';
+      else if (subcategory === 'Vacuum Tube') componentType = 'VacuumTube';
+      else {
+        componentType = 'GenericComponent';
+        if (subcategory === 'Attenuator') subtype = 'Attenuator';
+        else if (subcategory === 'Circuit Breaker') subtype = 'CircuitBreaker';
+        else if (subcategory === 'Thermocouple') subtype = 'Thermocouple';
+        else if (subcategory === 'Tuner') subtype = 'Tuner';
+      }
+      break;
+
+    default:
+      componentType = 'GenericComponent';
+      break;
   }
-  if (designators.includes('CF')) {
-    return { componentType: 'Film Capacitor', designator: 'CF' };
-  }
-  if (designators.includes('TR')) {
-    return { componentType: 'Transformer', designator: 'TR' };
-  }
-  if (designators.includes('VR')) {
-    return { componentType: 'VariableResistor', designator: 'VR', subtype: 'Potentiometer' };
-  }
-  if (designators.includes('AT')) {
-    return { componentType: 'GenericComponent', designator: 'AT', subtype: 'Attenuator' };
-  }
-  if (designators.includes('CB')) {
-    return { componentType: 'GenericComponent', designator: 'CB', subtype: 'CircuitBreaker' };
-  }
-  if (designators.includes('TC')) {
-    return { componentType: 'GenericComponent', designator: 'TC', subtype: 'Thermocouple' };
-  }
-  if (designators.includes('TUN')) {
-    return { componentType: 'GenericComponent', designator: 'TUN', subtype: 'Tuner' };
-  }
-  if (designators.includes('LED')) {
-    return { componentType: 'Diode', designator: 'LED', subtype: 'LED' };
-  }
-  if (designators.includes('IR')) {
-    return { componentType: 'Diode', designator: 'IR', subtype: 'Infrared' };
-  }
-  if (designators.includes('PD')) {
-    return { componentType: 'Diode', designator: 'PD', subtype: 'Photodiode' };
-  }
-  if (designators.includes('RV')) {
-    return { componentType: 'VariableResistor', designator: 'RV', subtype: 'Varistor' };
-  }
-  if (designators.includes('RN')) {
-    return { componentType: 'ResistorNetwork', designator: 'RN' };
-  }
-  if (designators.includes('RT')) {
-    return { componentType: 'Thermistor', designator: 'RT' };
-  }
-  if (designators.includes('PS')) {
-    return { componentType: 'PowerSupply', designator: 'PS' };
-  }
-  if (designators.includes('B')) {
-    return { componentType: 'Battery', designator: 'B' };
-  }
-  if (designators.includes('JP')) {
-    return { componentType: 'Jumper', designator: 'JP' };
-  }
-  if (designators.includes('TP')) {
-    return { componentType: 'TestPoint', designator: 'TP' };
-  }
-  if (designators.includes('FB')) {
-    return { componentType: 'FerriteBead', designator: 'FB' };
-  }
-  if (designators.includes('D')) {
-    return { componentType: 'Diode', designator: 'D', subtype: 'Standard' };
-  }
-  if (designators.includes('C')) {
-    return { componentType: 'Capacitor', designator: 'C' };
-  }
-  if (designators.includes('R')) {
-    return { componentType: 'Resistor', designator: 'R' };
-  }
-  if (designators.includes('Q')) {
-    return { componentType: 'Transistor', designator: 'Q' };
-  }
-  if (designators.includes('U')) {
-    return { componentType: 'IntegratedCircuit', designator: 'U' };
-  }
-  if (designators.includes('J')) {
-    return { componentType: 'Connector', designator: 'J' };
-  }
-  if (designators.includes('S')) {
-    return { componentType: 'Switch', designator: 'S' };
-  }
-  if (designators.includes('Z')) {
-    return { componentType: 'Diode', designator: 'Z', subtype: 'Zener' };
-  }
-  if (designators.includes('V') && !designators.includes('VR')) {
-    return { componentType: 'VacuumTube', designator: 'V' };
-  }
-  if (designators.includes('K')) {
-    return { componentType: 'Relay', designator: 'K' };
-  }
-  if (designators.includes('F')) {
-    return { componentType: 'Fuse', designator: 'F' };
-  }
-  if (designators.includes('L')) {
-    return { componentType: 'Inductor', designator: 'L' };
-  }
-  if (designators.includes('M')) {
-    return { componentType: 'Motor', designator: 'M' };
-  }
-  if (designators.includes('X')) {
-    return { componentType: 'Crystal', designator: 'X' };
-  }
-  if (designators.includes('LS')) {
-    return { componentType: 'Speaker', designator: 'LS' };
-  }
-  
-  return null;
+
+  const uniqueKey = `${category}:${subcategory}:${type}:${designator}`;
+  const v2Key = `${category}:${subcategory}:${type}`;
+  const dataDrivenDefinition = getDefinitionByKey(v2Key);
+
+  return {
+    componentType,
+    designator,
+    subtype,
+    uniqueKey,
+    componentDefinition: def,
+    dataDrivenDefinition: dataDrivenDefinition,
+  };
 };
+
+// Pre-group components by category for the non-search view
+const COMPONENTS_BY_CATEGORY: Record<string, ComponentDefinition[]> = COMPONENT_LIST.reduce(
+  (acc, def) => {
+    if (!acc[def.category]) {
+      acc[def.category] = [];
+  }
+    acc[def.category].push(def);
+    return acc;
+  },
+  {} as Record<string, ComponentDefinition[]>
+);
+
+// Sort entries within each category by displayName (what the user actually sees)
+Object.values(COMPONENTS_BY_CATEGORY).forEach(list => {
+  list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+});
 
 export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> = ({
   visible,
@@ -277,24 +267,28 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
     const searchLower = searchText.toLowerCase();
     
     return (entry: {
+      category?: string;
       type?: string;
       subcategory?: string;
       designator?: string;
-      componentType?: string; // Description from COMPONENT_DESIGNATORS
-      designators?: string[]; // Array of designators
-      subtype?: string; // Component subtype
+      displayName?: string;
+      description?: string;
+      resolvedTypeName?: string;
     }): boolean => {
-      // Search in component type name (e.g., "Diode", "Resistor", "Electrolytic Capacitor")
-      // Check both the formatted name and the raw type name to catch all variations
-      if (entry.type) {
-        const formattedName = formatComponentTypeName(entry.type).toLowerCase();
-        const rawTypeName = entry.type.toLowerCase();
-        if (formattedName.includes(searchLower) || rawTypeName.includes(searchLower)) {
+      // Search in display name (e.g., "Resistor Network", "Power Supply")
+      if (entry.displayName && entry.displayName.toLowerCase().includes(searchLower)) {
           return true;
         }
+
+      // Search in description text
+      if (entry.description && entry.description.toLowerCase().includes(searchLower)) {
+        return true;
       }
       
-      // Search in subcategory/specific type name (e.g., "Schottky", "LED", "Photodiode")
+      // Search in category and subcategory names
+      if (entry.category && entry.category.toLowerCase().includes(searchLower)) {
+        return true;
+      }
       if (entry.subcategory && entry.subcategory.toLowerCase().includes(searchLower)) {
         return true;
       }
@@ -303,12 +297,12 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
       if (entry.designator && entry.designator.toLowerCase().includes(searchLower)) {
         return true;
       }
-      if (entry.designators && entry.designators.some(d => d.toLowerCase().includes(searchLower))) {
+
+      // Search in raw type or resolved ComponentType name
+      if (entry.type && entry.type.toLowerCase().includes(searchLower)) {
         return true;
       }
-      
-      // Search in description field (from COMPONENT_DESIGNATORS.componentType)
-      if (entry.componentType && entry.componentType.toLowerCase().includes(searchLower)) {
+      if (entry.resolvedTypeName && entry.resolvedTypeName.toLowerCase().includes(searchLower)) {
         return true;
       }
       
@@ -316,29 +310,24 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
     };
   }, [searchText]);
   
-  // Filter designators based on search text (search in componentType field, designators, and type names)
+  // Filter component definitions based on search text
   // Must be called before early return to follow Rules of Hooks
-  const filteredDesignators = useMemo(() => {
+  const filteredComponents = useMemo(() => {
     if (!searchText.trim()) {
-      return COMPONENT_DESIGNATORS;
+      return COMPONENT_LIST;
     }
-    return COMPONENT_DESIGNATORS.filter(entry => {
-      // Check description field
-      if (matchesSearch({ componentType: entry.componentType, designators: entry.designators })) {
-        return true;
-      }
-      
-      // Also check if any designator maps to a component type that matches
-      const metadata = mapDesignatorToMetadata(entry.designators);
-      if (metadata) {
+
+    return COMPONENT_LIST.filter(def => {
+      const meta = buildMetadataForDefinition(def);
         return matchesSearch({
-          type: metadata.componentType,
-          designator: metadata.designator,
-          subtype: metadata.subtype,
+        category: def.category,
+        type: meta.componentType,
+        subcategory: def.subcategory,
+        designator: def.designator,
+        displayName: def.displayName,
+        description: def.description,
+        resolvedTypeName: formatComponentTypeName(meta.componentType),
         });
-      }
-      
-      return false;
     });
   }, [searchText, matchesSearch]);
   
@@ -542,37 +531,19 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
             <div style={{ maxHeight: 'calc(80vh - 280px)', overflowY: 'auto' }}>
               {searchText.trim() ? (
                 // Show search results when searching
-                filteredDesignators.length > 0 ? (
-                  filteredDesignators.map((entry, index) => {
-                    const metadata = mapDesignatorToMetadata(entry.designators);
-                    // Create unique key for search results: use first designator + component type
-                    const uniqueKey = metadata ? `${entry.designators[0]}-${metadata.componentType}` : null;
-                    const isSelected = metadata && uniqueKey ? selectedComponentKey === uniqueKey : false;
-                    const designatorStr = entry.designators.join(', ');
-                    
-                    // Find the complete component definition from JSON by designator.
-                    // Do NOT require type match here, since legacy componentType strings
-                    // (e.g., 'Electrolytic Capacitor') may differ from JSON type ('Capacitor').
-                    const componentDef = metadata
-                      ? COMPONENT_LIST.find(comp =>
-                          comp.designators.includes(metadata.designator || '')
-                        )
-                      : undefined;
-                    
-                    // Enhance metadata with component definition
-                    const enhancedMetadata = metadata ? {
-                      ...metadata,
-                      componentDefinition: componentDef
-                    } : undefined;
+                filteredComponents.length > 0 ? (
+                  filteredComponents.map((def) => {
+                    const metadata = buildMetadataForDefinition(def);
+                    const uniqueKey = metadata.uniqueKey || `${def.category}:${def.subcategory}:${def.type}:${def.designator}`;
+                    const isSelected = selectedComponentKey === uniqueKey;
+                    const labelText = `${def.designator} - ${def.displayName}`;
                     
                     return (
                       <label
-                        key={index}
+                        key={uniqueKey}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (enhancedMetadata && uniqueKey) {
-                            onComponentTypeChange(enhancedMetadata.componentType, uniqueKey, enhancedMetadata);
-                          }
+                          onComponentTypeChange(metadata.componentType, uniqueKey, metadata);
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         style={{
@@ -584,28 +555,23 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                           background: isSelected ? '#e6f0ff' : '#fff',
                           border: '1px solid #ddd',
                           borderRadius: 4,
-                          cursor: metadata ? 'pointer' : 'default',
+                          cursor: 'pointer',
                           fontSize: '12px',
-                          color: metadata ? '#333' : '#999',
+                          color: '#333',
                         }}
                       >
                         <input
                           type="radio"
                           name="componentType-search"
                           checked={isSelected}
-                          onChange={() => {
-                            if (enhancedMetadata && uniqueKey) {
-                              onComponentTypeChange(enhancedMetadata.componentType, uniqueKey, enhancedMetadata);
-                            }
-                          }}
+                          onChange={() => onComponentTypeChange(metadata.componentType, uniqueKey, metadata)}
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
-                          disabled={!metadata}
                           style={{ 
                             marginRight: '10px',
                             width: '20px',
                             height: '20px',
-                            cursor: metadata ? 'pointer' : 'default',
+                            cursor: 'pointer',
                             appearance: 'none',
                             WebkitAppearance: 'none',
                             MozAppearance: 'none',
@@ -616,8 +582,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                             flexShrink: 0,
                           }}
                         />
-                        <strong>{designatorStr}</strong> - {entry.componentType}
-                        {!metadata && <span style={{ color: '#999', fontSize: '11px', marginLeft: '8px' }}>(Not available)</span>}
+                        <strong>{labelText}</strong>
                       </label>
                     );
                   })
@@ -627,112 +592,9 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                   </div>
                 )
               ) : (
-                // Show all categories (original view) - each subtype as separate radio button
-                // Filter categories based on search text if provided
-                Object.entries(COMPONENT_CATEGORIES)
-                  .filter(([category]) => {
-                    // If search text is provided, filter categories and entries
-                    if (!searchText.trim()) return true;
-                    // Category name might match
-                    if (category.toLowerCase().includes(searchText.toLowerCase())) return true;
-                    // Will filter entries below
-                    return true;
-                  })
-                  .map(([category, subcategories]) => {
-                  // Create separate entry for each subcategory (no consolidation)
-                  const entries: Array<{ type: string; subcategory: string; designator: string; subtype?: string }> = [];
-                  
-                  Object.entries(subcategories).forEach(([subcategory, types]: [string, readonly string[]]) => {
-                    types.forEach((type: string) => {
-                      const info = COMPONENT_TYPE_INFO[type as keyof typeof COMPONENT_TYPE_INFO];
-                      if (!info) return;
-                      
-                      // Determine designator and subtype from subcategory
-                      let designator = info.prefix[0];
-                      let subtype: string | undefined;
-                      
-                      // Map subcategory names to subtypes and designators
-                      if (type === 'Capacitor' || type === 'Electrolytic Capacitor' || type === 'Film Capacitor') {
-                        if (subcategory === 'Electrolytic') { designator = 'CE'; }
-                        else if (subcategory === 'Film') { designator = 'CF'; }
-                        else if (subcategory === 'Tantalum') { designator = 'C'; subtype = 'Tantalum'; }
-                        else { designator = 'C'; }
-                      } else if (type === 'Diode') {
-                        if (subcategory === 'LED') { designator = 'LED'; subtype = 'LED'; }
-                        else if (subcategory === 'Infrared') { designator = 'IR'; subtype = 'Infrared'; }
-                        else if (subcategory === 'Photodiode') { designator = 'PD'; subtype = 'Photodiode'; }
-                        else if (subcategory === 'Schottky') { designator = 'D'; subtype = 'Schottky'; }
-                        else { designator = 'D'; subtype = 'Standard'; }
-                      } else if (category === 'Resistors' && type === 'Resistor') {
-                        // Resistor family: use specific designators for subtypes
-                        if (subcategory === 'Network') {
-                          designator = 'RN';
-                          subtype = 'Network';
-                        } else if (subcategory === 'Thermistor') {
-                          designator = 'RT';
-                          subtype = 'Thermistor';
-                        } else if (subcategory === 'Variable') {
-                          designator = 'VR';
-                          subtype = 'Potentiometer';
-                        } else if (subcategory === 'Varistor') {
-                          designator = 'RV';
-                          subtype = 'Varistor';
-                        } else {
-                          designator = 'R';
-                        }
-                      } else if (type === 'PowerEnergy') {
-                        // Power & Energy family: distinct designators per subtype
-                        if (subcategory === 'Power Supply') {
-                          designator = 'PS';
-                          subtype = 'PowerSupply';
-                        } else if (subcategory === 'Fuse') {
-                          designator = 'F';
-                          subtype = 'Fuse';
-                        } else if (subcategory === 'Battery') {
-                          designator = 'B';
-                          subtype = 'Battery';
-                        } else {
-                          designator = info.prefix[0];
-                        }
-                      } else if (type === 'GenericComponent') {
-                        if (subcategory === 'Attenuator') { designator = 'AT'; subtype = 'Attenuator'; }
-                        else if (subcategory === 'Circuit Breaker') { designator = 'CB'; subtype = 'CircuitBreaker'; }
-                        else if (subcategory === 'Thermocouple') { designator = 'TC'; subtype = 'Thermocouple'; }
-                        else if (subcategory === 'Tuner') { designator = 'TUN'; subtype = 'Tuner'; }
-                      } else {
-                        // For other types, use the first prefix
-                        designator = info.prefix[0];
-                      }
-                      
-                      // Filter by search text if provided
-                      // Look up the description from COMPONENT_DESIGNATORS for this designator
-                      let description: string | undefined;
-                      const designatorEntry = COMPONENT_DESIGNATORS.find(entry => 
-                        entry.designators.includes(designator)
-                      );
-                      if (designatorEntry) {
-                        description = designatorEntry.componentType;
-                      }
-                      
-                      if (searchText.trim() && !matchesSearch({ 
-                        type, 
-                        subcategory, 
-                        designator, 
-                        subtype,
-                        componentType: description, // Include description for search
-                        designators: [designator]
-                      })) {
-                        return; // Skip this entry if it doesn't match search
-                      }
-                      
-                      entries.push({ type, subcategory, designator, subtype });
-                    });
-                  });
-
-                  // Don't show category if no entries match search
-                  if (entries.length === 0) {
-                    return null;
-                  }
+                // Show all categories (original view) - each definition as a separate radio button
+                Object.entries(COMPONENTS_BY_CATEGORY).map(([category, defs]) => {
+                  if (defs.length === 0) return null;
                   
                   return (
                     <div key={category} style={{ marginBottom: '12px' }}>
@@ -750,46 +612,20 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                       >
                         {category}
                       </div>
-                      {/* Each subcategory as separate radio button */}
+                      {/* Each component definition as a separate radio button */}
                       <div style={{ marginLeft: '8px' }}>
-                      {entries.map(({ type, subcategory, designator, subtype }, index) => {
-                        const info = COMPONENT_TYPE_INFO[type as keyof typeof COMPONENT_TYPE_INFO];
-                        if (!info) return null;
-                        // Create a unique key for this entry: designator-type-subcategory
-                        // Include subcategory to ensure uniqueness when same designator/type has different subtypes
-                        const uniqueKey = `${designator}-${type}-${subcategory}`;
-                        // Only this specific entry should be selected, not all entries with the same type
+                        {defs.map((def) => {
+                          const metadata = buildMetadataForDefinition(def);
+                          const uniqueKey = metadata.uniqueKey || `${def.category}:${def.subcategory}:${def.type}:${def.designator}`;
                         const isSelected = selectedComponentKey === uniqueKey;
-                        const typeName = formatComponentTypeName(type);
-                        
-                        // Build display text: designator - typeName or designator - subcategory name
-                        let displayText = `${designator} - ${typeName}`;
-                        if (subcategory !== 'Standard' && subcategory !== 'General' && subcategory !== typeName) {
-                          displayText = `${designator} - ${subcategory}`;
-                        }
-                        
-                        // Find the complete component definition from JSON
-                        const componentDef = COMPONENT_LIST.find(comp => 
-                          comp.category === category &&
-                          comp.subcategory === subcategory &&
-                          comp.type === type
-                        );
-                        
-                        // Create metadata object with subtype, designator, and complete definition
-                        const metadata: ComponentSelectionMetadata = {
-                          componentType: type as ComponentType,
-                          designator,
-                          subtype,
-                          uniqueKey,
-                          componentDefinition: componentDef
-                        };
+                          const displayText = `${def.designator} - ${def.displayName}`;
                         
                         return (
                           <label
-                            key={`${type}-${subcategory}-${index}`}
+                              key={uniqueKey}
                             onClick={(e) => {
                               e.stopPropagation();
-                              onComponentTypeChange(type as ComponentType, uniqueKey, metadata);
+                                onComponentTypeChange(metadata.componentType, uniqueKey, metadata);
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                             style={{
@@ -810,7 +646,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                               type="radio"
                               name={`componentType-${category}`}
                               checked={isSelected}
-                              onChange={() => onComponentTypeChange(type as ComponentType, uniqueKey, metadata)}
+                                onChange={() => onComponentTypeChange(metadata.componentType, uniqueKey, metadata)}
                               onMouseDown={(e) => e.stopPropagation()}
                               style={{ 
                                 marginRight: '10px',

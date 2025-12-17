@@ -22,9 +22,8 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
-import { createComponent, autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
+import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
 import { createComponentInstance } from './dataDrivenComponents/runtime/instanceFactory';
-import { getDefinitionByKey } from './dataDrivenComponents/definitions/loader';
 import {
   applyTransform,
   applySimpleTransform,
@@ -39,7 +38,7 @@ import {
   contentCanvasToWorld,
   darkenColor,
 } from './utils/transformations';
-import {
+import { 
   formatComponentTypeName,
   COLOR_PALETTE,
   COMPONENT_ICON,
@@ -826,7 +825,7 @@ function App() {
       }
       // Only auto-open if the user has not dismissed it while this tool is active
       if (!hasDismissedComponentDialog) {
-        setShowComponentSelectionDialog(true);
+      setShowComponentSelectionDialog(true);
       }
     } else {
       // When switching away from the component tool, hide the dialog
@@ -1893,6 +1892,9 @@ function App() {
   const [selectedComponentKey, setSelectedComponentKey] = useState<string | null>(null);
   const [selectedComponentMetadata, setSelectedComponentMetadata] = useState<ComponentSelectionMetadata | null>(null);
   const lastSelectedComponentTypeRef = React.useRef<ComponentType | null>(null);
+  // Refs to hold the latest values for event handlers (avoids stale closure issues)
+  const selectedComponentMetadataRef = React.useRef<ComponentSelectionMetadata | null>(null);
+  const selectedComponentTypeRef = React.useRef<ComponentType | null>(null);
   const traceButtonRef = useRef<HTMLButtonElement>(null);
   const padButtonRef = useRef<HTMLButtonElement>(null);
   const testPointButtonRef = useRef<HTMLButtonElement>(null);
@@ -1907,6 +1909,15 @@ function App() {
   const [selectStart, setSelectStart] = useState<{ x: number; y: number } | null>(null);
   const [selectRect, setSelectRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   // (Open Project uses native picker or hidden input; no overlay)
+
+  // Sync refs for event handlers (avoids stale closure issues)
+  // These refs ensure that event handlers always have access to the latest state values
+  React.useEffect(() => {
+    selectedComponentMetadataRef.current = selectedComponentMetadata;
+  }, [selectedComponentMetadata]);
+  React.useEffect(() => {
+    selectedComponentTypeRef.current = selectedComponentType;
+  }, [selectedComponentType]);
 
   // Helper function to copy image file to images/ subdirectory in project directory
   const copyImageToProjectDirectory = useCallback(async (file: File, projectDirHandle: FileSystemDirectoryHandle | null): Promise<string> => {
@@ -2903,14 +2914,16 @@ function App() {
       setTransformStartPos({ x, y });
     } else if (currentTool === 'component') {
       // Only place component if a type has been selected (like power tool)
-      if (!selectedComponentType) {
+      // Read from ref to avoid stale closure issues (ref always has the latest value)
+      if (!selectedComponentTypeRef.current) {
         return; // Wait for user to select a component type
       }
       
       // Truncate coordinates to 3 decimal places for exact matching
       const truncatedPos = truncatePoint({ x, y });
       // Use tool instance directly (single source of truth) for consistent size/color
-      const layer = componentToolLayer || 'top';
+      // Read from ref to avoid stale closure issues (ref always has the latest value)
+      const layer = componentToolLayerRef.current || 'top';
       const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
       const componentInstance = toolInstanceManager.get(componentInstanceId);
       const componentColor = componentInstance.color;
@@ -2927,80 +2940,39 @@ function App() {
         // Project-local mode: use session counters (starts empty, gets updated as components are created)
         counters = { ...sessionDesignatorCountersRef.current };
       }
-      if (!componentToolLayer) {
+      if (!componentToolLayerRef.current) {
         return; // Wait for user to select a layer
       }
       
-      // Use v2 runtime if metadata with componentDefinition is available
+      // Use v2 runtime exclusively: component placement is fully data-driven.
+      // The data-driven definition comes directly from the component the user selected in the dialog.
+      // Read from ref to avoid stale closure issues (ref always has the latest value)
+      const dataDrivenDefinition = selectedComponentMetadataRef.current?.dataDrivenDefinition;
+      if (!dataDrivenDefinition) {
+        console.error('[Component Creation] Missing dataDrivenDefinition metadata for selected component.');
+        return;
+      }
+
       let comp: PCBComponent;
       try {
-        if (selectedComponentMetadata?.componentDefinition) {
-          // Get v2 definition from the legacy definition
-          const legacyDef = selectedComponentMetadata.componentDefinition;
-          const v2Key = `${legacyDef.category}:${legacyDef.subcategory}:${legacyDef.type}`;
-          const v2Definition = getDefinitionByKey(v2Key);
-          
-          if (v2Definition) {
-            // Use v2 runtime
-            comp = createComponentInstance({
-              definition: v2Definition,
-              layer: componentToolLayer,
-              x: truncatedPos.x,
-              y: truncatedPos.y,
-              color: componentColor,
-              size: componentSize,
-              existingComponents: allExistingComponents,
-              counters: autoAssignDesignators ? counters : {},
-            });
-          } else {
-            // Fallback to legacy createComponent if v2 definition not found
-            comp = createComponent(
-              selectedComponentType,
-              componentToolLayer,
-              truncatedPos.x,
-              truncatedPos.y,
-              componentColor,
-              componentSize,
-              allExistingComponents,
-              counters,
-              autoAssignDesignators,
-              selectedComponentMetadata || undefined
-            );
-          }
-        } else {
-          // Fallback to legacy createComponent if no metadata
-          comp = createComponent(
-            selectedComponentType,
-            componentToolLayer,
-            truncatedPos.x,
-            truncatedPos.y,
-            componentColor,
-            componentSize,
-            allExistingComponents,
-            counters,
-            autoAssignDesignators,
-            selectedComponentMetadata || undefined
-          );
-        }
+        comp = createComponentInstance({
+          definition: dataDrivenDefinition,
+          layer: componentToolLayerRef.current,
+          x: truncatedPos.x,
+          y: truncatedPos.y,
+          color: componentColor,
+          size: componentSize,
+          existingComponents: allExistingComponents,
+          counters: autoAssignDesignators ? counters : {},
+        });
       } catch (error) {
-        console.error('[Component Creation] Error creating component:', error);
-        // Fallback to legacy on any error
-        comp = createComponent(
-          selectedComponentType,
-          componentToolLayer,
-          truncatedPos.x,
-          truncatedPos.y,
-          componentColor,
-          componentSize,
-          allExistingComponents,
-          counters,
-          autoAssignDesignators,
-          selectedComponentMetadata || undefined
-        );
+        console.error('[Component Creation] Error creating component with v2 runtime:', error);
+        return;
       }
       
       // Initialize abbreviation to default based on component type prefix
-      (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentType);
+      // Read from ref to avoid stale closure issues (ref always has the latest value)
+      (comp as any).abbreviation = getDefaultAbbreviation(selectedComponentTypeRef.current);
       
       // IMPORTANT: Update counters immediately after component creation so the next component gets the correct number
       // This ensures that when placing multiple components rapidly, each gets a unique sequential designator
@@ -3031,7 +3003,8 @@ function App() {
       
       // Add component to appropriate layer
       // NOTE: This will trigger auto-save change detection via the useEffect that watches componentsTop/componentsBottom
-      if (componentToolLayer === 'top') {
+      // Read from ref to avoid stale closure issues (ref always has the latest value)
+      if (componentToolLayerRef.current === 'top') {
         setShowTopComponents(true);
         setComponentsTop(prev => [...prev, comp]);
       } else {
@@ -8906,14 +8879,15 @@ function App() {
       ctx.stroke();
       // Draw abbreviation text - use specific designator from metadata if available
       const abbrev = (() => {
-        if (selectedComponentMetadata?.componentDefinition?.designators?.[0]) {
-          const designator = selectedComponentMetadata.componentDefinition.designators[0];
-          return designator.length <= 3 ? designator : designator.substring(0, 3);
-        }
-        if (selectedComponentMetadata?.designator) {
-          return selectedComponentMetadata.designator.length <= 3 
-            ? selectedComponentMetadata.designator 
-            : selectedComponentMetadata.designator.substring(0, 3);
+        const primaryDesignator =
+          selectedComponentMetadata?.dataDrivenDefinition?.designator ??
+          selectedComponentMetadata?.componentDefinition?.designator ??
+          selectedComponentMetadata?.designator;
+
+        if (primaryDesignator) {
+          return primaryDesignator.length <= 3
+            ? primaryDesignator
+            : primaryDesignator.substring(0, 3);
         }
         return selectedComponentType ? getDefaultAbbreviation(selectedComponentType) : '?';
       })();
@@ -9965,9 +9939,9 @@ function App() {
       // Helper to ensure there is space for at least `neededLines` more text rows.
       const ensurePageSpace = (neededLines: number) => {
         if (yPos > pageHeight - margin - lineHeight * neededLines) {
-          doc.addPage();
-          yPos = margin + lineHeight;
-        }
+        doc.addPage();
+        yPos = margin + lineHeight;
+      }
       };
       
       // Main BOM row ---------------------------------------------------------
@@ -12427,16 +12401,15 @@ function App() {
                     <text x="12" y="14" textAnchor="middle" fontSize="7" fill={componentColor} fontWeight="bold" fontFamily="monospace">{
                       (() => {
                         // Prefer designator from componentDefinition (most specific)
-                        const designator = selectedComponentMetadata?.componentDefinition?.designators?.[0];
-                        if (designator) {
+                        const primaryDesignator =
+                          selectedComponentMetadata?.componentDefinition?.designator ??
+                          selectedComponentMetadata?.designator;
+
+                        if (primaryDesignator) {
                           // Show up to 3 characters for multi-letter designators (CE, CF, LED, etc.)
-                          return designator.length <= 3 ? designator : designator.substring(0, 3);
-                        }
-                        // Fallback to designator from metadata
-                        if (selectedComponentMetadata?.designator) {
-                          return selectedComponentMetadata.designator.length <= 3 
-                            ? selectedComponentMetadata.designator 
-                            : selectedComponentMetadata.designator.substring(0, 3);
+                          return primaryDesignator.length <= 3
+                            ? primaryDesignator
+                            : primaryDesignator.substring(0, 3);
                         }
                         // Last resort: use default abbreviation
                         return getDefaultAbbreviation(selectedComponentType);

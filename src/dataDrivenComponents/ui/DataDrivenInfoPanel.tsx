@@ -39,7 +39,7 @@ export const DataDrivenInfoPanel: React.FC<DataDrivenInfoPanelProps> = ({ compon
           <div><strong>Key:</strong> {keyValue}</div>
           <div><strong>Category:</strong> {definition.category} / {definition.subcategory}</div>
           <div><strong>Type:</strong> {definition.type}</div>
-          <div><strong>Designators:</strong> {definition.designators?.join(', ') || 'N/A'}</div>
+          <div><strong>Designator:</strong> {definition.designator || 'N/A'}</div>
         </div>
       )}
       {fields.length === 0 ? (

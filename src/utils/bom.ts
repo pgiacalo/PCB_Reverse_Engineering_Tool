@@ -122,7 +122,7 @@ function getComponentValue(comp: PCBComponent): string {
       return combineValueAndUnit(value, unit);
     }
   }
-
+  
   // Capacitor family: Capacitor, Electrolytic Capacitor, Film Capacitor
   if (
     (comp.componentType === 'Capacitor' ||
@@ -140,7 +140,7 @@ function getComponentValue(comp: PCBComponent): string {
       return combineValueAndUnit(value, unit);
     }
   }
-
+  
   // Inductor: use inductance with unit
   if (comp.componentType === 'Inductor' && 'inductance' in comp) {
     const { value, unit } = readValueAndUnit(
@@ -153,7 +153,7 @@ function getComponentValue(comp: PCBComponent): string {
       return combineValueAndUnit(value, unit);
     }
   }
-
+  
   // Fuse: use current rating with unit
   if (comp.componentType === 'Fuse' && 'current' in comp) {
     const { value, unit } = readValueAndUnit(
@@ -166,7 +166,7 @@ function getComponentValue(comp: PCBComponent): string {
       return combineValueAndUnit(value, unit);
     }
   }
-
+  
   // Battery: prefer capacity, fall back to voltage
   if (comp.componentType === 'Battery') {
     const { value: capValue, unit: capUnit } = readValueAndUnit(
@@ -201,7 +201,7 @@ function getComponentValue(comp: PCBComponent): string {
       return combineValueAndUnit(value, unit);
     }
   }
-
+  
   // ---------------------------------------------------------------------------
   // Active / other components: prefer part name or part number
   // ---------------------------------------------------------------------------
@@ -214,7 +214,7 @@ function getComponentValue(comp: PCBComponent): string {
   if (partNumber && partNumber !== '') {
     return partNumber;
   }
-
+  
   // Fallback to componentType (what you are currently seeing in the BOM)
   return formatComponentTypeName(comp.componentType);
 }

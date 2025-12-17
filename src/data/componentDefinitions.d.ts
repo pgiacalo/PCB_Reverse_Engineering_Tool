@@ -20,7 +20,16 @@ export interface ComponentDefinition {
   displayName: string;
   description: string;
   searchText: string;
-  designators: string[];
+  /**
+   * Primary PCB designator prefix for this component (e.g., "R", "RN", "CE").
+   * There is exactly one designator per (category, subcategory) combination.
+   */
+  designator: string;
+  /**
+   * Legacy field preserved for backward compatibility with older project files.
+   * New code should treat `designator` as the single source of truth and ignore this.
+   */
+  designators?: string[];
   defaultPins: number;
   subtype?: string;
   properties?: Record<string, any>;  // Variant properties (e.g., capacitorType, diodeType)

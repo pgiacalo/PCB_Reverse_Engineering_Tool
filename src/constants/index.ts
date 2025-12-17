@@ -171,26 +171,36 @@ import type { ComponentDefinition } from '../data/componentDefinitions.d';
 
 // Type definitions for component info
 export interface ComponentTypeInfo {
+  /**
+   * All known designator prefixes for this logical component type
+   * (e.g., 'R', 'RN', 'RT', 'RV' for the resistor family).
+   */
   prefix: readonly string[];
+  /**
+   * Default pin count when creating a new instance of this type.
+   */
   defaultPins: number;
 }
 
-// Build COMPONENT_TYPE_INFO from new structure (for backward compatibility)
-// Maps component type to prefix and defaultPins
+// Build COMPONENT_TYPE_INFO from the JSON definitions.
+// NOTE: The map is keyed by the raw `type` string from the JSON (e.g., "Resistor", "PowerEnergy").
+// Higher‑level code is free to index it with more specific ComponentType strings where appropriate.
 const componentTypeInfoMap: Record<string, ComponentTypeInfo> = {};
 componentDefinitions.components.forEach(comp => {
-  if (!componentTypeInfoMap[comp.type]) {
-    componentTypeInfoMap[comp.type] = {
-      prefix: comp.designators as readonly string[],
-      defaultPins: comp.defaultPins
+  const key = comp.type;
+  const prefix = comp.designator;
+
+  if (!componentTypeInfoMap[key]) {
+    componentTypeInfoMap[key] = {
+      prefix: [prefix],
+      defaultPins: comp.defaultPins,
     };
   } else {
-    // Merge designators if type already exists
-    const existing = componentTypeInfoMap[comp.type];
-    const mergedPrefixes = [...new Set([...existing.prefix, ...comp.designators])];
-    componentTypeInfoMap[comp.type] = {
-      prefix: mergedPrefixes as readonly string[],
-      defaultPins: existing.defaultPins
+    const existing = componentTypeInfoMap[key];
+    const mergedPrefixes = [...new Set([...existing.prefix, prefix])];
+    componentTypeInfoMap[key] = {
+      prefix: mergedPrefixes,
+      defaultPins: existing.defaultPins,
     };
   }
 });

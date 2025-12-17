@@ -10,9 +10,10 @@ export interface DesignatorCounters {
  * This is intentionally simple and can evolve independently of the v1 mapping.
  */
 export function getBasePrefix(def: DataDrivenComponentDefinition): string {
-  // Prefer designators from JSON if present
-  if (def.designators && def.designators.length > 0) {
-    return def.designators[0];
+  // Prefer the primary designator from componentDefinitions.json
+  // This is the single source of truth for prefixes (R, RN, RT, CE, CF, PS, F, etc.)
+  if (def.designator && def.designator.trim() !== '') {
+    return def.designator.trim();
   }
 
   // Fallback by baseType
