@@ -220,13 +220,6 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
     }
   }, [visible, position]);
 
-  // Reset position when dialog is closed
-  useEffect(() => {
-    if (!visible) {
-      setPosition(null);
-    }
-  }, [visible]);
-
   // Handle drag start
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     // Only start dragging if clicking on the header (not buttons/inputs)
@@ -412,7 +405,16 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
         >
           <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Select Component</h2>
           <button
-            onClick={onClose}
+            type="button"
+            onMouseDown={(e) => {
+              // Prevent drag behavior when clicking the close button
+              e.stopPropagation();
+            }}
+            onClick={(e) => {
+              // Ensure the click does not get interpreted as a drag and reliably closes the dialog
+              e.stopPropagation();
+              onClose();
+            }}
             style={{
               background: 'transparent',
               border: 'none',
@@ -661,9 +663,37 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                         else if (subcategory === 'Photodiode') { designator = 'PD'; subtype = 'Photodiode'; }
                         else if (subcategory === 'Schottky') { designator = 'D'; subtype = 'Schottky'; }
                         else { designator = 'D'; subtype = 'Standard'; }
-                      } else if (type === 'VariableResistor') {
-                        if (subcategory === 'Varistor') { designator = 'RV'; subtype = 'Varistor'; }
-                        else { designator = 'VR'; subtype = 'Potentiometer'; }
+                      } else if (category === 'Resistors' && type === 'Resistor') {
+                        // Resistor family: use specific designators for subtypes
+                        if (subcategory === 'Network') {
+                          designator = 'RN';
+                          subtype = 'Network';
+                        } else if (subcategory === 'Thermistor') {
+                          designator = 'RT';
+                          subtype = 'Thermistor';
+                        } else if (subcategory === 'Variable') {
+                          designator = 'VR';
+                          subtype = 'Potentiometer';
+                        } else if (subcategory === 'Varistor') {
+                          designator = 'RV';
+                          subtype = 'Varistor';
+                        } else {
+                          designator = 'R';
+                        }
+                      } else if (type === 'PowerEnergy') {
+                        // Power & Energy family: distinct designators per subtype
+                        if (subcategory === 'Power Supply') {
+                          designator = 'PS';
+                          subtype = 'PowerSupply';
+                        } else if (subcategory === 'Fuse') {
+                          designator = 'F';
+                          subtype = 'Fuse';
+                        } else if (subcategory === 'Battery') {
+                          designator = 'B';
+                          subtype = 'Battery';
+                        } else {
+                          designator = info.prefix[0];
+                        }
                       } else if (type === 'GenericComponent') {
                         if (subcategory === 'Attenuator') { designator = 'AT'; subtype = 'Attenuator'; }
                         else if (subcategory === 'Circuit Breaker') { designator = 'CB'; subtype = 'CircuitBreaker'; }

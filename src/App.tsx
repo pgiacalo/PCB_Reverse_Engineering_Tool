@@ -787,7 +787,12 @@ function App() {
     }
   }, [currentTool, drawingMode, testPointToolLayer, topTestPointColor, bottomTestPointColor, topTestPointSize, bottomTestPointSize]);
 
-  // Show component selection dialog when component tool is selected
+  // Tracks whether the user has manually dismissed the component selection dialog
+  // so it is not auto-reopened while the Component tool remains active.
+  const [hasDismissedComponentDialog, setHasDismissedComponentDialog] = useState(false);
+
+  // Show component selection dialog when component tool is selected,
+  // unless the user has manually dismissed it for the current tool session.
   React.useEffect(() => {
     if (currentTool === 'component') {
       const layer = componentToolLayer; // Use current default (always 'top' or 'bottom', never null)
@@ -802,12 +807,17 @@ function App() {
         setShowBottomImage(true);
         setShowBottomComponents(true);
       }
-      // Show component selection dialog
-      setShowComponentSelectionDialog(true);
+      // Only auto-open if the user has not dismissed it while this tool is active
+      if (!hasDismissedComponentDialog) {
+        setShowComponentSelectionDialog(true);
+      }
     } else {
+      // When switching away from the component tool, hide the dialog
+      // and reset the dismissal flag so it opens next time the tool is selected.
       setShowComponentSelectionDialog(false);
+      setHasDismissedComponentDialog(false);
     }
-  }, [currentTool, componentToolLayer, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize]);
+  }, [currentTool, componentToolLayer, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, hasDismissedComponentDialog]);
   
   // Update layer-specific settings when componentToolLayer changes
   React.useEffect(() => {
@@ -14520,7 +14530,10 @@ function App() {
           lastSelectedComponentTypeRef.current = componentType;
         }}
         onClose={() => {
+          // User explicitly closed the dialog; remember this so it is not auto-reopened
+          // while the Component tool remains active.
           setShowComponentSelectionDialog(false);
+          setHasDismissedComponentDialog(true);
         }}
       />
 
