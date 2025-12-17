@@ -594,112 +594,129 @@ function App() {
       if (currentToolDef) {
         // Save to localStorage - use layer-specific settings for tools that support layers
         if (currentTool === 'draw' && drawingMode === 'trace') {
+          // TRACE TOOL: use the trace tool instance as the single source of truth
           const layer = traceToolLayer || 'top';
-          // Tool settings are project-specific, saved in project file
-          // Update state and layer defaults
+          const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+          const traceInstance = toolInstanceManager.get(traceInstanceId);
+          const color = traceInstance.color;
+          const size = traceInstance.size;
+
+          // Update project-level defaults from the instance
           if (layer === 'top') {
-            setTopTraceColor(brushColor);
-            setTopTraceSize(brushSize);
-            saveDefaultColor('trace', brushColor, 'top');
-            saveDefaultSize('trace', brushSize, 'top');
+            setTopTraceColor(color);
+            setTopTraceSize(size);
+            saveDefaultColor('trace', color, 'top');
+            saveDefaultSize('trace', size, 'top');
           } else {
-            setBottomTraceColor(brushColor);
-            setBottomTraceSize(brushSize);
-            saveDefaultColor('trace', brushColor, 'bottom');
-            saveDefaultSize('trace', brushSize, 'bottom');
+            setBottomTraceColor(color);
+            setBottomTraceSize(size);
+            saveDefaultColor('trace', color, 'bottom');
+            saveDefaultSize('trace', size, 'bottom');
           }
           // Update registry with layer-specific settings
           const updated = new Map(prev);
           const layerSettings = new Map(currentToolDef.layerSettings);
-          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          layerSettings.set(layer, { color, size });
           updated.set(currentToolDef.id, {
             ...currentToolDef,
             layerSettings,
-            settings: { color: brushColor, size: brushSize }
+            settings: { color, size }
           });
-          prevBrushColorRef.current = brushColor;
-          prevBrushSizeRef.current = brushSize;
+          prevBrushColorRef.current = color;
+          prevBrushSizeRef.current = size;
           return updated;
         } else if (currentTool === 'draw' && drawingMode === 'pad') {
+          // PAD TOOL: use the pad tool instance as the single source of truth
           const layer = padToolLayer || 'top';
-          // Tool settings are project-specific, saved in project file
-          // Update state and layer defaults
+          const padInstanceId = layer === 'top' ? 'padTop' : 'padBottom';
+          const padInstance = toolInstanceManager.get(padInstanceId);
+          const color = padInstance.color;
+          const size = padInstance.size;
+
           if (layer === 'top') {
-            setTopPadColor(brushColor);
-            setTopPadSize(brushSize);
-            saveDefaultColor('pad', brushColor, 'top');
-            saveDefaultSize('pad', brushSize, 'top');
+            setTopPadColor(color);
+            setTopPadSize(size);
+            saveDefaultColor('pad', color, 'top');
+            saveDefaultSize('pad', size, 'top');
           } else {
-            setBottomPadColor(brushColor);
-            setBottomPadSize(brushSize);
-            saveDefaultColor('pad', brushColor, 'bottom');
-            saveDefaultSize('pad', brushSize, 'bottom');
+            setBottomPadColor(color);
+            setBottomPadSize(size);
+            saveDefaultColor('pad', color, 'bottom');
+            saveDefaultSize('pad', size, 'bottom');
           }
           // Update registry with layer-specific settings
           const updated = new Map(prev);
           const layerSettings = new Map(currentToolDef.layerSettings);
-          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          layerSettings.set(layer, { color, size });
           updated.set(currentToolDef.id, {
             ...currentToolDef,
             layerSettings,
-            settings: { color: brushColor, size: brushSize }
+            settings: { color, size }
           });
-          prevBrushColorRef.current = brushColor;
-          prevBrushSizeRef.current = brushSize;
+          prevBrushColorRef.current = color;
+          prevBrushSizeRef.current = size;
           return updated;
         } else if (currentTool === 'draw' && drawingMode === 'testPoint') {
+          // TEST POINT TOOL: use the test point tool instance as the single source of truth
           const layer = testPointToolLayer || 'top';
-          // Tool settings are project-specific, saved in project file
-          // Update state and layer defaults
+          const testPointInstanceId = layer === 'top' ? 'testPointTop' : 'testPointBottom';
+          const testPointInstance = toolInstanceManager.get(testPointInstanceId);
+          const color = testPointInstance.color;
+          const size = testPointInstance.size;
+
           if (layer === 'top') {
-            setTopTestPointColor(brushColor);
-            setTopTestPointSize(brushSize);
-            saveDefaultColor('testPoint', brushColor, 'top');
-            saveDefaultSize('testPoint', brushSize, 'top');
+            setTopTestPointColor(color);
+            setTopTestPointSize(size);
+            saveDefaultColor('testPoint', color, 'top');
+            saveDefaultSize('testPoint', size, 'top');
           } else {
-            setBottomTestPointColor(brushColor);
-            setBottomTestPointSize(brushSize);
-            saveDefaultColor('testPoint', brushColor, 'bottom');
-            saveDefaultSize('testPoint', brushSize, 'bottom');
+            setBottomTestPointColor(color);
+            setBottomTestPointSize(size);
+            saveDefaultColor('testPoint', color, 'bottom');
+            saveDefaultSize('testPoint', size, 'bottom');
           }
           // Update registry with layer-specific settings
           const updated = new Map(prev);
           const layerSettings = new Map(currentToolDef.layerSettings);
-          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          layerSettings.set(layer, { color, size });
           updated.set(currentToolDef.id, {
             ...currentToolDef,
             layerSettings,
-            settings: { color: brushColor, size: brushSize }
+            settings: { color, size }
           });
-          prevBrushColorRef.current = brushColor;
-          prevBrushSizeRef.current = brushSize;
+          prevBrushColorRef.current = color;
+          prevBrushSizeRef.current = size;
           return updated;
         } else if (currentTool === 'component') {
+          // COMPONENT TOOL: use the component tool instance as the single source of truth
           const layer = componentToolLayer || 'top';
-          // Tool settings are project-specific, saved in project file
-          // Update state and layer defaults
+          const componentInstanceId = layer === 'top' ? 'componentTop' : 'componentBottom';
+          const componentInstance = toolInstanceManager.get(componentInstanceId);
+          const color = componentInstance.color;
+          const size = componentInstance.size;
+
           if (layer === 'top') {
-            setTopComponentColor(brushColor);
-            setTopComponentSize(brushSize);
-            saveDefaultColor('component', brushColor, 'top');
-            saveDefaultSize('component', brushSize, 'top');
+            setTopComponentColor(color);
+            setTopComponentSize(size);
+            saveDefaultColor('component', color, 'top');
+            saveDefaultSize('component', size, 'top');
           } else {
-            setBottomComponentColor(brushColor);
-            setBottomComponentSize(brushSize);
-            saveDefaultColor('component', brushColor, 'bottom');
-            saveDefaultSize('component', brushSize, 'bottom');
+            setBottomComponentColor(color);
+            setBottomComponentSize(size);
+            saveDefaultColor('component', color, 'bottom');
+            saveDefaultSize('component', size, 'bottom');
           }
           // Update registry with layer-specific settings
           const updated = new Map(prev);
           const layerSettings = new Map(currentToolDef.layerSettings);
-          layerSettings.set(layer, { color: brushColor, size: brushSize });
+          layerSettings.set(layer, { color, size });
           updated.set(currentToolDef.id, {
             ...currentToolDef,
             layerSettings,
-            settings: { color: brushColor, size: brushSize }
+            settings: { color, size }
           });
-          prevBrushColorRef.current = brushColor;
-          prevBrushSizeRef.current = brushSize;
+          prevBrushColorRef.current = color;
+          prevBrushSizeRef.current = size;
           return updated;
         } else {
           // For other tools (via, etc.), tool settings are project-specific, saved in project file
@@ -8595,6 +8612,32 @@ function App() {
       const componentInstance = toolInstanceManager.get(componentInstanceId);
       const worldSize = componentInstance.size || COMPONENT_ICON.DEFAULT_SIZE;
       diameterPx = Math.max(16, Math.round(worldSize * scale));
+    } else if (kind === 'trace') {
+      // Use trace tool instance size (single source of truth), not generic brushSize.
+      const layer = traceToolLayer || 'top';
+      const traceInstanceId = layer === 'top' ? 'traceTop' : 'traceBottom';
+      const traceInstance = toolInstanceManager.get(traceInstanceId);
+      const worldSize = traceInstance.size || 6;
+      diameterPx = Math.max(6, Math.round(worldSize * scale));
+    } else if (kind === 'via') {
+      // Use via tool instance size (single source of truth)
+      const viaInstance = toolInstanceManager.get('via');
+      const worldSize = viaInstance.size || 6;
+      diameterPx = Math.max(6, Math.round(worldSize * scale));
+    } else if (kind === 'pad') {
+      // Use pad tool instance size (single source of truth)
+      const layer = padToolLayer || 'top';
+      const padInstanceId = layer === 'top' ? 'padTop' : 'padBottom';
+      const padInstance = toolInstanceManager.get(padInstanceId);
+      const worldSize = padInstance.size || 6;
+      diameterPx = Math.max(6, Math.round(worldSize * scale));
+    } else if (kind === 'testPoint') {
+      // Use test point tool instance size (single source of truth)
+      const layer = testPointToolLayer || 'top';
+      const testPointInstanceId = layer === 'top' ? 'testPointTop' : 'testPointBottom';
+      const testPointInstance = toolInstanceManager.get(testPointInstanceId);
+      const worldSize = testPointInstance.size || 18;
+      diameterPx = Math.max(12, Math.round(worldSize * scale));
     } else if (kind === 'power' || kind === 'ground') {
       diameterPx = Math.max(12, Math.round(brushSize * scale));
     } else {
@@ -8650,8 +8693,8 @@ function App() {
       const padInstanceId = padToolLayer === 'top' ? 'padTop' : 'padBottom';
       const padInstance = toolInstanceManager.get(padInstanceId);
       const padColor = padInstance.color;
-      // Recalculate diameterPx and r based on tool instance size
-      const padDiameterPx = Math.max(6, Math.round(padInstance.size * scale));
+      // Use diameterPx based on pad tool instance size (already scaled above)
+      const padDiameterPx = diameterPx;
       const padR = padDiameterPx / 2;
       
       // Draw pad as square annulus (square with square hole) - similar to via but square
@@ -8691,12 +8734,8 @@ function App() {
       ctx.arc(cx, cy, r, 0, TWO_PI);
       ctx.fill();
     } else if (kind === 'testPoint') {
-      // Use tool instance directly (single source of truth)
-      const testPointInstanceId = testPointToolLayer === 'top' ? 'testPointTop' : 'testPointBottom';
-      const testPointInstance = toolInstanceManager.get(testPointInstanceId);
-      // Scale the size to match what will be drawn on canvas
-      const scaledSize = testPointInstance.size * scale;
-      setCanvasCursor(generateTestPointCursor(scaledSize));
+      // Use test point tool instance size (already scaled into diameterPx)
+      setCanvasCursor(generateTestPointCursor(diameterPx));
       return;
     } else if (kind === 'erase') {
       // Draw tilted pink eraser matching toolbar icon shape
