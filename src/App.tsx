@@ -5085,27 +5085,27 @@ function App() {
                              (comp as any).dielectric === 'Tantalum';
         const isPolarized = (hasPolarity || isTantalumCap) && comp.pinPolarities;
         
-        // Check if this is an Integrated Circuit in the Semiconductors category
+        // Check if this is a semiconductor (Transistor or Integrated Circuit in the Semiconductors category)
         const compDef = resolveComponentDefinition(comp as any);
-        const isICSemiconductor = compDef?.category === 'Semiconductors' && comp.componentType === 'IntegratedCircuit';
+        const isSemiconductor = compDef?.category === 'Semiconductors';
         
         // Collect unique node IDs with their polarity and Pin 1 info to avoid drawing duplicate lines
         // Map<nodeId, { isNegative: boolean, hasPin1: boolean }>
-        // Note: hasPin1 is ONLY set for Integrated Circuits in Semiconductors category
+        // Note: hasPin1 is set for all semiconductors (Transistors and Integrated Circuits)
         const connectedNodes = new Map<string, { isNegative: boolean; hasPin1: boolean }>();
         for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
           const connection = pinConnections[pinIndex];
           if (connection && connection.trim() !== '') {
             const nodeIdStr = connection.trim();
-            // Only mark Pin 1 for Integrated Circuits in Semiconductors category
-            const isPin1 = isICSemiconductor && pinIndex === 0;
+            // Mark Pin 1 for all semiconductors (Transistors and Integrated Circuits)
+            const isPin1 = isSemiconductor && pinIndex === 0;
             // Check if this pin is negative (for polarized components)
             const isNegative: boolean = Boolean(isPolarized && 
                              comp.pinPolarities && 
                              pinIndex < comp.pinPolarities.length &&
                              comp.pinPolarities[pinIndex] === '-');
             // If node already exists, keep the negative flag if either connection is negative
-            // and keep hasPin1 if any connection is Pin 1 (only for ICs) (only for ICs)
+            // and keep hasPin1 if any connection is Pin 1 (for all semiconductors)
             const existingValue = connectedNodes.get(nodeIdStr);
             if (existingValue !== undefined) {
               connectedNodes.set(nodeIdStr, {
@@ -5133,8 +5133,8 @@ function App() {
             
             ctx.save();
             // Use black for negative connections of polarized components
-            // Use darkened color for Pin 1 connections (ONLY for Integrated Circuits in Semiconductors category)
-            // hasPin1 is already set correctly for ICs in Semiconductors category
+            // Use darkened color for Pin 1 connections (for all semiconductors: Transistors and Integrated Circuits)
+            // hasPin1 is already set correctly for all semiconductors
             // Otherwise use component connection color
             // If selected, use highlight color (cyan) and thicker line
             if (isSelected) {
@@ -5146,7 +5146,7 @@ function App() {
                 ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
               } else if (hasPin1) {
                 // Pin 1 gets a darker version of the component connection color
-                // Only for Integrated Circuits in the Semiconductors category
+                // For all semiconductors (Transistors and Integrated Circuits)
                 ctx.strokeStyle = darkenColor(componentConnectionColor, 0.4);
               } else {
                 ctx.strokeStyle = componentConnectionColor;
