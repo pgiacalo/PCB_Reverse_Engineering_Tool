@@ -9923,12 +9923,16 @@ function App() {
     doc.setFontSize(8);
     
     bomData.items.forEach((item) => {
-      // Check if we need a new page
-      if (yPos > pageHeight - margin - lineHeight * 3) {
-        doc.addPage();
-        yPos = margin + lineHeight;
-      }
+      // Helper to ensure there is space for at least `neededLines` more text rows.
+      const ensurePageSpace = (neededLines: number) => {
+        if (yPos > pageHeight - margin - lineHeight * neededLines) {
+          doc.addPage();
+          yPos = margin + lineHeight;
+        }
+      };
       
+      // Main BOM row ---------------------------------------------------------
+      ensurePageSpace(3);
       xPos = margin;
       const rowData = [
         item.quantity.toString(),
@@ -9949,6 +9953,41 @@ function App() {
       });
       
       yPos += lineHeight * 1.2;
+      
+      // Optional detail lines: Notes and Spec Sheet URL ----------------------
+      const notes = (item.notes || '').toString().trim();
+      const datasheet = (item as any).datasheet
+        ? (item as any).datasheet.toString().trim()
+        : '';
+      
+      const detailLines: string[] = [];
+      if (notes) {
+        detailLines.push(`Notes: ${notes}`);
+      }
+      if (datasheet) {
+        detailLines.push(`Spec Sheet URL: ${datasheet}`);
+      }
+      
+      if (detailLines.length > 0) {
+        // Indent detail lines so they appear under the main item text
+        const detailX = margin + colWidths[0] + 2; // just after Qty column
+        const availableWidth = pageWidth - margin - detailX;
+        
+        detailLines.forEach((line) => {
+          const wrapped = doc.splitTextToSize(line, availableWidth);
+          wrapped.forEach((textLine: string) => {
+            ensurePageSpace(2);
+            doc.text(textLine, detailX, yPos);
+            yPos += lineHeight * 0.9;
+          });
+        });
+      }
+      
+      // Divider line between items -------------------------------------------
+      ensurePageSpace(1);
+      doc.setLineWidth(0.2);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += lineHeight * 0.5;
     });
     
     // Convert to blob

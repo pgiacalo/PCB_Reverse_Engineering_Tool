@@ -80,6 +80,7 @@ export interface BOMItem {
   partNumber?: string;
   description?: string;
   notes?: string | null;
+  datasheet?: string;
   layer: 'top' | 'bottom' | 'both';
 }
 
@@ -99,47 +100,111 @@ export interface BOMData {
  * Get component value string for BOM
  */
 function getComponentValue(comp: PCBComponent): string {
-  // For Resistor: use resistance with unit
-  if (comp.componentType === 'Resistor' && 'resistance' in comp) {
-    const { value, unit } = readValueAndUnit(comp, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+  // ---------------------------------------------------------------------------
+  // Passive components: use their primary electrical value (with units)
+  // ---------------------------------------------------------------------------
+
+  // Resistor family: Resistor, ResistorNetwork, Thermistor, VariableResistor
+  if (
+    (comp.componentType === 'Resistor' ||
+      comp.componentType === 'ResistorNetwork' ||
+      comp.componentType === 'Thermistor' ||
+      comp.componentType === 'VariableResistor') &&
+    'resistance' in comp
+  ) {
+    const { value, unit } = readValueAndUnit(
+      comp,
+      'resistance',
+      'resistanceUnit',
+      getDefaultUnit('resistance')
+    );
     if (value && value.trim() !== '') {
       return combineValueAndUnit(value, unit);
     }
   }
-  
-  // For Capacitor: use capacitance with unit
-  if (comp.componentType === 'Capacitor' && 'capacitance' in comp) {
-    const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+
+  // Capacitor family: Capacitor, Electrolytic Capacitor, Film Capacitor
+  if (
+    (comp.componentType === 'Capacitor' ||
+      comp.componentType === 'Electrolytic Capacitor' ||
+      comp.componentType === 'Film Capacitor') &&
+    'capacitance' in comp
+  ) {
+    const { value, unit } = readValueAndUnit(
+      comp,
+      'capacitance',
+      'capacitanceUnit',
+      getDefaultUnit('capacitance')
+    );
     if (value && value.trim() !== '') {
       return combineValueAndUnit(value, unit);
     }
   }
-  
-  // For Electrolytic Capacitor: use capacitance with unit
-  if (comp.componentType === 'Electrolytic Capacitor' && 'capacitance' in comp) {
-    const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
-    if (value && value.trim() !== '') {
-      return combineValueAndUnit(value, unit);
-    }
-  }
-  
-  // For Film Capacitor: use capacitance with unit
-  if (comp.componentType === 'Film Capacitor' && 'capacitance' in comp) {
-    const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
-    if (value && value.trim() !== '') {
-      return combineValueAndUnit(value, unit);
-    }
-  }
-  
-  // For Inductor: use inductance with unit
+
+  // Inductor: use inductance with unit
   if (comp.componentType === 'Inductor' && 'inductance' in comp) {
-    const { value, unit } = readValueAndUnit(comp, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
+    const { value, unit } = readValueAndUnit(
+      comp,
+      'inductance',
+      'inductanceUnit',
+      getDefaultUnit('inductance')
+    );
     if (value && value.trim() !== '') {
       return combineValueAndUnit(value, unit);
     }
   }
-  
-  // For ICs, Transistors, Diodes, and other active components: use partNumber or partName
+
+  // Fuse: use current rating with unit
+  if (comp.componentType === 'Fuse' && 'current' in comp) {
+    const { value, unit } = readValueAndUnit(
+      comp,
+      'current',
+      'currentUnit',
+      getDefaultUnit('current')
+    );
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+
+  // Battery: prefer capacity, fall back to voltage
+  if (comp.componentType === 'Battery') {
+    const { value: capValue, unit: capUnit } = readValueAndUnit(
+      comp,
+      'capacity',
+      'capacityUnit',
+      getDefaultUnit('capacity')
+    );
+    if (capValue && capValue.trim() !== '') {
+      return combineValueAndUnit(capValue, capUnit);
+    }
+    const { value: vValue, unit: vUnit } = readValueAndUnit(
+      comp,
+      'voltage',
+      'voltageUnit',
+      getDefaultUnit('voltage')
+    );
+    if (vValue && vValue.trim() !== '') {
+      return combineValueAndUnit(vValue, vUnit);
+    }
+  }
+
+  // Power supply: use output voltage with unit
+  if (comp.componentType === 'PowerSupply') {
+    const { value, unit } = readValueAndUnit(
+      comp,
+      'outputVoltage',
+      'outputVoltageUnit',
+      getDefaultUnit('voltage')
+    );
+    if (value && value.trim() !== '') {
+      return combineValueAndUnit(value, unit);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Active / other components: prefer part name or part number
+  // ---------------------------------------------------------------------------
   const partName = (comp as any).partName?.trim();
   if (partName && partName !== '') {
     return partName;
@@ -149,8 +214,8 @@ function getComponentValue(comp: PCBComponent): string {
   if (partNumber && partNumber !== '') {
     return partNumber;
   }
-  
-  // Fallback to componentType
+
+  // Fallback to componentType (what you are currently seeing in the BOM)
   return formatComponentTypeName(comp.componentType);
 }
 
@@ -189,6 +254,7 @@ export function generateBOM(
         partNumber: (comp as any).partNumber,
         description: comp.description,
         notes: comp.notes,
+        datasheet: (comp as any).datasheet,
         layer,
       });
     }

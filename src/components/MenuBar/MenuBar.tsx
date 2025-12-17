@@ -335,10 +335,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   const [openToolsSubmenu, setOpenToolsSubmenu] = React.useState<'lock' | 'select' | null>(null);
   const toolsSubmenuTimeoutRef = React.useRef<number | null>(null);
   
-  // Track Settings submenu
-  const [openSettingsSubmenu, setOpenSettingsSubmenu] = React.useState(false);
-  const settingsSubmenuTimeoutRef = React.useRef<number | null>(null);
-  
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
   const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
@@ -880,116 +876,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Restore from History…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <div style={{ position: 'relative' }}>
-              <button 
-                onMouseEnter={() => {
-                  if (settingsSubmenuTimeoutRef.current) {
-                    clearTimeout(settingsSubmenuTimeoutRef.current);
-                    settingsSubmenuTimeoutRef.current = null;
-                  }
-                  setOpenSettingsSubmenu(true);
-                }}
-                onMouseLeave={() => {
-                  settingsSubmenuTimeoutRef.current = window.setTimeout(() => {
-                    setOpenSettingsSubmenu(false);
-                  }, 200);
-                }}
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setOpenSettingsSubmenu(!openSettingsSubmenu);
-                }} 
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
-              >
-                Settings ▸
-              </button>
-              {openSettingsSubmenu && (
-                <div 
-                  onMouseEnter={() => {
-                    if (settingsSubmenuTimeoutRef.current) {
-                      clearTimeout(settingsSubmenuTimeoutRef.current);
-                      settingsSubmenuTimeoutRef.current = null;
-                    }
-                    setOpenSettingsSubmenu(true);
-                  }}
-                  onMouseLeave={() => {
-                    settingsSubmenuTimeoutRef.current = window.setTimeout(() => {
-                      setOpenSettingsSubmenu(false);
-                    }, 200);
-                  }}
-                  style={{ position: 'absolute', top: 0, left: '100%', marginLeft: '4px', minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 10 }}
-                >
-                  <div style={{ padding: '4px 8px', color: '#aaa', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>BOM Export Format</div>
-                  <label 
-                    onClick={(e) => { e.stopPropagation(); setBomExportFormat('pdf'); }}
-                    style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <input 
-                      type="radio" 
-                      name="bomFormat" 
-                      checked={bomExportFormat === 'pdf'} 
-                      onChange={() => setBomExportFormat('pdf')}
-                      style={{ marginRight: '8px', cursor: 'pointer', accentColor: '#4a9eff' }}
-                    />
-                    <span>PDF</span>
-                  </label>
-                  <label 
-                    onClick={(e) => { e.stopPropagation(); setBomExportFormat('json'); }}
-                    style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', cursor: 'pointer', userSelect: 'none' }}
-                  >
-                    <input 
-                      type="radio" 
-                      name="bomFormat" 
-                      checked={bomExportFormat === 'json'} 
-                      onChange={() => setBomExportFormat('json')}
-                      style={{ marginRight: '8px', cursor: 'pointer', accentColor: '#4a9eff' }}
-                    />
-                    <span>JSON</span>
-                  </label>
-                  <div style={{ height: 1, background: '#444', margin: '8px 0' }} />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSetToolSizeDialogVisible(true);
-                      setOpenMenu(null);
-                      setOpenSettingsSubmenu(false);
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '6px 10px',
-                      color: '#f2f2f2',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Set Tool Sizes…
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSetToolColorDialogVisible(true);
-                      setOpenMenu(null);
-                      setOpenSettingsSubmenu(false);
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      textAlign: 'left',
-                      padding: '6px 10px',
-                      color: '#f2f2f2',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Set Tool Colors…
-                  </button>
-                </div>
-              )}
-            </div>
-            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
               onClick={async () => { 
                 if (isReadOnlyMode) return;
@@ -1228,6 +1114,43 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               }}
             >
               Open Project Notes…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button
+              onClick={() => {
+                setSetToolSizeDialogVisible(true);
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Set Tool Sizes…
+            </button>
+            <button
+              onClick={() => {
+                setSetToolColorDialogVisible(true);
+                setOpenMenu(null);
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Set Tool Colors…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
