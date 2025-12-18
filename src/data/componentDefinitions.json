@@ -1485,7 +1485,8 @@
       "designator": "U",
       "defaultPins": 8,
       "properties": {
-        "semiconductorType": "IntegratedCircuit"
+        "semiconductorType": "IntegratedCircuit",
+        "pinNames": ["CHIP_DEPENDENT"]
       },
       "fields": [
         {

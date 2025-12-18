@@ -573,13 +573,13 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                     // Determine if this component type has polarity using definition
                     const showPolarityColumn = isComponentPolarized(comp);
                     
-                    // Get pin names for semiconductors (transistors, op amps)
+                    // Get pin names - data-driven: show if pinNames are defined in the definition
                     const definition = resolveComponentDefinition(comp as any);
                     const instancePinNames = (comp as any)?.pinNames as string[] | undefined;
                     const definitionPinNames = definition?.properties?.pinNames as string[] | undefined;
-                    const isTransistor = comp.componentType === 'Transistor';
-                    const isOpAmp = definition?.properties?.semiconductorType === 'OpAmp';
-                    const showPinNames = (isTransistor || isOpAmp) && (definitionPinNames && definitionPinNames.length > 0);
+                    // Show Name column if pinNames are defined in the definition
+                    const hasPinNames = definitionPinNames && definitionPinNames.length > 0;
+                    const showPinNames = hasPinNames;
                     
                     return (
                       <div style={{ marginTop: '8px', marginBottom: '8px' }}>
@@ -606,8 +606,13 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             {comp.pinConnections.map((conn, idx) => {
                               const polarity = comp.pinPolarities && comp.pinPolarities.length > idx ? comp.pinPolarities[idx] : '';
                               // Get pin name from instance or definition default
-                              const pinName = (instancePinNames && idx < instancePinNames.length && instancePinNames[idx]) ||
-                                            (definitionPinNames && idx < definitionPinNames.length ? definitionPinNames[idx] : '');
+                              // For CHIP_DEPENDENT, show empty string (user fills in custom names)
+                              const instancePinName = instancePinNames && idx < instancePinNames.length ? instancePinNames[idx] : '';
+                              const defaultPinName = definitionPinNames && idx < definitionPinNames.length ? definitionPinNames[idx] : '';
+                              const isChipDependent = defaultPinName === 'CHIP_DEPENDENT';
+                              // Use instance value if it exists and is not empty, otherwise use default (unless it's CHIP_DEPENDENT)
+                              const pinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : 
+                                            (isChipDependent ? '' : defaultPinName);
                               return (
                                 <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                                   <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>

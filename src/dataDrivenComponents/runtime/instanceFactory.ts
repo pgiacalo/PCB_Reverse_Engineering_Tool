@@ -69,6 +69,24 @@ export function createComponentInstance(options: CreateInstanceOptions): PCBComp
     Object.assign(base, definition.properties);
   }
 
+  // Initialize pinNames from definition defaults (user can edit later)
+  // Do this AFTER Object.assign so pinNames from properties are available
+  // Create a new array that matches pinCount, filling with default names
+  // Special case: If pinNames contains "CHIP_DEPENDENT", initialize with empty strings
+  if (definition.properties?.pinNames && Array.isArray(definition.properties.pinNames)) {
+    const defaultPinNames = definition.properties.pinNames as string[];
+    const isChipDependent = defaultPinNames.includes('CHIP_DEPENDENT');
+    if (isChipDependent) {
+      // For CHIP_DEPENDENT, initialize with empty strings (user will fill in)
+      base.pinNames = new Array(base.pinCount).fill('');
+    } else {
+      // For predefined names, fill with default names
+      base.pinNames = new Array(base.pinCount).fill('').map((_, i) => 
+        i < defaultPinNames.length ? defaultPinNames[i] : ''
+      );
+    }
+  }
+
   // Initialize fields with default values and units
   if (definition.fields && definition.fields.length > 0) {
     definition.fields.forEach((field: ComponentFieldDefinition) => {

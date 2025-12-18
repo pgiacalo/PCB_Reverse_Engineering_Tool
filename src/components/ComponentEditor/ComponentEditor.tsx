@@ -863,15 +863,18 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
             const currentComp = currentCompList.find(c => c.id === componentEditor.id);
             const instancePinNames = (currentComp as any)?.pinNames as string[] | undefined;
-            const definitionPinNames = componentDefinition?.properties?.pinNames as string[] | undefined;
+            // Resolve definition if not provided as prop
+            const resolvedDef = componentDefinition || resolveComponentDefinition(comp as any);
+            const definitionPinNames = resolvedDef?.properties?.pinNames as string[] | undefined;
             
-            // Determine if this component has predefined pin names (transistors, op amps) or uses free text (other ICs)
-            const isTransistor = comp.componentType === 'Transistor';
-            const isOpAmp = componentDefinition?.properties?.semiconductorType === 'OpAmp';
-            const isIC = comp.componentType === 'IntegratedCircuit' && !isOpAmp;
-            const useDropdown = (isTransistor || isOpAmp) && definitionPinNames && definitionPinNames.length > 0;
-            const useTextInput = isIC;
-            const showNameColumn = useDropdown || useTextInput;
+            // Data-driven: Show Name column if pinNames are defined in the definition
+            // If pinNames contains "CHIP_DEPENDENT", use text input (for ICs with custom pin names)
+            // Otherwise, use dropdown (for transistors, op amps with predefined names)
+            const hasPinNames = definitionPinNames && definitionPinNames.length > 0;
+            const isChipDependent = hasPinNames && definitionPinNames.includes('CHIP_DEPENDENT');
+            const useDropdown = hasPinNames && !isChipDependent; // Dropdown for predefined names
+            const useTextInput = isChipDependent; // Text input for CHIP_DEPENDENT
+            const showNameColumn = hasPinNames; // Show if pinNames are defined
             
             return (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
@@ -893,12 +896,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                     const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
                     const pinPolarity = (currentComp?.pinPolarities && currentComp.pinPolarities.length > i) ? (currentComp.pinPolarities[i] || '') : '';
                     // Get pin name from instance (user-edited) or default from definition
-                    // Always use definition default if instance doesn't have a value for this pin
-                    // Ensure the value matches one of the dropdown options for proper display
+                    // For CHIP_DEPENDENT, show empty string (user fills in custom names)
                     const instancePinName = instancePinNames && i < instancePinNames.length ? instancePinNames[i] : '';
                     const defaultPinName = definitionPinNames && i < definitionPinNames.length ? definitionPinNames[i] : '';
-                    // Use instance value if it exists and is not empty, otherwise use default
-                    const currentPinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : defaultPinName;
+                    const isChipDependent = defaultPinName === 'CHIP_DEPENDENT';
+                    // Use instance value if it exists and is not empty, otherwise use default (unless it's CHIP_DEPENDENT)
+                    const currentPinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : 
+                                          (isChipDependent ? '' : defaultPinName);
                     const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
                     
                     return (
@@ -997,7 +1001,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                                 }}
                               >
                                 {definitionPinNames && definitionPinNames.length > 0 ? (
-                                  definitionPinNames.map((name, idx) => (
+                                  // Filter out CHIP_DEPENDENT from dropdown options (it's only used as a marker)
+                                  definitionPinNames.filter(name => name !== 'CHIP_DEPENDENT').map((name, idx) => (
                                     <option key={idx} value={name}>{name}</option>
                                   ))
                                 ) : (
