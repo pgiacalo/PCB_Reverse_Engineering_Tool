@@ -140,7 +140,7 @@ const buildMetadataForDefinition = (def: ComponentDefinition): ComponentSelectio
         else if (subcategory === 'Circuit Breaker') subtype = 'CircuitBreaker';
         else if (subcategory === 'Thermocouple') subtype = 'Thermocouple';
         else if (subcategory === 'Tuner') subtype = 'Tuner';
-      }
+  }
       break;
 
     default:
@@ -194,6 +194,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   const [isDragging, setIsDragging] = useState(false);
   const dragOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const dialogRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize position when dialog becomes visible
   useEffect(() => {
@@ -209,6 +210,18 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
       });
     }
   }, [visible, position]);
+
+  // Auto-focus search input when dialog opens
+  useEffect(() => {
+    if (visible && searchInputRef.current) {
+      // Small delay to ensure dialog is fully rendered
+      const timeoutId = setTimeout(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [visible]);
 
   // Handle drag start
   const handleDragStart = useCallback((e: React.MouseEvent) => {
@@ -425,6 +438,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
           {/* Search Box */}
           <div style={{ marginBottom: '16px' }} onClick={(e) => e.stopPropagation()}>
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Search by Component Type..."
               value={searchText}

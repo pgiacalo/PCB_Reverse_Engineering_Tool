@@ -2955,16 +2955,16 @@ function App() {
 
       let comp: PCBComponent;
       try {
-        comp = createComponentInstance({
+            comp = createComponentInstance({
           definition: dataDrivenDefinition,
           layer: componentToolLayerRef.current,
-          x: truncatedPos.x,
-          y: truncatedPos.y,
-          color: componentColor,
-          size: componentSize,
-          existingComponents: allExistingComponents,
-          counters: autoAssignDesignators ? counters : {},
-        });
+              x: truncatedPos.x,
+              y: truncatedPos.y,
+              color: componentColor,
+              size: componentSize,
+              existingComponents: allExistingComponents,
+              counters: autoAssignDesignators ? counters : {},
+            });
       } catch (error) {
         console.error('[Component Creation] Error creating component with v2 runtime:', error);
         return;
@@ -14585,6 +14585,8 @@ function App() {
           // while the Component tool remains active.
           setShowComponentSelectionDialog(false);
           setHasDismissedComponentDialog(true);
+          // Activate Select tool when dialog closes
+          setCurrentTool('select');
         }}
       />
 
