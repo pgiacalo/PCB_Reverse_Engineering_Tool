@@ -13619,6 +13619,12 @@ function App() {
             const icType = comp.componentType === 'IntegratedCircuit' && 'icType' in comp ? comp.icType : null;
             // Get detailed component information
             const componentDetails = getComponentDetails(comp);
+            // Check if this is a semiconductor for pin table display
+            const compDef = resolveComponentDefinition(comp as any);
+            const isSemiconductor = compDef?.category === 'Semiconductors';
+            // Get pin names and connections for semiconductors
+            const instancePinNames = (comp as any)?.pinNames as string[] | undefined;
+            const definitionPinNames = compDef?.properties?.pinNames as string[] | undefined;
             
             // Calculate tooltip position near mouse pointer with smart positioning
             // Offset from mouse cursor (smaller offset for closer positioning)
@@ -13699,6 +13705,46 @@ function App() {
                     {comp.notes}
                   </div>
                 )}
+                {isSemiconductor && comp.pinCount > 0 && (() => {
+                  // Build pin table for semiconductors
+                  const pinRows = Array.from({ length: comp.pinCount }, (_, i) => {
+                    const pinConnection = comp.pinConnections && comp.pinConnections.length > i ? comp.pinConnections[i] : '';
+                    // Get pin name from instance or definition
+                    const instancePinName = instancePinNames && i < instancePinNames.length ? instancePinNames[i] : '';
+                    const defaultPinName = definitionPinNames && i < definitionPinNames.length ? definitionPinNames[i] : '';
+                    const isChipDependent = defaultPinName === 'CHIP_DEPENDENT';
+                    // Use instance value if it exists and is not empty, otherwise use default (unless it's CHIP_DEPENDENT)
+                    const pinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : 
+                                  (isChipDependent ? '' : defaultPinName);
+                    return { pin: i + 1, name: pinName || '-', nodeId: pinConnection || '-' };
+                  });
+                  
+                  return (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px', color: '#fff' }}>
+                        Pin Connections:
+                      </div>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.3)' }}>
+                            <th style={{ textAlign: 'left', padding: '2px 6px', fontWeight: 600, color: '#fff' }}>Pin</th>
+                            <th style={{ textAlign: 'left', padding: '2px 6px', fontWeight: 600, color: '#fff' }}>Name</th>
+                            <th style={{ textAlign: 'left', padding: '2px 6px', fontWeight: 600, color: '#fff' }}>Node ID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pinRows.map((row, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                              <td style={{ padding: '2px 6px', color: '#e0e0e0', fontFamily: 'monospace' }}>{row.pin}</td>
+                              <td style={{ padding: '2px 6px', color: '#e0e0e0', fontStyle: row.name !== '-' ? 'italic' : 'normal' }}>{row.name}</td>
+                              <td style={{ padding: '2px 6px', color: '#e0e0e0', fontFamily: 'monospace' }}>{row.nodeId}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}

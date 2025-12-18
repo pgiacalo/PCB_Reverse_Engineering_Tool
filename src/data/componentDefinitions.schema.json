@@ -1,0 +1,243 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool/componentDefinitions.schema.json",
+  "title": "Component Definitions Schema",
+  "description": "Schema for componentDefinitions.json - defines all available PCB components, their properties, and fields",
+  "type": "object",
+  "required": ["components", "categories"],
+  "properties": {
+    "components": {
+      "type": "array",
+      "description": "Array of component definitions",
+      "items": {
+        "$ref": "#/definitions/ComponentDefinition"
+      }
+    },
+    "categories": {
+      "type": "object",
+      "description": "Category definitions mapping category names to their subcategories",
+      "additionalProperties": {
+        "$ref": "#/definitions/ComponentCategory"
+      }
+    }
+  },
+  "definitions": {
+    "ComponentDefinition": {
+      "type": "object",
+      "required": [
+        "category",
+        "subcategory",
+        "type",
+        "displayName",
+        "description",
+        "searchText",
+        "designator",
+        "defaultPins"
+      ],
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "Component category (e.g., 'Capacitors', 'Resistors', 'Semiconductors')"
+        },
+        "subcategory": {
+          "type": "string",
+          "description": "Component subcategory within the category (e.g., 'General', 'Electrolytic', 'BJT')"
+        },
+        "type": {
+          "type": "string",
+          "description": "Component type identifier (e.g., 'Capacitor', 'Resistor', 'Semiconductor')"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable display name for the component (e.g., 'Capacitor', 'BJT', 'Single Op Amp')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the component"
+        },
+        "searchText": {
+          "type": "string",
+          "description": "Space-separated search keywords for finding this component"
+        },
+        "designator": {
+          "type": "string",
+          "description": "PCB designator prefix (e.g., 'C', 'R', 'Q', 'U'). Single designator per (category, subcategory) combination.",
+          "pattern": "^[A-Z][A-Z0-9]*$"
+        },
+        "defaultPins": {
+          "type": "integer",
+          "description": "Default number of pins for this component",
+          "minimum": 1
+        },
+        "subtype": {
+          "type": "string",
+          "description": "Optional subtype identifier (legacy field)"
+        },
+        "designators": {
+          "type": "array",
+          "description": "Legacy field: array of designator prefixes. Use 'designator' field instead.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "properties": {
+          "type": "object",
+          "description": "Component-specific properties (e.g., capacitorType, diodeType, pinNames, polarized)",
+          "additionalProperties": true,
+          "properties": {
+            "capacitorType": {
+              "type": "string",
+              "description": "Type of capacitor (e.g., 'General', 'Electrolytic', 'Film', 'Tantalum')"
+            },
+            "diodeType": {
+              "type": "string",
+              "description": "Type of diode (e.g., 'Standard', 'Zener', 'LED', 'Schottky')"
+            },
+            "resistorType": {
+              "type": "string",
+              "description": "Type of resistor (e.g., 'Standard', 'Network', 'Thermistor')"
+            },
+            "vrType": {
+              "type": "string",
+              "description": "Type of variable resistor (e.g., 'Potentiometer', 'Varistor', 'VoltageRegulator')"
+            },
+            "semiconductorType": {
+              "type": "string",
+              "description": "Type of semiconductor (e.g., 'Transistor', 'OpAmp', 'IntegratedCircuit')"
+            },
+            "transistorType": {
+              "type": "string",
+              "description": "Type of transistor (e.g., 'BJT', 'MOSFET', 'JFET')"
+            },
+            "polarized": {
+              "type": "boolean",
+              "description": "Whether the component is polarized (has positive/negative pins). Fixed property, not editable by user."
+            },
+            "pinNames": {
+              "type": "array",
+              "description": "Array of default pin names. Use ['CHIP_DEPENDENT'] for ICs that require custom pin names.",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                ["Base", "Emitter", "Collector"],
+                ["Source", "Gate", "Drain"],
+                ["V+", "V-", "input+", "input-", "output"],
+                ["CHIP_DEPENDENT"]
+              ]
+            },
+            "passiveType": {
+              "type": "string",
+              "description": "Type of passive component"
+            },
+            "powerType": {
+              "type": "string",
+              "description": "Type of power/energy component"
+            },
+            "genericType": {
+              "type": "string",
+              "description": "Type of generic component"
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "description": "Array of field definitions for component properties dialog",
+          "items": {
+            "$ref": "#/definitions/ComponentFieldDefinition"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ComponentFieldDefinition": {
+      "type": "object",
+      "required": ["name", "label", "type"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Field name (used as property key on component instance)",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9]*$"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label for the field (displayed in UI)"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["number", "string", "enum"],
+          "description": "Field data type"
+        },
+        "units": {
+          "type": "array",
+          "description": "Array of available units for number fields (e.g., ['pF', 'nF', 'µF', 'mF', 'F'])",
+          "items": {
+            "type": "string"
+          }
+        },
+        "defaultUnit": {
+          "type": "string",
+          "description": "Default unit for number fields (must be one of the values in 'units' array)"
+        },
+        "defaultValue": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" }
+          ],
+          "description": "Default value for the field (string or number)"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the field is required (default: false)",
+          "default": false
+        },
+        "enumValues": {
+          "type": "array",
+          "description": "Array of allowed values for enum fields (required when type is 'enum')",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "enum" } }
+          },
+          "then": {
+            "required": ["enumValues"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "number" } },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "units": { "type": "array", "minItems": 1 },
+              "defaultUnit": { "type": "string" }
+            }
+          }
+        }
+      ]
+    },
+    "ComponentCategory": {
+      "type": "object",
+      "required": ["subcategories"],
+      "properties": {
+        "subcategories": {
+          "type": "array",
+          "description": "Array of subcategory names within this category",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
+
