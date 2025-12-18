@@ -25,36 +25,133 @@
  * Displays a welcome message when no project images are loaded
  */
 
-import React from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 
 export interface WelcomeDialogProps {
   /** Whether to show the dialog (typically when no images are loaded) */
   visible: boolean;
+  /** Canvas size and position to match video background */
+  canvasSize?: { width: number; height: number };
+  canvasPosition?: { left: number; top: number };
+  /** Callback when user interacts (clicks) - should stop and remove video */
+  onDismiss?: () => void;
 }
 
-export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
+export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ 
+  visible, 
+  canvasSize = { width: 960, height: 600 },
+  canvasPosition = { left: 244, top: 6 },
+  onDismiss
+}) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [showVideo, setShowVideo] = useState(true);
+
+  // Stop and remove video when dismissed
+  const stopAndRemoveVideo = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.src = '';
+      videoRef.current.load(); // Reset video element to free memory
+    }
+    setShowVideo(false); // Remove video from DOM
+    if (onDismiss) {
+      onDismiss();
+    }
+  }, [onDismiss]);
+
+  // Reset showVideo when dialog becomes visible again
+  useEffect(() => {
+    if (visible) {
+      setShowVideo(true);
+    }
+  }, [visible]);
+
+  // Handle clicks anywhere to dismiss
+  useEffect(() => {
+    if (!visible) return;
+
+    const handleClick = () => {
+      // Stop video and dismiss on any click
+      stopAndRemoveVideo();
+    };
+
+    // Add click listener to document
+    document.addEventListener('click', handleClick, { once: true });
+    document.addEventListener('mousedown', handleClick, { once: true });
+
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('mousedown', handleClick);
+    };
+  }, [visible, stopAndRemoveVideo]);
+
+  useEffect(() => {
+    if (visible && showVideo && videoRef.current) {
+      // Ensure video plays when dialog becomes visible
+      videoRef.current.play().catch((error) => {
+        console.warn('Video autoplay failed:', error);
+      });
+    } else if ((!visible || !showVideo) && videoRef.current) {
+      // Stop video when dialog becomes invisible or video is dismissed
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
+    }
+  }, [visible, showVideo]);
+
   if (!visible) return null;
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      textAlign: 'center',
-      padding: '24px 32px',
-      background: 'rgba(255, 255, 255, 0.85)',
-      borderRadius: 8,
-      border: '2px solid #4CAF50',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-      zIndex: 1,
-      maxWidth: '500px'
-    }}>
+    <div 
+      ref={containerRef}
+      style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 10 }}
+    >
+      {/* Video background - matches canvas area exactly */}
+      {showVideo && (
+        <video
+          ref={videoRef}
+          src={`${import.meta.env.BASE_URL}SplashLoop.mp4`}
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{
+            position: 'absolute',
+            left: `${canvasPosition.left}px`,
+            top: `${canvasPosition.top}px`,
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`,
+            objectFit: 'cover',
+            pointerEvents: 'none',
+            zIndex: 1,
+          }}
+        />
+      )}
+      {/* Dialog content - centered on top of video */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        textAlign: 'center',
+        padding: '24px 32px',
+        background: 'rgba(255, 255, 255, 0.85)',
+        borderRadius: 8,
+        border: '2px solid #4CAF50',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        maxWidth: '500px',
+        pointerEvents: 'auto',
+        zIndex: 2,
+      }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
         PCB Tracer: An Electronics Tool
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-        Reverse Engineer, Troubleshoot, Trace Signals
+        Reverse Engineer, Troubleshoot, Repair, Signal Trace,<br />
+        Learn & Understand
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1) Use the File menu to start a new project.
@@ -65,6 +162,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ visible }) => {
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
         3) Use the tools to draw vias, traces, components, etc.
       </div>
+    </div>
     </div>
   );
 };

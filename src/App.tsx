@@ -13459,7 +13459,11 @@ function App() {
           </div>
 
           {/* Canvas welcome note - shown when no project is loaded */}
-          <WelcomeDialog visible={!topImage && !bottomImage} />
+          <WelcomeDialog 
+            visible={!topImage && !bottomImage} 
+            canvasSize={canvasSize}
+            canvasPosition={{ left: 244, top: 6 }}
+          />
 
           <canvas
             ref={canvasRef}
