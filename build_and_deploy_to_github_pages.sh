@@ -69,9 +69,24 @@ TARGET_REPO="${GH_PAGES_REPO:-$ORIGIN_URL}"
 
 echo "🚀 Deploying to gh-pages branch (repo: $TARGET_REPO)..."
 # Increase HTTP buffer to handle large files (like video files)
+# Set both local and global to ensure gh-pages inherits it
 git config http.postBuffer 524288000
+git config --global http.postBuffer 524288000
+# Also set http version to 1.1 which handles large files better
+git config http.version HTTP/1.1
+git config --global http.version HTTP/1.1
 # Use gh-pages directly so we can pass the repo target safely
-npx --yes gh-pages -d dist -r "$TARGET_REPO"
+# Note: If deployment still fails, the video file (1.7MB) may need to be hosted externally
+# or compressed further. GitHub Pages can handle files up to 100MB, but the HTTP push
+# buffer may need to be increased further or the file split into smaller chunks.
+npx --yes gh-pages -d dist -r "$TARGET_REPO" || {
+  echo "⚠️  Deployment failed. This may be due to the video file size."
+  echo "   Consider:"
+  echo "   1. Compressing the video further"
+  echo "   2. Hosting the video on a CDN and loading it externally"
+  echo "   3. Using GitHub's web interface to manually upload the dist folder"
+  exit 1
+}
 
 echo "✅ Deployment complete."
 
