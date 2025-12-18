@@ -14617,31 +14617,32 @@ function App() {
         onSkip={handleAutoSavePromptSkip}
       />
 
-      {/* Donate Button - fixed position in lower left corner */}
-        <div 
-          style={{
-            position: 'fixed',
-            bottom: 8,
-            left: 8,
-            zIndex: 100,
-          }}
+
+      {/* Donate Button - fixed position in lower right corner */}
+      <div 
+        style={{
+          position: 'fixed',
+          bottom: 8,
+          right: 8,
+          zIndex: 100,
+        }}
       >
-              <button
+        <button
           onClick={() => {
             // Open donate page in new window to avoid losing user's work
             window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
           }}
-                style={{
+          style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '6px 12px',
             background: 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)',
             border: '1px solid rgba(27, 31, 36, 0.15)',
-                  borderRadius: 6,
-                  cursor: 'pointer',
+            borderRadius: 6,
+            cursor: 'pointer',
             fontSize: 12,
-                  fontWeight: 500,
+            fontWeight: 500,
             color: '#24292f',
             boxShadow: '0 1px 0 rgba(27, 31, 36, 0.04)',
             transition: 'background 0.2s',
@@ -14658,8 +14659,8 @@ function App() {
             <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
           </svg>
           Donate
-              </button>
-            </div>
+        </button>
+      </div>
 
     </div>
   );
