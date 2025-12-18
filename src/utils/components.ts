@@ -137,11 +137,8 @@ export function createComponent(
   baseComponent.pinConnections = new Array(baseComponent.pinCount).fill('');
   
   // Initialize pinPolarities for components that are polarized
-  const isPolarized = metadata?.componentDefinition?.properties?.polarized !== undefined 
-                     ? metadata.componentDefinition.properties.polarized
-                     : componentType === 'Electrolytic Capacitor' || 
-                       componentType === 'Diode' || 
-                       componentType === 'Battery';
+  // Use properties.polarized from definition as single source of truth
+  const isPolarized = metadata?.componentDefinition?.properties?.polarized === true;
   if (isPolarized) {
     baseComponent.pinPolarities = new Array(baseComponent.pinCount).fill('');
   }
@@ -150,6 +147,15 @@ export function createComponent(
   const componentDef = metadata?.componentDefinition;
   if (componentDef?.properties) {
     Object.assign(baseComponent as any, componentDef.properties);
+  }
+  
+  // Initialize pinNames from definition defaults (user can edit later)
+  // Do this AFTER Object.assign so pinNames from properties are available
+  if (componentDef?.properties?.pinNames && Array.isArray(componentDef.properties.pinNames)) {
+    const defaultPinNames = componentDef.properties.pinNames as string[];
+    (baseComponent as any).pinNames = new Array(baseComponent.pinCount).fill('').map((_, i) => 
+      i < defaultPinNames.length ? defaultPinNames[i] : ''
+    );
   }
   if (componentDef?.fields) {
     componentDef.fields.forEach((field: ComponentFieldDefinition) => {
@@ -348,6 +354,17 @@ export function hasConnections(component: PCBComponent): boolean {
   return component.pinConnections.some(nodeId => nodeId !== '');
 }
 
+import { resolveComponentDefinition } from './componentDefinitionResolver';
+
+/**
+ * Check if a component is polarized based on its definition.
+ * Uses properties.polarized from the component definition as the single source of truth.
+ */
+export function isComponentPolarized(component: PCBComponent): boolean {
+  const def = resolveComponentDefinition(component);
+  return def?.properties?.polarized === true;
+}
+
 /**
  * Auto-assign pin polarity for 2-pin components with polarity
  * Returns the new pinPolarities array if assignment was successful, null otherwise
@@ -357,15 +374,8 @@ export function autoAssignPolarity(
   pinConnections: string[],
   drawingStrokes: Array<{ type?: 'trace' | 'via' | 'pad' | 'testPoint'; points: Array<{ x: number; y: number; id?: number }> }>
 ): ('+' | '-' | '')[] | null {
-  // Check if component has polarity
-  const hasPolarity = component.componentType === 'Electrolytic Capacitor' || 
-                     component.componentType === 'Diode' || 
-                     component.componentType === 'Battery';
-  const isTantalumCap = component.componentType === 'Capacitor' && 
-                       'dielectric' in component && 
-                       (component as any).dielectric === 'Tantalum';
-  
-  if (!(hasPolarity || isTantalumCap) || component.pinCount !== 2) {
+  // Check if component has polarity using definition
+  if (!isComponentPolarized(component) || component.pinCount !== 2) {
     return null;
   }
   

@@ -29,7 +29,7 @@ import React from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
-import { autoAssignPolarity } from '../../utils/components';
+import { autoAssignPolarity, isComponentPolarized } from '../../utils/components';
 import { formatComponentTypeName } from '../../constants';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 
@@ -570,15 +570,16 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   )}
                   
                   {comp.pinConnections && comp.pinConnections.length > 0 && (() => {
-                    // Determine if this component type has polarity
-                    const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
-                                       comp.componentType === 'Diode' || // Includes LEDs
-                                       comp.componentType === 'Battery';
-                    // Also check for tantalum capacitors
-                    const isTantalumCap = comp.componentType === 'Capacitor' && 
-                                         'dielectric' in comp && 
-                                         (comp as any).dielectric === 'Tantalum';
-                    const showPolarityColumn = hasPolarity || isTantalumCap;
+                    // Determine if this component type has polarity using definition
+                    const showPolarityColumn = isComponentPolarized(comp);
+                    
+                    // Get pin names for semiconductors (transistors, op amps)
+                    const definition = resolveComponentDefinition(comp as any);
+                    const instancePinNames = (comp as any)?.pinNames as string[] | undefined;
+                    const definitionPinNames = definition?.properties?.pinNames as string[] | undefined;
+                    const isTransistor = comp.componentType === 'Transistor';
+                    const isOpAmp = definition?.properties?.semiconductorType === 'OpAmp';
+                    const showPinNames = (isTransistor || isOpAmp) && (definitionPinNames && definitionPinNames.length > 0);
                     
                     return (
                       <div style={{ marginTop: '8px', marginBottom: '8px' }}>
@@ -592,6 +593,9 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                           <thead>
                             <tr style={{ backgroundColor: '#f0f0f0' }}>
                               <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
+                              {showPinNames && (
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Name</th>
+                              )}
                               {showPolarityColumn && (
                                 <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Polarity</th>
                               )}
@@ -601,9 +605,17 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                           <tbody>
                             {comp.pinConnections.map((conn, idx) => {
                               const polarity = comp.pinPolarities && comp.pinPolarities.length > idx ? comp.pinPolarities[idx] : '';
+                              // Get pin name from instance or definition default
+                              const pinName = (instancePinNames && idx < instancePinNames.length && instancePinNames[idx]) ||
+                                            (definitionPinNames && idx < definitionPinNames.length ? definitionPinNames[idx] : '');
                               return (
                                 <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
                                   <td style={{ padding: '4px 8px', border: '1px solid #ddd' }}>{idx + 1}</td>
+                                  {showPinNames && (
+                                    <td style={{ padding: '4px 8px', border: '1px solid #ddd', fontSize: '9px', fontStyle: 'italic', color: '#555' }}>
+                                      {pinName || '-'}
+                                    </td>
+                                  )}
                                   {showPolarityColumn && (
                                     <td style={{ padding: '4px 8px', border: '1px solid #ddd', textAlign: 'center', fontFamily: 'monospace', fontWeight: 600, color: polarity === '+' ? '#d32f2f' : polarity === '-' ? '#1976d2' : '#999' }}>
                                       {polarity || '-'}

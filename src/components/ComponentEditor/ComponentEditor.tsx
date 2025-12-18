@@ -31,6 +31,7 @@ import type { ComponentDefinition } from '../../data/componentDefinitions.d';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
+import { isComponentPolarized } from '../../utils/components';
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: string): string => {
@@ -168,12 +169,23 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           i < currentPolarities.length ? currentPolarities[i] : ''
         );
       }
+      // Resize pinNames array if it exists, preserving existing names
+      if ((comp as any).pinNames) {
+        const currentPinNames = (comp as any).pinNames || [];
+        (updated as any).pinNames = new Array(componentEditor.pinCount).fill('').map((_, i) => 
+          i < currentPinNames.length ? currentPinNames[i] : ''
+        );
+      }
     } else {
       // Preserve existing pinConnections even if pin count didn't change
       updated.pinConnections = comp.pinConnections || [];
       // Preserve existing pinPolarities if they exist
       if (comp.pinPolarities) {
         updated.pinPolarities = comp.pinPolarities;
+      }
+      // Preserve existing pinNames if they exist
+      if ((comp as any).pinNames) {
+        (updated as any).pinNames = (comp as any).pinNames;
       }
     }
     
@@ -198,7 +210,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).voltage = componentEditor.voltage || undefined;
       (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
       (updated as any).tolerance = componentEditor.tolerance || undefined;
-      (updated as any).polarized = componentEditor.polarized !== undefined ? componentEditor.polarized : undefined;
+      // polarized is now a fixed property from definition, not user-editable
       (updated as any).esr = componentEditor.esr || undefined;
       (updated as any).esrUnit = componentEditor.esrUnit || undefined;
       (updated as any).temperature = componentEditor.temperature || undefined;
@@ -844,14 +856,22 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             </div>
           )}
           {(() => {
-            // Determine if this component type has polarity
-            const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
-                               comp.componentType === 'Diode' || 
-                               comp.componentType === 'Battery';
-            const isTantalumCap = comp.componentType === 'Capacitor' && 
-                                 'dielectric' in comp && 
-                                 (comp as any).dielectric === 'Tantalum';
-            const showPolarityColumn = hasPolarity || isTantalumCap;
+            // Determine if this component type has polarity using definition
+            const showPolarityColumn = isComponentPolarized(comp);
+            
+            // Get pin names from component instance (user-editable) or definition (defaults)
+            const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+            const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+            const instancePinNames = (currentComp as any)?.pinNames as string[] | undefined;
+            const definitionPinNames = componentDefinition?.properties?.pinNames as string[] | undefined;
+            
+            // Determine if this component has predefined pin names (transistors, op amps) or uses free text (other ICs)
+            const isTransistor = comp.componentType === 'Transistor';
+            const isOpAmp = componentDefinition?.properties?.semiconductorType === 'OpAmp';
+            const isIC = comp.componentType === 'IntegratedCircuit' && !isOpAmp;
+            const useDropdown = (isTransistor || isOpAmp) && definitionPinNames && definitionPinNames.length > 0;
+            const useTextInput = isIC;
+            const showNameColumn = useDropdown || useTextInput;
             
             return (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
@@ -859,6 +879,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                   <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '40px' }}>Pin</th>
+                    {showNameColumn && (
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '70px' }}>Name</th>
+                    )}
                     {showPolarityColumn && (
                       <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '50px' }}>Polarity</th>
                     )}
@@ -867,10 +890,15 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                 </thead>
                 <tbody>
                   {Array.from({ length: componentEditor.pinCount }, (_, i) => {
-                    const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                    const currentComp = currentCompList.find(c => c.id === componentEditor.id);
                     const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
                     const pinPolarity = (currentComp?.pinPolarities && currentComp.pinPolarities.length > i) ? (currentComp.pinPolarities[i] || '') : '';
+                    // Get pin name from instance (user-edited) or default from definition
+                    // Always use definition default if instance doesn't have a value for this pin
+                    // Ensure the value matches one of the dropdown options for proper display
+                    const instancePinName = instancePinNames && i < instancePinNames.length ? instancePinNames[i] : '';
+                    const defaultPinName = definitionPinNames && i < definitionPinNames.length ? definitionPinNames[i] : '';
+                    // Use instance value if it exists and is not empty, otherwise use default
+                    const currentPinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : defaultPinName;
                     const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
                     
                     return (
@@ -921,46 +949,159 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                         <td style={{ padding: '2px 4px', color: '#333', fontWeight: isSelected ? 600 : 400, fontFamily: 'monospace' }}>
                           {i + 1}
                         </td>
+                        {(useDropdown || useTextInput) && (
+                          <td style={{ padding: '2px 4px', textAlign: 'left' }}>
+                            {useDropdown ? (
+                              // Transistor/Op Amp: Dropdown that displays and allows editing the pin name
+                              <select
+                                value={currentPinName || ''}
+                                onChange={(e) => {
+                                  if (areComponentsLocked) {
+                                    alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                    return;
+                                  }
+                                  const newPinName = e.target.value;
+                                  const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                                  const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                                  if (currentComp) {
+                                    const existingPinNames = (currentComp as any).pinNames || 
+                                                             (definitionPinNames ? [...definitionPinNames] : []);
+                                    const newPinNames = [...existingPinNames];
+                                    while (newPinNames.length < componentEditor.pinCount) {
+                                      newPinNames.push('');
+                                    }
+                                    newPinNames[i] = newPinName;
+                                    const updatedComp = { ...currentComp, pinNames: newPinNames };
+                                    if (componentEditor.layer === 'top') {
+                                      setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    } else {
+                                      setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    }
+                                  }
+                                }}
+                                disabled={areComponentsLocked}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={(e) => e.stopPropagation()}
+                                style={{ 
+                                  padding: '2px 4px', 
+                                  fontSize: '8px', 
+                                  border: '1px solid #ddd', 
+                                  borderRadius: 2, 
+                                  background: '#fff',
+                                  color: '#333',
+                                  cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                                  opacity: areComponentsLocked ? 0.6 : 1,
+                                  width: '100%',
+                                  fontStyle: 'italic',
+                                  minHeight: '18px'
+                                }}
+                              >
+                                {definitionPinNames && definitionPinNames.length > 0 ? (
+                                  definitionPinNames.map((name, idx) => (
+                                    <option key={idx} value={name}>{name}</option>
+                                  ))
+                                ) : (
+                                  <option value="">-</option>
+                                )}
+                              </select>
+                            ) : (
+                              // IC: Text input field
+                              <input
+                                type="text"
+                                value={currentPinName || ''}
+                                onChange={(e) => {
+                                  if (areComponentsLocked) {
+                                    alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                    return;
+                                  }
+                                  const newPinName = e.target.value;
+                                  const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                                  const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                                  if (currentComp) {
+                                    const existingPinNames = (currentComp as any).pinNames || [];
+                                    const newPinNames = [...existingPinNames];
+                                    while (newPinNames.length < componentEditor.pinCount) {
+                                      newPinNames.push('');
+                                    }
+                                    newPinNames[i] = newPinName;
+                                    const updatedComp = { ...currentComp, pinNames: newPinNames };
+                                    if (componentEditor.layer === 'top') {
+                                      setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    } else {
+                                      setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    }
+                                  }
+                                }}
+                                disabled={areComponentsLocked}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={(e) => e.stopPropagation()}
+                                placeholder="Pin name"
+                                style={{ 
+                                  padding: '1px 2px', 
+                                  fontSize: '7px', 
+                                  border: '1px solid #ddd', 
+                                  borderRadius: 2, 
+                                  background: '#fff',
+                                  color: '#333',
+                                  width: '100%',
+                                  opacity: areComponentsLocked ? 0.6 : 1,
+                                  cursor: areComponentsLocked ? 'not-allowed' : 'text'
+                                }}
+                              />
+                            )}
+                          </td>
+                        )}
                         {showPolarityColumn && (
                           <td style={{ padding: '2px 4px', textAlign: 'center' }}>
-                            <select
-                              key={`polarity-${comp.id}-${i}-${pinPolarity}`}
-                              value={pinPolarity ?? ''}
-                              onChange={(e) => {
-                                if (areComponentsLocked) {
-                                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
-                                  return;
-                                }
-                                const newPolarity = e.target.value as '+' | '-' | '';
-                                const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                                const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-                                if (currentComp) {
-                                  const existingPolarities = currentComp.pinPolarities || new Array(currentComp.pinCount).fill('');
-                                  const newPolarities = [...existingPolarities];
-                                  while (newPolarities.length < currentComp.pinCount) {
-                                    newPolarities.push('');
+                            {pinConnection ? (
+                              // Display polarity as read-only text when connected (like Information dialog)
+                              <span style={{
+                                fontFamily: 'monospace',
+                                fontWeight: 600,
+                                color: pinPolarity === '+' ? '#d32f2f' : pinPolarity === '-' ? '#1976d2' : '#999'
+                              }}>
+                                {pinPolarity || '-'}
+                              </span>
+                            ) : (
+                              // Allow editing polarity when not connected
+                              <select
+                                key={`polarity-${comp.id}-${i}-${pinPolarity}`}
+                                value={pinPolarity ?? ''}
+                                onChange={(e) => {
+                                  if (areComponentsLocked) {
+                                    alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                    return;
                                   }
-                                  newPolarities[i] = newPolarity;
-                                  const updatedComp = { ...currentComp, pinPolarities: newPolarities };
-                                  if (componentEditor.layer === 'top') {
-                                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                                  } else {
-                                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                  const newPolarity = e.target.value as '+' | '-' | '';
+                                  const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                                  const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                                  if (currentComp) {
+                                    const existingPolarities = currentComp.pinPolarities || new Array(currentComp.pinCount).fill('');
+                                    const newPolarities = [...existingPolarities];
+                                    while (newPolarities.length < currentComp.pinCount) {
+                                      newPolarities.push('');
+                                    }
+                                    newPolarities[i] = newPolarity;
+                                    const updatedComp = { ...currentComp, pinPolarities: newPolarities };
+                                    if (componentEditor.layer === 'top') {
+                                      setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    } else {
+                                      setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                    }
                                   }
-                                }
-                              }}
-                              disabled={areComponentsLocked}
-                              onClick={(e) => e.stopPropagation()}
-                              onFocus={(e) => e.stopPropagation()}
-                              style={{ 
-                                padding: '1px 2px', 
-                                fontSize: '8px', 
-                                border: '1px solid #ddd', 
-                                borderRadius: 2, 
-                                background: '#fff',
-                                cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-                                opacity: areComponentsLocked ? 0.6 : 1,
-                                width: '100%',
+                                }}
+                                disabled={areComponentsLocked}
+                                onClick={(e) => e.stopPropagation()}
+                                onFocus={(e) => e.stopPropagation()}
+                                style={{ 
+                                  padding: '1px 2px', 
+                                  fontSize: '8px', 
+                                  border: '1px solid #ddd', 
+                                  borderRadius: 2, 
+                                  background: '#fff',
+                                  cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                                  opacity: areComponentsLocked ? 0.6 : 1,
+                                  width: '100%',
                                 fontFamily: 'monospace',
                                 fontWeight: 600,
                               }}
@@ -969,6 +1110,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                               <option value="+">+</option>
                               <option value="-">-</option>
                             </select>
+                            )}
                           </td>
                         )}
                         <td style={{ padding: '2px 4px', color: pinConnection ? '#28a745' : '#999', fontWeight: pinConnection ? 600 : 400, fontFamily: 'monospace' }}>

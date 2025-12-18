@@ -102,8 +102,10 @@ const buildMetadataForDefinition = (def: ComponentDefinition): ComponentSelectio
       break;
 
     case 'Semiconductors':
-      if (subcategory === 'Transistor') {
+      if (subcategory === 'BJT' || subcategory === 'MOSFET' || subcategory === 'JFET') {
         componentType = 'Transistor';
+      } else if (subcategory === 'Single Op Amp' || subcategory === 'Dual Op Amp') {
+        componentType = 'IntegratedCircuit';
       } else {
         componentType = 'IntegratedCircuit';
   }
@@ -273,6 +275,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   }, [isDragging]);
   
   // Helper function to check if search text matches any of the searchable fields
+  // Uses searchText field from component definition as the primary search source
   const matchesSearch = useMemo(() => {
     if (!searchText.trim()) {
       return () => true; // No filter if search is empty
@@ -287,18 +290,24 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
       displayName?: string;
       description?: string;
       resolvedTypeName?: string;
+      searchText?: string; // Primary search field from component definition
     }): boolean => {
-      // Search in display name (e.g., "Resistor Network", "Power Supply")
+      // Primary: Search in searchText field (contains all searchable terms)
+      if (entry.searchText && entry.searchText.toLowerCase().includes(searchLower)) {
+        return true;
+      }
+      
+      // Fallback: Search in display name (e.g., "Resistor Network", "Power Supply")
       if (entry.displayName && entry.displayName.toLowerCase().includes(searchLower)) {
-          return true;
-        }
+        return true;
+      }
 
-      // Search in description text
+      // Fallback: Search in description text
       if (entry.description && entry.description.toLowerCase().includes(searchLower)) {
         return true;
       }
       
-      // Search in category and subcategory names
+      // Fallback: Search in category and subcategory names
       if (entry.category && entry.category.toLowerCase().includes(searchLower)) {
         return true;
       }
@@ -306,12 +315,12 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
         return true;
       }
       
-      // Search in designator(s)
+      // Fallback: Search in designator(s)
       if (entry.designator && entry.designator.toLowerCase().includes(searchLower)) {
         return true;
       }
 
-      // Search in raw type or resolved ComponentType name
+      // Fallback: Search in raw type or resolved ComponentType name
       if (entry.type && entry.type.toLowerCase().includes(searchLower)) {
         return true;
       }
@@ -340,6 +349,7 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
         displayName: def.displayName,
         description: def.description,
         resolvedTypeName: formatComponentTypeName(meta.componentType),
+        searchText: def.searchText, // Primary search field from component definition
         });
     });
   }, [searchText, matchesSearch]);

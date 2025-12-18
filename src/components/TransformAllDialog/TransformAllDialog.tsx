@@ -170,7 +170,7 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
             dialogWidth,
             dialogHeight
           );
-        }
+    }
       } else {
         // No saved position, use default position (lower to avoid covering file name)
         initialPosition = constrainDialogPosition(
@@ -308,8 +308,8 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
         }}
       >
         <h2 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>
-          Change Perspective
-        </h2>
+            Change Perspective
+          </h2>
         <button
           onClick={onClose}
           style={{

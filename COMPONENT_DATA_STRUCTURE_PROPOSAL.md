@@ -18,7 +18,7 @@
       "displayName": "Film",
       "description": "Film capacitor",
       "searchText": "Film Capacitor capacitor film",
-      "designators": ["C", "CF"],
+      "designator": "CF",
       "defaultPins": 2
     }
   ]
@@ -44,7 +44,7 @@
           "type": "Film Capacitor",
           "displayName": "Film",
           "description": "Film capacitor",
-          "designators": ["C", "CF"],
+          "designator": "CF",
           "defaultPins": 2
         }
       }
@@ -72,7 +72,7 @@
       "type": "Film Capacitor",
       "displayName": "Film",
       "description": "Film capacitor",
-      "designators": ["C", "CF"],
+      "designator": "CF",
       "defaultPins": 2
     }
   ],
@@ -104,7 +104,7 @@ interface ComponentDefinition {
   displayName: string;       // "Film", "LED", "Capacitor" (what user sees)
   description: string;       // "Film capacitor" (full description)
   searchText: string;         // "Film Capacitor capacitor film" (all searchable terms)
-  designators: string[];      // ["C", "CF"]
+  designator: string;         // "CF" (single designator prefix)
   defaultPins: number;        // 2
   subtype?: string;           // For Diode, VariableResistor, GenericComponent
 }
@@ -128,9 +128,11 @@ interface ComponentDefinition {
 - Search "diodes" → finds all diode types
 
 **Lookup:**
-- By designator: Find component where `designators.includes('C')`
+- By designator: Find component where `designator === 'CF'`
 - By type: Find component where `type === 'Film Capacitor'`
 - By category: Filter where `category === 'Capacitors'`
+
+
 
 
 

@@ -22,7 +22,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
-import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter } from './utils/components';
+import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter, isComponentPolarized } from './utils/components';
 import { createComponentInstance } from './dataDrivenComponents/runtime/instanceFactory';
 import {
   applyTransform,
@@ -5077,13 +5077,8 @@ function App() {
         const pinConnections = comp.pinConnections || [];
         
         // Check if component has polarity
-        const hasPolarity = comp.componentType === 'Electrolytic Capacitor' || 
-                           comp.componentType === 'Diode' || 
-                           comp.componentType === 'Battery';
-        const isTantalumCap = comp.componentType === 'Capacitor' && 
-                             'dielectric' in comp && 
-                             (comp as any).dielectric === 'Tantalum';
-        const isPolarized = (hasPolarity || isTantalumCap) && comp.pinPolarities;
+        // Check if component is polarized using definition (single source of truth)
+        const isPolarized = isComponentPolarized(comp) && comp.pinPolarities;
         
         // Check if this is a semiconductor (Transistor or Integrated Circuit in the Semiconductors category)
         const compDef = resolveComponentDefinition(comp as any);
@@ -11074,7 +11069,8 @@ function App() {
       setTopImage(newTop);
       setBottomImage(newBottom);
 
-      // Restore point ID counter from saved value
+      // Restore point ID counter from saved value (will be validated after all data is loaded)
+      // We'll set it initially, then recalculate based on actual max ID after loading all elements
       if (project.pointIdCounter && typeof project.pointIdCounter === 'number') {
         setPointIdCounter(project.pointIdCounter);
       } else {
@@ -11332,6 +11328,79 @@ function App() {
         // Initialize empty array if project doesn't have power symbols
         setPowerSymbols([]);
       }
+      
+      // Validate and correct pointIdCounter after all elements are loaded
+      // This ensures the counter is always >= max(existing IDs) + 1
+      // This fixes cases where pointIdCounter was incorrectly saved as 1
+      let maxId = 0;
+      
+      // Check all drawing stroke points
+      if (project.drawing?.drawingStrokes && Array.isArray(project.drawing.drawingStrokes)) {
+        for (const stroke of project.drawing.drawingStrokes as DrawingStroke[]) {
+          for (const point of stroke.points) {
+            if (point.id && typeof point.id === 'number' && point.id > maxId) {
+              maxId = point.id;
+            }
+          }
+        }
+      }
+      
+      // Check all component pin connections (they reference point IDs as strings)
+      if (project.drawing?.componentsTop && Array.isArray(project.drawing.componentsTop)) {
+        for (const comp of project.drawing.componentsTop as PCBComponent[]) {
+          if (comp.pinConnections && Array.isArray(comp.pinConnections)) {
+            for (const conn of comp.pinConnections) {
+              if (conn && typeof conn === 'string') {
+                const id = parseInt(conn, 10);
+                if (!isNaN(id) && id > maxId) {
+                  maxId = id;
+                }
+              }
+            }
+          }
+        }
+      }
+      if (project.drawing?.componentsBottom && Array.isArray(project.drawing.componentsBottom)) {
+        for (const comp of project.drawing.componentsBottom as PCBComponent[]) {
+          if (comp.pinConnections && Array.isArray(comp.pinConnections)) {
+            for (const conn of comp.pinConnections) {
+              if (conn && typeof conn === 'string') {
+                const id = parseInt(conn, 10);
+                if (!isNaN(id) && id > maxId) {
+                  maxId = id;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Check all ground symbols
+      if (project.drawing?.grounds && Array.isArray(project.drawing.grounds)) {
+        for (const ground of project.drawing.grounds as GroundSymbol[]) {
+          if (ground.pointId && typeof ground.pointId === 'number' && ground.pointId > maxId) {
+            maxId = ground.pointId;
+          }
+        }
+      }
+      
+      // Check all power symbols
+      if (project.drawing?.powers && Array.isArray(project.drawing.powers)) {
+        for (const power of project.drawing.powers as PowerSymbol[]) {
+          if (power.pointId && typeof power.pointId === 'number' && power.pointId > maxId) {
+            maxId = power.pointId;
+          }
+        }
+      }
+      
+      // Update counter to max+1 if the saved counter is too low
+      const correctCounter = maxId + 1;
+      const currentCounter = getPointIdCounter();
+      if (currentCounter < correctCounter) {
+        console.warn(`pointIdCounter was ${currentCounter} but max existing ID is ${maxId}. Correcting to ${correctCounter}.`);
+        setPointIdCounter(correctCounter);
+      }
+      
       // Reset change tracking for auto save after loading project
       hasChangesSinceLastAutoSaveRef.current = false;
       // Reset save status indicator (project is loaded and saved - green)
@@ -14623,30 +14692,30 @@ function App() {
 
 
       {/* Donate Button - fixed position in lower right corner */}
-      <div 
-        style={{
-          position: 'fixed',
-          bottom: 8,
+        <div 
+          style={{
+            position: 'fixed',
+            bottom: 8,
           right: 8,
-          zIndex: 100,
-        }}
+            zIndex: 100,
+          }}
       >
-        <button
+              <button
           onClick={() => {
             // Open donate page in new window to avoid losing user's work
             window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
           }}
-          style={{
+                style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '6px 12px',
             background: 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)',
             border: '1px solid rgba(27, 31, 36, 0.15)',
-            borderRadius: 6,
-            cursor: 'pointer',
+                  borderRadius: 6,
+                  cursor: 'pointer',
             fontSize: 12,
-            fontWeight: 500,
+                  fontWeight: 500,
             color: '#24292f',
             boxShadow: '0 1px 0 rgba(27, 31, 36, 0.04)',
             transition: 'background 0.2s',
@@ -14663,8 +14732,8 @@ function App() {
             <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
           </svg>
           Donate
-        </button>
-      </div>
+              </button>
+            </div>
 
     </div>
   );

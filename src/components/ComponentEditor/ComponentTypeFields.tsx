@@ -30,6 +30,7 @@ import type { PCBComponent } from '../../types';
 import { getPropertyUnits, getDefaultUnit } from '../../constants';
 import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
+import { isComponentPolarized } from '../../utils/components';
 
 export interface ComponentTypeFieldsProps {
   component: PCBComponent;
@@ -353,10 +354,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
             <input
               id={`component-polarized-${comp.id}`}
               type="checkbox"
-              checked={componentEditor.polarized !== undefined ? componentEditor.polarized : (comp as any).polarized !== undefined ? (comp as any).polarized : false}
-              onChange={(e) => setComponentEditor({ ...componentEditor, polarized: e.target.checked })}
-              disabled={areComponentsLocked}
-              style={{ opacity: areComponentsLocked ? 0.6 : 1, cursor: areComponentsLocked ? 'not-allowed' : 'pointer' }}
+              checked={isComponentPolarized(comp)}
+              disabled={true}
+              style={{ opacity: 0.6, cursor: 'not-allowed' }}
+              title="Polarized is a fixed property determined by component type"
             />
           </div>
         </>
