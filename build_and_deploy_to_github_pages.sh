@@ -68,6 +68,8 @@ echo "🚀 Preparing deployment target..."
 TARGET_REPO="${GH_PAGES_REPO:-$ORIGIN_URL}"
 
 echo "🚀 Deploying to gh-pages branch (repo: $TARGET_REPO)..."
+# Increase HTTP buffer to handle large files (like video files)
+git config http.postBuffer 524288000
 # Use gh-pages directly so we can pass the repo target safely
 npx --yes gh-pages -d dist -r "$TARGET_REPO"
 
