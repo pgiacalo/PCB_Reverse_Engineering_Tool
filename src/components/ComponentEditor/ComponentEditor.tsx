@@ -1069,44 +1069,44 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                               </span>
                             ) : (
                               // Allow editing polarity when not connected
-                              <select
-                                key={`polarity-${comp.id}-${i}-${pinPolarity}`}
-                                value={pinPolarity ?? ''}
-                                onChange={(e) => {
-                                  if (areComponentsLocked) {
-                                    alert('Cannot edit: Components are locked. Unlock components to edit them.');
-                                    return;
+                            <select
+                              key={`polarity-${comp.id}-${i}-${pinPolarity}`}
+                              value={pinPolarity ?? ''}
+                              onChange={(e) => {
+                                if (areComponentsLocked) {
+                                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                                  return;
+                                }
+                                const newPolarity = e.target.value as '+' | '-' | '';
+                                const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                                const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                                if (currentComp) {
+                                  const existingPolarities = currentComp.pinPolarities || new Array(currentComp.pinCount).fill('');
+                                  const newPolarities = [...existingPolarities];
+                                  while (newPolarities.length < currentComp.pinCount) {
+                                    newPolarities.push('');
                                   }
-                                  const newPolarity = e.target.value as '+' | '-' | '';
-                                  const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                                  const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-                                  if (currentComp) {
-                                    const existingPolarities = currentComp.pinPolarities || new Array(currentComp.pinCount).fill('');
-                                    const newPolarities = [...existingPolarities];
-                                    while (newPolarities.length < currentComp.pinCount) {
-                                      newPolarities.push('');
-                                    }
-                                    newPolarities[i] = newPolarity;
-                                    const updatedComp = { ...currentComp, pinPolarities: newPolarities };
-                                    if (componentEditor.layer === 'top') {
-                                      setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                                    } else {
-                                      setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                                    }
+                                  newPolarities[i] = newPolarity;
+                                  const updatedComp = { ...currentComp, pinPolarities: newPolarities };
+                                  if (componentEditor.layer === 'top') {
+                                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                                  } else {
+                                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
                                   }
-                                }}
-                                disabled={areComponentsLocked}
-                                onClick={(e) => e.stopPropagation()}
-                                onFocus={(e) => e.stopPropagation()}
-                                style={{ 
-                                  padding: '1px 2px', 
-                                  fontSize: '8px', 
-                                  border: '1px solid #ddd', 
-                                  borderRadius: 2, 
-                                  background: '#fff',
-                                  cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-                                  opacity: areComponentsLocked ? 0.6 : 1,
-                                  width: '100%',
+                                }
+                              }}
+                              disabled={areComponentsLocked}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={(e) => e.stopPropagation()}
+                              style={{ 
+                                padding: '1px 2px', 
+                                fontSize: '8px', 
+                                border: '1px solid #ddd', 
+                                borderRadius: 2, 
+                                background: '#fff',
+                                cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                                opacity: areComponentsLocked ? 0.6 : 1,
+                                width: '100%',
                                 fontFamily: 'monospace',
                                 fontWeight: 600,
                               }}

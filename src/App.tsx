@@ -1191,6 +1191,127 @@ function App() {
   const [homeViews, setHomeViews] = useState<Record<number, HomeView>>({});
   // Track when center tool is waiting for a number key press (with 2-second timeout)
   const [isWaitingForHomeViewKey, setIsWaitingForHomeViewKey] = useState(false);
+  
+  // Calculate default view 0: origin (0,0) with photos fully contained within canvas
+  const calculateDefaultView0 = useCallback((): HomeView | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    
+    // Get canvas content area (excluding border)
+    const contentWidth = canvas.width - 2 * CONTENT_BORDER;
+    const contentHeight = canvas.height - 2 * CONTENT_BORDER;
+    
+    // Find bounding box of all images
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let hasImages = false;
+    
+    if (topImage) {
+      const img = topImage;
+      const halfW = (img.width || 0) / 2;
+      const halfH = (img.height || 0) / 2;
+      minX = Math.min(minX, img.x - halfW);
+      minY = Math.min(minY, img.y - halfH);
+      maxX = Math.max(maxX, img.x + halfW);
+      maxY = Math.max(maxY, img.y + halfH);
+      hasImages = true;
+    }
+    
+    if (bottomImage) {
+      const img = bottomImage;
+      const halfW = (img.width || 0) / 2;
+      const halfH = (img.height || 0) / 2;
+      minX = Math.min(minX, img.x - halfW);
+      minY = Math.min(minY, img.y - halfH);
+      maxX = Math.max(maxX, img.x + halfW);
+      maxY = Math.max(maxY, img.y + halfH);
+      hasImages = true;
+    }
+    
+    if (!hasImages) {
+      // No images - use default view
+      return {
+        pcbReferenceX: 0,
+        pcbReferenceY: 0,
+        x: 0,
+        y: 0,
+        zoom: 1,
+        viewRotation: 0,
+        viewFlipX: false,
+        isBottomView: false,
+        transparency: 0,
+        showTopImage: true,
+        showBottomImage: true,
+        showViasLayer: true,
+        showTopTracesLayer: true,
+        showBottomTracesLayer: true,
+        showTopPadsLayer: true,
+        showBottomPadsLayer: true,
+        showTopTestPointsLayer: true,
+        showBottomTestPointsLayer: true,
+        showTopComponents: true,
+        showBottomComponents: true,
+        showPowerLayer: true,
+        showGroundLayer: true,
+        showConnectionsLayer: true,
+      };
+    }
+    
+    // Calculate bounding box dimensions
+    const bboxWidth = maxX - minX;
+    const bboxHeight = maxY - minY;
+    
+    // Add padding (10% margin on each side)
+    const padding = 0.1;
+    const paddedWidth = bboxWidth * (1 + 2 * padding);
+    const paddedHeight = bboxHeight * (1 + 2 * padding);
+    
+    // Calculate scale to fit within canvas content area
+    const scaleX = paddedWidth > 0 ? contentWidth / paddedWidth : 1;
+    const scaleY = paddedHeight > 0 ? contentHeight / paddedHeight : 1;
+    const zoom = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1x
+    
+    // For view 0, we want origin (0,0) to be at the center of the canvas
+    // The PCB reference should be at (0,0) for the origin view
+    return {
+      pcbReferenceX: 0,
+      pcbReferenceY: 0,
+      x: 0,
+      y: 0,
+      zoom,
+      viewRotation: 0,
+      viewFlipX: false,
+      isBottomView: false,
+      transparency: 0,
+      showTopImage: true,
+      showBottomImage: true,
+      showViasLayer: true,
+      showTopTracesLayer: true,
+      showBottomTracesLayer: true,
+      showTopPadsLayer: true,
+      showBottomPadsLayer: true,
+      showTopTestPointsLayer: true,
+      showBottomTestPointsLayer: true,
+      showTopComponents: true,
+      showBottomComponents: true,
+      showPowerLayer: true,
+      showGroundLayer: true,
+      showConnectionsLayer: true,
+    };
+  }, [topImage, bottomImage]);
+  
+  // Initialize default view 0 when images are loaded or changed
+  React.useEffect(() => {
+    const defaultView0 = calculateDefaultView0();
+    if (defaultView0) {
+      setHomeViews(prev => {
+        // Only set if view 0 doesn't exist yet (don't overwrite user's saved view 0)
+        if (!prev[0]) {
+          return { ...prev, 0: defaultView0 };
+        }
+        return prev;
+      });
+    }
+  }, [topImage, bottomImage, calculateDefaultView0]);
   const homeViewTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);

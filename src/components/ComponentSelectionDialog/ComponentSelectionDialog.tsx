@@ -299,8 +299,8 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
       
       // Fallback: Search in display name (e.g., "Resistor Network", "Power Supply")
       if (entry.displayName && entry.displayName.toLowerCase().includes(searchLower)) {
-        return true;
-      }
+          return true;
+        }
 
       // Fallback: Search in description text
       if (entry.description && entry.description.toLowerCase().includes(searchLower)) {
