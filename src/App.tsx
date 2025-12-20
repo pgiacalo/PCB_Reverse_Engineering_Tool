@@ -70,7 +70,10 @@ import { SetSizeDialog } from './components/SetSizeDialog';
 import { AutoSaveDialog } from './components/AutoSaveDialog';
 import { AutoSavePromptDialog } from './components/AutoSavePromptDialog';
 import { PastMachineDialog } from './components/PastMachineDialog';
+import { ICPlacementDialog } from './components/ICPlacementDialog';
 import { resolveComponentDefinition } from './utils/componentDefinitionResolver';
+import { generateICPlacementPads } from './utils/icPlacement';
+import type { ComponentInput as ICComponentInput } from './types/icPlacement';
 import {
   useDrawing,
   useSelection,
@@ -1395,6 +1398,38 @@ function App() {
   const [projectNotesDialogPosition, setProjectNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
   const [projectNotesDialogDragOffset, setProjectNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // IC Placement Dialog
+  const [showICPlacementDialog, setShowICPlacementDialog] = useState(false);
+  const [icPlacementIsPad, setICPlacementIsPad] = useState(false);
+  const [icPlacementOptions, setICPlacementOptions] = useState<ICComponentInput | null>(null);
+  const [isICPlacementMode, setIsICPlacementMode] = useState(false);
+  const [icPlacementArea, setICPlacementArea] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
+  const [isDrawingICPlacement, setIsDrawingICPlacement] = useState(false);
+  const icPlacementOptionsRef = useRef<ICComponentInput | null>(null);
+  const isICPlacementModeRef = useRef(false);
+  const icPlacementAreaRef = useRef<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
+  const isDrawingICPlacementRef = useRef(false);
+  const icPlacementIsPadRef = useRef(false);
+  
+  React.useEffect(() => {
+    icPlacementOptionsRef.current = icPlacementOptions;
+  }, [icPlacementOptions]);
+  
+  React.useEffect(() => {
+    isICPlacementModeRef.current = isICPlacementMode;
+  }, [isICPlacementMode]);
+  
+  React.useEffect(() => {
+    icPlacementAreaRef.current = icPlacementArea;
+  }, [icPlacementArea]);
+  
+  React.useEffect(() => {
+    isDrawingICPlacementRef.current = isDrawingICPlacement;
+  }, [isDrawingICPlacement]);
+  
+  React.useEffect(() => {
+    icPlacementIsPadRef.current = icPlacementIsPad;
+  }, [icPlacementIsPad]);
   // Board dimensions for coordinate scaling
   // Default to null for new projects - value is loaded from project file when opening existing projects
   const [boardDimensions, setBoardDimensions] = useState<BoardDimensions | null>(null);
@@ -2198,6 +2233,13 @@ function App() {
     const worldPos = contentCanvasToWorld(contentCanvasX, contentCanvasY, viewPan, viewScale, viewRotation, viewFlipX);
     const x = worldPos.x;
     const y = worldPos.y;
+
+    // IC Placement mode: start drawing rectangle
+    if (isICPlacementModeRef.current && currentTool === 'select') {
+      setIsDrawingICPlacement(true);
+      setICPlacementArea({ start: { x, y }, end: { x, y } });
+      return;
+    }
 
     // Handle setting home view location - when center tool is active and user clicks,
     // start waiting for a number key (0-9) to assign this view to that slot
@@ -3669,6 +3711,14 @@ function App() {
     // Update mouse world position for display
     setMouseWorldPos({ x, y });
 
+    // IC Placement mode: update rectangle preview
+    if (isDrawingICPlacementRef.current && icPlacementAreaRef.current) {
+      setICPlacementArea({
+        start: icPlacementAreaRef.current.start,
+        end: { x, y },
+      });
+    }
+
     // Track mouse position for trace preview line
     if (currentTool === 'draw' && drawingMode === 'trace' && currentStroke.length > 0) {
       // Helper function to snap to nearest via/pad/power/ground (same as in handleCanvasMouseDown)
@@ -4119,6 +4169,76 @@ function App() {
   const handleCanvasMouseUp = useCallback(() => {
     // Clear mouse world position when mouse leaves canvas
     setMouseWorldPos(null);
+    
+    // IC Placement mode: finalize and draw vias/pads
+    if (isICPlacementModeRef.current && icPlacementAreaRef.current && icPlacementOptionsRef.current && isDrawingICPlacementRef.current) {
+      const area = icPlacementAreaRef.current;
+      const options = icPlacementOptionsRef.current;
+      const width = Math.abs(area.end.x - area.start.x);
+      const height = Math.abs(area.end.y - area.start.y);
+      
+      // Validate minimum size
+      if (width >= 1 && height >= 1) {
+        try {
+          const padLocations = generateICPlacementPads({
+            numPins: options.numPins,
+            type: options.type,
+            twoSidedOrientation: options.twoSidedOrientation,
+            point1: area.start,
+            point2: area.end,
+          });
+          
+          // Generate NodeIds starting from the lowest available
+          const existingIds = new Set(drawingStrokes.flatMap(s => 
+            s.points.map(p => p.id || 0).filter(id => id > 0)
+          ));
+          const nextNodeId = existingIds.size > 0 ? Math.max(...Array.from(existingIds)) + 1 : 1;
+          
+          // Create drawing strokes for each pad location
+          const newStrokes: DrawingStroke[] = padLocations.map((pad, idx) => {
+            const instanceId = icPlacementIsPadRef.current 
+              ? ((padToolLayer || 'top') === 'top' ? 'padTop' : 'padBottom')
+              : 'via';
+            const instance = toolInstanceManager.get(instanceId);
+            const nodeId = nextNodeId + idx;
+            const layer = icPlacementIsPadRef.current ? (padToolLayer || 'top') : 'top';
+            return {
+              id: nodeId.toString(),
+              type: icPlacementIsPadRef.current ? 'pad' : 'via',
+              points: [{ x: pad.x, y: pad.y, id: nodeId }],
+              size: instance.size,
+              color: instance.color,
+              layer: layer,
+            };
+          });
+          
+          // Add strokes to drawing
+          setDrawingStrokes(prev => {
+            const updated = [...prev, ...newStrokes];
+            // Save snapshot for undo with updated strokes
+            saveSnapshot(updated, componentsTop, componentsBottom, powerSymbols, groundSymbols);
+            return updated;
+          });
+        } catch (error) {
+          console.error('IC Placement error:', error);
+          alert(`Error placing ${icPlacementIsPadRef.current ? 'pads' : 'vias'}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
+      // Reset IC placement state
+      setIsICPlacementMode(false);
+      setICPlacementArea(null);
+      setICPlacementOptions(null);
+      setIsDrawingICPlacement(false);
+      isICPlacementModeRef.current = false;
+      icPlacementAreaRef.current = null;
+      icPlacementOptionsRef.current = null;
+      isDrawingICPlacementRef.current = false;
+      setCanvasCursor(undefined);
+      setCurrentTool('select');
+      return;
+    }
+    
     // Finalize selection if active
     if (currentTool === 'select' && isSelecting) {
       const rectSel = selectRect;
@@ -5288,6 +5408,40 @@ function App() {
     if (showTopComponents) componentsTop.forEach(drawComponent);
     if (showBottomComponents) componentsBottom.forEach(drawComponent);
     
+    // Draw IC Placement preview rectangle
+    if (isICPlacementMode && icPlacementArea) {
+      ctx.save();
+      const startWorld = icPlacementArea.start;
+      const endWorld = icPlacementArea.end;
+      // Draw in world coordinates (view transform already applied globally above)
+      const minX = Math.min(startWorld.x, endWorld.x);
+      const minY = Math.min(startWorld.y, endWorld.y);
+      const maxX = Math.max(startWorld.x, endWorld.x);
+      const maxY = Math.max(startWorld.y, endWorld.y);
+      const width = maxX - minX;
+      const height = maxY - minY;
+      
+      // Orange dashed rectangle with semi-transparent fill
+      const dash = Math.max(2, 6 / Math.max(0.0001, viewScale));
+      ctx.strokeStyle = '#ff8800';
+      ctx.fillStyle = 'rgba(255, 136, 0, 0.2)';
+      ctx.lineWidth = Math.max(1, 2 / Math.max(0.0001, viewScale));
+      ctx.setLineDash([dash, dash]);
+      ctx.beginPath();
+      ctx.rect(minX, minY, width, height);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Mark Pin 1 location (start point) with a small circle
+      ctx.fillStyle = '#ff8800';
+      ctx.beginPath();
+      ctx.arc(startWorld.x, startWorld.y, Math.max(3, 6 / Math.max(0.0001, viewScale)), 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+    
     // Draw active selection rectangle in view space for perfect alignment
     if (currentTool === 'select' && selectRect) {
       ctx.save();
@@ -5363,7 +5517,7 @@ function App() {
     
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, cameraWorldCenter]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, cameraWorldCenter, isICPlacementMode, icPlacementArea]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -12346,8 +12500,18 @@ function App() {
               </div>
             </button>
             <button 
-              onClick={() => { 
-                if (!isReadOnlyMode) { 
+              onMouseDown={(e) => {
+                if (e.altKey && !isReadOnlyMode) {
+                  // Option+click: open IC placement dialog
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setICPlacementIsPad(false);
+                  setShowICPlacementDialog(true);
+                  return;
+                }
+              }}
+              onClick={(e) => { 
+                if (!isReadOnlyMode && !e.altKey) { 
                   console.log('Via tool clicked');
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('via'); 
@@ -12356,7 +12520,7 @@ function App() {
                 } 
               }} 
               disabled={isReadOnlyMode}
-              title="Draw Vias (V)" 
+              title="Draw Vias (V), Option+click for Pattern Placement" 
               style={{ 
                 width: '100%', 
                 height: 32, 
@@ -12391,8 +12555,18 @@ function App() {
             </button>
             <button 
               ref={padButtonRef}
-              onClick={() => { 
-                if (!isReadOnlyMode) { 
+              onMouseDown={(e) => {
+                if (e.altKey && !isReadOnlyMode) {
+                  // Option+click: open IC placement dialog
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setICPlacementIsPad(true);
+                  setShowICPlacementDialog(true);
+                  return;
+                }
+              }}
+              onClick={(e) => { 
+                if (!isReadOnlyMode && !e.altKey) { 
                   console.log('Pad tool clicked');
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('pad'); 
@@ -12403,7 +12577,7 @@ function App() {
                 } 
               }} 
               disabled={isReadOnlyMode}
-              title="Draw Pads (P)" 
+              title="Draw Pads (P), Option+click for Pattern Placement" 
               style={{ 
                 width: '100%', 
                 height: 32, 
@@ -14857,6 +15031,26 @@ function App() {
         onSkip={handleAutoSavePromptSkip}
       />
 
+      {/* IC Placement Dialog */}
+      <ICPlacementDialog
+        visible={showICPlacementDialog}
+        isPad={icPlacementIsPad}
+        onConfirm={(options) => {
+          setICPlacementOptions({
+            numPins: options.numPins,
+            type: options.type,
+            twoSidedOrientation: options.twoSidedOrientation,
+            point1: { x: 0, y: 0 }, // Will be set on click
+            point2: { x: 0, y: 0 }, // Will be set on release
+          } as ICComponentInput);
+          setIsICPlacementMode(true);
+          setCurrentTool('select'); // Ensure we're in select tool mode
+          setShowICPlacementDialog(false);
+        }}
+        onClose={() => {
+          setShowICPlacementDialog(false);
+        }}
+      />
 
       {/* Donate Button - fixed position in lower right corner */}
         <div 
