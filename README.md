@@ -213,7 +213,9 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 **Tool Selection**
 - **Select** — <code>S</code>
 - **Via** — <code>V</code>
+- **Via Pattern Placement** — <code>Option+V</code> (opens dialog for multiple via placement)
 - **Pad** — <code>P</code>
+- **Pad Pattern Placement** — <code>Option+P</code> (opens dialog for multiple pad placement)
 - **Test Point** — <code>Y</code>
 - **Trace** — <code>T</code>
 - **Component** — <code>C</code>
