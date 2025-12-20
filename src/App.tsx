@@ -7252,8 +7252,10 @@ function App() {
     }
 
     // Option+V and Option+P: Open IC Placement dialogs
-    // Follow the same pattern as Ctrl+Z (check key first, then modifiers)
-    if ((e.key === 'v' || e.key === 'V') && 
+    // Use e.code instead of e.key to handle macOS Option key special characters
+    // On macOS, Option+V produces '√' and Option+P produces 'π', so e.key won't match
+    // e.code represents the physical key pressed, so 'KeyV' and 'KeyP' work on all OS
+    if (e.code === 'KeyV' && 
         e.altKey && 
         !e.ctrlKey && !e.shiftKey && !isReadOnly) {
       // Ignore if user is typing in an input field, textarea, or contenteditable
@@ -7277,7 +7279,7 @@ function App() {
       return;
     }
     
-    if ((e.key === 'p' || e.key === 'P') && 
+    if (e.code === 'KeyP' && 
         e.altKey && 
         !e.ctrlKey && !e.shiftKey && !isReadOnly) {
       // Ignore if user is typing in an input field, textarea, or contenteditable
