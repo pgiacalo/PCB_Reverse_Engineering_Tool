@@ -7317,7 +7317,7 @@ function App() {
           case 'v':
           case 'V':
             // Option-V: Open IC Placement dialog for vias
-            if (e.altKey && !isReadOnlyMode) {
+            if (e.altKey && !isReadOnly) {
               e.preventDefault();
               e.stopPropagation();
               setICPlacementIsPad(false);
@@ -7326,19 +7326,19 @@ function App() {
             }
             // Regular V: Select via tool
             if (!e.altKey) {
-              e.preventDefault();
-              clearAllSelections(); // Clear all selections when tool is selected
-              setDrawingMode('via');
-              setCurrentTool('draw');
-              setShowViasLayer(true); // Automatically enable vias layer visibility
-              // The useEffect hook will load via tool settings automatically
+            e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
+            setDrawingMode('via');
+            setCurrentTool('draw');
+            setShowViasLayer(true); // Automatically enable vias layer visibility
+            // The useEffect hook will load via tool settings automatically
               return;
             }
             return;
           case 'p':
           case 'P':
             // Option-P: Open IC Placement dialog for pads
-            if (e.altKey && !isReadOnlyMode) {
+            if (e.altKey && !isReadOnly) {
               e.preventDefault();
               e.stopPropagation();
               setICPlacementIsPad(true);
@@ -7347,11 +7347,11 @@ function App() {
             }
             // Regular P: Select pad tool
             if (!e.altKey) {
-              e.preventDefault();
-              clearAllSelections(); // Clear all selections when tool is selected
-              setDrawingMode('pad');
-              setCurrentTool('draw');
-              // The useEffect hook will automatically apply the default layer and show the layer chooser
+            e.preventDefault();
+            clearAllSelections(); // Clear all selections when tool is selected
+            setDrawingMode('pad');
+            setCurrentTool('draw');
+            // The useEffect hook will automatically apply the default layer and show the layer chooser
               return;
             }
             return;
@@ -7802,7 +7802,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
