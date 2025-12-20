@@ -254,6 +254,7 @@ export function useComponents() {
       y: component.y,
       orientation: component.orientation ?? 0,
       description: (component as any).description || '', // Initialize description for all components
+      datasheet: (component as any).datasheet || '', // Initialize datasheet for all components (used by IntegratedCircuit)
       componentDefinitionKey: (component as any).componentDefinitionKey || '',
     };
     
