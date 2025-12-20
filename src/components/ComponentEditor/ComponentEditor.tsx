@@ -883,7 +883,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '40px' }}>Pin</th>
                     {showNameColumn && (
-                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '70px' }}>Name</th>
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '70px' }}>Pin Name</th>
                     )}
                     {showPolarityColumn && (
                       <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '50px' }}>Polarity</th>

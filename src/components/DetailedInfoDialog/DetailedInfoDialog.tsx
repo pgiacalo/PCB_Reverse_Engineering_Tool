@@ -594,7 +594,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             <tr style={{ backgroundColor: '#f0f0f0' }}>
                               <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin #</th>
                               {showPinNames && (
-                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Name</th>
+                                <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Pin Name</th>
                               )}
                               {showPolarityColumn && (
                                 <th style={{ padding: '4px 8px', textAlign: 'left', border: '1px solid #ddd', fontWeight: 600 }}>Polarity</th>
