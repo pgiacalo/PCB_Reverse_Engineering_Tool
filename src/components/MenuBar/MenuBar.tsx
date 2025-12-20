@@ -1480,7 +1480,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 6: Place Components</h3>
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Place Component:</strong> Click the Component tool (<code>C</code>), select component type, then click on the PCB.</li>
-                  <li><strong>Edit Component:</strong> Double-click a component to open the Component Editor dialog.</li>
+                  <li><strong>Edit Component:</strong> Double-click a component or select a component and press <code>A</code> to open the Component Properties dialog. If multiple components are selected, opens the most recently selected one.</li>
                   <li><strong>Set Properties:</strong> Enter designator (e.g., R1, C2), value, and other component details.</li>
                   <li><strong>Connect Pins:</strong> Click on pads or vias to connect component pins to the circuit.</li>
                 </ul>
