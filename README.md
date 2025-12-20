@@ -213,12 +213,13 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 **Tool Selection**
 - **Select** — <code>S</code>
 - **Via** — <code>V</code>
-- **Via Pattern Placement** — <code>Option+V</code> (opens dialog for multiple via placement)
+- **Via Pattern Placement** — <code>Alt/Option+V</code> (opens dialog for multiple via placement)
 - **Pad** — <code>P</code>
-- **Pad Pattern Placement** — <code>Option+P</code> (opens dialog for multiple pad placement)
+- **Pad Pattern Placement** — <code>Alt/Option+P</code> (opens dialog for multiple pad placement)
 - **Test Point** — <code>Y</code>
 - **Trace** — <code>T</code>
 - **Component** — <code>C</code>
+- **Component Properties** — <code>A</code> (opens dialog for selected component)
 - **Power** — <code>B</code>
 - **Ground** — <code>G</code>
 - **Erase** — <code>E</code>
@@ -226,7 +227,7 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Zoom** — <code>Z</code>
 - **Center** — <code>X</code>
 - **Information Dialog** — <code>Ctrl</code> + <code>I</code>
-- **Component Properties** — double-click component
+- **Component Properties** — <code>A</code> (select component first) or double-click component
 
 **Arrow Key Controls**
 - **On Sliders**: Click slider first, then use ← → arrows for precise adjustment

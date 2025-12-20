@@ -1213,7 +1213,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Via/Pad Placement</p>
                   <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
-                    <li>Option+click the Via or Pad tool, or press <code>Option+V</code> or <code>Option+P</code> to open the placement dialog</li>
+                    <li>Alt/Option+click the Via or Pad tool, or press <code>Alt/Option+V</code> or <code>Alt/Option+P</code> to open the placement dialog</li>
                     <li>Place multiple vias or pads in Linear, 2-Sided, or 4-Sided arrangements</li>
                     <li>Automatic counter-clockwise numbering starting from Pin 1</li>
                     <li>Supports chip orientations of 0°, 90°, 180°, or 270°</li>
@@ -1469,7 +1469,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Place Vias:</strong> Click the Via tool (<code>V</code>) and click on the PCB where vias connect layers.</li>
                   <li><strong>Place Pads:</strong> Click the Pad tool (<code>P</code>) and mark component pad locations.</li>
-                  <li><strong>Place Multiple Vias/Pads:</strong> Option+click the Via or Pad tool, or press <code>Option+V</code> (vias) or <code>Option+P</code> (pads) to open the placement dialog. Choose arrangement (Linear, 2-Sided, or 4-Sided), number of pins, orientation, and layer. Click and drag on the canvas to define the placement area. Vias/pads are automatically arranged in counter-clockwise order starting from Pin 1.</li>
+                  <li><strong>Place Multiple Vias/Pads:</strong> Alt/Option+click the Via or Pad tool, or press <code>Alt/Option+V</code> (vias) or <code>Alt/Option+P</code> (pads) to open the placement dialog. Choose arrangement (Linear, 2-Sided, or 4-Sided), number of pins, orientation, and layer. Click and drag on the canvas to define the placement area. Vias/pads are automatically arranged in counter-clockwise order starting from Pin 1.</li>
                   <li><strong>Place Test Points:</strong> Click the Test Point tool (<code>Y</code>) to mark test points.</li>
                   <li><strong>Draw Traces:</strong> Click the Trace tool (<code>T</code>), select Top or Bottom layer, then click to start a trace. Click again to add segments. Press <code>Enter</code> or click outside to finish.</li>
                   <li><strong>Snapping:</strong> Traces automatically snap to nearby vias, pads, power nodes, and ground nodes.</li>
@@ -1524,12 +1524,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                       <li><strong>Select</strong> — <code>S</code></li>
                       <li><strong>Via</strong> — <code>V</code></li>
-                      <li><strong>Via Pattern</strong> — <code>Option+V</code></li>
+                      <li><strong>Via Pattern</strong> — <code>Alt/Option+V</code></li>
                       <li><strong>Pad</strong> — <code>P</code></li>
-                      <li><strong>Pad Pattern</strong> — <code>Option+P</code></li>
+                      <li><strong>Pad Pattern</strong> — <code>Alt/Option+P</code></li>
                       <li><strong>Test Point</strong> — <code>Y</code></li>
                       <li><strong>Trace</strong> — <code>T</code></li>
                       <li><strong>Component</strong> — <code>C</code></li>
+                      <li><strong>Component Properties</strong> — <code>A</code> (opens dialog for selected component)</li>
                       <li><strong>Power</strong> — <code>B</code></li>
                       <li><strong>Ground</strong> — <code>G</code></li>
                     </ul>
