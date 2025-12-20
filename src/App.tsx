@@ -7252,8 +7252,11 @@ function App() {
     }
 
     // Option+V and Option+P: Open IC Placement dialogs
-    // Check this BEFORE the regular tool shortcuts
-    if (e.altKey && !e.ctrlKey && !e.shiftKey && !isReadOnly) {
+    // Follow the same pattern as Ctrl+Z (check key first, then modifiers)
+    if ((e.key === 'v' || e.key === 'V') && 
+        e.altKey && 
+        !e.ctrlKey && !e.shiftKey && !isReadOnly) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
       const active = document.activeElement as HTMLElement | null;
       const isEditing =
         !!active &&
@@ -7263,22 +7266,39 @@ function App() {
           (active as HTMLInputElement).type !== 'radio') ||
           active.tagName === 'TEXTAREA' ||
           active.isContentEditable);
-      if (!isEditing) {
-        if (e.key === 'v' || e.key === 'V') {
-          e.preventDefault();
-          e.stopPropagation();
-          setICPlacementIsPad(false);
-          setShowICPlacementDialog(true);
-          return;
-        }
-        if (e.key === 'p' || e.key === 'P') {
-          e.preventDefault();
-          e.stopPropagation();
-          setICPlacementIsPad(true);
-          setShowICPlacementDialog(true);
-          return;
-        }
+      if (isEditing) {
+        return; // Let browser handle input in text fields
       }
+      
+      e.preventDefault();
+      e.stopPropagation();
+      setICPlacementIsPad(false);
+      setShowICPlacementDialog(true);
+      return;
+    }
+    
+    if ((e.key === 'p' || e.key === 'P') && 
+        e.altKey && 
+        !e.ctrlKey && !e.shiftKey && !isReadOnly) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Let browser handle input in text fields
+      }
+      
+      e.preventDefault();
+      e.stopPropagation();
+      setICPlacementIsPad(true);
+      setShowICPlacementDialog(true);
+      return;
     }
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
