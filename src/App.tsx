@@ -7300,6 +7300,56 @@ function App() {
       setShowICPlacementDialog(true);
       return;
     }
+    
+    // 'A' key: Open Component Properties dialog for selected component(s)
+    // If multiple components are selected, open the most recently selected one
+    if ((e.key === 'a' || e.key === 'A') && 
+        !e.ctrlKey && !e.altKey && !e.shiftKey && !isReadOnly) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Let browser handle input in text fields
+      }
+      
+      // Check if any components are selected
+      if (selectedComponentIds.size > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Get the most recently selected component (last item in Set)
+        // Sets preserve insertion order, so the last item is the most recent
+        const componentIdArray = Array.from(selectedComponentIds);
+        const mostRecentComponentId = componentIdArray[componentIdArray.length - 1];
+        
+        // Find the component in top or bottom layer
+        let foundComponent: PCBComponent | null = null;
+        let foundLayer: 'top' | 'bottom' | null = null;
+        
+        foundComponent = componentsTop.find(c => c.id === mostRecentComponentId) || null;
+        if (foundComponent) {
+          foundLayer = 'top';
+        } else {
+          foundComponent = componentsBottom.find(c => c.id === mostRecentComponentId) || null;
+          if (foundComponent) {
+            foundLayer = 'bottom';
+          }
+        }
+        
+        // Open the component editor if found
+        if (foundComponent && foundLayer) {
+          openComponentEditor(foundComponent, foundLayer);
+        }
+      }
+      return;
+    }
 
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.ctrlKey && !e.altKey) {
@@ -7830,7 +7880,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog, openComponentEditor]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
