@@ -324,7 +324,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     } else if (comp.componentType === 'IntegratedCircuit') {
       // For ICs, save description from the Description field
       (updated as any).description = componentEditor.description?.trim() || undefined;
-      (updated as any).datasheet = componentEditor.datasheet?.trim() || undefined;
+      // Save datasheet - preserve empty string if explicitly set, otherwise undefined
+      const datasheetValue = componentEditor.datasheet?.trim();
+      (updated as any).datasheet = datasheetValue && datasheetValue.length > 0 ? datasheetValue : undefined;
       (updated as any).icType = componentEditor.icType || undefined;
     } else {
       // For non-IC components, save description from the Description field
@@ -373,7 +375,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     
     if (currentComp) {
       // Component exists - update it
+      // Debug: Log datasheet before and after update for IntegratedCircuit components
+      if (currentComp.componentType === 'IntegratedCircuit') {
+        console.log('[ComponentEditor] Before update - component datasheet:', (currentComp as any).datasheet, 'editor datasheet:', componentEditor.datasheet);
+      }
       const updatedComp = updateComponent(currentComp);
+      if (currentComp.componentType === 'IntegratedCircuit') {
+        console.log('[ComponentEditor] After update - updated component datasheet:', (updatedComp as any).datasheet);
+      }
       
       // Check if layer changed
       const oldLayer = currentComp.layer;

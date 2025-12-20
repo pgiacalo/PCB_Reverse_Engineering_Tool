@@ -447,6 +447,7 @@ export function useComponents() {
       // This ensures auto-assigned designators are properly displayed
       editor.description = ic.description || component.designator || '';
       editor.datasheet = ic.datasheet || '';
+      console.log('[useComponents] Loading IC component - datasheet from component:', ic.datasheet, 'editor datasheet:', editor.datasheet);
       editor.icType = ic.icType || 'Op-Amp';
     } else if (compType === 'VacuumTube') {
       const vt = component as any;
