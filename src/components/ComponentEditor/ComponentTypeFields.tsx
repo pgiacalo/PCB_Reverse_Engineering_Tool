@@ -164,7 +164,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   
   // Fallback: definition missing
   return (
-    <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '12px' }}>
+    <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '9px' }}>
       Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
     </div>
   );

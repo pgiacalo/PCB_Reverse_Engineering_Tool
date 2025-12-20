@@ -1210,6 +1210,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Features</h3>
                 
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Via/Pad Placement</p>
+                  <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
+                    <li>Option+click the Via or Pad tool to open the placement dialog</li>
+                    <li>Place multiple vias or pads in Linear, 2-Sided, or 4-Sided arrangements</li>
+                    <li>Automatic counter-clockwise numbering starting from Pin 1</li>
+                    <li>Supports chip orientations of 0°, 90°, 180°, or 270°</li>
+                    <li>Click and drag to define the placement area</li>
+                    <li>Tool automatically returns to Select tool after placement</li>
+                  </ul>
+                </div>
+                
                 {/* Tools & Shortcuts - Full Width */}
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
@@ -1234,6 +1246,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Magnify</strong> — <code>M</code></li>
                         <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
                         <li><strong>Recall View</strong> — <code>0-9</code> to recall saved view</li>
+                        <li><strong>Default View 0</strong> — <code>0</code> to recall default view (origin with all images contained)</li>
                         <li><strong>Information Dialog</strong> — <code>I</code></li>
                         <li><strong>Notes Dialog</strong> — <code>N</code></li>
                         <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
@@ -1362,6 +1375,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>View mode switching (top/bottom/overlay)</li>
                       <li>Save up to 10 view locations (X + 0-9)</li>
                       <li>Recall saved views instantly (0-9 keys)</li>
+                      <li>Default View 0: Press <code>0</code> to recall the default view showing the origin with all loaded images fully contained within the canvas</li>
                       <li>Change Perspective (Tools menu) - switch between top/bottom view and rotate all elements</li>
                       <li>Detailed information dialog</li>
                     </ul>
@@ -1455,6 +1469,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Place Vias:</strong> Click the Via tool (<code>V</code>) and click on the PCB where vias connect layers.</li>
                   <li><strong>Place Pads:</strong> Click the Pad tool (<code>P</code>) and mark component pad locations.</li>
+                  <li><strong>Place Multiple Vias/Pads:</strong> Option+click the Via or Pad tool to open the placement dialog. Choose arrangement (Linear, 2-Sided, or 4-Sided), number of pins, orientation, and layer. Click and drag on the canvas to define the placement area. Vias/pads are automatically arranged in counter-clockwise order starting from Pin 1.</li>
                   <li><strong>Place Test Points:</strong> Click the Test Point tool (<code>Y</code>) to mark test points.</li>
                   <li><strong>Draw Traces:</strong> Click the Trace tool (<code>T</code>), select Top or Bottom layer, then click to start a trace. Click again to add segments. Press <code>Enter</code> or click outside to finish.</li>
                   <li><strong>Snapping:</strong> Traces automatically snap to nearby vias, pads, power nodes, and ground nodes.</li>
@@ -1524,6 +1539,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li><strong>Magnify</strong> — <code>M</code></li>
                       <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code></li>
                       <li><strong>Recall View</strong> — <code>0-9</code></li>
+                      <li><strong>Default View 0</strong> — <code>0</code> (origin with all images contained)</li>
+                      <li><strong>Default View 0</strong> — <code>0</code> (origin with all images contained)</li>
                       <li><strong>Information</strong> — <code>I</code></li>
                       <li><strong>Notes</strong> — <code>N</code></li>
                       <li><strong>Project Notes</strong> — <code>L</code></li>
