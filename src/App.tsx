@@ -7251,6 +7251,36 @@ function App() {
       return;
     }
 
+    // Option+V and Option+P: Open IC Placement dialogs
+    // Check this BEFORE the regular tool shortcuts
+    if (e.altKey && !e.ctrlKey && !e.shiftKey && !isReadOnly) {
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (!isEditing) {
+        if (e.key === 'v' || e.key === 'V') {
+          e.preventDefault();
+          e.stopPropagation();
+          setICPlacementIsPad(false);
+          setShowICPlacementDialog(true);
+          return;
+        }
+        if (e.key === 'p' || e.key === 'P') {
+          e.preventDefault();
+          e.stopPropagation();
+          setICPlacementIsPad(true);
+          setShowICPlacementDialog(true);
+          return;
+        }
+      }
+    }
+
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.ctrlKey && !e.altKey) {
       // Ignore if user is typing in an input field, textarea, or contenteditable
@@ -7316,44 +7346,22 @@ function App() {
             return;
           case 'v':
           case 'V':
-            // Option-V: Open IC Placement dialog for vias
-            if (e.altKey && !isReadOnly) {
-              e.preventDefault();
-              e.stopPropagation();
-              setICPlacementIsPad(false);
-              setShowICPlacementDialog(true);
-              return;
-            }
             // Regular V: Select via tool
-            if (!e.altKey) {
             e.preventDefault();
             clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('via');
             setCurrentTool('draw');
             setShowViasLayer(true); // Automatically enable vias layer visibility
             // The useEffect hook will load via tool settings automatically
-              return;
-            }
             return;
           case 'p':
           case 'P':
-            // Option-P: Open IC Placement dialog for pads
-            if (e.altKey && !isReadOnly) {
-              e.preventDefault();
-              e.stopPropagation();
-              setICPlacementIsPad(true);
-              setShowICPlacementDialog(true);
-              return;
-            }
             // Regular P: Select pad tool
-            if (!e.altKey) {
             e.preventDefault();
             clearAllSelections(); // Clear all selections when tool is selected
             setDrawingMode('pad');
             setCurrentTool('draw');
             // The useEffect hook will automatically apply the default layer and show the layer chooser
-              return;
-            }
             return;
           case 'y':
           case 'Y':
