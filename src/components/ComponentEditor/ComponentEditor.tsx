@@ -612,11 +612,27 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   };
 
   return (
-    <div
-      data-component-editor-dialog
-      onClick={(e) => {
-        // Don't interfere with pin connection clicks - let document handler deal with it
-        if (connectingPin && connectingPin.componentId === comp.id) {
+    <>
+      <style>{`
+        @keyframes heartbeat {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.8);
+          }
+          50% {
+            transform: scale(1.15);
+            box-shadow: 0 0 0 8px rgba(76, 175, 80, 0);
+          }
+        }
+        .fetch-pin-names-pulse {
+          animation: heartbeat 0.8s ease-in-out infinite;
+        }
+      `}</style>
+      <div
+        data-component-editor-dialog
+        onClick={(e) => {
+          // Don't interfere with pin connection clicks - let document handler deal with it
+          if (connectingPin && connectingPin.componentId === comp.id) {
           // Only stop propagation for dialog content (buttons, inputs)
           const target = e.target as HTMLElement;
           if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' || target.closest('button') || target.closest('input')) {
@@ -1338,17 +1354,19 @@ ${truncatedText}`;
                         <button
                           onClick={handleFetchPinNames}
                           disabled={isFetchingPinNames || areComponentsLocked}
+                          className={isFetchingPinNames ? 'fetch-pin-names-pulse' : ''}
                           style={{
                             padding: '3px 8px',
                             fontSize: '11px',
-                            background: isFetchingPinNames || areComponentsLocked ? '#ccc' : '#4CAF50',
+                            background: areComponentsLocked ? '#ccc' : '#4CAF50',
                             color: '#fff',
                             border: 'none',
                             borderRadius: '3px',
                             cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
                             opacity: areComponentsLocked ? 0.6 : 1,
                             fontWeight: 600,
-                            whiteSpace: 'nowrap'
+                            whiteSpace: 'nowrap',
+                            transition: 'background 0.2s'
                           }}
                         >
                           {isFetchingPinNames ? 'Fetching...' : 'Fetch Pin Names'}
@@ -1658,6 +1676,7 @@ ${truncatedText}`;
         </button>
       </div>
     </div>
+    </>
   );
 };
 
