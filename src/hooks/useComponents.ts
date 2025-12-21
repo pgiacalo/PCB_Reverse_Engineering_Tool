@@ -441,11 +441,13 @@ export function useComponents() {
     } else if (compType === 'TestPoint') {
       const tp = component as any;
       editor.signal = tp.signal || '';
-    } else if (compType === 'IntegratedCircuit') {
+    } else if (compType === 'IntegratedCircuit' || compType === 'Semiconductor') {
+      // Handle both 'IntegratedCircuit' and legacy 'Semiconductor' componentType
       const ic = component as any;
       // For ICs, description should be synced with designator if description is empty
       // This ensures auto-assigned designators are properly displayed
       editor.description = ic.description || component.designator || '';
+      // Use 'datasheet' field consistently (not 'datasheetUrl')
       editor.datasheet = ic.datasheet || '';
       console.log('[useComponents] Loading IC component - datasheet from component:', ic.datasheet, 'editor datasheet:', editor.datasheet);
       editor.icType = ic.icType || 'Op-Amp';

@@ -129,11 +129,7 @@ export interface PCBComponentBase {
    * Manufacturer-specific ordering / part number (if known).
    */
   partNumber?: string;
-  /**
-   * URL to the component datasheet (if known).
-   * This can be a vendor link, PDF, or distributor page.
-   */
-  datasheetUrl?: string;
+  // Note: datasheetUrl is deprecated - use 'datasheet' property in IntegratedCircuit interface instead
 }
 
 /**

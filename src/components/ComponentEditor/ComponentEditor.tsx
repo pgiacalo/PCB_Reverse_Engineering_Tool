@@ -136,7 +136,15 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
 
   // Update component function - handles all component type-specific save logic
   const updateComponent = (comp: PCBComponent): PCBComponent => {
-    const updated = { ...comp };
+    // Create a deep copy to ensure all properties are preserved, including custom ones like datasheet
+    const updated = { ...comp } as any;
+    console.log('[ComponentEditor] updateComponent - Entry:', {
+      componentId: comp.id,
+      componentType: comp.componentType,
+      editorDatasheet: componentEditor.datasheet,
+      editorDatasheetType: typeof componentEditor.datasheet,
+      originalComponentDatasheet: (comp as any).datasheet
+    });
     // Always use the designator field value directly (not abbreviation)
     // The designator field is the source of truth for the component's designator
     const designator = componentEditor.designator?.trim() || '';
@@ -321,13 +329,38 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
       (updated as any).tolerance = componentEditor.tolerance || undefined;
       (updated as any).filmType = componentEditor.filmType || undefined;
-    } else if (comp.componentType === 'IntegratedCircuit') {
+    } else if (comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') {
       // For ICs, save description from the Description field
-      (updated as any).description = componentEditor.description?.trim() || undefined;
-      // Save datasheet - preserve empty string if explicitly set, otherwise undefined
-      const datasheetValue = componentEditor.datasheet?.trim();
-      (updated as any).datasheet = datasheetValue && datasheetValue.length > 0 ? datasheetValue : undefined;
-      (updated as any).icType = componentEditor.icType || undefined;
+      // Handle both 'IntegratedCircuit' and legacy 'Semiconductor' componentType
+      updated.description = componentEditor.description?.trim() || undefined;
+      // Save datasheet - ALWAYS save the value from componentEditor, even if empty
+      // The key is to preserve whatever the user entered
+      const datasheetValue = componentEditor.datasheet;
+      console.log('[ComponentEditor] updateComponent - IntegratedCircuit/Semiconductor block:', {
+        componentType: comp.componentType,
+        editorDatasheet: componentEditor.datasheet,
+        editorDatasheetType: typeof componentEditor.datasheet,
+        editorDatasheetLength: componentEditor.datasheet?.length,
+        originalComponentDatasheet: (comp as any).datasheet,
+        datasheetValue: datasheetValue
+      });
+      
+      // Always set the datasheet property - preserve empty string if user cleared it, or the value if they entered one
+      if (datasheetValue !== undefined && datasheetValue !== null) {
+        const trimmed = datasheetValue.trim();
+        updated.datasheet = trimmed.length > 0 ? trimmed : '';
+      } else {
+        // If datasheet is undefined/null in editor, preserve the original or set to undefined
+        updated.datasheet = (comp as any).datasheet || undefined;
+      }
+      
+      // Ensure componentType is set correctly (fix legacy 'Semiconductor' to 'IntegratedCircuit')
+      if ((comp as any).componentType === 'Semiconductor') {
+        updated.componentType = 'IntegratedCircuit';
+      }
+      
+      console.log('[ComponentEditor] updateComponent - Final datasheet value:', updated.datasheet);
+      updated.icType = componentEditor.icType || undefined;
     } else {
       // For non-IC components, save description from the Description field
       (updated as any).description = componentEditor.description?.trim() || undefined;
@@ -377,11 +410,20 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       // Component exists - update it
       // Debug: Log datasheet before and after update for IntegratedCircuit components
       if (currentComp.componentType === 'IntegratedCircuit') {
-        console.log('[ComponentEditor] Before update - component datasheet:', (currentComp as any).datasheet, 'editor datasheet:', componentEditor.datasheet);
+        console.log('[ComponentEditor] handleSave - Before updateComponent call:', {
+          componentDatasheet: (currentComp as any).datasheet,
+          editorDatasheet: componentEditor.datasheet,
+          editorDatasheetType: typeof componentEditor.datasheet,
+          editorDatasheetLength: componentEditor.datasheet?.length,
+          fullEditor: componentEditor
+        });
       }
       const updatedComp = updateComponent(currentComp);
       if (currentComp.componentType === 'IntegratedCircuit') {
-        console.log('[ComponentEditor] After update - updated component datasheet:', (updatedComp as any).datasheet);
+        console.log('[ComponentEditor] handleSave - After updateComponent call:', {
+          updatedComponentDatasheet: (updatedComp as any).datasheet,
+          updatedComponentDatasheetType: typeof (updatedComp as any).datasheet
+        });
       }
       
       // Check if layer changed
@@ -402,9 +444,37 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       } else {
         // Layer unchanged - update in place
         if (newLayer === 'top') {
-          setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+          setComponentsTop(prev => {
+            const updated = prev.map(c => {
+              if (c.id === componentEditor.id) {
+                console.log('[ComponentEditor] Updating component in top array - datasheet:', (updatedComp as any).datasheet);
+                return updatedComp;
+              }
+              return c;
+            });
+            // Verify the update worked
+            const found = updated.find(c => c.id === componentEditor.id);
+            if (found && found.componentType === 'IntegratedCircuit') {
+              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+            }
+            return updated;
+          });
         } else {
-          setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+          setComponentsBottom(prev => {
+            const updated = prev.map(c => {
+              if (c.id === componentEditor.id) {
+                console.log('[ComponentEditor] Updating component in bottom array - datasheet:', (updatedComp as any).datasheet);
+                return updatedComp;
+              }
+              return c;
+            });
+            // Verify the update worked
+            const found = updated.find(c => c.id === componentEditor.id);
+            if (found && found.componentType === 'IntegratedCircuit') {
+              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+            }
+            return updated;
+          });
         }
       }
     } else {
@@ -819,38 +889,6 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             }}
             disabled={areComponentsLocked}
             style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-          />
-        </div>
-        
-        {/* Manufacturer - on one line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-manufacturer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-            Manufacturer:
-          </label>
-          <input
-            id={`component-manufacturer-${comp.id}`}
-            name={`component-manufacturer-${comp.id}`}
-            type="text"
-            value={componentEditor.manufacturer}
-            onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-            disabled={areComponentsLocked}
-            style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-          />
-        </div>
-        
-        {/* Part Number - on one line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-partnumber-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-            Part Number:
-          </label>
-          <input
-            id={`component-partnumber-${comp.id}`}
-            name={`component-partnumber-${comp.id}`}
-            type="text"
-            value={componentEditor.partNumber}
-            onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-            disabled={areComponentsLocked}
-            style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
