@@ -69,6 +69,11 @@
           "description": "Default number of pins for this component",
           "minimum": 1
         },
+        "fixedPinCount": {
+          "type": "boolean",
+          "description": "Whether the component has a fixed pin count that cannot be changed. Defaults to true. Set to false for components like Integrated Circuits that can have variable pin counts.",
+          "default": true
+        },
         "subtype": {
           "type": "string",
           "description": "Optional subtype identifier (legacy field)"

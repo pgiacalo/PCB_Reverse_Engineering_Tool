@@ -1484,6 +1484,7 @@
       "searchText": "integrated circuit semiconductor ic",
       "designator": "U",
       "defaultPins": 8,
+      "fixedPinCount": false,
       "properties": {
         "semiconductorType": "IntegratedCircuit",
         "pinNames": ["CHIP_DEPENDENT"]

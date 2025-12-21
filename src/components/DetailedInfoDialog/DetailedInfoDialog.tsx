@@ -25,13 +25,14 @@
  * Displays detailed information about selected PCB elements (components, vias, pads, traces, power, ground)
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
 import { autoAssignPolarity, isComponentPolarized } from '../../utils/components';
 import { formatComponentTypeName } from '../../constants';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
+import { ErrorDialog } from '../ErrorDialog';
 
 
 // DrawingStroke type matches App.tsx's local interface
@@ -128,6 +129,12 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   onDragStart,
   onOpenNotesDialog,
 }) => {
+  const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   if (!visible) return null;
 
   // Use provided position or default to right side
@@ -453,6 +460,41 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                           if (pinsPerComponent === 0) {
                             console.warn(`Not enough ${selectedPads.length > 0 ? 'pads' : 'vias'} (${totalItemCount}) for ${componentCount} components`);
                             return;
+                          }
+
+                          // Check if component has fixed pin count
+                          const componentDefinition = resolveComponentDefinition(allSelectedComponents[0] as any);
+                          const fixedPinCount = componentDefinition?.fixedPinCount !== false; // Default to true if not specified
+                          
+                          if (fixedPinCount) {
+                            // For fixed pin count components, verify that pinsPerComponent matches the expected pin count
+                            // Use the current pinCount if available, otherwise use defaultPins from definition
+                            const expectedPinCount = allSelectedComponents[0]?.pinCount ?? componentDefinition?.defaultPins ?? pinsPerComponent;
+                            
+                            // Verify all components have the same pin count (they should for fixed pin count components)
+                            const allHaveSamePinCount = allSelectedComponents.every(c => 
+                              (c.pinCount ?? componentDefinition?.defaultPins) === expectedPinCount
+                            );
+                            
+                            if (!allHaveSamePinCount) {
+                              console.warn(`Selected components have different pin counts`);
+                            }
+                            
+                            if (pinsPerComponent !== expectedPinCount) {
+                              const itemType = selectedPads.length > 0 ? 'pads' : 'vias';
+                              console.warn(
+                                `Cannot change pin count for ${comp.componentType}. ` +
+                                `Expected ${expectedPinCount} ${itemType} per component, but got ${pinsPerComponent}. ` +
+                                `This component has a fixed pin count.`
+                              );
+                              setErrorDialog({
+                                visible: true,
+                                title: 'Cannot Connect Components',
+                                message: `${comp.componentType} has a fixed pin count of ${expectedPinCount}. ` +
+                                  `Please select exactly ${expectedPinCount * componentCount} ${itemType} (${expectedPinCount} per component).`
+                              });
+                              return;
+                            }
                           }
 
                           // Sort components by ID for consistent assignment
@@ -1406,6 +1448,14 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
           ))}
         </div>
       </div>
+      
+      {/* Error Dialog */}
+      <ErrorDialog
+        visible={errorDialog.visible}
+        title={errorDialog.title}
+        message={errorDialog.message}
+        onClose={() => setErrorDialog({ visible: false, title: '', message: '' })}
+      />
     </div>
   );
 };

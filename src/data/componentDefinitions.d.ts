@@ -31,6 +31,11 @@ export interface ComponentDefinition {
    */
   designators?: string[];
   defaultPins: number;
+  /**
+   * Whether the component has a fixed pin count that cannot be changed.
+   * Defaults to true. Set to false for components like Integrated Circuits that can have variable pin counts.
+   */
+  fixedPinCount?: boolean;
   subtype?: string;
   properties?: Record<string, any>;  // Variant properties (e.g., capacitorType, diodeType)
   fields?: ComponentFieldDefinition[];  // Field definitions for this component
