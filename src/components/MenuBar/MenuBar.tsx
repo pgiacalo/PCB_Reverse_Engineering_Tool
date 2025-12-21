@@ -908,24 +908,20 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         <button 
           onClick={(e) => { 
             if (!isReadOnlyMode) { 
-              if (!isProjectActive) {
-                alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
-                return;
-              }
               e.stopPropagation(); 
               setOpenMenu(m => m === 'transform' ? null : 'transform'); 
             } 
           }} 
-          disabled={isReadOnlyMode || !isProjectActive}
+          disabled={isReadOnlyMode}
           style={{ 
             padding: '6px 10px', 
             borderRadius: 6, 
             border: '1px solid #ddd', 
             background: openMenu === 'transform' ? '#eef3ff' : '#fff', 
             fontWeight: 600, 
-            color: (isReadOnlyMode || !isProjectActive) ? '#999' : '#222',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            opacity: (isReadOnlyMode || !isProjectActive) ? 0.5 : 1
+            color: isReadOnlyMode ? '#999' : '#222',
+            cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+            opacity: isReadOnlyMode ? 0.5 : 1
           }}
         >
           Images ▾
@@ -933,47 +929,49 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         {openMenu === 'transform' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 260, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
             <button 
-              onClick={() => { if (!isReadOnlyMode && !areImagesLocked) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode || areImagesLocked}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode && !areImagesLocked && isProjectActive) { fileInputTopRef.current?.click(); setOpenMenu(null); } }} 
+              disabled={isReadOnlyMode || areImagesLocked || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Load Top PCB…
             </button>
             <button 
-              onClick={() => { if (!isReadOnlyMode && !areImagesLocked) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
-              disabled={isReadOnlyMode || areImagesLocked}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!isReadOnlyMode && !areImagesLocked && isProjectActive) { fileInputBottomRef.current?.click(); setOpenMenu(null); } }} 
+              disabled={isReadOnlyMode || areImagesLocked || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || areImagesLocked || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || areImagesLocked || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Load Bottom PCB…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
-              onClick={() => { if (!areImagesLocked) { onEnterBoardDimensions(); setOpenMenu(null); } }} 
-              disabled={areImagesLocked}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: areImagesLocked ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: areImagesLocked ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!areImagesLocked && isProjectActive) { onEnterBoardDimensions(); setOpenMenu(null); } }} 
+              disabled={areImagesLocked || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (areImagesLocked || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (areImagesLocked || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Enter PCB Dimensions…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
               <button 
                 onClick={() => { 
-                onOpenTransformImages();
-                setOpenMenu(null); 
+                if (isProjectActive) {
+                  onOpenTransformImages();
+                  setOpenMenu(null); 
+                }
               }} 
-              disabled={(!topImage && !bottomImage) || areImagesLocked}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: ((!topImage && !bottomImage) || areImagesLocked) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: ((!topImage && !bottomImage) || areImagesLocked) ? 'not-allowed' : 'pointer' }}
+              disabled={(!topImage && !bottomImage) || areImagesLocked || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: ((!topImage && !bottomImage) || areImagesLocked || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: ((!topImage && !bottomImage) || areImagesLocked || !isProjectActive) ? 'not-allowed' : 'pointer' }}
               >
               Transform Images…
               </button>
             <button 
-              onClick={() => { if (!areImagesLocked) { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); } }} 
-              disabled={areImagesLocked || (!topImage && !bottomImage)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (areImagesLocked || (!topImage && !bottomImage)) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (areImagesLocked || (!topImage && !bottomImage)) ? 'not-allowed' : 'pointer' }}
+              onClick={() => { if (!areImagesLocked && isProjectActive) { setCurrentTool('transform'); resetImageTransform(); setOpenMenu(null); } }} 
+              disabled={areImagesLocked || (!topImage && !bottomImage) || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (areImagesLocked || (!topImage && !bottomImage) || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (areImagesLocked || (!topImage && !bottomImage) || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Reset Transform
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { setAreImagesLocked(prev => !prev); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+            <button onClick={() => { if (isProjectActive) { setAreImagesLocked(prev => !prev); setOpenMenu(null); } }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>
               {areImagesLocked ? 'Unlock Images ✓' : 'Lock Images'}
             </button>
           </div>
@@ -985,49 +983,51 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         <button 
           onClick={(e) => { 
             if (!isReadOnlyMode) { 
-              if (!isProjectActive) {
-                alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
-                return;
-              }
               e.stopPropagation(); 
               setOpenMenu(m => m === 'tools' ? null : 'tools'); 
             } 
           }} 
-          disabled={isReadOnlyMode || !isProjectActive}
+          disabled={isReadOnlyMode}
           style={{ 
             padding: '6px 10px', 
             borderRadius: 6, 
             border: '1px solid #ddd', 
             background: openMenu === 'tools' ? '#eef3ff' : '#fff', 
             fontWeight: 600, 
-            color: (isReadOnlyMode || !isProjectActive) ? '#999' : '#222',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            opacity: (isReadOnlyMode || !isProjectActive) ? 0.5 : 1
+            color: isReadOnlyMode ? '#999' : '#222',
+            cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+            opacity: isReadOnlyMode ? 0.5 : 1
           }}
         >
           Tools ▾
         </button>
         {openMenu === 'tools' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 220, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6 }}>
-            <button onClick={() => { onOpenTransformAll(); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+            <button onClick={() => { if (isProjectActive) { onOpenTransformAll(); setOpenMenu(null); } }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>
               Change Perspective…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button
               onClick={(e) => {
-                increaseSize(e.shiftKey ? 5 : 1);
-                setOpenMenu(null);
+                if (isProjectActive) {
+                  increaseSize(e.shiftKey ? 5 : 1);
+                  setOpenMenu(null);
+                }
               }}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               Increase Size (+)
             </button>
             <button
               onClick={(e) => {
-                decreaseSize(e.shiftKey ? 5 : 1);
-                setOpenMenu(null);
+                if (isProjectActive) {
+                  decreaseSize(e.shiftKey ? 5 : 1);
+                  setOpenMenu(null);
+                }
               }}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               Decrease Size (-)
             </button>
@@ -1035,82 +1035,99 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
-                  if (toolsSubmenuTimeoutRef.current) {
+                  if (isProjectActive && toolsSubmenuTimeoutRef.current) {
                     clearTimeout(toolsSubmenuTimeoutRef.current);
                     toolsSubmenuTimeoutRef.current = null;
                   }
-                  setOpenToolsSubmenu('lock');
+                  if (isProjectActive) {
+                    setOpenToolsSubmenu('lock');
+                  }
                 }}
                 onMouseLeave={() => {
-                  toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
-                    setOpenToolsSubmenu(prev => prev === 'lock' ? null : prev);
-                  }, 200);
+                  if (isProjectActive) {
+                    toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                      setOpenToolsSubmenu(prev => prev === 'lock' ? null : prev);
+                    }, 200);
+                  }
                 }}
                 onClick={() => {
-                  setOpenToolsSubmenu(prev => (prev === 'lock' ? null : 'lock'));
+                  if (isProjectActive) {
+                    setOpenToolsSubmenu(prev => (prev === 'lock' ? null : 'lock'));
+                  }
                 }}
+                disabled={!isProjectActive}
                 style={{
                   display: 'block',
                   width: '100%',
                   textAlign: 'left',
                   padding: '6px 10px',
-                  color: '#f2f2f2',
+                  color: !isProjectActive ? '#777' : '#f2f2f2',
                   background: 'transparent',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: !isProjectActive ? 'not-allowed' : 'pointer',
                 }}
               >
                 Lock ▸
               </button>
-              {openToolsSubmenu === 'lock' && renderLockSubmenu()}
+              {openToolsSubmenu === 'lock' && isProjectActive && renderLockSubmenu()}
             </div>
             <div style={{ position: 'relative' }}>
               <button
                 onMouseEnter={() => {
-                  if (toolsSubmenuTimeoutRef.current) {
+                  if (isProjectActive && toolsSubmenuTimeoutRef.current) {
                     clearTimeout(toolsSubmenuTimeoutRef.current);
                     toolsSubmenuTimeoutRef.current = null;
                   }
-                  setOpenToolsSubmenu('select');
+                  if (isProjectActive) {
+                    setOpenToolsSubmenu('select');
+                  }
                 }}
                 onMouseLeave={() => {
-                  toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
-                    setOpenToolsSubmenu(prev => prev === 'select' ? null : prev);
-                  }, 200);
+                  if (isProjectActive) {
+                    toolsSubmenuTimeoutRef.current = window.setTimeout(() => {
+                      setOpenToolsSubmenu(prev => prev === 'select' ? null : prev);
+                    }, 200);
+                  }
                 }}
                 onClick={() => {
-                  setOpenToolsSubmenu(prev => (prev === 'select' ? null : 'select'));
+                  if (isProjectActive) {
+                    setOpenToolsSubmenu(prev => (prev === 'select' ? null : 'select'));
+                  }
                 }}
+                disabled={!isProjectActive}
                 style={{
                   display: 'block',
                   width: '100%',
                   textAlign: 'left',
                   padding: '6px 10px',
-                  color: '#f2f2f2',
+                  color: !isProjectActive ? '#777' : '#f2f2f2',
                   background: 'transparent',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: !isProjectActive ? 'not-allowed' : 'pointer',
                 }}
               >
                 Select ▸
               </button>
-              {openToolsSubmenu === 'select' && renderSelectSubmenu()}
+              {openToolsSubmenu === 'select' && isProjectActive && renderSelectSubmenu()}
             </div>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button
               onClick={() => {
-                onOpenProjectNotes();
-                setOpenMenu(null);
+                if (isProjectActive) {
+                  onOpenProjectNotes();
+                  setOpenMenu(null);
+                }
               }}
+              disabled={!isProjectActive}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
                 padding: '6px 10px',
-                color: '#f2f2f2',
+                color: !isProjectActive ? '#777' : '#f2f2f2',
                 background: 'transparent',
                 border: 'none',
-                cursor: 'pointer',
+                cursor: !isProjectActive ? 'not-allowed' : 'pointer',
               }}
             >
               Open Project Notes…
@@ -1118,51 +1135,58 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button
               onClick={() => {
-                setSetToolSizeDialogVisible(true);
-                setOpenMenu(null);
+                if (isProjectActive) {
+                  setSetToolSizeDialogVisible(true);
+                  setOpenMenu(null);
+                }
               }}
+              disabled={!isProjectActive}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
                 padding: '6px 10px',
-                color: '#f2f2f2',
+                color: !isProjectActive ? '#777' : '#f2f2f2',
                 background: 'transparent',
                 border: 'none',
-                cursor: 'pointer',
+                cursor: !isProjectActive ? 'not-allowed' : 'pointer',
               }}
             >
               Set Tool Sizes…
             </button>
             <button
               onClick={() => {
-                setSetToolColorDialogVisible(true);
-                setOpenMenu(null);
+                if (isProjectActive) {
+                  setSetToolColorDialogVisible(true);
+                  setOpenMenu(null);
+                }
               }}
+              disabled={!isProjectActive}
               style={{
                 display: 'block',
                 width: '100%',
                 textAlign: 'left',
                 padding: '6px 10px',
-                color: '#f2f2f2',
+                color: !isProjectActive ? '#777' : '#f2f2f2',
                 background: 'transparent',
                 border: 'none',
-                cursor: 'pointer',
+                cursor: !isProjectActive ? 'not-allowed' : 'pointer',
               }}
             >
               Set Tool Colors…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
-            <button onClick={() => { setShowPowerBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+            <button onClick={() => { if (isProjectActive) { setShowPowerBusManager(true); setOpenMenu(null); } }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>
               Manage Power Buses…
             </button>
-            <button onClick={() => { setShowGroundBusManager(true); setOpenMenu(null); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}>
+            <button onClick={() => { if (isProjectActive) { setShowGroundBusManager(true); setOpenMenu(null); } }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>
               Manage Ground Buses…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
-              onClick={() => { setShowTraceCornerDots(!showTraceCornerDots); setOpenMenu(null); }} 
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+              onClick={() => { if (isProjectActive) { setShowTraceCornerDots(!showTraceCornerDots); setOpenMenu(null); } }} 
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
             </button>
@@ -1201,9 +1225,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Technology</h3>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Technologies</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  The application runs entirely client-side in the browser, to provide a responsive, interactive drawing experience with no backend server requirements.
+                  Built with <strong>TypeScript</strong> and <strong>React</strong>, with <strong>Gemini AI</strong> integration for intelligent pin name extraction from datasheets. The application runs entirely client-side in the browser, providing a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 

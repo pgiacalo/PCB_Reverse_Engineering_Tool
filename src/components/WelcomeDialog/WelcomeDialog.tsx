@@ -151,7 +151,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
         Reverse Engineer, Troubleshoot, Repair, Signal Trace,<br />
-        Generate Schematic, Document Test Results
+        Document Test Results
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1) Use the File menu to start a new project.
