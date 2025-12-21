@@ -238,6 +238,11 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Slant**: 0.5° per arrow (vertical on ↑/↓, horizontal on ←/→)
 - **Keystone**: 0.5° per arrow (vertical on ↑/↓, horizontal on ←/→)
 
+**Size Controls**
+- **Resize Icons** — <code>+</code> / <code>-</code> keys to increase/decrease component icon and tool sizes
+- **Fast Resize** — <code>Shift</code> + <code>+</code> / <code>-</code> changes size 5 times faster (increment of 5 instead of 1)
+- **Menu Options** — Tools menu → Increase Size (+) / Decrease Size (-) buttons (hold <code>Shift</code> while clicking for 5x faster change)
+
 **Reset Functions**
 - **Double-click any slider**: Reset to default value
 - **Double-click Erase button**: Clear selected drawing layer

@@ -184,11 +184,11 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   // This ensures the file upload field is always available
   // Fallback: definition missing (only for non-IntegratedCircuit components)
   if (!isIntegratedCircuit) {
-    return (
+  return (
       <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '9px' }}>
-        Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
-      </div>
-    );
+      Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
+    </div>
+  );
   }
 
   // Legacy rendering - IntegratedCircuit always uses this path to ensure file upload is available
@@ -978,8 +978,8 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                   <a
                     href="#"
                     onClick={async (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
+                    e.preventDefault();
+                    e.stopPropagation();
                       if (uploadedDatasheetFile) {
                         // Create a blob URL from the file and open it
                         const blobUrl = URL.createObjectURL(uploadedDatasheetFile);
@@ -989,13 +989,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                           setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
                         }
                       }
-                    }}
-                    style={{ 
+                  }}
+                  style={{
                       fontSize: '9px', 
                       color: '#0066cc', 
                       whiteSpace: 'nowrap',
                       textDecoration: 'underline',
-                      cursor: 'pointer',
+                    cursor: 'pointer',
                       flex: '0 0 auto'
                     }}
                     title="Click to open PDF in new window"
@@ -1024,7 +1024,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                       textDecoration: 'underline',
                       cursor: 'pointer',
                       wordBreak: 'break-all'
-                    }}
+                  }}
                     title="Click to open URL in new window"
                   >
                     {componentEditor.datasheet.trim()}

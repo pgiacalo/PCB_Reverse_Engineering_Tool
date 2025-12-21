@@ -1086,7 +1086,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                     </button>
                   </div>
                 )}
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>

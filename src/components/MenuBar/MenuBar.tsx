@@ -78,8 +78,8 @@ export interface MenuBarProps {
   openProjectRef: React.RefObject<HTMLInputElement | null>;
   
   // Tools operations
-  increaseSize: () => void;
-  decreaseSize: () => void;
+  increaseSize: (increment?: number) => void;
+  decreaseSize: (decrement?: number) => void;
   brushSize: number;
   drawingStrokes: DrawingStroke[];
   selectedIds: Set<string>;
@@ -1014,8 +1014,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button
-              onClick={() => {
-                increaseSize();
+              onClick={(e) => {
+                increaseSize(e.shiftKey ? 5 : 1);
                 setOpenMenu(null);
               }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
@@ -1023,8 +1023,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Increase Size (+)
             </button>
             <button
-              onClick={() => {
-                decreaseSize();
+              onClick={(e) => {
+                decreaseSize(e.shiftKey ? 5 : 1);
                 setOpenMenu(null);
               }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none' }}
@@ -1235,7 +1235,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Trace</strong> — <code>T</code></li>
                         <li><strong>Component</strong> — <code>C</code></li>
                         <li><strong>Component Properties</strong> — double-click component</li>
-                        <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code></li>
+                        <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code> (<code>Shift</code> + <code>+</code> / <code>-</code> = 5x faster)</li>
                       </ul>
                     </div>
                     <div>
@@ -1573,7 +1573,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li>Lock layers (Tools → Lock) to prevent accidental modifications</li>
                   <li>Use the Find button in the Information dialog to center elements in view</li>
                   <li>Save views with <code>X</code> + number key for quick navigation</li>
-                  <li>Use <code>+</code> and <code>-</code> keys to resize tool icons</li>
+                  <li>Use <code>+</code> and <code>-</code> keys to resize tool icons (<code>Shift</code> + <code>+</code> / <code>-</code> changes size 5 times faster)</li>
                 </ul>
               </div>
 

@@ -6048,7 +6048,7 @@ function App() {
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   // Helper functions for size changes
-  const increaseSize = useCallback(() => {
+  const increaseSize = useCallback((increment: number = 1) => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
       // Check if any selected items are locked
       if (selectedIds.size > 0) {
@@ -6090,7 +6090,7 @@ function App() {
       
       setDrawingStrokes(prev => prev.map(s => {
         if (selectedIds.has(s.id)) {
-          const newSize = s.size + 1;
+          const newSize = s.size + increment;
           // Persist default size for this object type
           if (s.type === 'via') {
             saveDefaultSize('via', newSize);
@@ -6104,20 +6104,20 @@ function App() {
         return s;
       }));
       if (selectedComponentIds.size > 0) {
-        const newSize = (selectedComponentIds.size > 0 ? (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) : 18) + 1;
+        const newSize = (selectedComponentIds.size > 0 ? (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) : 18) + increment;
         saveDefaultSize('component', newSize);
-        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
-        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + 1 } : c));
+        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + increment } : c));
+        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: (c.size || 18) + increment } : c));
       }
       if (selectedPowerIds.size > 0) {
-        const newSize = (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) + 1;
+        const newSize = (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) + increment;
         saveDefaultSize('power', newSize);
-        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + 1 } : p));
+        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: p.size + increment } : p));
       }
       if (selectedGroundIds.size > 0) {
-        const newSize = (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) + 1;
+        const newSize = (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) + increment;
         saveDefaultSize('ground', newSize);
-        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + 1 } : g));
+        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: (g.size || 18) + increment } : g));
       }
     } else {
       // Update tool size using centralized tool state management
@@ -6151,14 +6151,14 @@ function App() {
       if (toolInstanceId) {
         // Read current size directly from tool instance (source of truth) to avoid stale closure values
         const currentInstance = toolInstanceManager.get(toolInstanceId);
-        const newSize = Math.min(40, currentInstance.size + 1);
+        const newSize = Math.min(40, currentInstance.size + increment);
         toolInstanceManager.setSize(toolInstanceId, newSize);
         // brushSize will be synced automatically via useEffect
       }
     }
   }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, saveDefaultSize]);
 
-  const decreaseSize = useCallback(() => {
+  const decreaseSize = useCallback((decrement: number = 1) => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
       // Check if any selected items are locked
       if (selectedIds.size > 0) {
@@ -6200,7 +6200,7 @@ function App() {
       // Determine object types from selected items to persist defaults
       setDrawingStrokes(prev => prev.map(s => {
         if (selectedIds.has(s.id)) {
-          const newSize = Math.max(1, s.size - 1);
+          const newSize = Math.max(1, s.size - decrement);
           // Persist default size for this object type
           if (s.type === 'via') {
             saveDefaultSize('via', newSize);
@@ -6216,20 +6216,20 @@ function App() {
         return s;
       }));
       if (selectedComponentIds.size > 0) {
-        const newSize = Math.max(1, (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) - 1);
+        const newSize = Math.max(12, (selectedComponentIds.size > 0 ? (componentsTop.find(c => selectedComponentIds.has(c.id))?.size || 18) : 18) - decrement);
         saveDefaultSize('component', newSize);
-        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
-        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(1, (c.size || 18) - 1) } : c));
+        setComponentsTop(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(12, (c.size || 18) - decrement) } : c));
+        setComponentsBottom(prev => prev.map(c => selectedComponentIds.has(c.id) ? { ...c, size: Math.max(12, (c.size || 18) - decrement) } : c));
       }
       if (selectedPowerIds.size > 0) {
-        const newSize = Math.max(1, (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) - 1);
+        const newSize = Math.max(12, (powers.find(p => selectedPowerIds.has(p.id))?.size || 18) - decrement);
         saveDefaultSize('power', newSize);
-        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(1, p.size - 1) } : p));
+        setPowerSymbols(prev => prev.map(p => selectedPowerIds.has(p.id) ? { ...p, size: Math.max(12, p.size - decrement) } : p));
       }
       if (selectedGroundIds.size > 0) {
-        const newSize = Math.max(1, (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) - 1);
+        const newSize = Math.max(12, (grounds.find(g => selectedGroundIds.has(g.id))?.size || 18) - decrement);
         saveDefaultSize('ground', newSize);
-        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(1, (g.size || 18) - 1) } : g));
+        setGroundSymbols(prev => prev.map(g => selectedGroundIds.has(g.id) ? { ...g, size: Math.max(12, (g.size || 18) - decrement) } : g));
       }
     } else {
       // Update tool size using centralized tool state management
@@ -6263,7 +6263,7 @@ function App() {
       if (toolInstanceId) {
         // Read current size directly from tool instance (source of truth) to avoid stale closure values
         const currentInstance = toolInstanceManager.get(toolInstanceId);
-        const newSize = Math.max(1, currentInstance.size - 1);
+        const newSize = Math.max(1, currentInstance.size - decrement);
         toolInstanceManager.setSize(toolInstanceId, newSize);
         // brushSize will be synced automatically via useEffect
       }
@@ -6723,14 +6723,14 @@ function App() {
       // + key (or = key on keyboards where + requires Shift)
       e.preventDefault();
       e.stopPropagation();
-      increaseSize();
+      increaseSize(e.shiftKey ? 5 : 1);
       return;
     }
     if (e.key === '-' || e.key === '_') {
       // - key (or _ key on keyboards where - requires Shift)
       e.preventDefault();
       e.stopPropagation();
-      decreaseSize();
+      decreaseSize(e.shiftKey ? 5 : 1);
       return;
     }
     
