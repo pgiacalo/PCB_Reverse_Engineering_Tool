@@ -39,6 +39,33 @@ if (typeof window !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
+// Google Gemini API configuration
+// API key priority:
+// 1. User-provided key from localStorage (for production/GitHub Pages)
+// 2. Build-time environment variable (for development)
+// This ensures no API key is exposed in production builds
+const getGeminiApiKey = (): string | null => {
+  // First check localStorage (user-provided, secure for production)
+  if (typeof window !== 'undefined') {
+    const userKey = localStorage.getItem('geminiApiKey');
+    if (userKey && userKey.trim()) {
+      return userKey.trim();
+    }
+  }
+  // Fallback to build-time env var (development only)
+  return import.meta.env.VITE_GEMINI_API_KEY || null;
+};
+
+// Use v1 API and gemini-2.5-flash (latest stable, fast model)
+// Alternative: 'gemini-2.5-pro' for better quality (slower)
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const getGeminiApiUrl = (): string | null => {
+  const apiKey = getGeminiApiKey();
+  return apiKey 
+    ? `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+    : null;
+};
+
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: string): string => {
   const info = COMPONENT_TYPE_INFO[componentType as keyof typeof COMPONENT_TYPE_INFO];
@@ -124,6 +151,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
+  // API key input state - must be at top level (React Rules of Hooks)
+  const [apiKeyInput, setApiKeyInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('geminiApiKey') || '';
+    }
+    return '';
+  });
   
   if (!componentEditor || !componentEditor.visible) {
     return null;
@@ -573,7 +607,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           flexShrink: 0,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: '12px', color: '#fff', fontWeight: 600 }}>Component Properties</h3>
+        <h3 style={{ margin: 0, fontSize: '13px', color: '#fff', fontWeight: 600 }}>Component Properties</h3>
         <button
           onClick={() => {
             setComponentEditor(null);
@@ -582,7 +616,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           style={{
             background: 'transparent',
             border: 'none',
-            fontSize: '14px',
+            fontSize: '15px',
             cursor: 'pointer',
             color: '#fff',
             padding: 0,
@@ -613,20 +647,20 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           const def = componentDefinition || resolveComponentDefinition(comp as any);
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
                 Category:
               </label>
-              <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
+              <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '11px', color: '#000' }}>
                 {def?.category || 'N/A'}
               </div>
             </div>
           );
         })()}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Type:
           </label>
-          <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '10px', color: '#000' }}>
+          <div style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', borderRadius: 2, fontSize: '11px', color: '#000' }}>
             {(() => {
               // Resolve component definition if not provided as prop
               const def = componentDefinition || resolveComponentDefinition(comp as any);
@@ -664,7 +698,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Layer (editable) - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-layer-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Layer:
           </label>
           <select
@@ -673,7 +707,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             value={componentEditor.layer}
             onChange={(e) => setComponentEditor({ ...componentEditor, layer: e.target.value as 'top' | 'bottom' })}
             disabled={areComponentsLocked}
-            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           >
             <option value="top">Top</option>
             <option value="bottom">Bottom</option>
@@ -682,7 +716,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Orientation - moved near top for easy access */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Orientation:
           </label>
           <select
@@ -708,7 +742,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               }
             }}
             disabled={areComponentsLocked}
-            style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           >
             <option value="0">0°</option>
             <option value="90">90°</option>
@@ -734,7 +768,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         
         {/* Designator - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Designator:
           </label>
           <input
@@ -749,14 +783,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
             }}
             disabled={areComponentsLocked}
-            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder="e.g., U2, R7, C1"
           />
         </div>
         
         {/* Description/Part Name - for all components */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Description:
           </label>
           <input
@@ -769,14 +803,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, description: e.target.value });
             }}
             disabled={areComponentsLocked}
-            style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder=""
           />
         </div>
         
         {/* Notes - single line, clickable to open Notes dialog */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-notes-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-notes-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Notes:
           </label>
           <input
@@ -799,7 +833,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               background: '#f5f5f5', 
               border: '1px solid #ddd', 
               borderRadius: 2, 
-              fontSize: '10px', 
+              fontSize: '11px', 
               color: '#000', 
               opacity: areComponentsLocked ? 0.6 : 1,
               cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
@@ -815,7 +849,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         {/* Pin Count - on one line (only for non-IC components; ICs show it under IC Properties) */}
         {comp.componentType !== 'IntegratedCircuit' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
               Pin Count:
             </label>
             <input
@@ -860,14 +894,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                 }
               }}
               disabled={areComponentsLocked}
-              style={{ width: '60px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+              style={{ width: '60px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
             />
           </div>
         )}
         
         {/* X - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-x-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-x-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             X:
           </label>
           <input
@@ -880,13 +914,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, x: val });
             }}
             disabled={areComponentsLocked}
-            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
         {/* Y - on one line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <label htmlFor={`component-y-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+          <label htmlFor={`component-y-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
             Y:
           </label>
           <input
@@ -899,17 +933,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
               setComponentEditor({ ...componentEditor, y: val });
             }}
             disabled={areComponentsLocked}
-            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
           />
         </div>
         
         {/* Pin Connections - tabular format with polarity column for components with polarity */}
         <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-          <label style={{ display: 'block', fontSize: '9px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+          <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
             Pin Connections:
           </label>
           {connectingPin && connectingPin.componentId === comp.id && (
-            <div style={{ padding: '2px 3px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 2, marginBottom: '2px', fontSize: '8px', color: '#856404' }}>
+            <div style={{ padding: '2px 3px', background: '#fff3cd', border: '1px solid #ffc107', borderRadius: 2, marginBottom: '2px', fontSize: '11px', color: '#856404' }}>
               Pin {connectingPin.pinIndex + 1} selected. Click on a via or pad to connect.
             </div>
           )}
@@ -936,6 +970,19 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             
             // Function to fetch and parse pin names from datasheet
             const handleFetchPinNames = async () => {
+              // Check if API key is configured
+              const apiKey = getGeminiApiKey();
+              const apiUrl = getGeminiApiUrl();
+              
+              if (!apiKey || !apiUrl) {
+                const message = 'Gemini API key is not configured.\n\n' +
+                  'For production/GitHub Pages: Enter your API key in the field below.\n' +
+                  'For development: Create a .env file with VITE_GEMINI_API_KEY=your_api_key_here\n\n' +
+                  'Get your free API key from: https://aistudio.google.com/apikey';
+                alert(message);
+                return;
+              }
+              
               // Prefer uploaded file over URL
               if (!uploadedDatasheetFile) {
                 const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
@@ -1002,41 +1049,149 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                   fullText += pageText + '\n';
                 }
                 
-                // Parse pin names from the text
-                // Look for common patterns like "Pin 1", "Pin 2", "1 VCC", "2 GND", etc.
+                // Use Google Gemini AI to extract pin information
+                // Limit text length to avoid token limits (Gemini Pro has ~32k token limit)
+                const maxTextLength = 20000; // Conservative limit to leave room for prompt and response
+                const truncatedText = fullText.length > maxTextLength 
+                  ? fullText.substring(0, maxTextLength) + '\n[... text truncated ...]'
+                  : fullText;
+
+                const prompt = `You are analyzing an electronic component datasheet. Extract the pin information and return it as a CSV table.
+
+Requirements:
+1. Return ONLY a CSV table with three columns: Pin #, Pin Name, Pin Description
+2. Include a header row: "Pin #,Pin Name,Pin Description"
+3. Extract information for pins 1 through ${componentEditor.pinCount} (inclusive)
+4. For each pin, provide:
+   - Pin #: The pin number (1, 2, 3, etc.)
+   - Pin Name: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
+   - Pin Description: A brief description of the pin's function (optional, can be empty)
+5. If a pin description is not available, leave that field empty but keep the comma
+6. Return ONLY the CSV data, no additional text, explanations, or markdown formatting
+7. If you cannot find pin information for all ${componentEditor.pinCount} pins, still return what you find
+
+Example format:
+Pin #,Pin Name,Pin Description
+1,VCC,Power supply positive
+2,GND,Ground
+3,IN+,Non-inverting input
+
+Datasheet text:
+${truncatedText}`;
+
+                // Call Google Gemini API
+                const geminiResponse = await fetch(apiUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    contents: [{
+                      parts: [{
+                        text: prompt
+                      }]
+                    }]
+                  })
+                });
+
+                if (!geminiResponse.ok) {
+                  const errorText = await geminiResponse.text();
+                  let errorMessage = `Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`;
+                  try {
+                    const errorJson = JSON.parse(errorText);
+                    if (errorJson.error && errorJson.error.message) {
+                      errorMessage += `. ${errorJson.error.message}`;
+                    }
+                  } catch {
+                    errorMessage += `. ${errorText.substring(0, 200)}`;
+                  }
+                  throw new Error(errorMessage);
+                }
+
+                const geminiData = await geminiResponse.json();
+                
+                // Extract the response text
+                let csvText = '';
+                if (geminiData.candidates && geminiData.candidates[0]) {
+                  // Check for finish reason (safety/content filters)
+                  if (geminiData.candidates[0].finishReason && 
+                      geminiData.candidates[0].finishReason !== 'STOP') {
+                    throw new Error(`Gemini API response blocked: ${geminiData.candidates[0].finishReason}`);
+                  }
+                  
+                  if (geminiData.candidates[0].content && geminiData.candidates[0].content.parts) {
+                    const parts = geminiData.candidates[0].content.parts;
+                    if (parts && parts[0] && parts[0].text) {
+                      csvText = parts[0].text.trim();
+                    }
+                  }
+                }
+
+                if (!csvText) {
+                  throw new Error('No response text from Gemini API. The API may have returned an empty response.');
+                }
+
+                // Parse CSV response
+                // Remove markdown code blocks if present (Gemini sometimes wraps in ```csv or ```)
+                csvText = csvText.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+                
                 const pinNames: string[] = new Array(componentEditor.pinCount).fill('');
                 
-                // Try to find pin table or pinout section
-                // Common patterns:
-                // - "Pin 1" or "1" followed by name
-                // - Table with pin numbers and names
-                const lines = fullText.split('\n');
+                const lines = csvText.split('\n').filter(line => line.trim().length > 0);
                 
-                // Look for pin number patterns
-                for (let pinNum = 1; pinNum <= componentEditor.pinCount; pinNum++) {
-                  // Try various patterns
-                  const patterns = [
-                    new RegExp(`(?:^|\\s)${pinNum}\\s+([A-Z][A-Z0-9_/\\-]*?)(?:\\s|$)`, 'i'),
-                    new RegExp(`Pin\\s+${pinNum}[\\s:]+([A-Z][A-Z0-9_/\\-]*?)(?:\\s|$)`, 'i'),
-                    new RegExp(`${pinNum}\\s+([A-Z][A-Z0-9_/\\-]+)`, 'i'),
-                  ];
+                if (lines.length === 0) {
+                  throw new Error('No CSV data found in Gemini API response');
+                }
+                
+                // Skip header row if present
+                let startIndex = 0;
+                const firstLine = lines[0].toLowerCase();
+                if (firstLine.includes('pin #') || firstLine.includes('pin,') || 
+                    firstLine.includes('pin number') || firstLine.startsWith('pin')) {
+                  startIndex = 1;
+                }
+                
+                // Parse each CSV line
+                let parsedCount = 0;
+                for (let i = startIndex; i < lines.length; i++) {
+                  const line = lines[i].trim();
+                  // Skip empty lines
+                  if (!line) continue;
                   
-                  for (const pattern of patterns) {
-                    for (const line of lines) {
-                      const match = line.match(pattern);
-                      if (match && match[1]) {
-                        const pinName = match[1].trim();
-                        // Filter out common non-pin-name words
-                        if (pinName.length > 0 && 
-                            !['NC', 'N/C', 'N.C.', 'RESERVED', 'DNC', 'DNU'].includes(pinName.toUpperCase()) &&
-                            pinName.length < 20) { // Reasonable pin name length
-                          pinNames[pinNum - 1] = pinName;
-                          break;
-                        }
-                      }
+                  // Simple CSV parsing (handles quoted fields)
+                  // Split by comma, but respect quoted strings
+                  const columns: string[] = [];
+                  let current = '';
+                  let inQuotes = false;
+                  
+                  for (let j = 0; j < line.length; j++) {
+                    const char = line[j];
+                    if (char === '"') {
+                      inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                      columns.push(current.trim());
+                      current = '';
+                    } else {
+                      current += char;
                     }
-                    if (pinNames[pinNum - 1]) break;
                   }
+                  columns.push(current.trim()); // Add last column
+                  
+                  if (columns.length >= 2) {
+                    const pinNum = parseInt(columns[0], 10);
+                    if (!isNaN(pinNum) && pinNum >= 1 && pinNum <= componentEditor.pinCount) {
+                      // Remove quotes if present
+                      const pinName = columns[1].replace(/^"|"$/g, '').trim();
+                      pinNames[pinNum - 1] = pinName;
+                      parsedCount++;
+                      // Note: Pin descriptions (columns[2]) are parsed but not stored
+                      // as the component type doesn't currently support descriptions
+                    }
+                  }
+                }
+                
+                if (parsedCount === 0) {
+                  throw new Error('Could not parse any pin information from the CSV response. The format may be incorrect.');
                 }
                 
                 // Update component with fetched pin names
@@ -1062,42 +1217,93 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                 setIsFetchingPinNames(false);
               }
             };
-            
+
+            const handleSaveApiKey = () => {
+              if (apiKeyInput.trim()) {
+                localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+                alert('API key saved! You can now use the "Fetch Pin Names" feature.');
+              } else {
+                localStorage.removeItem('geminiApiKey');
+                alert('API key removed.');
+              }
+            };
+
             return (
               <div>
                 {showNameColumn && (
-                  <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={handleFetchPinNames}
-                      disabled={isFetchingPinNames || areComponentsLocked}
-                      style={{
-                        padding: '2px 8px',
-                        fontSize: '8px',
-                        background: isFetchingPinNames || areComponentsLocked ? '#ccc' : '#4CAF50',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
-                        opacity: areComponentsLocked ? 0.6 : 1,
-                        fontWeight: 600
-                      }}
-                    >
-                      {isFetchingPinNames ? 'Fetching...' : 'Fetch Pin Names'}
-                    </button>
+                  <div style={{ marginBottom: '8px', padding: '4px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '3px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                        Google Gemini API Key (for AI pin name extraction from the Datasheet):
+                      </label>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <input
+                          type="password"
+                          value={apiKeyInput}
+                          onChange={(e) => setApiKeyInput(e.target.value)}
+                          placeholder="Enter your Gemini API key"
+                          style={{
+                            flex: 1,
+                            minWidth: '200px',
+                            padding: '3px 6px',
+                            fontSize: '11px',
+                            border: '1px solid #ddd',
+                            borderRadius: '2px',
+                            background: '#fff',
+                            color: '#000'
+                          }}
+                          title="Enter your Google Gemini API key. Get one free at https://aistudio.google.com/apikey"
+                        />
+                        <button
+                          onClick={handleSaveApiKey}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '11px',
+                            background: '#2196F3',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          Save API Key
+                        </button>
+                        <button
+                          onClick={handleFetchPinNames}
+                          disabled={isFetchingPinNames || areComponentsLocked}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: '11px',
+                            background: isFetchingPinNames || areComponentsLocked ? '#ccc' : '#4CAF50',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
+                            opacity: areComponentsLocked ? 0.6 : 1,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {isFetchingPinNames ? 'Fetching...' : 'Fetch Pin Names'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '2px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
-                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>
-                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '40px' }}>Pin</th>
+                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '20px' }}></th>
+                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '40px' }}>Pin</th>
                     {showNameColumn && (
-                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '70px' }}>Pin Name</th>
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '70px' }}>Pin Name</th>
                     )}
                     {showPolarityColumn && (
-                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '50px' }}>Polarity</th>
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '50px' }}>Polarity</th>
                     )}
-                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333' }}>Node ID</th>
+                    <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333' }}>Node ID</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1197,7 +1403,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                                 onFocus={(e) => e.stopPropagation()}
                                 style={{ 
                                   padding: '2px 4px', 
-                                  fontSize: '8px', 
+                                  fontSize: '11px', 
                                   border: '1px solid #ddd', 
                                   borderRadius: 2, 
                                   background: '#fff',
@@ -1252,7 +1458,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                                 placeholder="Pin name"
                                 style={{ 
                                   padding: '1px 2px', 
-                                  fontSize: '7px', 
+                                  fontSize: '11px', 
                                   border: '1px solid #ddd', 
                                   borderRadius: 2, 
                                   background: '#fff',
@@ -1309,7 +1515,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                               onFocus={(e) => e.stopPropagation()}
                               style={{ 
                                 padding: '1px 2px', 
-                                fontSize: '8px', 
+                                fontSize: '11px', 
                                 border: '1px solid #ddd', 
                                 borderRadius: 2, 
                                 background: '#fff',
@@ -1363,7 +1569,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             border: '1px solid #ddd',
             borderRadius: 2,
             cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-            fontSize: '10px',
+            fontSize: '11px',
             opacity: areComponentsLocked ? 0.6 : 1,
           }}
         >
@@ -1379,7 +1585,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             border: '1px solid #ddd',
             borderRadius: 2,
             cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-            fontSize: '10px',
+            fontSize: '11px',
             opacity: areComponentsLocked ? 0.6 : 1,
           }}
         >

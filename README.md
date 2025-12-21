@@ -37,7 +37,34 @@ The application is hosted on GitHub and is available globally. No installation r
    npm install
    ```
 
-3. **Start the development server**
+3. **Configure AI API key (optional)**
+   
+   For AI-powered pin name extraction from datasheets, you have two options:
+   
+   **Option A: For Development (Local)**
+   Create a `.env` file in the project root:
+   ```bash
+   cp .env.example .env
+   ```
+   Then edit `.env` and add your Google Gemini API key:
+   ```
+   VITE_GEMINI_API_KEY=your_api_key_here
+   ```
+   
+   **Option B: For Production/GitHub Pages (Recommended)**
+   Enter your API key directly in the Component Properties dialog:
+   1. Open any Integrated Circuit component's properties
+   2. In the "Pin Name" column header, you'll see an API key input field
+   3. Enter your API key and click "Save API Key"
+   4. The key is stored in your browser's localStorage (secure, not exposed in code)
+   
+   Get your free API key from: https://aistudio.google.com/apikey
+   
+   **Security Note:** 
+   - For GitHub Pages deployment, use Option B (localStorage) to avoid exposing your API key in the build
+   - The `.env` file is for local development only and is already in `.gitignore`
+
+4. **Start the development server**
    
    **Option A: Using the convenience script (Recommended)**
    ```bash

@@ -65,4 +65,25 @@ npm run build
 npm run preview
 ```
 
+## AI Feature Configuration
+
+The AI-powered pin name extraction feature works automatically on GitHub Pages. **No special configuration is required** for deployment.
+
+### How It Works
+
+- Users enter their own Google Gemini API key in the Component Properties dialog
+- API keys are stored in browser localStorage (secure, not exposed in code)
+- No API keys are embedded in the build
+- Each user uses their own free API key and quota
+
+### User Setup (After Deployment)
+
+1. Get a free API key from: https://aistudio.google.com/apikey
+2. Open any Integrated Circuit component's properties
+3. Enter the API key in the "Pin Name" column header
+4. Click "Save API Key"
+5. Use the "Fetch Pin Names" feature
+
+For detailed instructions, see [GITHUB_PAGES_AI_SETUP.md](./GITHUB_PAGES_AI_SETUP.md)
+
 
