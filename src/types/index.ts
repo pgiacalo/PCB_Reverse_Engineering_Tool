@@ -419,6 +419,7 @@ export interface IntegratedCircuit extends PCBComponentBase {
   partNumber?: string;
   description?: string;
   datasheet?: string; // URL to datasheet
+  datasheetFileName?: string; // Name of the uploaded local datasheet file (for display only, file not persisted)
   icType?: string; // e.g., "Microcontroller", "Op-Amp", "Voltage Regulator"
 }
 

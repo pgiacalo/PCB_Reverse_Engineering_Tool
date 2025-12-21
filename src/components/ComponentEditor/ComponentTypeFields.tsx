@@ -1002,6 +1002,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                   >
                     {uploadedDatasheetFile.name || 'PDF file'}
                   </a>
+                ) : (comp as any)?.datasheetFileName ? (
+                  <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }} title="File name saved in project (file not available)">
+                    {(comp as any).datasheetFileName}
+                  </span>
                 ) : (
                   <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
                 )}

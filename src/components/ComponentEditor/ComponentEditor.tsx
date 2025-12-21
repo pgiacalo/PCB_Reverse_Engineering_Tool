@@ -172,6 +172,24 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   }
   if (!comp) return null;
   
+  // Restore uploaded datasheet file name from component data when component changes
+  // Note: We only restore the file name for display, not the actual file (which is local to user's machine)
+  React.useEffect(() => {
+    if (comp && (comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor')) {
+      const ic = comp as any;
+      if (ic.datasheetFileName) {
+        // We have the file name, but not the file itself (since it's local to user's machine)
+        // The file input will be empty, but we can display the file name
+        // Set uploadedDatasheetFile to null since we don't have the actual file
+        setUploadedDatasheetFile(null);
+      } else {
+        setUploadedDatasheetFile(null);
+      }
+    } else {
+      setUploadedDatasheetFile(null);
+    }
+  }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName]);
+  
   // Update componentEditor layer if it doesn't match the actual component's layer
   if (componentEditor.layer !== actualLayer) {
     setComponentEditor({ ...componentEditor, layer: actualLayer });
@@ -404,6 +422,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       
       console.log('[ComponentEditor] updateComponent - Final datasheet value:', updated.datasheet);
       updated.icType = componentEditor.icType || undefined;
+      
+      // Save uploaded datasheet file name (but not the file contents)
+      if (uploadedDatasheetFile) {
+        (updated as any).datasheetFileName = uploadedDatasheetFile.name;
+      } else {
+        // Clear file name if no file is uploaded
+        (updated as any).datasheetFileName = undefined;
+      }
     } else {
       // For non-IC components, save description from the Description field
       (updated as any).description = componentEditor.description?.trim() || undefined;
