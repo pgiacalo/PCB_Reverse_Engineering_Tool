@@ -12440,7 +12440,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Tracer (v2.8)</h1>
+        <h1>🔧 PCB Tracer (v2.9)</h1>
       </header>
 
       {/* Application menu bar */}
