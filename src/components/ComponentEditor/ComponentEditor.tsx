@@ -25,13 +25,19 @@
  * Dialog for editing component properties
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition } from '../../data/componentDefinitions.d';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 import { isComponentPolarized } from '../../utils/components';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker - use jsdelivr CDN which is more reliable
+if (typeof window !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+}
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: string): string => {
@@ -116,6 +122,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   setSelectedComponentIds,
   setNotesDialogVisible,
 }) => {
+  const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
+  const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
+  
   if (!componentEditor || !componentEditor.visible) {
     return null;
   }
@@ -717,6 +726,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           areComponentsLocked={areComponentsLocked}
           componentsTop={componentsTop}
           componentsBottom={componentsBottom}
+          uploadedDatasheetFile={uploadedDatasheetFile}
+          setUploadedDatasheetFile={setUploadedDatasheetFile}
           setComponentsTop={setComponentsTop}
           setComponentsBottom={setComponentsBottom}
         />
@@ -923,8 +934,159 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             const useTextInput = isChipDependent; // Text input for CHIP_DEPENDENT
             const showNameColumn = hasPinNames; // Show if pinNames are defined
             
+            // Function to fetch and parse pin names from datasheet
+            const handleFetchPinNames = async () => {
+              // Prefer uploaded file over URL
+              if (!uploadedDatasheetFile) {
+                const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
+                if (!datasheetUrl) {
+                  alert('Please upload a datasheet PDF file or enter a datasheet URL above before fetching pin names.');
+                  return;
+                }
+              }
+              
+              setIsFetchingPinNames(true);
+              
+              try {
+                let arrayBuffer: ArrayBuffer;
+                
+                if (uploadedDatasheetFile) {
+                  // Use uploaded file - no CORS issues!
+                  arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
+                } else {
+                  // Fall back to URL fetch
+                  const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
+                  
+                  // Try direct fetch first
+                  try {
+                    const response = await fetch(datasheetUrl);
+                    if (!response.ok) {
+                      throw new Error(`Failed to fetch datasheet: ${response.statusText}`);
+                    }
+                    arrayBuffer = await response.arrayBuffer();
+                  } catch (directFetchError) {
+                    // If direct fetch fails (likely CORS), try using a CORS proxy
+                    console.log('Direct fetch failed, trying CORS proxy...', directFetchError);
+                    
+                    // Use a CORS proxy service
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(datasheetUrl)}`;
+                    
+                    try {
+                      const proxyResponse = await fetch(proxyUrl);
+                      if (!proxyResponse.ok) {
+                        throw new Error(`CORS proxy failed: ${proxyResponse.statusText}`);
+                      }
+                      arrayBuffer = await proxyResponse.arrayBuffer();
+                    } catch (proxyError) {
+                      // If proxy also fails, provide helpful error message
+                      throw new Error(
+                        'Unable to fetch datasheet due to CORS restrictions. ' +
+                        'Please download the PDF and upload it using the file input above. ' +
+                        `Original error: ${directFetchError instanceof Error ? directFetchError.message : 'Unknown error'}`
+                      );
+                    }
+                  }
+                }
+                
+                // Load PDF document
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                // Extract text from all pages
+                let fullText = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                  const page = await pdf.getPage(i);
+                  const textContent = await page.getTextContent();
+                  const pageText = textContent.items
+                    .map((item: any) => item.str)
+                    .join(' ');
+                  fullText += pageText + '\n';
+                }
+                
+                // Parse pin names from the text
+                // Look for common patterns like "Pin 1", "Pin 2", "1 VCC", "2 GND", etc.
+                const pinNames: string[] = new Array(componentEditor.pinCount).fill('');
+                
+                // Try to find pin table or pinout section
+                // Common patterns:
+                // - "Pin 1" or "1" followed by name
+                // - Table with pin numbers and names
+                const lines = fullText.split('\n');
+                
+                // Look for pin number patterns
+                for (let pinNum = 1; pinNum <= componentEditor.pinCount; pinNum++) {
+                  // Try various patterns
+                  const patterns = [
+                    new RegExp(`(?:^|\\s)${pinNum}\\s+([A-Z][A-Z0-9_/\\-]*?)(?:\\s|$)`, 'i'),
+                    new RegExp(`Pin\\s+${pinNum}[\\s:]+([A-Z][A-Z0-9_/\\-]*?)(?:\\s|$)`, 'i'),
+                    new RegExp(`${pinNum}\\s+([A-Z][A-Z0-9_/\\-]+)`, 'i'),
+                  ];
+                  
+                  for (const pattern of patterns) {
+                    for (const line of lines) {
+                      const match = line.match(pattern);
+                      if (match && match[1]) {
+                        const pinName = match[1].trim();
+                        // Filter out common non-pin-name words
+                        if (pinName.length > 0 && 
+                            !['NC', 'N/C', 'N.C.', 'RESERVED', 'DNC', 'DNU'].includes(pinName.toUpperCase()) &&
+                            pinName.length < 20) { // Reasonable pin name length
+                          pinNames[pinNum - 1] = pinName;
+                          break;
+                        }
+                      }
+                    }
+                    if (pinNames[pinNum - 1]) break;
+                  }
+                }
+                
+                // Update component with fetched pin names
+                if (currentComp) {
+                  const updatedComp = { ...currentComp, pinNames };
+                  if (componentEditor.layer === 'top') {
+                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  } else {
+                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                  }
+                  
+                  const foundCount = pinNames.filter(name => name.length > 0).length;
+                  if (foundCount > 0) {
+                    alert(`Successfully fetched ${foundCount} pin name(s) from datasheet. Please review and edit as needed.`);
+                  } else {
+                    alert('Could not automatically extract pin names from the datasheet. Please enter them manually.');
+                  }
+                }
+              } catch (error) {
+                console.error('Error fetching pin names:', error);
+                alert(`Failed to fetch pin names: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`);
+              } finally {
+                setIsFetchingPinNames(false);
+              }
+            };
+            
             return (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
+              <div>
+                {showNameColumn && (
+                  <div style={{ marginBottom: '4px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={handleFetchPinNames}
+                      disabled={isFetchingPinNames || areComponentsLocked}
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '8px',
+                        background: isFetchingPinNames || areComponentsLocked ? '#ccc' : '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
+                        opacity: areComponentsLocked ? 0.6 : 1,
+                        fontWeight: 600
+                      }}
+                    >
+                      {isFetchingPinNames ? 'Fetching...' : 'Fetch Pin Names'}
+                    </button>
+                  </div>
+                )}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', marginTop: '2px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
                     <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '8px', color: '#333', width: '20px' }}></th>
@@ -1173,6 +1335,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
                   })}
                 </tbody>
               </table>
+              </div>
             );
           })()}
         </div>

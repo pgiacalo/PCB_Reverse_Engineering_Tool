@@ -775,7 +775,23 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                   
                   {comp.componentType === 'IntegratedCircuit' && (
                     <>
-                      {(comp as any).datasheet && <div>Datasheet: <a href={(comp as any).datasheet} target="_blank" rel="noopener noreferrer">{(comp as any).datasheet}</a></div>}
+                      {(comp as any).datasheet && (() => {
+                        const datasheetUrl = (comp as any).datasheet.trim();
+                        const urlWithProtocol = datasheetUrl.match(/^https?:\/\//) ? datasheetUrl : `https://${datasheetUrl}`;
+                        return (
+                          <div>
+                            Datasheet:{' '}
+                            <a 
+                              href={urlWithProtocol} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ color: '#0066cc', textDecoration: 'underline' }}
+                            >
+                              {datasheetUrl}
+                            </a>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                   

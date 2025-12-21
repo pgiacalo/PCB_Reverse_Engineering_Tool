@@ -42,6 +42,8 @@ export interface ComponentTypeFieldsProps {
   componentsBottom: PCBComponent[];
   setComponentsTop: (updater: (prev: PCBComponent[]) => PCBComponent[]) => void;
   setComponentsBottom: (updater: (prev: PCBComponent[]) => PCBComponent[]) => void;
+  uploadedDatasheetFile: File | null;
+  setUploadedDatasheetFile: (file: File | null) => void;
 }
 
 export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
@@ -54,6 +56,8 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   componentsBottom,
   setComponentsTop,
   setComponentsBottom,
+  uploadedDatasheetFile,
+  setUploadedDatasheetFile,
 }) => {
   const def: ComponentDefinition | undefined =
     componentDefinition ||
@@ -61,8 +65,15 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     resolveComponentDefinition(comp as any);
   const fields: ComponentFieldDefinition[] | undefined = def?.fields;
 
+  // Check if this is an IntegratedCircuit component (used throughout)
+  const compType = (comp as any).componentType;
+  const isIntegratedCircuit = compType === 'IntegratedCircuit' || compType === 'Semiconductor';
+
   // Dynamic rendering from component definition fields (if available)
-  if (fields && fields.length > 0) {
+  // BUT: For IntegratedCircuit, we skip dynamic rendering to use hardcoded section with file upload
+  
+  // For IntegratedCircuit, always use hardcoded section (skip dynamic rendering)
+  if (fields && fields.length > 0 && !isIntegratedCircuit) {
     // Helper function to determine optimal field width based on field name and type
     const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
       if (hasUnits) {
@@ -96,6 +107,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     };
 
     const renderField = (field: ComponentFieldDefinition) => {
+      // Skip datasheet field for IntegratedCircuit - it's handled specially with file upload
+      const compType = (comp as any).componentType;
+      const isIntegratedCircuit = compType === 'IntegratedCircuit' || compType === 'Semiconductor';
+      if (isIntegratedCircuit && field.name === 'datasheet') {
+        return null; // Skip - will be rendered in the hardcoded section below
+      }
+      
       const valueKey = field.name;
       const unitKey = `${field.name}Unit`;
       // Get value from componentEditor, component, or field default
@@ -157,19 +175,23 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
 
     return (
       <>
-        {fields.map(renderField)}
+        {fields.map(renderField).filter(Boolean)}
       </>
     );
   }
   
-  // Fallback: definition missing
-  return (
-    <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '9px' }}>
-      Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
-    </div>
-  );
+  // For IntegratedCircuit, always render the hardcoded section (even without definition)
+  // This ensures the file upload field is always available
+  // Fallback: definition missing (only for non-IntegratedCircuit components)
+  if (!isIntegratedCircuit) {
+    return (
+      <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '9px' }}>
+        Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
+      </div>
+    );
+  }
 
-  // Legacy rendering (unreachable because of return above, kept for reference if needed)
+  // Legacy rendering - IntegratedCircuit always uses this path to ensure file upload is available
   return (
     <>
       {/* Resistor */}
@@ -889,7 +911,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       )}
 
       {/* IntegratedCircuit - special handling, IC Type and Datasheet are shown after main fields */}
-      {comp.componentType === 'IntegratedCircuit' && (
+      {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
         <>
           <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '9px', fontWeight: 600, color: '#000' }}>IC Properties:</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -913,39 +935,112 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '9px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1 }}>
-              <input id={`component-datasheet-${comp.id}`} type="text" value={componentEditor.datasheet || ''} onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="URL" />
-              {componentEditor.datasheet && componentEditor.datasheet.trim() && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const url = componentEditor.datasheet.trim();
-                    // Ensure URL has a protocol
-                    const urlWithProtocol = url.match(/^https?:\/\//) ? url : `https://${url}`;
-                    window.open(urlWithProtocol, '_blank', 'noopener,noreferrer');
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+              {/* File upload input */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', flex: 1 }}>
+                <input
+                  id={`component-datasheet-file-${comp.id}`}
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setUploadedDatasheetFile(file);
                   }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: '2px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: areComponentsLocked ? 0.4 : 1,
-                    flexShrink: 0,
-                  }}
-                  title="Open URL in new tab"
                   disabled={areComponentsLocked}
+                  style={{ 
+                    position: 'absolute',
+                    width: '0.1px',
+                    height: '0.1px',
+                    opacity: 0,
+                    overflow: 'hidden',
+                    zIndex: -1
+                  }}
+                />
+                <label
+                  htmlFor={`component-datasheet-file-${comp.id}`}
+                  style={{
+                    display: 'inline-block',
+                    padding: '2px 6px',
+                    background: '#f5f5f5',
+                    border: '1px solid #ddd',
+                    borderRadius: 2,
+                    fontSize: '9px',
+                    color: '#000',
+                    cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                    opacity: areComponentsLocked ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                    flex: '0 0 auto'
+                  }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#4a9eff' }}>
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                </button>
-              )}
+                  Choose File
+                </label>
+                {uploadedDatasheetFile ? (
+                  <a
+                    href="#"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (uploadedDatasheetFile) {
+                        // Create a blob URL from the file and open it
+                        const blobUrl = URL.createObjectURL(uploadedDatasheetFile);
+                        const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                        if (newWindow) {
+                          // Clean up the blob URL after a delay to allow the browser to load it
+                          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                        }
+                      }
+                    }}
+                    style={{ 
+                      fontSize: '9px', 
+                      color: '#0066cc', 
+                      whiteSpace: 'nowrap',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      flex: '0 0 auto'
+                    }}
+                    title="Click to open PDF in new window"
+                  >
+                    {uploadedDatasheetFile.name || 'PDF file'}
+                  </a>
+                ) : (
+                  <span style={{ fontSize: '9px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
+                )}
+              </div>
+              {/* URL input (optional, for reference) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                {componentEditor.datasheet && componentEditor.datasheet.trim() ? (
+                  <a
+                    href={componentEditor.datasheet.trim().match(/^https?:\/\//) ? componentEditor.datasheet.trim() : `https://${componentEditor.datasheet.trim()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    style={{ 
+                      flex: 1, 
+                      padding: '2px 3px', 
+                      fontSize: '10px', 
+                      color: '#0066cc',
+                      textDecoration: 'underline',
+                      cursor: 'pointer',
+                      wordBreak: 'break-all'
+                    }}
+                    title="Click to open URL in new window"
+                  >
+                    {componentEditor.datasheet.trim()}
+                  </a>
+                ) : (
+                  <input 
+                    id={`component-datasheet-${comp.id}`} 
+                    type="text" 
+                    value={componentEditor.datasheet || ''} 
+                    onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} 
+                    disabled={areComponentsLocked} 
+                    style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '10px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} 
+                    placeholder="URL (optional, for reference)" 
+                  />
+                )}
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
