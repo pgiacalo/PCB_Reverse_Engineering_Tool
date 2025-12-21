@@ -236,6 +236,36 @@ export function useComponents() {
   }, []);
 
   const openComponentEditor = useCallback((component: PCBComponent, layer: 'top' | 'bottom') => {
+    // Validate component has all required properties before proceeding
+    if (!component) {
+      console.error('[openComponentEditor] Component is null or undefined');
+      return;
+    }
+    
+    if (!component.id || typeof component.id !== 'string') {
+      console.error('[openComponentEditor] Component missing valid id property:', { component });
+      return;
+    }
+    
+    const componentId = component.id; // Store for use after type narrowing
+    
+    if (!component.componentType || typeof component.componentType !== 'string') {
+      console.error('[openComponentEditor] Component missing valid componentType property:', { componentId, component });
+      return;
+    }
+    
+    const componentType = component.componentType; // Store for use after type narrowing
+    
+    if (typeof component.pinCount !== 'number' || component.pinCount < 0) {
+      console.error('[openComponentEditor] Component missing valid pinCount property:', { componentId, componentType, pinCount: component.pinCount, component });
+      return;
+    }
+    
+    if (layer !== 'top' && layer !== 'bottom') {
+      console.error('[openComponentEditor] Invalid layer parameter:', { layer, componentId: component.id });
+      return;
+    }
+    
     // Extract abbreviation from designator if not already set
     const designator = component.designator || '';
     const abbreviation = (component as any).abbreviation || (designator.length > 0 ? designator.charAt(0).toUpperCase() : '');

@@ -159,23 +159,40 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     return '';
   });
   
-  if (!componentEditor || !componentEditor.visible) {
-    return null;
-  }
-
   // Find the component being edited - check both layers in case layer was changed
-  let comp = componentsTop.find(c => c.id === componentEditor.id);
-  let actualLayer: 'top' | 'bottom' = 'top';
-  if (!comp) {
-    comp = componentsBottom.find(c => c.id === componentEditor.id);
-    actualLayer = 'bottom';
-  }
-  if (!comp) return null;
+  // This must be computed before useEffect but after hooks are declared
+  const comp = React.useMemo(() => {
+    if (!componentEditor || !componentEditor.visible) {
+      return null;
+    }
+    let found = componentsTop.find(c => c.id === componentEditor.id);
+    if (!found) {
+      found = componentsBottom.find(c => c.id === componentEditor.id);
+    }
+    return found || null;
+  }, [componentEditor, componentsTop, componentsBottom]);
   
   // Restore uploaded datasheet file name from component data when component changes
   // Note: We only restore the file name for display, not the actual file (which is local to user's machine)
+  // This hook MUST be called unconditionally (Rules of Hooks)
   React.useEffect(() => {
-    if (comp && (comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor')) {
+    // Additional validation inside useEffect for safety
+    if (!comp) {
+      setUploadedDatasheetFile(null);
+      return;
+    }
+    
+    const compId = comp.id; // Store for use in error messages
+    const compType = comp.componentType; // Store for type narrowing
+    const compTypeAny = (comp as any).componentType; // For legacy 'Semiconductor' check
+    
+    if (!compType) {
+      console.error('[ComponentEditor useEffect] Component missing componentType:', { comp, componentId: compId });
+      setUploadedDatasheetFile(null);
+      return;
+    }
+    
+    if (compType === 'IntegratedCircuit' || compTypeAny === 'Semiconductor') {
       const ic = comp as any;
       if (ic.datasheetFileName) {
         // We have the file name, but not the file itself (since it's local to user's machine)
@@ -189,6 +206,28 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       setUploadedDatasheetFile(null);
     }
   }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName]);
+  
+  // Early returns AFTER all hooks are declared
+  if (!componentEditor || !componentEditor.visible) {
+    return null;
+  }
+  
+  // Validate component exists and has required properties
+  if (!comp) {
+    console.error('[ComponentEditor] Component not found:', { componentId: componentEditor.id, componentsTopCount: componentsTop.length, componentsBottomCount: componentsBottom.length });
+    return null;
+  }
+  
+  if (!comp.id || !comp.componentType || typeof comp.pinCount !== 'number') {
+    console.error('[ComponentEditor] Component missing required properties:', { componentId: comp.id, hasComponentType: !!comp.componentType, componentType: comp.componentType, pinCount: comp.pinCount, pinCountType: typeof comp.pinCount, component: comp });
+    return null;
+  }
+  
+  // Determine actual layer
+  let actualLayer: 'top' | 'bottom' = 'top';
+  if (!componentsTop.find(c => c.id === componentEditor.id)) {
+    actualLayer = 'bottom';
+  }
   
   // Update componentEditor layer if it doesn't match the actual component's layer
   if (componentEditor.layer !== actualLayer) {

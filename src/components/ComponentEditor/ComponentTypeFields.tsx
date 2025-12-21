@@ -59,6 +59,12 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   uploadedDatasheetFile,
   setUploadedDatasheetFile,
 }) => {
+  // Validate component has required properties
+  if (!comp || !comp.id || !comp.componentType || typeof comp.pinCount !== 'number') {
+    console.error('[ComponentTypeFields] Component missing required properties:', { comp, hasId: !!comp?.id, hasComponentType: !!comp?.componentType, componentType: comp?.componentType, pinCount: comp?.pinCount, pinCountType: typeof comp?.pinCount });
+    return null;
+  }
+  
   const def: ComponentDefinition | undefined =
     componentDefinition ||
     (componentEditor as any)?.componentDefinition ||
