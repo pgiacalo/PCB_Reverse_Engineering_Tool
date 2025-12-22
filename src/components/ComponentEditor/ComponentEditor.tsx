@@ -25,9 +25,10 @@
  * Dialog for editing component properties
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition } from '../../data/componentDefinitions.d';
+import { InfoDialog } from '../InfoDialog/InfoDialog';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
@@ -159,6 +160,20 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
     return '';
   });
+  // Dialog resize state
+  const [dialogSize, setDialogSize] = useState(() => {
+    const saved = localStorage.getItem('componentDialogSize');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { width: 350, height: window.innerHeight * 0.4 };
+      }
+    }
+    return { width: 350, height: window.innerHeight * 0.4 };
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
   
   // Find the component being edited - check both layers in case layer was changed
   // This must be computed before useEffect but after hooks are declared
@@ -196,17 +211,64 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     if (compType === 'IntegratedCircuit' || compTypeAny === 'Semiconductor') {
       const ic = comp as any;
       if (ic.datasheetFileName) {
-        // We have the file name, but not the file itself (since it's local to user's machine)
-        // The file input will be empty, but we can display the file name
-        // Set uploadedDatasheetFile to null since we don't have the actual file
+        // We have the file name and potentially file data stored in the component
+        // The file input will be empty, but we can display the file name as a clickable link
+        // Set uploadedDatasheetFile to null since we don't have the actual File object
         setUploadedDatasheetFile(null);
+        // Restore file data to componentEditor if available
+        if (ic.datasheetFileData && !componentEditor.datasheetFileData) {
+          setComponentEditor({
+            ...componentEditor,
+            datasheetFileData: ic.datasheetFileData,
+            datasheetFileName: ic.datasheetFileName,
+          });
+        }
       } else {
         setUploadedDatasheetFile(null);
       }
     } else {
       setUploadedDatasheetFile(null);
     }
-  }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName]);
+  }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName, (comp as any)?.datasheetFileData]);
+  
+  // Handle resize mouse events
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizeStart.x;
+      const deltaY = e.clientY - resizeStart.y;
+      const newWidth = Math.max(350, Math.min(window.innerWidth - 20, resizeStart.width + deltaX));
+      const newHeight = Math.max(200, Math.min(window.innerHeight - 20, resizeStart.height + deltaY));
+      const newSize = { width: newWidth, height: newHeight };
+      setDialogSize(newSize);
+      localStorage.setItem('componentDialogSize', JSON.stringify(newSize));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, resizeStart]);
+
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: dialogSize.width,
+      height: dialogSize.height,
+    });
+  };
   
   // Early returns AFTER all hooks are declared
   if (!componentEditor || !componentEditor.visible) {
@@ -463,12 +525,21 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       console.log('[ComponentEditor] updateComponent - Final datasheet value:', updated.datasheet);
       updated.icType = componentEditor.icType || undefined;
       
-      // Save uploaded datasheet file name (but not the file contents)
+      // Save uploaded datasheet file name and file data (as data URL)
       if (uploadedDatasheetFile) {
         (updated as any).datasheetFileName = uploadedDatasheetFile.name;
+        // File data should already be in componentEditor.datasheetFileData from the onChange handler
+        if (componentEditor.datasheetFileData) {
+          (updated as any).datasheetFileData = componentEditor.datasheetFileData;
+        }
+      } else if (componentEditor.datasheetFileData) {
+        // Keep existing file data if no new file is uploaded
+        (updated as any).datasheetFileData = componentEditor.datasheetFileData;
+        (updated as any).datasheetFileName = componentEditor.datasheetFileName || (comp as any)?.datasheetFileName;
       } else {
-        // Clear file name if no file is uploaded
+        // Clear file data if explicitly removed
         (updated as any).datasheetFileName = undefined;
+        (updated as any).datasheetFileData = undefined;
       }
     } else {
       // For non-IC components, save description from the Description field
@@ -631,7 +702,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     if (!uploadedDatasheetFile) {
       const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
       if (!datasheetUrl) {
-        alert('Please upload a datasheet PDF file or enter a datasheet URL above before fetching pin names.');
+        setInfoDialog({
+          visible: true,
+          title: 'Datasheet Required',
+          message: 'Please upload a datasheet PDF file or enter a datasheet URL above before extracting information.',
+          type: 'info',
+        });
         return;
       }
     }
@@ -992,19 +1068,29 @@ ${truncatedText}`;
         }
         
         const foundCount = pinNames.filter(name => name.length > 0).length;
-        let message = `Successfully extracted ${foundCount} pin name(s)`;
+        let message = `Extracted ${foundCount} pin name${foundCount !== 1 ? 's' : ''}`;
         if (extractedPinCount !== componentEditor.pinCount) {
-          message += ` and pin count (${extractedPinCount})`;
+          message += ` and pin count`;
         }
         if (propertiesExtracted > 0) {
-          message += ` and ${propertiesExtracted} component propert${propertiesExtracted === 1 ? 'y' : 'ies'}`;
+          message += ` and ${propertiesExtracted} propert${propertiesExtracted === 1 ? 'y' : 'ies'}`;
         }
-        message += ' from datasheet. Please review and edit as needed.';
-        alert(message);
+        message += ' from datasheet.';
+        setInfoDialog({
+          visible: true,
+          title: 'Extraction Complete',
+          message: message,
+          type: 'success',
+        });
       }
     } catch (error) {
       console.error('Error fetching pin names:', error);
-      alert(`Failed to fetch pin names: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`);
+      setInfoDialog({
+        visible: true,
+        title: 'Extraction Failed',
+        message: `Failed to extract information: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`,
+        type: 'info',
+      });
     } finally {
       setIsFetchingPinNames(false);
     }
@@ -1014,10 +1100,20 @@ ${truncatedText}`;
   const handleSaveApiKey = () => {
     if (apiKeyInput.trim()) {
       localStorage.setItem('geminiApiKey', apiKeyInput.trim());
-      alert('API key saved! You can now use the "Extract Datasheet Information" feature.');
+      setInfoDialog({
+        visible: true,
+        title: 'API Key Saved',
+        message: 'API key saved! You can now use the "Extract Datasheet Information" feature.',
+        type: 'success',
+      });
     } else {
       localStorage.removeItem('geminiApiKey');
-      alert('API key removed.');
+      setInfoDialog({
+        visible: true,
+        title: 'API Key Removed',
+        message: 'API key removed.',
+        type: 'info',
+      });
     }
   };
 
@@ -1061,12 +1157,14 @@ ${truncatedText}`;
         boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
         zIndex: 1000,
         minWidth: '350px',
-        width: '350px',
-        maxHeight: '40vh',
+        width: `${dialogSize.width}px`,
+        height: `${dialogSize.height}px`,
+        maxHeight: `${window.innerHeight - 20}px`,
         display: 'flex',
         flexDirection: 'column',
         pointerEvents: 'auto',
         cursor: isDraggingDialog ? 'grabbing' : 'default',
+        position: 'relative',
       }}
     >
       {/* Fixed header - does not scroll */}
@@ -1257,9 +1355,31 @@ ${truncatedText}`;
                     id={`component-datasheet-file-${comp.id}`}
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0] || null;
-                      setUploadedDatasheetFile(file);
+                      if (file) {
+                        setUploadedDatasheetFile(file);
+                        // Read file as data URL and store in componentEditor for persistence
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const dataUrl = event.target?.result as string;
+                          if (dataUrl) {
+                            setComponentEditor({
+                              ...componentEditor,
+                              datasheetFileData: dataUrl,
+                              datasheetFileName: file.name,
+                            });
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      } else {
+                        setUploadedDatasheetFile(null);
+                        setComponentEditor({
+                          ...componentEditor,
+                          datasheetFileData: undefined,
+                          datasheetFileName: undefined,
+                        });
+                      }
                     }}
                     disabled={areComponentsLocked}
                     style={{ 
@@ -1289,39 +1409,65 @@ ${truncatedText}`;
                   >
                     Choose File
                   </label>
-                  {uploadedDatasheetFile ? (
-                    <a
-                      href="#"
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (uploadedDatasheetFile) {
-                          const blobUrl = URL.createObjectURL(uploadedDatasheetFile);
-                          const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-                          if (newWindow) {
-                            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                          }
-                        }
-                      }}
-                      style={{
-                        fontSize: '11px', 
-                        color: '#0066cc', 
-                        whiteSpace: 'nowrap',
-                        textDecoration: 'underline',
-                        cursor: 'pointer',
-                        flex: '0 0 auto'
-                      }}
-                      title="Click to open PDF in new window"
-                    >
-                      {uploadedDatasheetFile.name || 'PDF file'}
-                    </a>
-                  ) : (comp as any)?.datasheetFileName ? (
-                    <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }} title="File name saved in project (file not available)">
-                      {(comp as any).datasheetFileName}
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
-                  )}
+                  {(() => {
+                    // Determine which file to use: uploaded file (in memory) or stored file data (from component)
+                    const fileToUse = uploadedDatasheetFile || 
+                      ((comp as any)?.datasheetFileData ? { 
+                        name: (comp as any).datasheetFileName || 'PDF file',
+                        data: (comp as any).datasheetFileData 
+                      } : null);
+                    
+                    const fileName = uploadedDatasheetFile?.name || (comp as any)?.datasheetFileName;
+                    
+                    if (fileToUse && fileName) {
+                      return (
+                        <a
+                          href="#"
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            try {
+                              let blobUrl: string;
+                              if (uploadedDatasheetFile) {
+                                // Use the in-memory file
+                                blobUrl = URL.createObjectURL(uploadedDatasheetFile);
+                              } else if ((comp as any)?.datasheetFileData) {
+                                // Convert data URL to blob URL
+                                const response = await fetch((comp as any).datasheetFileData);
+                                const blob = await response.blob();
+                                blobUrl = URL.createObjectURL(blob);
+                              } else {
+                                return;
+                              }
+                              
+                              const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                              if (newWindow) {
+                                setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                              }
+                            } catch (error) {
+                              console.error('Error opening datasheet:', error);
+                              alert('Failed to open datasheet file.');
+                            }
+                          }}
+                          style={{
+                            fontSize: '11px', 
+                            color: '#0066cc', 
+                            whiteSpace: 'nowrap',
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            flex: '0 0 auto'
+                          }}
+                          title="Click to open PDF in new window"
+                        >
+                          {fileName}
+                        </a>
+                      );
+                    } else {
+                      return (
+                        <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
+                      );
+                    }
+                  })()}
                 </div>
                 {/* URL input (optional, for reference) */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
@@ -2139,7 +2285,31 @@ ${truncatedText}`;
           </div>
         </div>
       )}
+      
+      {/* Resize Handle */}
+      <div
+        onMouseDown={handleResizeStart}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          right: 0,
+          width: '20px',
+          height: '20px',
+          cursor: 'nwse-resize',
+          background: 'linear-gradient(135deg, transparent 0%, transparent 40%, #ccc 40%, #ccc 45%, transparent 45%, transparent 55%, #ccc 55%, #ccc 60%, transparent 60%)',
+          zIndex: 1001,
+        }}
+        title="Drag to resize"
+      />
     </div>
+    
+    <InfoDialog
+      visible={infoDialog.visible}
+      title={infoDialog.title}
+      message={infoDialog.message}
+      type={infoDialog.type}
+      onClose={() => setInfoDialog({ visible: false, title: '', message: '', type: 'info' })}
+    />
     </>
   );
 };

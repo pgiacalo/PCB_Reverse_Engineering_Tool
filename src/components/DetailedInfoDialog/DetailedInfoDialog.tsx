@@ -25,7 +25,7 @@
  * Displays detailed information about selected PCB elements (components, vias, pads, traces, power, ground)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../../hooks/usePowerGround';
@@ -134,6 +134,59 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
     title: '',
     message: '',
   });
+  // Dialog resize state
+  const [dialogSize, setDialogSize] = useState(() => {
+    const saved = localStorage.getItem('detailedInfoDialogSize');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { width: 400, height: window.innerHeight * 0.8 };
+      }
+    }
+    return { width: 400, height: window.innerHeight * 0.8 };
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+
+  // Handle resize mouse events
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizeStart.x;
+      const deltaY = e.clientY - resizeStart.y;
+      const newWidth = Math.max(300, Math.min(window.innerWidth - 20, resizeStart.width + deltaX));
+      const newHeight = Math.max(200, Math.min(window.innerHeight - 20, resizeStart.height + deltaY));
+      const newSize = { width: newWidth, height: newHeight };
+      setDialogSize(newSize);
+      localStorage.setItem('detailedInfoDialogSize', JSON.stringify(newSize));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, resizeStart]);
+
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: dialogSize.width,
+      height: dialogSize.height,
+    });
+  };
 
   if (!visible) return null;
 
@@ -145,10 +198,10 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
         top: `${position.y}px`,
         backgroundColor: '#fff',
         borderRadius: 8,
-        minWidth: '150px',
-        maxWidth: '400px',
-        width: 'fit-content',
-        maxHeight: '80%',
+        minWidth: '300px',
+        width: `${dialogSize.width}px`,
+        height: `${dialogSize.height}px`,
+        maxHeight: `${window.innerHeight - 20}px`,
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
         border: '1px solid #ddd',
         zIndex: 10000,
@@ -180,6 +233,24 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
 
   return (
     <div style={dialogStyle}>
+      <div style={{ 
+        position: 'relative', 
+        width: '100%', 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        ...(position ? {} : { 
+          backgroundColor: '#fff',
+          borderRadius: 8,
+          minWidth: '300px',
+          width: `${dialogSize.width}px`,
+          height: `${dialogSize.height}px`,
+          maxHeight: `${window.innerHeight - 20}px`,
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+          border: '1px solid #ddd',
+          pointerEvents: 'auto',
+        })
+      }}>
       {/* Fixed header - does not scroll */}
       <div 
         onMouseDown={(e) => {
@@ -822,7 +893,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                         const urlWithProtocol = datasheetUrl.match(/^https?:\/\//) ? datasheetUrl : `https://${datasheetUrl}`;
                         return (
                           <div>
-                            Datasheet:{' '}
+                            Datasheet URL:{' '}
                             <a 
                               href={urlWithProtocol} 
                               target="_blank" 
@@ -831,6 +902,43 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             >
                               {datasheetUrl}
                             </a>
+                          </div>
+                        );
+                      })()}
+                      {(comp as any).datasheetFileName && (() => {
+                        const fileName = (comp as any).datasheetFileName;
+                        const fileData = (comp as any).datasheetFileData;
+                        return (
+                          <div>
+                            Datasheet File:{' '}
+                            {fileData ? (
+                              <a
+                                href="#"
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  try {
+                                    // Convert data URL to blob URL
+                                    const response = await fetch(fileData);
+                                    const blob = await response.blob();
+                                    const blobUrl = URL.createObjectURL(blob);
+                                    const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                                    if (newWindow) {
+                                      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                                    }
+                                  } catch (error) {
+                                    console.error('Error opening datasheet:', error);
+                                    alert('Failed to open datasheet file.');
+                                  }
+                                }}
+                                style={{ color: '#0066cc', textDecoration: 'underline', cursor: 'pointer' }}
+                                title="Click to open PDF in new window"
+                              >
+                                {fileName}
+                              </a>
+                            ) : (
+                              <span style={{ color: '#666' }}>{fileName} (file not available)</span>
+                            )}
                           </div>
                         );
                       })()}
@@ -1449,7 +1557,23 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
         </div>
       </div>
       
-      {/* Error Dialog */}
+        {/* Resize Handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+            width: '20px',
+            height: '20px',
+            cursor: 'nwse-resize',
+            background: 'linear-gradient(135deg, transparent 0%, transparent 40%, #ccc 40%, #ccc 45%, transparent 45%, transparent 55%, #ccc 55%, #ccc 60%, transparent 60%)',
+            zIndex: 10001,
+          }}
+          title="Drag to resize"
+        />
+      </div>
+      
       <ErrorDialog
         visible={errorDialog.visible}
         title={errorDialog.title}

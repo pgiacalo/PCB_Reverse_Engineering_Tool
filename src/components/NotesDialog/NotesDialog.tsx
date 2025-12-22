@@ -93,7 +93,7 @@ export interface NotesDialogProps {
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-const MAX_NOTES_LENGTH = 200;
+const MAX_NOTES_LENGTH = 500;
 
 export const NotesDialog: React.FC<NotesDialogProps> = ({
   visible,
@@ -123,6 +123,21 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
   // Local state for notes editing - preserve user edits even when selection changes
   const [notesMap, setNotesMap] = useState<Map<string, string>>(new Map());
   const lastSelectionKeyRef = useRef<string>('');
+  const inputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
+  // Dialog resize state
+  const [dialogSize, setDialogSize] = useState(() => {
+    const saved = localStorage.getItem('notesDialogSize');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return { width: 400, height: window.innerHeight * 0.8 };
+      }
+    }
+    return { width: 400, height: window.innerHeight * 0.8 };
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
 
   // Compute current selection key to detect selection changes
   const getSelectionKey = () => {
@@ -189,6 +204,45 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
     });
   }, [visible, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
 
+  // Handle resize mouse events
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - resizeStart.x;
+      const deltaY = e.clientY - resizeStart.y;
+      const newWidth = Math.max(300, Math.min(window.innerWidth - 20, resizeStart.width + deltaX));
+      const newHeight = Math.max(200, Math.min(window.innerHeight - 20, resizeStart.height + deltaY));
+      const newSize = { width: newWidth, height: newHeight };
+      setDialogSize(newSize);
+      localStorage.setItem('notesDialogSize', JSON.stringify(newSize));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, resizeStart]);
+
+  const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+    setResizeStart({
+      x: e.clientX,
+      y: e.clientY,
+      width: dialogSize.width,
+      height: dialogSize.height,
+    });
+  };
+
   if (!visible) return null;
 
   // Use provided position or default to right side
@@ -199,10 +253,10 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
         top: `${position.y}px`,
         backgroundColor: '#fff',
         borderRadius: 8,
-        minWidth: '150px',
-        maxWidth: '400px',
-        width: 'fit-content',
-        maxHeight: '80%',
+        minWidth: '300px',
+        width: `${dialogSize.width}px`,
+        height: `${dialogSize.height}px`,
+        maxHeight: `${window.innerHeight - 20}px`,
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
         border: '1px solid #ddd',
         zIndex: 10000,
@@ -298,6 +352,24 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
 
   return (
     <div style={dialogStyle}>
+      <div style={{ 
+        position: 'relative', 
+        width: '100%', 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column',
+        ...(position ? {} : { 
+          backgroundColor: '#fff',
+          borderRadius: 8,
+          minWidth: '300px',
+          width: `${dialogSize.width}px`,
+          height: `${dialogSize.height}px`,
+          maxHeight: `${window.innerHeight - 20}px`,
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+          border: '1px solid #ddd',
+          pointerEvents: 'auto',
+        })
+      }}>
       {/* Fixed header - does not scroll */}
       <div 
         onMouseDown={(e) => {
@@ -779,6 +851,23 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
             </>
           )}
         </div>
+      </div>
+      
+        {/* Resize Handle */}
+        <div
+          onMouseDown={handleResizeStart}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+            width: '20px',
+            height: '20px',
+            cursor: 'nwse-resize',
+            background: 'linear-gradient(135deg, transparent 0%, transparent 40%, #ccc 40%, #ccc 45%, transparent 45%, transparent 55%, #ccc 55%, #ccc 60%, transparent 60%)',
+            zIndex: 10001,
+          }}
+          title="Drag to resize"
+        />
       </div>
     </div>
   );
