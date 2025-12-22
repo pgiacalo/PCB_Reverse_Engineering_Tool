@@ -310,9 +310,6 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     console.log('[ComponentEditor] updateComponent - Entry:', {
       componentId: comp.id,
       componentType: comp.componentType,
-      editorDatasheet: componentEditor.datasheet,
-      editorDatasheetType: typeof componentEditor.datasheet,
-      originalComponentDatasheet: (comp as any).datasheet
     });
     // Always use the designator field value directly (not abbreviation)
     // The designator field is the source of truth for the component's designator
@@ -502,33 +499,11 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       // For ICs, save description from the Description field
       // Handle both 'IntegratedCircuit' and legacy 'Semiconductor' componentType
       updated.description = componentEditor.description?.trim() || undefined;
-      // Save datasheet - ALWAYS save the value from componentEditor, even if empty
-      // The key is to preserve whatever the user entered
-      const datasheetValue = componentEditor.datasheet;
-      console.log('[ComponentEditor] updateComponent - IntegratedCircuit/Semiconductor block:', {
-        componentType: comp.componentType,
-        editorDatasheet: componentEditor.datasheet,
-        editorDatasheetType: typeof componentEditor.datasheet,
-        editorDatasheetLength: componentEditor.datasheet?.length,
-        originalComponentDatasheet: (comp as any).datasheet,
-        datasheetValue: datasheetValue
-      });
-      
-      // Always set the datasheet property - preserve empty string if user cleared it, or the value if they entered one
-      if (datasheetValue !== undefined && datasheetValue !== null) {
-        const trimmed = datasheetValue.trim();
-        updated.datasheet = trimmed.length > 0 ? trimmed : '';
-      } else {
-        // If datasheet is undefined/null in editor, preserve the original or set to undefined
-        updated.datasheet = (comp as any).datasheet || undefined;
-      }
       
       // Ensure componentType is set correctly (fix legacy 'Semiconductor' to 'IntegratedCircuit')
       if ((comp as any).componentType === 'Semiconductor') {
         updated.componentType = 'IntegratedCircuit';
       }
-      
-      console.log('[ComponentEditor] updateComponent - Final datasheet value:', updated.datasheet);
       updated.icType = componentEditor.icType || undefined;
       
       // Save uploaded datasheet file name and file data (as data URL)
@@ -704,62 +679,22 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       return;
     }
     
-    // Prefer uploaded file over URL
+    // Require uploaded file
     if (!uploadedDatasheetFile) {
-      const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
-      if (!datasheetUrl) {
-        setInfoDialog({
-          visible: true,
-          title: 'Datasheet Required',
-          message: 'Please upload a datasheet PDF file or enter a datasheet URL above before extracting information.',
-          type: 'info',
-        });
-        return;
-      }
+      setInfoDialog({
+        visible: true,
+        title: 'Datasheet Required',
+        message: 'Please upload a datasheet PDF file before extracting information.',
+        type: 'info',
+      });
+      return;
     }
     
     setIsFetchingPinNames(true);
     
     try {
-      let arrayBuffer: ArrayBuffer;
-      
-      if (uploadedDatasheetFile) {
-        // Use uploaded file - no CORS issues!
-        arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
-      } else {
-        // Fall back to URL fetch
-        const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
-        
-        // Try direct fetch first
-        try {
-          const response = await fetch(datasheetUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to fetch datasheet: ${response.statusText}`);
-          }
-          arrayBuffer = await response.arrayBuffer();
-        } catch (directFetchError) {
-          // If direct fetch fails (likely CORS), try using a CORS proxy
-          console.log('Direct fetch failed, trying CORS proxy...', directFetchError);
-          
-          // Use a CORS proxy service
-          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(datasheetUrl)}`;
-          
-          try {
-            const proxyResponse = await fetch(proxyUrl);
-            if (!proxyResponse.ok) {
-              throw new Error(`CORS proxy failed: ${proxyResponse.statusText}`);
-            }
-            arrayBuffer = await proxyResponse.arrayBuffer();
-          } catch (proxyError) {
-            // If proxy also fails, provide helpful error message
-            throw new Error(
-              'Unable to fetch datasheet due to CORS restrictions. ' +
-              'Please download the PDF and upload it using the file input above. ' +
-              `Original error: ${directFetchError instanceof Error ? directFetchError.message : 'Unknown error'}`
-            );
-          }
-        }
-      }
+      // Use uploaded file - no CORS issues!
+      const arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
       
       // Load PDF document
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -970,10 +905,12 @@ ${truncatedText}`;
       // Extract component properties and update componentEditor
       const updatedEditor: any = { ...componentEditor };
       let propertiesExtracted = 0;
+      const extractedPropertiesList: Array<{ label: string; value: string }> = [];
       
       // Update pin count if extracted
       if (extractedPinCount !== componentEditor.pinCount) {
         updatedEditor.pinCount = extractedPinCount;
+        extractedPropertiesList.push({ label: 'Pin Count', value: String(extractedPinCount) });
         propertiesExtracted++;
       }
       
@@ -986,27 +923,35 @@ ${truncatedText}`;
             const value = props[field.name];
             
             if (value !== null && value !== undefined && value !== '') {
+              let displayValue = '';
               if (field.hasUnits) {
                 // For fields with units, extract both value and unit
                 updatedEditor[field.name] = String(value);
                 const unitKey = `${field.name}Unit`;
+                let unit = '';
                 if (props.hasOwnProperty(unitKey)) {
-                  const unit = String(props[unitKey]).trim();
+                  const unitValue = String(props[unitKey]).trim();
                   // Validate unit is in the allowed list
-                  if (field.units.includes(unit)) {
-                    updatedEditor[unitKey] = unit;
+                  if (field.units.includes(unitValue)) {
+                    updatedEditor[unitKey] = unitValue;
+                    unit = unitValue;
                   } else if (field.units.length > 0) {
                     // Use default unit if provided unit is not valid
                     updatedEditor[unitKey] = field.units[0];
+                    unit = field.units[0];
                   }
                 } else if (field.units.length > 0) {
                   // Use default unit if not provided
                   updatedEditor[unitKey] = field.units[0];
+                  unit = field.units[0];
                 }
+                displayValue = `${value} ${unit}`.trim();
               } else {
                 // For fields without units, just set the value
                 updatedEditor[field.name] = String(value);
+                displayValue = String(value);
               }
+              extractedPropertiesList.push({ label: field.label, value: displayValue });
               propertiesExtracted++;
             }
           }
@@ -1018,6 +963,7 @@ ${truncatedText}`;
           const validIcTypes = ['Op-Amp', 'Microcontroller', 'Microprocessor', 'Logic', 'Memory', 'Voltage Regulator', 'Timer', 'ADC', 'DAC', 'Comparator', 'Transceiver', 'Driver', 'Amplifier', 'Other'];
           if (validIcTypes.includes(icType)) {
             updatedEditor.icType = icType;
+            extractedPropertiesList.push({ label: 'IC Type', value: icType });
             propertiesExtracted++;
           }
         }
@@ -1030,6 +976,11 @@ ${truncatedText}`;
         if (datasheetSummary) {
           // Update componentEditor to reflect the notes change
           updatedEditor.notes = datasheetSummary;
+          // Truncate summary for display if too long
+          const summaryDisplay = datasheetSummary.length > 100 
+            ? datasheetSummary.substring(0, 100) + '...' 
+            : datasheetSummary;
+          extractedPropertiesList.push({ label: 'Notes', value: summaryDisplay });
           propertiesExtracted++;
         }
       }
@@ -1082,6 +1033,15 @@ ${truncatedText}`;
           message += ` and ${propertiesExtracted} propert${propertiesExtracted === 1 ? 'y' : 'ies'}`;
         }
         message += ' from datasheet.';
+        
+        // Add formatted list of extracted properties if any
+        if (extractedPropertiesList.length > 0) {
+          message += '\n\nExtracted Properties:';
+          extractedPropertiesList.forEach(prop => {
+            message += `\n  • ${prop.label}: ${prop.value}`;
+          });
+        }
+        
         setInfoDialog({
           visible: true,
           title: 'Extraction Complete',
@@ -1308,6 +1268,28 @@ ${truncatedText}`;
           </select>
         </div>
         
+        {/* Designator - on one line */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+            Designator:
+          </label>
+          <input
+            id={`component-designator-${comp.id}`}
+            name={`component-designator-${comp.id}`}
+            type="text"
+            value={componentEditor.designator || ''}
+            onChange={(e) => {
+              const val = e.target.value;
+              // Extract abbreviation (first letter) from designator for display purposes
+              const newAbbreviation = val.length > 0 ? val.charAt(0).toUpperCase() : componentEditor.abbreviation;
+              setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
+            }}
+            disabled={areComponentsLocked}
+            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
+            placeholder="e.g., U2, R7, C1"
+          />
+        </div>
+        
         {/* Orientation - moved near top for easy access */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <label htmlFor={`component-orientation-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
@@ -1348,7 +1330,6 @@ ${truncatedText}`;
         {/* Datasheet section - moved to top for semiconductors/ICs */}
         {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
           <>
-            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000' }}>Datasheet:</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
               <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
                 Datasheet:
@@ -1401,11 +1382,11 @@ ${truncatedText}`;
                     style={{
                       display: 'inline-block',
                       padding: '2px 6px',
-                      background: '#f5f5f5',
-                      border: '1px solid #ddd',
+                      background: areComponentsLocked ? '#ccc' : '#4CAF50',
+                      border: 'none',
                       borderRadius: 2,
                       fontSize: '11px',
-                      color: '#000',
+                      color: '#fff',
                       cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
                       opacity: areComponentsLocked ? 0.6 : 1,
                       whiteSpace: 'nowrap',
@@ -1473,39 +1454,6 @@ ${truncatedText}`;
                       );
                     }
                   })()}
-                </div>
-                {/* URL input (optional, for reference) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                  {componentEditor.datasheet && componentEditor.datasheet.trim() ? (
-                    <a
-                      href={componentEditor.datasheet.trim().match(/^https?:\/\//) ? componentEditor.datasheet.trim() : `https://${componentEditor.datasheet.trim()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: '11px', color: '#0066cc', textDecoration: 'underline', cursor: 'pointer', flex: '0 0 auto' }}
-                      title="Open datasheet URL"
-                    >
-                      {componentEditor.datasheet.trim()}
-                    </a>
-                  ) : null}
-                  <input
-                    id={`component-datasheet-${comp.id}`} 
-                    type="text"
-                    value={componentEditor.datasheet || ''} 
-                    onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} 
-                    disabled={areComponentsLocked}
-                    placeholder="Enter datasheet URL (optional)"
-                    style={{ 
-                      flex: 1, 
-                      minWidth: '200px',
-                      padding: '2px 6px', 
-                      fontSize: '11px', 
-                      border: '1px solid #ddd', 
-                      borderRadius: 2, 
-                      background: '#fff', 
-                      color: '#000',
-                      opacity: areComponentsLocked ? 0.6 : 1
-                    }}
-                  />
                 </div>
               </div>
             </div>
@@ -1694,28 +1642,6 @@ ${truncatedText}`;
           setComponentsBottom={setComponentsBottom}
         />
         
-        {/* Designator - on one line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0' }}>
-          <label htmlFor={`component-designator-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-            Designator:
-          </label>
-          <input
-            id={`component-designator-${comp.id}`}
-            name={`component-designator-${comp.id}`}
-            type="text"
-            value={componentEditor.designator || ''}
-            onChange={(e) => {
-              const val = e.target.value;
-              // Extract abbreviation (first letter) from designator for display purposes
-              const newAbbreviation = val.length > 0 ? val.charAt(0).toUpperCase() : componentEditor.abbreviation;
-              setComponentEditor({ ...componentEditor, designator: val, abbreviation: newAbbreviation });
-            }}
-            disabled={areComponentsLocked}
-            style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
-            placeholder="e.g., U2, R7, C1"
-          />
-        </div>
-        
         {/* Description/Part Name - for all components */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <label htmlFor={`component-description-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
@@ -1731,8 +1657,21 @@ ${truncatedText}`;
               setComponentEditor({ ...componentEditor, description: e.target.value });
             }}
             disabled={areComponentsLocked}
-            style={{ width: '180px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+            style={{ 
+              width: '180px', 
+              padding: '2px 3px', 
+              background: '#f5f5f5', 
+              border: '1px solid #ddd', 
+              borderRadius: 2, 
+              fontSize: '11px', 
+              color: '#000', 
+              opacity: areComponentsLocked ? 0.6 : 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap'
+            }}
             placeholder=""
+            title={componentEditor.description || ''}
           />
         </div>
         
@@ -1773,6 +1712,40 @@ ${truncatedText}`;
             title={comp.notes || 'Click to edit notes...'}
           />
         </div>
+        
+        {/* Operating Temperature - for Integrated Circuits */}
+        {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label htmlFor={`component-operatingTemperature-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+              Operating Temperature:
+            </label>
+            <input
+              id={`component-operatingTemperature-${comp.id}`}
+              name={`component-operatingTemperature-${comp.id}`}
+              type="text"
+              value={(componentEditor as any).operatingTemperature || ''}
+              onChange={(e) => {
+                setComponentEditor({ ...componentEditor, operatingTemperature: e.target.value });
+              }}
+              disabled={areComponentsLocked}
+              style={{ 
+                width: '180px', 
+                padding: '2px 3px', 
+                background: '#f5f5f5', 
+                border: '1px solid #ddd', 
+                borderRadius: 2, 
+                fontSize: '11px', 
+                color: '#000', 
+                opacity: areComponentsLocked ? 0.6 : 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+              placeholder=""
+              title={(componentEditor as any).operatingTemperature || ''}
+            />
+          </div>
+        )}
         
         {/* Pin Count - on one line (for all components) */}
         {comp.componentType !== 'IntegratedCircuit' && (comp as any).componentType !== 'Semiconductor' && (
@@ -2159,6 +2132,7 @@ ${truncatedText}`;
         justifyContent: 'flex-end', 
         gap: '6px',
         padding: '6px',
+        paddingRight: '24px',
         borderTop: '1px solid #e0e0e0',
         flexShrink: 0,
       }}>

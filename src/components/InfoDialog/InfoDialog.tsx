@@ -92,7 +92,7 @@ export const InfoDialog: React.FC<InfoDialogProps> = ({
             {title}
           </h3>
         </div>
-        <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.5' }}>
+        <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
           {message}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>

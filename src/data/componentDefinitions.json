@@ -1676,8 +1676,9 @@
             "DIP",
             "SOIC",
             "QFP",
-            "BGA",
+            "LQFP",
             "TQFP",
+            "BGA",
             "SSOP",
             "TSOP"
           ],
