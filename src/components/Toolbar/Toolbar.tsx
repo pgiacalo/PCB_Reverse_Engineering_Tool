@@ -37,6 +37,8 @@ interface ToolbarProps {
   isShiftPressed?: boolean;
   drawingMode?: 'trace' | 'via' | 'pad' | 'testPoint';
   onDrawingModeChange?: (mode: 'trace' | 'via' | 'pad' | 'testPoint') => void;
+  onProjectNotesClick?: () => void;
+  onTestPointsClick?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -49,6 +51,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   isShiftPressed = false,
   drawingMode = 'trace',
   onDrawingModeChange,
+  onProjectNotesClick,
+  onTestPointsClick,
 }) => {
   // Tool definitions with icons (using Unicode symbols for now)
   const tools = [
@@ -205,6 +209,88 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <div className="color-picker-value">{brushColor}</div>
         </div>
       </button>
+
+      {/* Project Notes Icon Button */}
+      {onProjectNotesClick && (
+        <button
+          className="toolbar-icon-button"
+          onClick={onProjectNotesClick}
+          title="Project Notes"
+          aria-label="Open project notes"
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '2px solid #ccc',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+            e.currentTarget.style.borderColor = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.borderColor = '#ccc';
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="6" width="3" height="3" rx="0.5" fill="white" />
+            <rect x="9" y="6" width="11" height="2" rx="0.5" fill="white" />
+            <rect x="4" y="11" width="3" height="3" rx="0.5" fill="white" />
+            <rect x="9" y="11" width="11" height="2" rx="0.5" fill="white" />
+            <rect x="4" y="16" width="3" height="3" rx="0.5" fill="white" />
+            <rect x="9" y="16" width="11" height="2" rx="0.5" fill="white" />
+          </svg>
+        </button>
+      )}
+
+      {/* Test Points Icon Button */}
+      {onTestPointsClick && (
+        <button
+          className="toolbar-icon-button"
+          onClick={onTestPointsClick}
+          title="Test Points"
+          aria-label="Open test points list"
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '2px solid #ccc',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+            e.currentTarget.style.borderColor = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.borderColor = '#ccc';
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="2" width="20" height="20" rx="2" fill="white" opacity="0.3" />
+            <circle cx="6" cy="6" r="1.5" fill="white" />
+            <rect x="9" y="5" width="9" height="2" rx="0.5" fill="white" />
+            <rect x="9" y="4" width="5" height="1" rx="0.5" fill="white" />
+            <circle cx="6" cy="10" r="1.5" fill="white" />
+            <rect x="9" y="9" width="9" height="2" rx="0.5" fill="white" />
+            <rect x="9" y="8" width="5" height="1" rx="0.5" fill="white" />
+            <circle cx="6" cy="14" r="1.5" fill="white" />
+            <rect x="9" y="13" width="9" height="2" rx="0.5" fill="white" />
+            <rect x="9" y="12" width="5" height="1" rx="0.5" fill="white" />
+          </svg>
+        </button>
+      )}
 
       {/* Separator */}
       <div className="toolbar-separator" />

@@ -66,6 +66,7 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   const [dialogSize, setDialogSize] = useState({ width: Math.min(window.innerWidth * 0.85, 1400), height: window.innerHeight * 0.7 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Sync local state with props
   useEffect(() => {
@@ -73,8 +74,19 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
       setLocalNotes([...projectNotes]);
       setEditingIndex(null);
       setEditingField(null);
+      setSearchQuery(''); // Clear search when dialog opens
     }
   }, [visible, projectNotes]);
+
+  // Filter notes based on search query
+  const filteredNotes = searchQuery.trim() === '' 
+    ? localNotes 
+    : localNotes.filter(note => {
+        const query = searchQuery.toLowerCase();
+        const nameMatch = note.name.toLowerCase().includes(query);
+        const valueMatch = note.value.toLowerCase().includes(query);
+        return nameMatch || valueMatch;
+      });
 
   // Handle resize mouse events
   useEffect(() => {
@@ -422,6 +434,62 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         </button>
       </div>
 
+      {/* Search Bar */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid #e0e0e0',
+        backgroundColor: '#f5f5f5',
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+        flexShrink: 0,
+      }}>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              // Search is already performed on change, so just prevent form submission
+            }
+          }}
+          placeholder="Search notes..."
+          style={{
+            flex: 1,
+            padding: '6px 12px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            fontSize: '13px',
+            color: '#000',
+            background: '#fff',
+            outline: 'none',
+          }}
+        />
+        <button
+          onClick={() => {
+            // Search is performed automatically via filteredNotes
+            // This button can be used to clear search or provide visual feedback
+            if (searchQuery.trim() !== '') {
+              setSearchQuery('');
+            }
+          }}
+          style={{
+            padding: '6px 16px',
+            background: searchQuery.trim() !== '' ? '#4CAF50' : '#888',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {searchQuery.trim() !== '' ? 'Clear' : 'Search'}
+        </button>
+      </div>
+
       {/* Content */}
       <div 
         className="project-notes-content"
@@ -484,10 +552,22 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
               }}>
                 No notes. Click "Add Note" to create one.
               </div>
+            ) : filteredNotes.length === 0 ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: '#999',
+                fontSize: '13px',
+              }}>
+                No matches found for "{searchQuery}".
+              </div>
             ) : (
-              localNotes.map((note, index) => (
+              filteredNotes.map((note, index) => {
+                // Find the original index in localNotes to maintain proper editing/delete functionality
+                const originalIndex = localNotes.findIndex(n => n === note);
+                return (
                 <div
-                  key={index}
+                  key={originalIndex}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '40px 1fr 3fr auto',
@@ -501,7 +581,7 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                       <input
                         type="checkbox"
                         checked={note.checked || false}
-                        onChange={(e) => handleCheckboxChange(index, e.target.checked)}
+                        onChange={(e) => handleCheckboxChange(originalIndex, e.target.checked)}
                       />
                     </label>
                   </div>
@@ -510,20 +590,20 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                   <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
                       <textarea
                         ref={(el) => {
-                          if (el) inputRefs.current.set(`${index}-name`, el);
-                          else inputRefs.current.delete(`${index}-name`);
+                          if (el) inputRefs.current.set(`${originalIndex}-name`, el);
+                          else inputRefs.current.delete(`${originalIndex}-name`);
                         }}
                         value={note.name}
-                        onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
-                      onFocus={() => handleFieldFocus(index, 'name')}
+                        onChange={(e) => handleFieldChange(originalIndex, 'name', e.target.value)}
+                      onFocus={() => handleFieldFocus(originalIndex, 'name')}
                         onBlur={handleFieldBlur}
-                        onKeyDown={(e) => handleKeyDown(e, index, 'name')}
+                        onKeyDown={(e) => handleKeyDown(e, originalIndex, 'name')}
                       placeholder="Item name..."
                         rows={1}
                         style={{
                           width: '100%',
                           padding: '4px 6px',
-                        border: editingIndex === index && editingField === 'name' ? '2px solid #0b5fff' : '1px solid transparent',
+                        border: editingIndex === originalIndex && editingField === 'name' ? '2px solid #0b5fff' : '1px solid transparent',
                           borderRadius: 3,
                           fontSize: '12px',
                           backgroundColor: '#fff',
@@ -549,20 +629,20 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                   <div style={{ padding: '4px', borderRight: '1px solid #ccc' }}>
                       <textarea
                         ref={(el) => {
-                          if (el) inputRefs.current.set(`${index}-value`, el);
-                          else inputRefs.current.delete(`${index}-value`);
+                          if (el) inputRefs.current.set(`${originalIndex}-value`, el);
+                          else inputRefs.current.delete(`${originalIndex}-value`);
                         }}
                         value={note.value}
-                        onChange={(e) => handleFieldChange(index, 'value', e.target.value)}
-                      onFocus={() => handleFieldFocus(index, 'value')}
+                        onChange={(e) => handleFieldChange(originalIndex, 'value', e.target.value)}
+                      onFocus={() => handleFieldFocus(originalIndex, 'value')}
                         onBlur={handleFieldBlur}
-                        onKeyDown={(e) => handleKeyDown(e, index, 'value')}
+                        onKeyDown={(e) => handleKeyDown(e, originalIndex, 'value')}
                       placeholder="Notes..."
                         rows={1}
                         style={{
                           width: '100%',
                           padding: '4px 6px',
-                        border: editingIndex === index && editingField === 'value' ? '2px solid #0b5fff' : '1px solid transparent',
+                        border: editingIndex === originalIndex && editingField === 'value' ? '2px solid #0b5fff' : '1px solid transparent',
                           borderRadius: 3,
                           fontSize: '12px',
                           backgroundColor: '#fff',
@@ -587,7 +667,7 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                   {/* Actions Column */}
                   <div style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <button
-                      onClick={() => handleDeleteNote(index)}
+                      onClick={() => handleDeleteNote(originalIndex)}
                       style={{
                         background: '#f44336',
                         color: '#fff',
@@ -603,7 +683,8 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                     </button>
                   </div>
                 </div>
-              ))
+              );
+              })
             )}
           </div>
         </div>

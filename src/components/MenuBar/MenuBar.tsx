@@ -197,6 +197,8 @@ export interface MenuBarProps {
   menuBarRef: React.RefObject<HTMLDivElement | null>;
   // Project Notes Dialog
   onOpenProjectNotes: () => void;
+  // Test Points Dialog
+  onOpenTestPoints?: () => void;
   // Transform Images Dialog
   onOpenTransformImages: () => void;
   // Transform All Dialog

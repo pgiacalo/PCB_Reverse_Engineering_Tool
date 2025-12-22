@@ -57,6 +57,7 @@ import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
+import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
 import { TransformAllDialog } from './components/TransformAllDialog';
@@ -1398,6 +1399,11 @@ function App() {
   const [projectNotesDialogPosition, setProjectNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
   const [projectNotesDialogDragOffset, setProjectNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // Test Points Dialog
+  const [testPointsDialogVisible, setTestPointsDialogVisible] = useState(false);
+  const [testPointsDialogPosition, setTestPointsDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingTestPointsDialog, setIsDraggingTestPointsDialog] = useState(false);
+  const [testPointsDialogDragOffset, setTestPointsDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // IC Placement Dialog
   const [showICPlacementDialog, setShowICPlacementDialog] = useState(false);
   const [icPlacementIsPad, setICPlacementIsPad] = useState(false);
@@ -1710,6 +1716,16 @@ function App() {
     setSelectedPowerIds(new Set());
     setSelectedComponentConnections(new Set());
   }, [findAndCenterObject, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
+
+  const findAndCenterTestPoint = useCallback((strokeId: string, worldX: number, worldY: number) => {
+    findAndCenterObject(worldX, worldY);
+    // Select the test point and clear other selections
+    setSelectedIds(new Set([strokeId]));
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+    setSelectedComponentConnections(new Set());
+  }, [findAndCenterObject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   const powerNodeNames = React.useMemo(() => {
     // Collect bus IDs that have at least one power symbol
@@ -8770,6 +8786,60 @@ function App() {
     };
   }, [isDraggingProjectNotesDialog, projectNotesDialogDragOffset]);
 
+  // Handle test points dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingTestPointsDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!testPointsDialogDragOffset) return;
+      const newPosition = {
+        x: e.clientX - testPointsDialogDragOffset.x,
+        y: e.clientY - testPointsDialogDragOffset.y,
+      };
+      setTestPointsDialogPosition(newPosition);
+      localStorage.setItem('testPointsDialogPosition', JSON.stringify(newPosition));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingTestPointsDialog(false);
+      setTestPointsDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingTestPointsDialog, testPointsDialogDragOffset]);
+
+  // Initialize test points dialog position when it opens (load from localStorage or default)
+  React.useEffect(() => {
+    if (testPointsDialogVisible && testPointsDialogPosition === null) {
+      // Try to load saved position from localStorage
+      const saved = localStorage.getItem('testPointsDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setTestPointsDialogPosition(savedPosition);
+        } catch {
+          // If parsing fails, use default position
+          setTestPointsDialogPosition({
+            x: 100,
+            y: 100,
+          });
+        }
+      } else {
+        // No saved position, use default position
+        setTestPointsDialogPosition({
+          x: 100,
+          y: 100,
+        });
+      }
+    }
+  }, [testPointsDialogVisible, testPointsDialogPosition]);
+
   // Initialize project notes dialog position when it opens (load from localStorage or default)
   React.useEffect(() => {
     if (projectNotesDialogVisible && projectNotesDialogPosition === null) {
@@ -8799,6 +8869,10 @@ function App() {
   // Function to open project notes dialog
   const handleOpenProjectNotes = useCallback(() => {
     setProjectNotesDialogVisible(true);
+  }, []);
+
+  const handleOpenTestPoints = useCallback(() => {
+    setTestPointsDialogVisible(true);
   }, []);
 
   // Initialize dialog position when it opens (load from localStorage or center of screen)
@@ -12565,6 +12639,7 @@ function App() {
         saveDefaultColor={saveDefaultColor}
         menuBarRef={menuBarRef}
         onOpenProjectNotes={handleOpenProjectNotes}
+        onOpenTestPoints={handleOpenTestPoints}
         onOpenTransformImages={() => setTransformImagesDialogVisible(true)}
         onOpenTransformAll={() => setTransformAllDialogVisible(true)}
       />
@@ -13012,8 +13087,8 @@ function App() {
                 <span style={{ fontSize: '9px', lineHeight: 1, opacity: 0.7 }}>{toolInstanceManager.get('ground').size}</span>
               </div>
             </button>
-            {/* Empty space separator after Ground tool (height = 2 toolbar boxes + gap) */}
-            <div style={{ height: 72 }} />
+            {/* Empty space separator after Ground tool (height = 1 toolbar tool height) */}
+            <div style={{ height: 32 }} />
             {/* Move tool (H) - moved above Set Home */}
               <button 
                 onClick={() => { 
@@ -13426,6 +13501,76 @@ function App() {
                 </div>
               )}
             </div>
+            {/* Empty space separator after Color Picker (height = 1 toolbar tool height) */}
+            <div style={{ height: 32 }} />
+            {/* Project Notes Icon Button */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) handleOpenProjectNotes(); }} 
+              disabled={isReadOnlyMode}
+              title="Project Notes" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: '1px solid #ddd', 
+                background: '#fff',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1,
+              }}
+            >
+              {/* List icon - white background with yellow border, 4 rows of black circles and rectangles */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="20" height="20" rx="2" fill="#fff" stroke="#FFD700" strokeWidth="1" />
+                {/* Row 1 */}
+                <circle cx="6" cy="7" r="1.5" fill="#000" />
+                <rect x="9" y="6" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 2 */}
+                <circle cx="6" cy="11" r="1.5" fill="#000" />
+                <rect x="9" y="10" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 3 */}
+                <circle cx="6" cy="15" r="1.5" fill="#000" />
+                <rect x="9" y="14" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 4 */}
+                <circle cx="6" cy="19" r="1.5" fill="#000" />
+                <rect x="9" y="18" width="8" height="2" rx="1" fill="#000" />
+              </svg>
+            </button>
+            {/* Test Points Icon Button */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) handleOpenTestPoints(); }} 
+              disabled={isReadOnlyMode}
+              title="Test Points" 
+              style={{ 
+                width: 32, 
+                height: 32, 
+                display: 'grid', 
+                placeItems: 'center', 
+                borderRadius: 6, 
+                border: '1px solid #ddd', 
+                background: '#fff',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1,
+              }}
+            >
+              {/* Checklist icon - bright yellow background, 4 rows of black circles and rectangles */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="24" height="24" fill="#FFD700" />
+                {/* Row 1 */}
+                <circle cx="6" cy="7" r="1.5" fill="#000" />
+                <rect x="9" y="6" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 2 */}
+                <circle cx="6" cy="11" r="1.5" fill="#000" />
+                <rect x="9" y="10" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 3 */}
+                <circle cx="6" cy="15" r="1.5" fill="#000" />
+                <rect x="9" y="14" width="8" height="2" rx="1" fill="#000" />
+                {/* Row 4 */}
+                <circle cx="6" cy="19" r="1.5" fill="#000" />
+                <rect x="9" y="18" width="8" height="2" rx="1" fill="#000" />
+              </svg>
+            </button>
           </div>
           {/* Active tool layer chooser for Trace */}
           {(currentTool === 'draw' && drawingMode === 'trace' && showTraceLayerChooser) && (
@@ -14555,6 +14700,37 @@ function App() {
             e.preventDefault();
           }
         }}
+      />
+
+      {/* Test Points Dialog */}
+      <TestPointsDialog
+        visible={testPointsDialogVisible}
+        drawingStrokes={drawingStrokes}
+        onClose={() => {
+          setTestPointsDialogVisible(false);
+          // Don't reset position - keep it for next time
+        }}
+        onFindTestPoint={findAndCenterTestPoint}
+        position={testPointsDialogPosition}
+        isDragging={isDraggingTestPointsDialog}
+        onDragStart={(e) => {
+          if (testPointsDialogPosition) {
+            setTestPointsDialogDragOffset({
+              x: e.clientX - testPointsDialogPosition.x,
+              y: e.clientY - testPointsDialogPosition.y,
+            });
+            setIsDraggingTestPointsDialog(true);
+            e.preventDefault();
+          } else {
+            // Initialize position on first drag
+            setTestPointsDialogPosition({ x: e.clientX - 300, y: e.clientY - 200 });
+            setTestPointsDialogDragOffset({ x: 300, y: 200 });
+            setIsDraggingTestPointsDialog(true);
+            e.preventDefault();
+          }
+        }}
+        determineTestPointType={determineTestPointType}
+        powerBuses={powerBuses}
       />
 
       {/* New Project Confirmation Dialog */}
