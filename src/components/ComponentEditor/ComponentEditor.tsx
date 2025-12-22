@@ -174,6 +174,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [infoDialog, setInfoDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info' as 'info' | 'success',
+  });
   
   // Find the component being edited - check both layers in case layer was changed
   // This must be computed before useEffect but after hooks are declared
@@ -216,7 +222,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         // Set uploadedDatasheetFile to null since we don't have the actual File object
         setUploadedDatasheetFile(null);
         // Restore file data to componentEditor if available
-        if (ic.datasheetFileData && !componentEditor.datasheetFileData) {
+        if (ic.datasheetFileData && componentEditor && !componentEditor.datasheetFileData) {
           setComponentEditor({
             ...componentEditor,
             datasheetFileData: ic.datasheetFileData,
@@ -1164,7 +1170,6 @@ ${truncatedText}`;
         flexDirection: 'column',
         pointerEvents: 'auto',
         cursor: isDraggingDialog ? 'grabbing' : 'default',
-        position: 'relative',
       }}
     >
       {/* Fixed header - does not scroll */}
