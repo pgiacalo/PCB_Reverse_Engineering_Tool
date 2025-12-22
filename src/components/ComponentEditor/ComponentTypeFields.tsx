@@ -74,12 +74,15 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   // Check if this is an IntegratedCircuit component (used throughout)
   const compType = (comp as any).componentType;
   const isIntegratedCircuit = compType === 'IntegratedCircuit' || compType === 'Semiconductor';
+  const isSemiconductor = compType === 'Semiconductor';
+  const isIntegratedCircuitOnly = compType === 'IntegratedCircuit';
 
   // Dynamic rendering from component definition fields (if available)
-  // BUT: For IntegratedCircuit, we skip dynamic rendering to use hardcoded section with file upload
+  // For IntegratedCircuit (not Semiconductor), we skip dynamic rendering to use hardcoded section with file upload
+  // For Semiconductor, we use dynamic rendering but skip the datasheet field (handled in hardcoded section)
   
-  // For IntegratedCircuit, always use hardcoded section (skip dynamic rendering)
-  if (fields && fields.length > 0 && !isIntegratedCircuit) {
+  // Use dynamic rendering for components with fields, except for IntegratedCircuit (which uses hardcoded section)
+  if (fields && fields.length > 0 && !isIntegratedCircuitOnly) {
     // Helper function to determine optimal field width based on field name and type
     const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
       if (hasUnits) {
@@ -179,15 +182,24 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       );
     };
 
-    return (
-      <>
-        {fields.map(renderField).filter(Boolean)}
-      </>
-    );
+    // For semiconductors, we need to render dynamic fields AND the datasheet section
+    // So we don't return early - instead, we'll render dynamic fields and continue to hardcoded section
+    // For other components, just return the dynamic fields
+    if (!isSemiconductor) {
+      return (
+        <>
+          {fields.map(renderField).filter(Boolean)}
+        </>
+      );
+    }
+    
+    // For semiconductors, don't return early - continue to hardcoded section below
+    // The dynamic fields will be rendered in the hardcoded section along with datasheet
   }
   
   // For IntegratedCircuit, always render the hardcoded section (even without definition)
   // This ensures the file upload field is always available
+  // For Semiconductor without fields, also use hardcoded section
   // Fallback: definition missing (only for non-IntegratedCircuit components)
   if (!isIntegratedCircuit) {
   return (
@@ -198,6 +210,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   }
 
   // Legacy rendering - IntegratedCircuit always uses this path to ensure file upload is available
+  // For Semiconductor, this section provides the datasheet upload (dynamic fields are rendered above if available)
   return (
     <>
       {/* Resistor */}
@@ -917,191 +930,126 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       )}
 
       {/* IntegratedCircuit - special handling, IC Type and Datasheet are shown after main fields */}
+      {/* For Semiconductor with dynamic fields, render them first, then datasheet */}
       {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
         <>
-          <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000' }}>IC Properties:</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>IC Type:</label>
-            <select id={`component-ictype-${comp.id}`} value={componentEditor.icType || 'Op-Amp'} onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="Op-Amp">Op-Amp</option>
-              <option value="Microcontroller">Microcontroller</option>
-              <option value="Microprocessor">Microprocessor</option>
-              <option value="Logic">Logic</option>
-              <option value="Memory">Memory</option>
-              <option value="Voltage Regulator">Voltage Regulator</option>
-              <option value="Timer">Timer</option>
-              <option value="ADC">ADC (Analog-to-Digital)</option>
-              <option value="DAC">DAC (Digital-to-Analog)</option>
-              <option value="Comparator">Comparator</option>
-              <option value="Transceiver">Transceiver</option>
-              <option value="Driver">Driver</option>
-              <option value="Amplifier">Amplifier</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Datasheet:</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-              {/* File upload input */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', flex: 1 }}>
-                <input
-                  id={`component-datasheet-file-${comp.id}`}
-                  type="file"
-                  accept=".pdf"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setUploadedDatasheetFile(file);
-                  }}
-                  disabled={areComponentsLocked}
-                  style={{ 
-                    position: 'absolute',
-                    width: '0.1px',
-                    height: '0.1px',
-                    opacity: 0,
-                    overflow: 'hidden',
-                    zIndex: -1
-                  }}
-                />
-                <label
-                  htmlFor={`component-datasheet-file-${comp.id}`}
-                  style={{
-                    display: 'inline-block',
-                    padding: '2px 6px',
-                    background: '#f5f5f5',
-                    border: '1px solid #ddd',
-                    borderRadius: 2,
-                    fontSize: '11px',
-                    color: '#000',
-                    cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-                    opacity: areComponentsLocked ? 0.6 : 1,
-                    whiteSpace: 'nowrap',
-                    flex: '0 0 auto'
-                  }}
-                >
-                  Choose File
+          {/* For semiconductors with fields, render dynamic fields first */}
+          {isSemiconductor && fields && fields.length > 0 && (() => {
+            // Re-render dynamic fields for semiconductor (they weren't returned above)
+            const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
+              if (hasUnits) return '80px';
+              if (fieldName === 'partNumber' || fieldName === 'manufacturer') return '150px';
+              if (fieldName === 'description' || fieldName === 'operatingTemperature') return '180px';
+              if (fieldType === 'string' && !fieldName.includes('Unit')) return '150px';
+              return '120px';
+            };
+            const renderField = (field: ComponentFieldDefinition) => {
+              if (field.name === 'datasheet') {
+                return null; // Skip - will be rendered in the datasheet section below
+              }
+              // Special handling for IC Type - render as dropdown
+              if (field.name === 'icType' || (isSemiconductor && !field.name)) {
+                // IC Type is handled separately below
+                return null;
+              }
+              const valueKey = field.name;
+              const unitKey = `${field.name}Unit`;
+              const value = (componentEditor as any)[valueKey] ?? (comp as any)[valueKey] ?? field.defaultValue ?? '';
+              const unit = (componentEditor as any)[unitKey] ?? (comp as any)[unitKey] ?? (field.units && field.defaultUnit ? field.defaultUnit : '');
+              const onValueChange = (val: string) => {
+                setComponentEditor({ ...componentEditor, [valueKey]: val });
+              };
+              const onUnitChange = (val: string) => {
+                setComponentEditor({ ...componentEditor, [unitKey]: val });
+              };
+              const hasUnits = Boolean(field.units && field.units.length > 0);
+              const fieldWidth = getFieldWidth(field.name, field.type, hasUnits);
+              return (
+                <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    {field.label}:
+                  </label>
+                  {field.type === 'enum' ? (
+                    <select
+                      value={value}
+                      onChange={(e) => onValueChange(e.target.value)}
+                      disabled={areComponentsLocked}
+                      style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+                    >
+                      {(field.enumValues || []).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => onValueChange(e.target.value)}
+                      disabled={areComponentsLocked}
+                      style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: hasUnits ? '8px' : '0' }}
+                      placeholder={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
+                    />
+                  )}
+                  {hasUnits && field.units && (
+                    <select
+                      value={unit || field.defaultUnit || field.units[0]}
+                      onChange={(e) => onUnitChange(e.target.value)}
+                      disabled={areComponentsLocked}
+                      style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, flexShrink: 0 }}
+                    >
+                      {field.units.map(u => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              );
+            };
+            const renderedFields = fields.map(renderField).filter(Boolean);
+            
+            // Add IC Type field after manufacturer if it's a semiconductor
+            const icTypeField = isSemiconductor ? (
+              <div key="icType" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                  IC Type:
                 </label>
-                {uploadedDatasheetFile ? (
-                  <a
-                    href="#"
-                    onClick={async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                      if (uploadedDatasheetFile) {
-                        // Create a blob URL from the file and open it
-                        const blobUrl = URL.createObjectURL(uploadedDatasheetFile);
-                        const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-                        if (newWindow) {
-                          // Clean up the blob URL after a delay to allow the browser to load it
-                          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                        }
-                      }
-                  }}
-                  style={{
-                      fontSize: '11px', 
-                      color: '#0066cc', 
-                      whiteSpace: 'nowrap',
-                      textDecoration: 'underline',
-                    cursor: 'pointer',
-                      flex: '0 0 auto'
-                    }}
-                    title="Click to open PDF in new window"
-                  >
-                    {uploadedDatasheetFile.name || 'PDF file'}
-                  </a>
-                ) : (comp as any)?.datasheetFileName ? (
-                  <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }} title="File name saved in project (file not available)">
-                    {(comp as any).datasheetFileName}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
-                )}
+                <select
+                  id={`component-ictype-${comp.id}`}
+                  value={componentEditor.icType || 'Other'}
+                  onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })}
+                  disabled={areComponentsLocked}
+                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
+                >
+                  <option value="Op-Amp">Op-Amp</option>
+                  <option value="Microcontroller">Microcontroller</option>
+                  <option value="Microprocessor">Microprocessor</option>
+                  <option value="Logic">Logic</option>
+                  <option value="Memory">Memory</option>
+                  <option value="Voltage Regulator">Voltage Regulator</option>
+                  <option value="Timer">Timer</option>
+                  <option value="ADC">ADC (Analog-to-Digital)</option>
+                  <option value="DAC">DAC (Digital-to-Analog)</option>
+                  <option value="Comparator">Comparator</option>
+                  <option value="Transceiver">Transceiver</option>
+                  <option value="Driver">Driver</option>
+                  <option value="Amplifier">Amplifier</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
-              {/* URL input (optional, for reference) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                {componentEditor.datasheet && componentEditor.datasheet.trim() ? (
-                  <a
-                    href={componentEditor.datasheet.trim().match(/^https?:\/\//) ? componentEditor.datasheet.trim() : `https://${componentEditor.datasheet.trim()}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                    }}
-                    style={{ 
-                      flex: 1, 
-                      padding: '2px 3px', 
-                      fontSize: '11px', 
-                      color: '#0066cc',
-                      textDecoration: 'underline',
-                      cursor: 'pointer',
-                      wordBreak: 'break-all'
-                  }}
-                    title="Click to open URL in new window"
-                  >
-                    {componentEditor.datasheet.trim()}
-                  </a>
-                ) : (
-                  <input 
-                    id={`component-datasheet-${comp.id}`} 
-                    type="text" 
-                    value={componentEditor.datasheet || ''} 
-                    onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} 
-                    disabled={areComponentsLocked} 
-                    style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} 
-                    placeholder="URL (optional, for reference)" 
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>
-              Pin Count:
-            </label>
-            <input
-              id={`component-pincount-${comp.id}`}
-              name={`component-pincount-${comp.id}`}
-              type="number"
-              min="1"
-              value={componentEditor.pinCount}
-              onChange={(e) => {
-                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
-                setComponentEditor({ ...componentEditor, pinCount: newPinCount });
-              }}
-              onBlur={(e) => {
-                if (areComponentsLocked) {
-                  alert('Cannot edit: Components are locked. Unlock components to edit them.');
-                  return;
-                }
-                const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
-                const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
-                const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-                if (currentComp && newPinCount !== currentComp.pinCount) {
-                  const currentConnections = currentComp.pinConnections || [];
-                  const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
-                    i < currentConnections.length ? currentConnections[i] : ''
-                  );
-                  const currentPolarities = currentComp.pinPolarities || [];
-                  const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
-                    i < currentPolarities.length ? currentPolarities[i] : ''
-                  ) : undefined;
-                  const updatedComp = {
-                    ...currentComp,
-                    pinCount: newPinCount,
-                    pinConnections: newPinConnections,
-                    ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
-                  };
-                  if (componentEditor.layer === 'top') {
-                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                  } else {
-                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                  }
-                  setComponentEditor({ ...componentEditor, pinCount: newPinCount });
-                }
-              }}
-              disabled={areComponentsLocked}
-              style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
-            />
-          </div>
+            ) : null;
+            
+            // Insert IC Type after manufacturer field
+            const manufacturerIndex = renderedFields.findIndex((field: any) => field?.key === 'manufacturer');
+            if (manufacturerIndex >= 0 && icTypeField) {
+              renderedFields.splice(manufacturerIndex + 1, 0, icTypeField);
+            } else if (icTypeField) {
+              // If no manufacturer field, add IC Type at the end
+              renderedFields.push(icTypeField);
+            }
+            
+            return renderedFields;
+          })()}
+          {/* Datasheet section removed - now rendered at top of ComponentEditor */}
         </>
       )}
 

@@ -151,6 +151,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
+  const [showApiKeyInstructions, setShowApiKeyInstructions] = useState(false);
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -611,6 +612,415 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     setConnectingPin(null); // Clear pin connection mode
   };
 
+  // Function to fetch and parse pin names from datasheet - moved to top level
+  const handleFetchPinNames = async () => {
+    // Check if API key is configured
+    const apiKey = getGeminiApiKey();
+    const apiUrl = getGeminiApiUrl();
+    
+    if (!apiKey || !apiUrl) {
+      const message = 'Gemini API key is not configured.\n\n' +
+        'For production/GitHub Pages: Enter your API key in the field below.\n' +
+        'For development: Create a .env file with VITE_GEMINI_API_KEY=your_api_key_here\n\n' +
+        'Get your free API key from: https://aistudio.google.com/apikey';
+      alert(message);
+      return;
+    }
+    
+    // Prefer uploaded file over URL
+    if (!uploadedDatasheetFile) {
+      const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
+      if (!datasheetUrl) {
+        alert('Please upload a datasheet PDF file or enter a datasheet URL above before fetching pin names.');
+        return;
+      }
+    }
+    
+    setIsFetchingPinNames(true);
+    
+    try {
+      let arrayBuffer: ArrayBuffer;
+      
+      if (uploadedDatasheetFile) {
+        // Use uploaded file - no CORS issues!
+        arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
+      } else {
+        // Fall back to URL fetch
+        const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
+        
+        // Try direct fetch first
+        try {
+          const response = await fetch(datasheetUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch datasheet: ${response.statusText}`);
+          }
+          arrayBuffer = await response.arrayBuffer();
+        } catch (directFetchError) {
+          // If direct fetch fails (likely CORS), try using a CORS proxy
+          console.log('Direct fetch failed, trying CORS proxy...', directFetchError);
+          
+          // Use a CORS proxy service
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(datasheetUrl)}`;
+          
+          try {
+            const proxyResponse = await fetch(proxyUrl);
+            if (!proxyResponse.ok) {
+              throw new Error(`CORS proxy failed: ${proxyResponse.statusText}`);
+            }
+            arrayBuffer = await proxyResponse.arrayBuffer();
+          } catch (proxyError) {
+            // If proxy also fails, provide helpful error message
+            throw new Error(
+              'Unable to fetch datasheet due to CORS restrictions. ' +
+              'Please download the PDF and upload it using the file input above. ' +
+              `Original error: ${directFetchError instanceof Error ? directFetchError.message : 'Unknown error'}`
+            );
+          }
+        }
+      }
+      
+      // Load PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      // Extract text from all pages
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      // Use Google Gemini AI to extract pin information
+      // Limit text length to avoid token limits (Gemini Pro has ~32k token limit)
+      const maxTextLength = 20000; // Conservative limit to leave room for prompt and response
+      const truncatedText = fullText.length > maxTextLength 
+        ? fullText.substring(0, maxTextLength) + '\n[... text truncated ...]'
+        : fullText;
+
+      // Get the current component
+      const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+      const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+      
+      if (!currentComp) {
+        throw new Error('Component not found');
+      }
+      
+      // Get component definition to know what fields are available
+      const def: ComponentDefinition | undefined = componentDefinition || resolveComponentDefinition(currentComp as any);
+      const availableFields = def?.fields || [];
+      
+      // Build list of fields to extract (excluding datasheet field)
+      const fieldsToExtract = availableFields
+        .filter(field => field.name !== 'datasheet')
+        .map(field => ({
+          name: field.name,
+          label: field.label,
+          type: field.type,
+          hasUnits: Boolean(field.units && field.units.length > 0),
+          units: field.units || []
+        }));
+
+      const prompt = `You are analyzing an electronic component datasheet. Extract pin information, component properties, a datasheet summary, IC type, and pin count, then return the data as a JSON object.
+
+Requirements:
+1. Return a JSON object with three sections: "pins", "properties", and "summary"
+2. First, determine the total number of pins (pinCount) for this component from the datasheet. This should be a positive integer representing the total number of pins/pads on the component.
+3. For pins, extract information for ALL pins found in the datasheet (not just a subset). For each pin, provide:
+   - pinNumber: The pin number (1, 2, 3, etc.)
+   - pinName: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
+   - pinDescription: A brief description of the pin's function (optional, can be empty string)
+4. For component properties, extract the following information if available in the datasheet:
+${fieldsToExtract.map(field => {
+  if (field.hasUnits) {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} value (as a number) and ${field.name}Unit: The unit (one of: ${field.units.join(', ')})`;
+  } else if (field.type === 'enum') {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string)`;
+  } else {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string or number, depending on the field type)`;
+  }
+}).join('\n')}
+5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
+6. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
+7. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
+8. Only include properties that are actually found in the datasheet - do not make up values
+9. For numeric fields with units, extract both the numeric value and the appropriate unit
+10. Return ONLY valid JSON, no additional text, explanations, or markdown formatting
+
+Example JSON format:
+{
+  "pins": [
+    {"pinNumber": 1, "pinName": "VCC", "pinDescription": "Power supply positive"},
+    {"pinNumber": 2, "pinName": "GND", "pinDescription": "Ground"},
+    {"pinNumber": 3, "pinName": "IN+", "pinDescription": "Non-inverting input"},
+    {"pinNumber": 4, "pinName": "IN-", "pinDescription": "Inverting input"},
+    {"pinNumber": 5, "pinName": "OUT", "pinDescription": "Output"}
+  ],
+  "properties": {
+    "partNumber": "LM358",
+    "manufacturer": "Texas Instruments",
+    "voltage": 36,
+    "voltageUnit": "V",
+    "description": "Dual operational amplifier",
+    "icType": "Op-Amp",
+    "pinCount": 5
+  },
+  "summary": {
+    "datasheetSummary": "The LM358 is a dual operational amplifier featuring low power consumption and wide supply voltage range. It is designed for single supply operation from 3V to 32V or dual supplies from ±1.5V to ±16V. The device offers high gain bandwidth product and low input offset voltage."
+  }
+}
+
+Datasheet text:
+${truncatedText}`;
+
+      // Call Google Gemini API
+      const geminiResponse = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }]
+        })
+      });
+
+      if (!geminiResponse.ok) {
+        const errorText = await geminiResponse.text();
+        let errorMessage = `Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error && errorJson.error.message) {
+            errorMessage += `. ${errorJson.error.message}`;
+          }
+        } catch {
+          errorMessage += `. ${errorText.substring(0, 200)}`;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const geminiData = await geminiResponse.json();
+      
+      // Extract the response text
+      let responseText = '';
+      if (geminiData.candidates && geminiData.candidates[0]) {
+        // Check for finish reason (safety/content filters)
+        if (geminiData.candidates[0].finishReason && 
+            geminiData.candidates[0].finishReason !== 'STOP') {
+          throw new Error(`Gemini API response blocked: ${geminiData.candidates[0].finishReason}`);
+        }
+        
+        if (geminiData.candidates[0].content && geminiData.candidates[0].content.parts) {
+          const parts = geminiData.candidates[0].content.parts;
+          if (parts && parts[0] && parts[0].text) {
+            responseText = parts[0].text.trim();
+          }
+        }
+      }
+
+      if (!responseText) {
+        throw new Error('No response text from Gemini API. The API may have returned an empty response.');
+      }
+
+      // Parse JSON response
+      // Remove markdown code blocks if present (Gemini sometimes wraps in ```json or ```)
+      responseText = responseText.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
+      
+      let extractedData: any;
+      try {
+        extractedData = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(`Failed to parse JSON response from Gemini API: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      }
+
+      if (!extractedData || typeof extractedData !== 'object') {
+        throw new Error('Invalid JSON response from Gemini API: expected an object');
+      }
+
+      // Extract pin count first (if provided)
+      let extractedPinCount = componentEditor.pinCount; // Default to current pin count
+      if (extractedData.properties && typeof extractedData.properties === 'object' && extractedData.properties.pinCount) {
+        const pinCountValue = parseInt(String(extractedData.properties.pinCount), 10);
+        if (!isNaN(pinCountValue) && pinCountValue > 0) {
+          extractedPinCount = pinCountValue;
+        }
+      } else if (extractedData.pins && Array.isArray(extractedData.pins)) {
+        // If pinCount not in properties, determine from pins array
+        let maxPinNum = 0;
+        for (const pin of extractedData.pins) {
+          if (pin && typeof pin === 'object' && pin.pinNumber) {
+            const pinNum = parseInt(String(pin.pinNumber), 10);
+            if (!isNaN(pinNum) && pinNum > maxPinNum) {
+              maxPinNum = pinNum;
+            }
+          }
+        }
+        if (maxPinNum > 0) {
+          extractedPinCount = maxPinNum;
+        }
+      }
+
+      // Extract pin names - use extracted pin count
+      const pinNames: string[] = new Array(extractedPinCount).fill('');
+      let parsedPinCount = 0;
+      
+      if (extractedData.pins && Array.isArray(extractedData.pins)) {
+        for (const pin of extractedData.pins) {
+          if (pin && typeof pin === 'object' && pin.pinNumber && pin.pinName) {
+            const pinNum = parseInt(String(pin.pinNumber), 10);
+            if (!isNaN(pinNum) && pinNum >= 1 && pinNum <= extractedPinCount) {
+              pinNames[pinNum - 1] = String(pin.pinName).trim();
+              parsedPinCount++;
+            }
+          }
+        }
+      }
+
+      if (parsedPinCount === 0) {
+        throw new Error('Could not parse any pin information from the JSON response.');
+      }
+
+      // Extract component properties and update componentEditor
+      const updatedEditor: any = { ...componentEditor };
+      let propertiesExtracted = 0;
+      
+      // Update pin count if extracted
+      if (extractedPinCount !== componentEditor.pinCount) {
+        updatedEditor.pinCount = extractedPinCount;
+        propertiesExtracted++;
+      }
+      
+      if (extractedData.properties && typeof extractedData.properties === 'object') {
+        const props = extractedData.properties;
+        
+        // Update each field that was found in the response
+        for (const field of fieldsToExtract) {
+          if (props.hasOwnProperty(field.name)) {
+            const value = props[field.name];
+            
+            if (value !== null && value !== undefined && value !== '') {
+              if (field.hasUnits) {
+                // For fields with units, extract both value and unit
+                updatedEditor[field.name] = String(value);
+                const unitKey = `${field.name}Unit`;
+                if (props.hasOwnProperty(unitKey)) {
+                  const unit = String(props[unitKey]).trim();
+                  // Validate unit is in the allowed list
+                  if (field.units.includes(unit)) {
+                    updatedEditor[unitKey] = unit;
+                  } else if (field.units.length > 0) {
+                    // Use default unit if provided unit is not valid
+                    updatedEditor[unitKey] = field.units[0];
+                  }
+                } else if (field.units.length > 0) {
+                  // Use default unit if not provided
+                  updatedEditor[unitKey] = field.units[0];
+                }
+              } else {
+                // For fields without units, just set the value
+                updatedEditor[field.name] = String(value);
+              }
+              propertiesExtracted++;
+            }
+          }
+        }
+        
+        // Handle IC Type if present
+        if (props.hasOwnProperty('icType') && props.icType) {
+          const icType = String(props.icType).trim();
+          const validIcTypes = ['Op-Amp', 'Microcontroller', 'Microprocessor', 'Logic', 'Memory', 'Voltage Regulator', 'Timer', 'ADC', 'DAC', 'Comparator', 'Transceiver', 'Driver', 'Amplifier', 'Other'];
+          if (validIcTypes.includes(icType)) {
+            updatedEditor.icType = icType;
+            propertiesExtracted++;
+          }
+        }
+      }
+      
+      // Handle datasheet summary (for Notes field) - will be merged into component update below
+      let datasheetSummary = '';
+      if (extractedData.summary && typeof extractedData.summary === 'object' && extractedData.summary.datasheetSummary) {
+        datasheetSummary = String(extractedData.summary.datasheetSummary).trim();
+        if (datasheetSummary) {
+          // Update componentEditor to reflect the notes change
+          updatedEditor.notes = datasheetSummary;
+          propertiesExtracted++;
+        }
+      }
+
+      // Update componentEditor state with extracted properties
+      setComponentEditor(updatedEditor);
+      
+      // Update component with fetched pin names and pin count
+      if (currentComp) {
+        // Update pin connections array to match new pin count if it changed
+        const existingPinConnections = currentComp.pinConnections || [];
+        const newPinConnections = new Array(extractedPinCount).fill('').map((_, i) => 
+          i < existingPinConnections.length ? existingPinConnections[i] : ''
+        );
+        
+        // Update pin polarities array to match new pin count if it changed
+        const existingPinPolarities = currentComp.pinPolarities || [];
+        const newPinPolarities = new Array(extractedPinCount).fill('').map((_, i) => 
+          i < existingPinPolarities.length ? existingPinPolarities[i] : ''
+        );
+        
+        // Ensure pinNames array matches pin count
+        const adjustedPinNames = [...pinNames];
+        while (adjustedPinNames.length < extractedPinCount) {
+          adjustedPinNames.push('');
+        }
+        
+        const updatedComp = { 
+          ...currentComp, 
+          pinNames: adjustedPinNames,
+          pinCount: extractedPinCount,
+          pinConnections: newPinConnections,
+          pinPolarities: newPinPolarities,
+          // Include datasheet summary in notes if available
+          ...(datasheetSummary && { notes: datasheetSummary })
+        };
+        
+        if (componentEditor.layer === 'top') {
+          setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+        } else {
+          setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+        }
+        
+        const foundCount = pinNames.filter(name => name.length > 0).length;
+        let message = `Successfully extracted ${foundCount} pin name(s)`;
+        if (extractedPinCount !== componentEditor.pinCount) {
+          message += ` and pin count (${extractedPinCount})`;
+        }
+        if (propertiesExtracted > 0) {
+          message += ` and ${propertiesExtracted} component propert${propertiesExtracted === 1 ? 'y' : 'ies'}`;
+        }
+        message += ' from datasheet. Please review and edit as needed.';
+        alert(message);
+      }
+    } catch (error) {
+      console.error('Error fetching pin names:', error);
+      alert(`Failed to fetch pin names: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`);
+    } finally {
+      setIsFetchingPinNames(false);
+    }
+  };
+
+  // Function to save API key - moved to top level
+  const handleSaveApiKey = () => {
+    if (apiKeyInput.trim()) {
+      localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+      alert('API key saved! You can now use the "Extract Datasheet Information" feature.');
+    } else {
+      localStorage.removeItem('geminiApiKey');
+      alert('API key removed.');
+    }
+  };
+
   return (
     <>
       <style>{`
@@ -832,6 +1242,292 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           </select>
         </div>
         
+        {/* Datasheet section - moved to top for semiconductors/ICs */}
+        {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
+          <>
+            <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000' }}>Datasheet:</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                Datasheet:
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                {/* File upload input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', flex: 1 }}>
+                  <input
+                    id={`component-datasheet-file-${comp.id}`}
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setUploadedDatasheetFile(file);
+                    }}
+                    disabled={areComponentsLocked}
+                    style={{ 
+                      position: 'absolute',
+                      width: '0.1px',
+                      height: '0.1px',
+                      opacity: 0,
+                      overflow: 'hidden',
+                      zIndex: -1
+                    }}
+                  />
+                  <label
+                    htmlFor={`component-datasheet-file-${comp.id}`}
+                    style={{
+                      display: 'inline-block',
+                      padding: '2px 6px',
+                      background: '#f5f5f5',
+                      border: '1px solid #ddd',
+                      borderRadius: 2,
+                      fontSize: '11px',
+                      color: '#000',
+                      cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                      opacity: areComponentsLocked ? 0.6 : 1,
+                      whiteSpace: 'nowrap',
+                      flex: '0 0 auto'
+                    }}
+                  >
+                    Choose File
+                  </label>
+                  {uploadedDatasheetFile ? (
+                    <a
+                      href="#"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (uploadedDatasheetFile) {
+                          const blobUrl = URL.createObjectURL(uploadedDatasheetFile);
+                          const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                          if (newWindow) {
+                            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                          }
+                        }
+                      }}
+                      style={{
+                        fontSize: '11px', 
+                        color: '#0066cc', 
+                        whiteSpace: 'nowrap',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                        flex: '0 0 auto'
+                      }}
+                      title="Click to open PDF in new window"
+                    >
+                      {uploadedDatasheetFile.name || 'PDF file'}
+                    </a>
+                  ) : (comp as any)?.datasheetFileName ? (
+                    <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }} title="File name saved in project (file not available)">
+                      {(comp as any).datasheetFileName}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
+                  )}
+                </div>
+                {/* URL input (optional, for reference) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                  {componentEditor.datasheet && componentEditor.datasheet.trim() ? (
+                    <a
+                      href={componentEditor.datasheet.trim().match(/^https?:\/\//) ? componentEditor.datasheet.trim() : `https://${componentEditor.datasheet.trim()}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: '11px', color: '#0066cc', textDecoration: 'underline', cursor: 'pointer', flex: '0 0 auto' }}
+                      title="Open datasheet URL"
+                    >
+                      {componentEditor.datasheet.trim()}
+                    </a>
+                  ) : null}
+                  <input
+                    id={`component-datasheet-${comp.id}`} 
+                    type="text"
+                    value={componentEditor.datasheet || ''} 
+                    onChange={(e) => setComponentEditor({ ...componentEditor, datasheet: e.target.value })} 
+                    disabled={areComponentsLocked}
+                    placeholder="Enter datasheet URL (optional)"
+                    style={{ 
+                      flex: 1, 
+                      minWidth: '200px',
+                      padding: '2px 6px', 
+                      fontSize: '11px', 
+                      border: '1px solid #ddd', 
+                      borderRadius: 2, 
+                      background: '#fff', 
+                      color: '#000',
+                      opacity: areComponentsLocked ? 0.6 : 1
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* IC Properties section - Pin Count, Manufacturer, Part Number for Integrated Circuits */}
+            {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
+              <>
+                <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000', marginBottom: '4px' }}>IC Properties:</div>
+                
+                {/* Pin Count */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label htmlFor={`component-pincount-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    Pin Count:
+                  </label>
+                  <input
+                    id={`component-pincount-ic-${comp.id}`}
+                    name={`component-pincount-ic-${comp.id}`}
+                    type="number"
+                    min="1"
+                    value={componentEditor.pinCount}
+                    onChange={(e) => {
+                      const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                      setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                    }}
+                    onBlur={(e) => {
+                      if (areComponentsLocked) {
+                        alert('Cannot edit: Components are locked. Unlock components to edit them.');
+                        return;
+                      }
+                      const newPinCount = Math.max(1, parseInt(e.target.value) || 1);
+                      const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                      const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                      if (currentComp && newPinCount !== currentComp.pinCount) {
+                        const currentConnections = currentComp.pinConnections || [];
+                        const newPinConnections = new Array(newPinCount).fill('').map((_, i) => 
+                          i < currentConnections.length ? currentConnections[i] : ''
+                        );
+                        const currentPolarities = currentComp.pinPolarities || [];
+                        const newPinPolarities = currentComp.pinPolarities ? new Array(newPinCount).fill('').map((_, i) => 
+                          i < currentPolarities.length ? currentPolarities[i] : ''
+                        ) : undefined;
+                        const updatedComp = {
+                          ...currentComp,
+                          pinCount: newPinCount,
+                          pinConnections: newPinConnections,
+                          ...(newPinPolarities !== undefined && { pinPolarities: newPinPolarities }),
+                        };
+                        if (componentEditor.layer === 'top') {
+                          setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                        } else {
+                          setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                        }
+                        setComponentEditor({ ...componentEditor, pinCount: newPinCount });
+                      }
+                    }}
+                    disabled={areComponentsLocked}
+                    style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                  />
+                </div>
+                
+                {/* Manufacturer */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label htmlFor={`component-manufacturer-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    Manufacturer:
+                  </label>
+                  <input
+                    id={`component-manufacturer-ic-${comp.id}`}
+                    type="text"
+                    value={componentEditor.manufacturer || ''}
+                    onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
+                    disabled={areComponentsLocked}
+                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    placeholder="e.g., Texas Instruments"
+                  />
+                </div>
+                
+                {/* Part Number */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label htmlFor={`component-partnumber-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    Part Number:
+                  </label>
+                  <input
+                    id={`component-partnumber-ic-${comp.id}`}
+                    type="text"
+                    value={componentEditor.partNumber || ''}
+                    onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
+                    disabled={areComponentsLocked}
+                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                    placeholder="e.g., LM358"
+                  />
+                </div>
+              </>
+            )}
+            
+            {/* Gemini API Key and Extract button - right below datasheet */}
+            {((comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor')) && (
+              <div style={{ marginBottom: '8px', padding: '4px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '3px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
+                    <span
+                      onClick={() => setShowApiKeyInstructions(true)}
+                      style={{
+                        color: '#0066cc',
+                        textDecoration: 'underline',
+                        cursor: 'pointer',
+                      }}
+                      title="Click for instructions on how to get an API key"
+                    >
+                      Google Gemini API Key
+                    </span>
+                    {' '}(to extract information from the Datasheet):
+                  </label>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input
+                      type="password"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="Enter your Gemini API key"
+                      style={{
+                        flex: 1,
+                        minWidth: '200px',
+                        padding: '3px 6px',
+                        fontSize: '11px',
+                        border: '1px solid #ddd',
+                        borderRadius: '2px',
+                        background: '#fff',
+                        color: '#000'
+                      }}
+                      title="Enter your Google Gemini API key. Get one free at https://aistudio.google.com/apikey"
+                    />
+                    <button
+                      onClick={handleSaveApiKey}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        background: '#2196F3',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Save API Key
+                    </button>
+                    <button
+                      onClick={handleFetchPinNames}
+                      disabled={isFetchingPinNames || areComponentsLocked}
+                      className={isFetchingPinNames ? 'fetch-pin-names-pulse' : ''}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11px',
+                        background: areComponentsLocked ? '#ccc' : '#4CAF50',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
+                        opacity: areComponentsLocked ? 0.6 : 1,
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      {isFetchingPinNames ? 'Extracting...' : 'Extract Datasheet Information'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+        
         {/* Type-specific value fields - moved near top for easy access */}
         <ComponentTypeFields
             component={comp}
@@ -927,8 +1623,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           />
         </div>
         
-        {/* Pin Count - on one line (only for non-IC components; ICs show it under IC Properties) */}
-        {comp.componentType !== 'IntegratedCircuit' && (
+        {/* Pin Count - on one line (for all components) */}
+        {comp.componentType !== 'IntegratedCircuit' && (comp as any).componentType !== 'Semiconductor' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-pincount-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
               Pin Count:
@@ -1048,333 +1744,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
             const useDropdown = hasPinNames && !isChipDependent; // Dropdown for predefined names
             const useTextInput = isChipDependent; // Text input for CHIP_DEPENDENT
             const showNameColumn = hasPinNames; // Show if pinNames are defined
-            
-            // Function to fetch and parse pin names from datasheet
-            const handleFetchPinNames = async () => {
-              // Check if API key is configured
-              const apiKey = getGeminiApiKey();
-              const apiUrl = getGeminiApiUrl();
-              
-              if (!apiKey || !apiUrl) {
-                const message = 'Gemini API key is not configured.\n\n' +
-                  'For production/GitHub Pages: Enter your API key in the field below.\n' +
-                  'For development: Create a .env file with VITE_GEMINI_API_KEY=your_api_key_here\n\n' +
-                  'Get your free API key from: https://aistudio.google.com/apikey';
-                alert(message);
-                return;
-              }
-              
-              // Prefer uploaded file over URL
-              if (!uploadedDatasheetFile) {
-                const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
-                if (!datasheetUrl) {
-                  alert('Please upload a datasheet PDF file or enter a datasheet URL above before fetching pin names.');
-                  return;
-                }
-              }
-              
-              setIsFetchingPinNames(true);
-              
-              try {
-                let arrayBuffer: ArrayBuffer;
-                
-                if (uploadedDatasheetFile) {
-                  // Use uploaded file - no CORS issues!
-                  arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
-                } else {
-                  // Fall back to URL fetch
-                  const datasheetUrl = (componentEditor as any)?.datasheet?.trim();
-                  
-                  // Try direct fetch first
-                  try {
-                    const response = await fetch(datasheetUrl);
-                    if (!response.ok) {
-                      throw new Error(`Failed to fetch datasheet: ${response.statusText}`);
-                    }
-                    arrayBuffer = await response.arrayBuffer();
-                  } catch (directFetchError) {
-                    // If direct fetch fails (likely CORS), try using a CORS proxy
-                    console.log('Direct fetch failed, trying CORS proxy...', directFetchError);
-                    
-                    // Use a CORS proxy service
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(datasheetUrl)}`;
-                    
-                    try {
-                      const proxyResponse = await fetch(proxyUrl);
-                      if (!proxyResponse.ok) {
-                        throw new Error(`CORS proxy failed: ${proxyResponse.statusText}`);
-                      }
-                      arrayBuffer = await proxyResponse.arrayBuffer();
-                    } catch (proxyError) {
-                      // If proxy also fails, provide helpful error message
-                      throw new Error(
-                        'Unable to fetch datasheet due to CORS restrictions. ' +
-                        'Please download the PDF and upload it using the file input above. ' +
-                        `Original error: ${directFetchError instanceof Error ? directFetchError.message : 'Unknown error'}`
-                      );
-                    }
-                  }
-                }
-                
-                // Load PDF document
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                
-                // Extract text from all pages
-                let fullText = '';
-                for (let i = 1; i <= pdf.numPages; i++) {
-                  const page = await pdf.getPage(i);
-                  const textContent = await page.getTextContent();
-                  const pageText = textContent.items
-                    .map((item: any) => item.str)
-                    .join(' ');
-                  fullText += pageText + '\n';
-                }
-                
-                // Use Google Gemini AI to extract pin information
-                // Limit text length to avoid token limits (Gemini Pro has ~32k token limit)
-                const maxTextLength = 20000; // Conservative limit to leave room for prompt and response
-                const truncatedText = fullText.length > maxTextLength 
-                  ? fullText.substring(0, maxTextLength) + '\n[... text truncated ...]'
-                  : fullText;
-
-                const prompt = `You are analyzing an electronic component datasheet. Extract the pin information and return it as a CSV table.
-
-Requirements:
-1. Return ONLY a CSV table with three columns: Pin #, Pin Name, Pin Description
-2. Include a header row: "Pin #,Pin Name,Pin Description"
-3. Extract information for pins 1 through ${componentEditor.pinCount} (inclusive)
-4. For each pin, provide:
-   - Pin #: The pin number (1, 2, 3, etc.)
-   - Pin Name: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
-   - Pin Description: A brief description of the pin's function (optional, can be empty)
-5. If a pin description is not available, leave that field empty but keep the comma
-6. Return ONLY the CSV data, no additional text, explanations, or markdown formatting
-7. If you cannot find pin information for all ${componentEditor.pinCount} pins, still return what you find
-
-Example format:
-Pin #,Pin Name,Pin Description
-1,VCC,Power supply positive
-2,GND,Ground
-3,IN+,Non-inverting input
-
-Datasheet text:
-${truncatedText}`;
-
-                // Call Google Gemini API
-                const geminiResponse = await fetch(apiUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    contents: [{
-                      parts: [{
-                        text: prompt
-                      }]
-                    }]
-                  })
-                });
-
-                if (!geminiResponse.ok) {
-                  const errorText = await geminiResponse.text();
-                  let errorMessage = `Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`;
-                  try {
-                    const errorJson = JSON.parse(errorText);
-                    if (errorJson.error && errorJson.error.message) {
-                      errorMessage += `. ${errorJson.error.message}`;
-                    }
-                  } catch {
-                    errorMessage += `. ${errorText.substring(0, 200)}`;
-                  }
-                  throw new Error(errorMessage);
-                }
-
-                const geminiData = await geminiResponse.json();
-                
-                // Extract the response text
-                let csvText = '';
-                if (geminiData.candidates && geminiData.candidates[0]) {
-                  // Check for finish reason (safety/content filters)
-                  if (geminiData.candidates[0].finishReason && 
-                      geminiData.candidates[0].finishReason !== 'STOP') {
-                    throw new Error(`Gemini API response blocked: ${geminiData.candidates[0].finishReason}`);
-                  }
-                  
-                  if (geminiData.candidates[0].content && geminiData.candidates[0].content.parts) {
-                    const parts = geminiData.candidates[0].content.parts;
-                    if (parts && parts[0] && parts[0].text) {
-                      csvText = parts[0].text.trim();
-                    }
-                  }
-                }
-
-                if (!csvText) {
-                  throw new Error('No response text from Gemini API. The API may have returned an empty response.');
-                }
-
-                // Parse CSV response
-                // Remove markdown code blocks if present (Gemini sometimes wraps in ```csv or ```)
-                csvText = csvText.replace(/^```[\w]*\n?/gm, '').replace(/\n?```$/gm, '');
-                
-                const pinNames: string[] = new Array(componentEditor.pinCount).fill('');
-                
-                const lines = csvText.split('\n').filter(line => line.trim().length > 0);
-                
-                if (lines.length === 0) {
-                  throw new Error('No CSV data found in Gemini API response');
-                }
-                
-                // Skip header row if present
-                let startIndex = 0;
-                const firstLine = lines[0].toLowerCase();
-                if (firstLine.includes('pin #') || firstLine.includes('pin,') || 
-                    firstLine.includes('pin number') || firstLine.startsWith('pin')) {
-                  startIndex = 1;
-                }
-                
-                // Parse each CSV line
-                let parsedCount = 0;
-                for (let i = startIndex; i < lines.length; i++) {
-                  const line = lines[i].trim();
-                  // Skip empty lines
-                  if (!line) continue;
-                  
-                  // Simple CSV parsing (handles quoted fields)
-                  // Split by comma, but respect quoted strings
-                  const columns: string[] = [];
-                  let current = '';
-                  let inQuotes = false;
-                  
-                  for (let j = 0; j < line.length; j++) {
-                    const char = line[j];
-                    if (char === '"') {
-                      inQuotes = !inQuotes;
-                    } else if (char === ',' && !inQuotes) {
-                      columns.push(current.trim());
-                      current = '';
-                    } else {
-                      current += char;
-                    }
-                  }
-                  columns.push(current.trim()); // Add last column
-                  
-                  if (columns.length >= 2) {
-                    const pinNum = parseInt(columns[0], 10);
-                    if (!isNaN(pinNum) && pinNum >= 1 && pinNum <= componentEditor.pinCount) {
-                      // Remove quotes if present
-                      const pinName = columns[1].replace(/^"|"$/g, '').trim();
-                      pinNames[pinNum - 1] = pinName;
-                      parsedCount++;
-                      // Note: Pin descriptions (columns[2]) are parsed but not stored
-                      // as the component type doesn't currently support descriptions
-                    }
-                  }
-                }
-                
-                if (parsedCount === 0) {
-                  throw new Error('Could not parse any pin information from the CSV response. The format may be incorrect.');
-                }
-                
-                // Update component with fetched pin names
-                if (currentComp) {
-                  const updatedComp = { ...currentComp, pinNames };
-                  if (componentEditor.layer === 'top') {
-                    setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                  } else {
-                    setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
-                  }
-                  
-                  const foundCount = pinNames.filter(name => name.length > 0).length;
-                  if (foundCount > 0) {
-                    alert(`Successfully fetched ${foundCount} pin name(s) from datasheet. Please review and edit as needed.`);
-                  } else {
-                    alert('Could not automatically extract pin names from the datasheet. Please enter them manually.');
-                  }
-                }
-              } catch (error) {
-                console.error('Error fetching pin names:', error);
-                alert(`Failed to fetch pin names: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`);
-              } finally {
-                setIsFetchingPinNames(false);
-              }
-            };
-
-            const handleSaveApiKey = () => {
-              if (apiKeyInput.trim()) {
-                localStorage.setItem('geminiApiKey', apiKeyInput.trim());
-                alert('API key saved! You can now use the "Fetch Pin Names" feature.');
-              } else {
-                localStorage.removeItem('geminiApiKey');
-                alert('API key removed.');
-              }
-            };
 
             return (
               <div>
-                {showNameColumn && (
-                  <div style={{ marginBottom: '8px', padding: '4px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '3px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
-                        Google Gemini API Key (for AI pin name extraction from the Datasheet):
-                      </label>
-                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          type="password"
-                          value={apiKeyInput}
-                          onChange={(e) => setApiKeyInput(e.target.value)}
-                          placeholder="Enter your Gemini API key"
-                          style={{
-                            flex: 1,
-                            minWidth: '200px',
-                            padding: '3px 6px',
-                            fontSize: '11px',
-                            border: '1px solid #ddd',
-                            borderRadius: '2px',
-                            background: '#fff',
-                            color: '#000'
-                          }}
-                          title="Enter your Google Gemini API key. Get one free at https://aistudio.google.com/apikey"
-                        />
-                        <button
-                          onClick={handleSaveApiKey}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: '11px',
-                            background: '#2196F3',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          Save API Key
-                        </button>
-                        <button
-                          onClick={handleFetchPinNames}
-                          disabled={isFetchingPinNames || areComponentsLocked}
-                          className={isFetchingPinNames ? 'fetch-pin-names-pulse' : ''}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: '11px',
-                            background: areComponentsLocked ? '#ccc' : '#4CAF50',
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
-                            opacity: areComponentsLocked ? 0.6 : 1,
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap',
-                            transition: 'background 0.2s'
-                          }}
-                        >
-                          {isFetchingPinNames ? 'Fetching...' : 'Fetch Pin Names'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', marginTop: '2px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #ddd', background: '#f5f5f5' }}>
@@ -1675,6 +2047,98 @@ ${truncatedText}`;
           Save
         </button>
       </div>
+      
+      {/* API Key Instructions Dialog */}
+      {showApiKeyInstructions && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10005,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowApiKeyInstructions(false);
+            }
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#2b2b31',
+              borderRadius: 8,
+              padding: '24px',
+              minWidth: '400px',
+              maxWidth: '600px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              border: '1px solid #1f1f24',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+                How to Get a Google Gemini API Key
+              </h3>
+              <button
+                onClick={() => setShowApiKeyInstructions(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: 0,
+                  width: '30px',
+                  height: '30px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Close"
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+              <p style={{ margin: '0 0 12px 0' }}>
+                To get a Google Gemini API key, go to{' '}
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: '#4CAF50', textDecoration: 'underline' }}
+                >
+                  Google AI Studio (aistudio.google.com/app/apikey)
+                </a>
+                , sign in with your Google account, and click "Get API key" or "Create API key" in the Dashboard to generate a key for a new or existing Google Cloud project, then copy it and store it securely.
+              </p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => setShowApiKeyInstructions(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );

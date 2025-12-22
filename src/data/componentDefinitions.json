@@ -1140,28 +1140,76 @@
       "category": "Semiconductors",
       "subcategory": "BJT",
       "type": "Semiconductor",
-      "displayName": "Transistor, BJT",
-      "description": "Bipolar Junction Transistor (Base, Emitter, Collector)",
-      "searchText": "bjt transistor bipolar junction base emitter collector npn pnp",
+      "displayName": "Transistor, BJT NPN",
+      "description": "Bipolar Junction Transistor NPN (Collector, Base, Emitter)",
+      "searchText": "bjt transistor bipolar junction base emitter collector npn",
       "designator": "Q",
       "defaultPins": 3,
       "properties": {
         "semiconductorType": "Transistor",
         "transistorType": "BJT",
-        "pinNames": ["Base", "Emitter", "Collector"]
+        "pinNames": ["Collector", "Base", "Emitter"]
       },
       "fields": [
         {
-          "name": "polarity",
-          "label": "Polarity",
-          "type": "enum",
-          "enumValues": [
-            "NPN",
-            "PNP"
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": [
+            "mV",
+            "V",
+            "kV"
           ],
-          "defaultValue": "NPN",
+          "defaultUnit": "V",
           "required": false
         },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temp",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Semiconductors",
+      "subcategory": "BJT PNP",
+      "type": "Semiconductor",
+      "displayName": "Transistor, BJT PNP",
+      "description": "Bipolar Junction Transistor PNP (Emitter, Base, Collector)",
+      "searchText": "bjt transistor bipolar junction base emitter collector pnp",
+      "designator": "Q",
+      "defaultPins": 3,
+      "properties": {
+        "semiconductorType": "Transistor",
+        "transistorType": "BJT",
+        "pinNames": ["Emitter", "Base", "Collector"]
+      },
+      "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
@@ -1210,28 +1258,76 @@
       "category": "Semiconductors",
       "subcategory": "MOSFET",
       "type": "Semiconductor",
-      "displayName": "Transistor, MOSFET",
-      "description": "Metal-Oxide-Semiconductor Field-Effect Transistor (Source, Gate, Drain)",
-      "searchText": "mosfet transistor metal oxide semiconductor field effect source gate drain n-channel p-channel",
+      "displayName": "Transistor, MOSFET, N-Channel",
+      "description": "Metal-Oxide-Semiconductor Field-Effect Transistor N-Channel (Source, Gate, Drain)",
+      "searchText": "mosfet transistor metal oxide semiconductor field effect source gate drain n-channel",
       "designator": "Q",
       "defaultPins": 3,
       "properties": {
         "semiconductorType": "Transistor",
         "transistorType": "MOSFET",
-        "pinNames": ["Source", "Gate", "Drain"]
+        "pinNames": ["Source", "Drain", "Gate"]
       },
       "fields": [
         {
-          "name": "polarity",
-          "label": "Polarity",
-          "type": "enum",
-          "enumValues": [
-            "N-Channel",
-            "P-Channel"
+          "name": "voltage",
+          "label": "Voltage",
+          "type": "number",
+          "units": [
+            "mV",
+            "V",
+            "kV"
           ],
-          "defaultValue": "N-Channel",
+          "defaultUnit": "V",
           "required": false
         },
+        {
+          "name": "current",
+          "label": "Current",
+          "type": "number",
+          "units": [
+            "µA",
+            "mA",
+            "A"
+          ],
+          "defaultUnit": "A",
+          "required": false
+        },
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "operatingTemperature",
+          "label": "Operating Temp",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Semiconductors",
+      "subcategory": "MOSFET P-Channel",
+      "type": "Semiconductor",
+      "displayName": "Transistor, MOSFET, P-Channel",
+      "description": "Metal-Oxide-Semiconductor Field-Effect Transistor P-Channel (Source, Gate, Drain)",
+      "searchText": "mosfet transistor metal oxide semiconductor field effect source gate drain p-channel",
+      "designator": "Q",
+      "defaultPins": 3,
+      "properties": {
+        "semiconductorType": "Transistor",
+        "transistorType": "MOSFET",
+        "pinNames": ["Source", "Drain", "Gate"]
+      },
+      "fields": [
         {
           "name": "voltage",
           "label": "Voltage",
@@ -1420,7 +1516,7 @@
       "defaultPins": 8,
       "properties": {
         "semiconductorType": "OpAmp",
-        "pinNames": ["A Output", "A -Input", "A +Input", "V-", "B +Input", "B -Input", "B Output", "V+"]
+        "pinNames": ["Output 1", "Input 1-", "Input 1+", "VEE / GND", "Input 2+", "Input 2-", "Output 2", "VCC / V+"]
       },
       "fields": [
         {
@@ -1448,6 +1544,70 @@
             "Other"
           ],
           "defaultValue": "DIP-8",
+          "required": false
+        },
+        {
+          "name": "voltage",
+          "label": "Supply Voltage",
+          "type": "number",
+          "units": [
+            "V",
+            "mV"
+          ],
+          "defaultUnit": "V",
+          "required": false
+        },
+        {
+          "name": "description",
+          "label": "Description",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "datasheet",
+          "label": "Datasheet URL",
+          "type": "string",
+          "required": false
+        }
+      ]
+    },
+    {
+      "category": "Semiconductors",
+      "subcategory": "Quad Op Amp",
+      "type": "Semiconductor",
+      "displayName": "Op Amp, Quad",
+      "description": "Quad operational amplifier",
+      "searchText": "quad op amp operational amplifier opamp",
+      "designator": "U",
+      "defaultPins": 14,
+      "properties": {
+        "semiconductorType": "OpAmp",
+        "pinNames": ["1OUT", "1IN-", "1IN+", "VCC+", "2IN+", "2IN-", "2OUT", "3OUT", "3IN-", "3IN+", "VCC-", "4IN+", "4IN-", "4OUT"]
+      },
+      "fields": [
+        {
+          "name": "partNumber",
+          "label": "Part Number",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "manufacturer",
+          "label": "Manufacturer",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "packageType",
+          "label": "Package Type",
+          "type": "enum",
+          "enumValues": [
+            "DIP-14",
+            "SOIC-14",
+            "TSSOP-14",
+            "Other"
+          ],
+          "defaultValue": "DIP-14",
           "required": false
         },
         {
