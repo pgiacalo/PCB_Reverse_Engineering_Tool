@@ -7329,7 +7329,16 @@ function App() {
         
         // Get all existing components to assign next designator
         const allComponents = [...componentsTop, ...componentsBottom];
-        const counters = loadDesignatorCounters();
+        
+        // Prepare counters based on mode (same logic as component creation)
+        let counters: Record<string, number>;
+        if (useGlobalDesignatorCounters) {
+          // Global mode: reload from localStorage each time to get latest values
+          counters = loadDesignatorCounters();
+        } else {
+          // Project-local mode: use session counters (starts empty, gets updated as components are created)
+          counters = { ...sessionDesignatorCountersRef.current };
+        }
         
         // Extract prefix from the original designator (e.g., "U8" -> "U")
         // Maintain the same prefix signature but increment the number
@@ -7351,9 +7360,19 @@ function App() {
         const nextNumber = getNextDesignatorNumber(prefix, allComponents, counters);
         const newDesignator = `${prefix}${nextNumber}`;
         
-        // Update designator counter
-        updateDesignatorCounter(prefix, nextNumber, counters);
-        saveDesignatorCounters(counters);
+        // Update designator counter (same logic as component creation)
+        if (useGlobalDesignatorCounters) {
+          // Update global counters in localStorage
+          const currentCounters = loadDesignatorCounters();
+          const updatedCounters = updateDesignatorCounter(prefix, nextNumber, currentCounters);
+          saveDesignatorCounters(updatedCounters);
+        } else {
+          // Update session counters for project-local mode
+          sessionDesignatorCountersRef.current[prefix] = Math.max(
+            sessionDesignatorCountersRef.current[prefix] || 0,
+            nextNumber
+          );
+        }
         
         // Clone the component with new ID, new designator, and no connections
         const clonedComponent: PCBComponent = {
@@ -14299,6 +14318,7 @@ function App() {
             projectDirHandle={projectDirHandle}
             showGeminiSettingsDialog={showGeminiSettingsDialog}
             onGeminiSettingsDialogClose={() => setShowGeminiSettingsDialog(false)}
+            onFindComponent={findAndCenterComponent}
             componentDefinition={componentEditor ? (() => {
               // Find the component being edited to resolve its definition
               const comp = componentsTop.find(c => c.id === componentEditor.id) || 

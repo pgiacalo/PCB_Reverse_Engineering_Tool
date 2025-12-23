@@ -142,6 +142,8 @@ export interface ComponentEditorProps {
   showGeminiSettingsDialog?: boolean;
   /** Callback when Gemini settings dialog is closed */
   onGeminiSettingsDialogClose?: () => void;
+  /** Callback to find and center on a component */
+  onFindComponent?: (componentId: string, x: number, y: number) => void;
 }
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
@@ -166,6 +168,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   projectDirHandle,
   showGeminiSettingsDialog = false,
   onGeminiSettingsDialogClose,
+  onFindComponent,
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
@@ -256,6 +259,35 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       message: 'API key has been removed from browser localStorage. You will need to enter it again to use AI features.',
       type: 'info',
     });
+  };
+
+  // Function to find components by designator
+  const handleFindByDesignator = () => {
+    const designatorToFind = componentEditor?.designator?.trim().toUpperCase();
+    if (!designatorToFind) {
+      return;
+    }
+
+    // Search for all components with matching designator (case-insensitive)
+    const allComponents = [...componentsTop, ...componentsBottom];
+    const matchingComponents = allComponents.filter(
+      c => c.designator?.trim().toUpperCase() === designatorToFind
+    );
+
+    if (matchingComponents.length === 0) {
+      return;
+    }
+
+    // Center on the first matching component (like the Information dialog Find button)
+    // This will also select the first component, but we'll override to select all matches
+    if (onFindComponent && matchingComponents.length > 0) {
+      const firstComponent = matchingComponents[0];
+      onFindComponent(firstComponent.id, firstComponent.x, firstComponent.y);
+    }
+
+    // Select all matching components (override the single selection from onFindComponent)
+    const matchingIds = new Set(matchingComponents.map(c => c.id));
+    setSelectedComponentIds(matchingIds);
   };
   
   // Dialog resize state
@@ -1704,7 +1736,36 @@ ${truncatedText}`;
             disabled={areComponentsLocked}
             style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', fontFamily: 'monospace', textTransform: 'uppercase', opacity: areComponentsLocked ? 0.6 : 1 }}
             placeholder="e.g., U2, R7, C1"
+            onKeyDown={(e) => {
+              // Allow Enter key to trigger Find
+              if (e.key === 'Enter' && !areComponentsLocked) {
+                e.preventDefault();
+                handleFindByDesignator();
+              }
+            }}
           />
+          <button
+            onClick={handleFindByDesignator}
+            disabled={areComponentsLocked || !componentEditor.designator?.trim()}
+            style={{
+              padding: '4px 12px',
+              background: areComponentsLocked || !componentEditor.designator?.trim() 
+                ? '#ccc' 
+                : 'linear-gradient(90deg, #7B68EE 0%, #6A5ACD 100%)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: areComponentsLocked || !componentEditor.designator?.trim() ? 'not-allowed' : 'pointer',
+              opacity: areComponentsLocked || !componentEditor.designator?.trim() ? 0.6 : 1,
+              textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+              whiteSpace: 'nowrap',
+            }}
+            title="Find all components with this designator"
+          >
+            Find
+          </button>
         </div>
         
         {/* Orientation - moved near top for easy access */}
