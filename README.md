@@ -7,7 +7,7 @@ A powerful, browser-based tool designed for reverse engineering, troubleshooting
 - **Load PCB images** from multiple layers and overlay them with precise alignment
 - **Annotate components, traces, vias, pads, power nodes, and ground connections** directly on your PCB photos
 - **Transform and align images** with pixel-perfect precision using move, rotate, scale, and perspective correction tools
-- **🔍 Trace signal paths through multi-layer PCBs** - The tool provides a **virtual PCB x-ray**, enabling you to easily visualize and follow signal paths across multiple layers by overlaying top and bottom images with adjustable transparency
+- **Trace signal paths through multi-layer PCBs** - The tool provides a **virtual PCB x-ray**, enabling you to easily visualize and follow signal paths across multiple layers by overlaying top and bottom images with adjustable transparency
 - **Document your analysis** with comprehensive annotations and notes
 - **AI-powered features** to automatically extract component information from datasheet PDFs
 
@@ -18,9 +18,9 @@ Working with PCBs can be challenging when you need to:
 - Reverse engineer existing designs
 - Document modifications and repairs
 - Learn how complex circuits work
-- **🔍 Trace signal paths through multi-layer PCBs** - See through layers like an x-ray! The tool's virtual PCB x-ray capability lets you overlay top and bottom images with adjustable transparency, making it easy to visualize and follow signal paths that travel between layers through vias and connections
+- **Trace signal paths through multi-layer PCBs** - See through layers like an x-ray! The tool's virtual PCB x-ray capability lets you overlay top and bottom images with adjustable transparency, making it easy to visualize and follow signal paths that travel between layers through vias and connections
 
-This tool makes it **easy** by letting you work directly with your PCB photos in your browser—no complex software installation, no learning curve. Just load your images and start annotating. The virtual x-ray view helps you see connections that would otherwise be hidden inside the board.
+This tool makes it **easy** by letting you work directly with your PCB photos in your browser—no complex software installation, no learning curve. Just load your images and start annotating. The virtual x-ray view helps you see and trace connections that would otherwise be very hard to follow.
 
 ## Try It Now
 
