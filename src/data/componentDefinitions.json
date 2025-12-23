@@ -1680,7 +1680,9 @@
             "TQFP",
             "BGA",
             "SSOP",
-            "TSOP"
+            "TSOP",
+            "Various",
+            "Other"
           ],
           "required": false
         },

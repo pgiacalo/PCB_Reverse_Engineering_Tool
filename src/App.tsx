@@ -14651,7 +14651,6 @@ function App() {
         onFindPower={findAndCenterPower}
         onFindGround={findAndCenterGround}
         onOpenNotesDialog={() => setNotesDialogVisible(true)}
-        projectDirHandle={projectDirHandle}
         position={detailedInfoDialogPosition}
         isDragging={isDraggingDetailedInfoDialog}
         onDragStart={(e) => {

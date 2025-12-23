@@ -1069,6 +1069,68 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
             
             return renderedFields;
           })()}
+          
+          {/* IC Type and Package Type for IntegratedCircuit (not Semiconductor) */}
+          {isIntegratedCircuitOnly && (
+            <>
+              {/* IC Type */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                  IC Type:
+                </label>
+                <select
+                  id={`component-ictype-${comp.id}`}
+                  value={componentEditor.icType || 'Other'}
+                  onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })}
+                  disabled={areComponentsLocked}
+                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                >
+                  <option value="Op-Amp">Op-Amp</option>
+                  <option value="Microcontroller">Microcontroller</option>
+                  <option value="Microprocessor">Microprocessor</option>
+                  <option value="Logic">Logic</option>
+                  <option value="Memory">Memory</option>
+                  <option value="Voltage Regulator">Voltage Regulator</option>
+                  <option value="Timer">Timer</option>
+                  <option value="ADC">ADC (Analog-to-Digital)</option>
+                  <option value="DAC">DAC (Digital-to-Analog)</option>
+                  <option value="Comparator">Comparator</option>
+                  <option value="Transceiver">Transceiver</option>
+                  <option value="Driver">Driver</option>
+                  <option value="Amplifier">Amplifier</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              
+              {/* Package Type */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <label htmlFor={`component-packagetype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                  Package Type:
+                </label>
+                <select
+                  id={`component-packagetype-${comp.id}`}
+                  value={(componentEditor as any).packageType || ''}
+                  onChange={(e) => setComponentEditor({ ...componentEditor, packageType: e.target.value })}
+                  disabled={areComponentsLocked}
+                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                >
+                  <option value="">-- Select --</option>
+                  <option value="DIP">DIP</option>
+                  <option value="PDIP">PDIP</option>
+                  <option value="SOIC">SOIC</option>
+                  <option value="QFP">QFP</option>
+                  <option value="LQFP">LQFP</option>
+                  <option value="TQFP">TQFP</option>
+                  <option value="BGA">BGA</option>
+                  <option value="SSOP">SSOP</option>
+                  <option value="TSOP">TSOP</option>
+                  <option value="Various">Various</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </>
+          )}
+          
           {/* Datasheet section removed - now rendered at top of ComponentEditor */}
         </>
       )}

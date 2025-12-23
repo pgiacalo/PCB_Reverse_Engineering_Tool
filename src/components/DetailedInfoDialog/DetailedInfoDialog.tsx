@@ -100,8 +100,6 @@ export interface DetailedInfoDialogProps {
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
   /** Callback to open the Notes dialog */
   onOpenNotesDialog?: () => void;
-  /** Project directory handle for accessing files */
-  projectDirHandle?: FileSystemDirectoryHandle | null;
 }
 
 export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
@@ -130,7 +128,6 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   isDragging,
   onDragStart,
   onOpenNotesDialog,
-  projectDirHandle,
 }) => {
   const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false,
@@ -925,105 +922,16 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       {(comp as any).datasheetFileName && (() => {
                         const datasheetPath = (comp as any).datasheetFileName;
                         const fileName = datasheetPath.split('/').pop(); // Extract just the filename
-                        const hasProjectDir = !!projectDirHandle;
                         
-                        if (hasProjectDir) {
-                          // Make clickable if project directory is available
-                          return (
-                            <div>
-                              Datasheet File:{' '}
-                              <a
-                                href="#"
-                                onClick={async (e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  try {
-                                    if (!projectDirHandle || !datasheetPath) {
-                                      alert('Datasheet file not available. Please re-select the file in Component Properties.');
-                                      return;
-                                    }
-                                    
-                                    // Read file from project directory
-                                    const pathParts = datasheetPath.split('/');
-                                    let currentDirHandle = projectDirHandle;
-                                    
-                                    // Navigate to subdirectory if path contains '/'
-                                    for (let i = 0; i < pathParts.length - 1; i++) {
-                                      const dirName = pathParts[i];
-                                      try {
-                                        currentDirHandle = await currentDirHandle.getDirectoryHandle(dirName);
-                                      } catch (e) {
-                                        // Try alternative case if first attempt fails
-                                        const altName = dirName === 'datasheets' ? 'Datasheets' : 
-                                                       dirName === 'Datasheets' ? 'datasheets' : dirName;
-                                        try {
-                                          currentDirHandle = await currentDirHandle.getDirectoryHandle(altName);
-                                        } catch (e2) {
-                                          throw new Error(`Directory '${dirName}' not found in project folder.`);
-                                        }
-                                      }
-                                    }
-                                    
-                                    const fileHandle = await currentDirHandle.getFileHandle(pathParts[pathParts.length - 1]);
-                                    const file = await fileHandle.getFile();
-                                    
-                                    // Workaround for macOS quarantine attributes:
-                                    // Read file as ArrayBuffer first to fully load it into memory,
-                                    // then create a Blob, then convert to data URL.
-                                    // This ensures the file is completely in memory before use,
-                                    // bypassing macOS quarantine attribute checks.
-                                    const arrayBuffer = await file.arrayBuffer();
-                                    const blob = new Blob([arrayBuffer], { type: file.type || 'application/pdf' });
-                                    
-                                    // Create data URL from the in-memory blob
-                                    // Data URLs work reliably and don't depend on file handles
-                                    const dataUrl = await new Promise<string>((resolve, reject) => {
-                                      const reader = new FileReader();
-                                      reader.onloadend = () => {
-                                        if (reader.result) {
-                                          resolve(reader.result as string);
-                                        } else {
-                                          reject(new Error('FileReader returned no result'));
-                                        }
-                                      };
-                                      reader.onerror = () => reject(new Error('FileReader error'));
-                                      reader.readAsDataURL(blob);
-                                    });
-                                    
-                                    // Open data URL directly in new window
-                                    // Data URLs are self-contained and don't have quarantine issues
-                                    const newWindow = window.open(dataUrl, '_blank', 'noopener,noreferrer');
-                                    if (!newWindow) {
-                                      alert('Popup blocked. Please allow popups for this site.');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error opening datasheet:', error);
-                                    alert('Failed to open datasheet file. Please ensure the file exists in the project directory.');
-                                  }
-                                }}
-                                style={{
-                                  fontSize: '11px',
-                                  color: '#0066cc',
-                                  textDecoration: 'underline',
-                                  cursor: 'pointer',
-                                }}
-                                title="Click to open PDF in new window"
-                              >
-                                {fileName}
-                              </a>
-                            </div>
-                          );
-                        } else {
-                          // Not clickable if project directory is not available
-                          return (
-                            <div>
-                              Datasheet File:{' '}
-                              <span style={{ color: '#666', fontStyle: 'italic' }} title="File was previously selected. Open Component Properties to re-select the file.">
-                                {fileName} (re-select in Component Properties to open)
-                              </span>
-                            </div>
-                          );
-                        }
+                        // Show static text with note to re-choose the file
+                        return (
+                          <div>
+                            Datasheet File:{' '}
+                            <span style={{ color: '#666', fontStyle: 'italic' }} title="Re-choose the datasheet file in Component Properties to open it">
+                              {fileName} (re-choose file to open)
+                            </span>
+                          </div>
+                        );
                       })()}
                     </>
                   )}

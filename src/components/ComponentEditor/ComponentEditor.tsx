@@ -516,10 +516,11 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       }
       updated.icType = componentEditor.icType || undefined;
       
-      // Save manufacturer, part number, and operating temperature for Integrated Circuits
+      // Save manufacturer, part number, operating temperature, and package type for Integrated Circuits
       (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
       (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
       (updated as any).operatingTemperature = (componentEditor as any).operatingTemperature?.trim() || undefined;
+      (updated as any).packageType = (componentEditor as any).packageType || undefined;
       
       // Save uploaded datasheet file path (relative to project root, e.g., "datasheets/filename.pdf")
       // The path is stored in componentEditor.datasheetFileName when file is selected
@@ -798,11 +799,12 @@ ${fieldsToExtract.map(field => {
   }
 }).join('\n')}
 5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
-6. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
-7. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
-8. Only include properties that are actually found in the datasheet - do not make up values
-9. For numeric fields with units, extract both the numeric value and the appropriate unit
-10. Return ONLY valid JSON, no additional text, explanations, or markdown formatting
+6. For Package Type (packageType), determine the package type from the datasheet. Choose from: "DIP", "PDIP", "SOIC", "QFP", "LQFP", "TQFP", "BGA", "SSOP", "TSOP", "Various", or "Other". If multiple package types are mentioned in the datasheet, use "Various". If it's a plastic DIP, use "PDIP". If it's a standard DIP, use "DIP".
+7. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
+8. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
+9. Only include properties that are actually found in the datasheet - do not make up values
+10. For numeric fields with units, extract both the numeric value and the appropriate unit
+11. Return ONLY valid JSON, no additional text, explanations, or markdown formatting
 
 Example JSON format:
 {
@@ -820,6 +822,7 @@ Example JSON format:
     "voltageUnit": "V",
     "description": "Dual operational amplifier",
     "icType": "Op-Amp",
+    "packageType": "PDIP",
     "pinCount": 5
   },
   "summary": {
@@ -1011,6 +1014,47 @@ ${truncatedText}`;
             propertiesExtracted++;
           }
         }
+        
+        // Handle Package Type if present
+        if (props.hasOwnProperty('packageType') && props.packageType) {
+          const packageType = String(props.packageType).trim();
+          // Valid package types from componentDefinitions.json
+          const validPackageTypes = ['DIP', 'PDIP', 'SOIC', 'QFP', 'LQFP', 'TQFP', 'BGA', 'SSOP', 'TSOP', 'Various', 'Other'];
+          // Also check if it's a common variation (e.g., "PDIP" might be returned as "DIP")
+          let normalizedPackageType = packageType;
+          if (packageType.toUpperCase() === 'PDIP' || packageType.toUpperCase() === 'DIP') {
+            // If multiple package types are mentioned, use "Various"
+            if (packageType.includes(',') || packageType.includes(' or ') || packageType.includes(' and ')) {
+              normalizedPackageType = 'Various';
+            } else if (packageType.toUpperCase().includes('PDIP')) {
+              normalizedPackageType = 'PDIP';
+            } else {
+              normalizedPackageType = 'DIP';
+            }
+          } else if (validPackageTypes.includes(packageType)) {
+            normalizedPackageType = packageType;
+          } else if (packageType.includes(',') || packageType.includes(' or ') || packageType.includes(' and ')) {
+            // Multiple package types mentioned
+            normalizedPackageType = 'Various';
+          } else {
+            // Try to match common variations
+            const upperPackageType = packageType.toUpperCase();
+            if (upperPackageType.includes('LQFP')) normalizedPackageType = 'LQFP';
+            else if (upperPackageType.includes('TQFP')) normalizedPackageType = 'TQFP';
+            else if (upperPackageType.includes('QFP')) normalizedPackageType = 'QFP';
+            else if (upperPackageType.includes('SOIC')) normalizedPackageType = 'SOIC';
+            else if (upperPackageType.includes('BGA')) normalizedPackageType = 'BGA';
+            else if (upperPackageType.includes('SSOP')) normalizedPackageType = 'SSOP';
+            else if (upperPackageType.includes('TSOP')) normalizedPackageType = 'TSOP';
+            else normalizedPackageType = 'Other';
+          }
+          
+          if (validPackageTypes.includes(normalizedPackageType) || normalizedPackageType === 'Various') {
+            (updatedEditor as any).packageType = normalizedPackageType;
+            extractedPropertiesList.push({ label: 'Package Type', value: normalizedPackageType });
+            propertiesExtracted++;
+          }
+        }
       }
       
       // Handle datasheet summary (for Notes field) - will be merged into component update below
@@ -1082,7 +1126,7 @@ ${truncatedText}`;
         if (extractedPropertiesList.length > 0) {
           message += '\n\nExtracted Properties:';
           extractedPropertiesList.forEach(prop => {
-            message += `\n  • ${prop.value}`;
+            message += `\n  • ${prop.label}: ${prop.value}`;
           });
         }
         
@@ -1523,95 +1567,19 @@ ${truncatedText}`;
                           </a>
                         );
                       } else {
-                        // Only filename/path is stored - try to read from project directory
-                        const datasheetPath = (comp as any)?.datasheetFileName;
+                        // Only filename/path is stored - show static text with note to re-choose
                         return (
-                          <a
-                            href="#"
-                            onClick={async (e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              try {
-                                if (projectDirHandle && datasheetPath) {
-                                  // Read file from project directory
-                                  // Follow the same pattern as image loading
-                                  const pathParts = datasheetPath.split('/');
-                                  let dirHandle = projectDirHandle;
-                                  
-                                  // Navigate to subdirectory if path contains '/'
-                                  // Use getDirectoryHandle without create: true (same as images)
-                                  // Handle case sensitivity like image loading does
-                                  for (let i = 0; i < pathParts.length - 1; i++) {
-                                    const dirName = pathParts[i];
-                                    try {
-                                      dirHandle = await dirHandle.getDirectoryHandle(dirName);
-                                    } catch (e) {
-                                      // Try alternative case if first attempt fails
-                                      const altName = dirName === 'datasheets' ? 'Datasheets' : 
-                                                     dirName === 'Datasheets' ? 'datasheets' : dirName;
-                                      try {
-                                        dirHandle = await dirHandle.getDirectoryHandle(altName);
-                                      } catch (e2) {
-                                        throw new Error(`Directory '${dirName}' not found in project folder.`);
-                                      }
-                                    }
-                                  }
-                                  
-                                  // Get file handle and read file
-                                  // Keep references to handles to prevent garbage collection
-                                  const fileHandle = await dirHandle.getFileHandle(pathParts[pathParts.length - 1]);
-                                  const file = await fileHandle.getFile();
-                                  
-                                  // Workaround for macOS quarantine attributes:
-                                  // Read file as ArrayBuffer first to fully load it into memory,
-                                  // then create a Blob, then convert to data URL.
-                                  // This ensures the file is completely in memory before use,
-                                  // bypassing macOS quarantine attribute checks.
-                                  const arrayBuffer = await file.arrayBuffer();
-                                  const blob = new Blob([arrayBuffer], { type: file.type || 'application/pdf' });
-                                  
-                                  // Create data URL from the in-memory blob
-                                  // Data URLs work reliably and don't depend on file handles
-                                  const dataUrl = await new Promise<string>((resolve, reject) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => {
-                                      if (reader.result) {
-                                        resolve(reader.result as string);
-                                      } else {
-                                        reject(new Error('FileReader returned no result'));
-                                      }
-                                    };
-                                    reader.onerror = () => reject(new Error('FileReader error'));
-                                    reader.readAsDataURL(blob);
-                                  });
-                                  
-                                  // Open data URL directly in new window
-                                  // Data URLs are self-contained and don't have quarantine issues
-                                  const newWindow = window.open(dataUrl, '_blank', 'noopener,noreferrer');
-                                  if (!newWindow) {
-                                    alert('Popup blocked. Please allow popups for this site.');
-                                  }
-                                } else {
-                                  alert('Project directory not available. Please re-select the file.');
-                                }
-                              } catch (error) {
-                                console.error('Error opening datasheet from project directory:', error);
-                                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                                alert(`Failed to open datasheet file: ${errorMessage}. Please re-select the file.`);
-                              }
-                            }}
-                            style={{
+                          <span 
+                            style={{ 
                               fontSize: '11px', 
-                              color: '#0066cc', 
-                              whiteSpace: 'nowrap',
-                              textDecoration: 'underline',
-                              cursor: 'pointer',
-                              flex: '0 0 auto'
+                              color: '#666', 
+                              flex: '0 0 auto',
+                              fontStyle: 'italic'
                             }}
-                            title="Click to open PDF in new window"
+                            title="Re-choose the datasheet file to open it"
                           >
-                            {fileName}
-                          </a>
+                            {fileName} (re-choose file to open)
+                          </span>
                         );
                       }
                     } else {
