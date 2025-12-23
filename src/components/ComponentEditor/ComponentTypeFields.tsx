@@ -52,12 +52,12 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
   componentDefinition,
   setComponentEditor,
   areComponentsLocked,
-  componentsTop,
-  componentsBottom,
-  setComponentsTop,
-  setComponentsBottom,
-  uploadedDatasheetFile,
-  setUploadedDatasheetFile,
+  componentsTop: _componentsTop,
+  componentsBottom: _componentsBottom,
+  setComponentsTop: _setComponentsTop,
+  setComponentsBottom: _setComponentsBottom,
+  uploadedDatasheetFile: _uploadedDatasheetFile,
+  setUploadedDatasheetFile: _setUploadedDatasheetFile,
 }) => {
   // Validate component has required properties
   if (!comp || !comp.id || !comp.componentType || typeof comp.pinCount !== 'number') {

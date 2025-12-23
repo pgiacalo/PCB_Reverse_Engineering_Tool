@@ -562,7 +562,7 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
                 No matches found for "{searchQuery}".
               </div>
             ) : (
-              filteredNotes.map((note, index) => {
+              filteredNotes.map((note) => {
                 // Find the original index in localNotes to maintain proper editing/delete functionality
                 const originalIndex = localNotes.findIndex(n => n === note);
                 return (

@@ -25,7 +25,7 @@
  * Dialog for editing component properties
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { PCBComponent } from '../../types';
 import type { ComponentDefinition } from '../../data/componentDefinitions.d';
 import { InfoDialog } from '../InfoDialog/InfoDialog';
@@ -57,13 +57,22 @@ const getGeminiApiKey = (): string | null => {
   return import.meta.env.VITE_GEMINI_API_KEY || null;
 };
 
-// Use v1 API and gemini-2.5-flash-lite (lightweight, fast model)
-// Alternative: 'gemini-2.5-pro' for better quality (slower)
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+// Get Gemini model from localStorage, default to gemini-2.5-flash-lite
+const getGeminiModel = (): string => {
+  if (typeof window !== 'undefined') {
+    const savedModel = localStorage.getItem('geminiModel');
+    if (savedModel) {
+      return savedModel;
+    }
+  }
+  return 'gemini-2.5-flash-lite'; // Default model
+};
+
 const getGeminiApiUrl = (): string | null => {
   const apiKey = getGeminiApiKey();
+  const model = getGeminiModel();
   return apiKey 
-    ? `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`
+    ? `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`
     : null;
 };
 
@@ -130,6 +139,10 @@ export interface ComponentEditorProps {
   setNotesDialogVisible: (visible: boolean) => void;
   /** Project directory handle for accessing files */
   projectDirHandle: FileSystemDirectoryHandle | null;
+  /** External trigger to show Gemini settings dialog */
+  showGeminiSettingsDialog?: boolean;
+  /** Callback when Gemini settings dialog is closed */
+  onGeminiSettingsDialogClose?: () => void;
 }
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
@@ -152,6 +165,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   setSelectedComponentIds,
   setNotesDialogVisible,
   projectDirHandle,
+  showGeminiSettingsDialog = false,
+  onGeminiSettingsDialogClose,
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
@@ -166,6 +181,84 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
     return '';
   });
+  // Gemini model selection state
+  const [geminiModelInput, setGeminiModelInput] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('geminiModel') || 'gemini-2.5-flash-lite';
+    }
+    return 'gemini-2.5-flash-lite';
+  });
+  
+  // Check if API key exists in localStorage (for Remove button state)
+  const [hasStoredApiKey, setHasStoredApiKey] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('geminiApiKey');
+    }
+    return false;
+  });
+
+  // Handle external trigger to show Gemini settings dialog
+  useEffect(() => {
+    if (showGeminiSettingsDialog) {
+      // Use a small timeout to ensure state updates properly
+      const timer = setTimeout(() => {
+        setShowApiKeyDialog(true);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [showGeminiSettingsDialog]);
+
+  // Update hasStoredApiKey when apiKeyInput changes or when checking localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setHasStoredApiKey(!!localStorage.getItem('geminiApiKey') || !!apiKeyInput.trim());
+    }
+  }, [apiKeyInput]);
+
+  // Function to save API key and model - moved to top level (before early return)
+  const handleSaveApiKey = () => {
+    if (apiKeyInput.trim()) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+        localStorage.setItem('geminiModel', geminiModelInput);
+      }
+      setHasStoredApiKey(true);
+      setInfoDialog({
+        visible: true,
+        title: 'API Key and Model Saved',
+        message: `API key and model (${geminiModelInput}) saved! You can now use the "Extract Datasheet Information" feature.`,
+        type: 'success',
+      });
+    } else {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('geminiApiKey');
+        localStorage.setItem('geminiModel', geminiModelInput); // Still save model even if removing key
+      }
+      setHasStoredApiKey(false);
+      setInfoDialog({
+        visible: true,
+        title: 'API Key Removed',
+        message: 'API key removed. Model preference saved.',
+        type: 'info',
+      });
+    }
+  };
+
+  // Function to remove API key from localStorage
+  const handleRemoveApiKey = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('geminiApiKey');
+    }
+    setApiKeyInput(''); // Clear the input field
+    setHasStoredApiKey(false); // Update state
+    setInfoDialog({
+      visible: true,
+      title: 'API Key Removed',
+      message: 'API key has been removed from browser localStorage. You will need to enter it again to use AI features.',
+      type: 'info',
+    });
+  };
+  
   // Dialog resize state
   const [dialogSize, setDialogSize] = useState(() => {
     const saved = localStorage.getItem('componentDialogSize');
@@ -284,8 +377,249 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   };
   
   // Early returns AFTER all hooks are declared
+  // Render dialogs even when no component is being edited (for Settings menu access)
   if (!componentEditor || !componentEditor.visible) {
-    return null;
+    return (
+      <>
+        {/* API Key Dialog - shown when user tries to extract without API key or from Settings menu */}
+        {showApiKeyDialog && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10005,
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowApiKeyDialog(false);
+                onGeminiSettingsDialogClose?.();
+              }
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#2b2b31',
+                borderRadius: 8,
+                padding: '24px',
+                minWidth: '500px',
+                maxWidth: '600px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                border: '1px solid #1f1f24',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+                  Google Gemini API Configuration
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowApiKeyDialog(false);
+                    onGeminiSettingsDialogClose?.();
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: '24px',
+                    cursor: 'pointer',
+                    padding: 0,
+                    width: '30px',
+                    height: '30px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title="Close"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+                <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+                  Benefits of Adding Your API Key:
+                </p>
+                <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
+                  <li>Automatically extract pin names and component properties (voltage, current, temperature, etc.) from datasheet PDFs</li>
+                  <li>Get datasheet summary for component notes</li>
+                  <li>Save time by avoiding manual data entry</li>
+                </ul>
+                
+                <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+                  How to Get Your Free API Key:
+                </p>
+                <p style={{ margin: '0 0 16px 0' }}>
+                  Go to{' '}
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#4CAF50', textDecoration: 'underline' }}
+                  >
+                    Google AI Studio (aistudio.google.com/app/apikey)
+                  </a>
+                  , sign in with your Google account, and click "Get API key" or "Create API key" in the Dashboard to generate a key for a new or existing Google Cloud project, then copy it and paste it below.
+                </p>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                    Enter Your API Key:
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="Paste your Gemini API key here"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      background: '#1f1f24',
+                      color: '#fff',
+                      boxSizing: 'border-box'
+                    }}
+                    autoFocus
+                  />
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                    Select Gemini Model:
+                  </label>
+                  <select
+                    value={geminiModelInput}
+                    onChange={(e) => setGeminiModelInput(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      background: '#1f1f24',
+                      color: '#fff',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Lightweight, Fast)</option>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Balanced)</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro (High Quality, Slower)</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy High Quality)</option>
+                  </select>
+                  <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px', lineHeight: '1.4' }}>
+                    Choose the model based on your needs: Flash models are faster and use fewer tokens, while Pro models provide higher quality responses.
+                  </p>
+                </div>
+                
+                <div style={{ marginTop: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff', fontSize: '13px' }}>
+                    Storage & Security Information:
+                  </p>
+                  <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                    Your API key will be stored in your browser's <strong>localStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+                  </p>
+                  <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                    ⚠️ Security Warnings:
+                  </p>
+                  <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                    <li>localStorage is accessible via browser DevTools</li>
+                    <li>Do not use on shared or public computers</li>
+                    <li>Malicious browser extensions could access your key</li>
+                    <li>XSS attacks could potentially read your key</li>
+                    <li>The key is stored in plain text (not encrypted)</li>
+                  </ul>
+                  <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
+                    For maximum security, consider using API key restrictions in Google Cloud Console and regularly rotating your keys.
+                  </p>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={handleRemoveApiKey}
+                  disabled={!hasStoredApiKey}
+                  style={{
+                    padding: '8px 16px',
+                    background: !hasStoredApiKey ? '#444' : '#d32f2f',
+                    color: '#fff',
+                    border: '1px solid #666',
+                    borderRadius: 6,
+                    cursor: !hasStoredApiKey ? 'not-allowed' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    opacity: !hasStoredApiKey ? 0.5 : 1,
+                  }}
+                  title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser localStorage'}
+                >
+                  Remove API Key
+                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    setShowApiKeyDialog(false);
+                    onGeminiSettingsDialogClose?.();
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#555',
+                    color: '#fff',
+                    border: '1px solid #666',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleSaveApiKey();
+                    setShowApiKeyDialog(false);
+                    onGeminiSettingsDialogClose?.();
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#4CAF50',
+                    color: '#fff',
+                    border: '1px solid #45a049',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                  }}
+                >
+                  Save API Key
+                </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <InfoDialog
+          visible={infoDialog.visible}
+          title={infoDialog.title}
+          message={infoDialog.message}
+          type={infoDialog.type}
+          onClose={() => {
+            setInfoDialog({ visible: false, title: '', message: '', type: 'info' });
+          }}
+          onShowResponse={infoDialog.onShowResponse}
+        />
+      </>
+    );
   }
   
   // Validate component exists and has required properties
@@ -1166,26 +1500,6 @@ ${truncatedText}`;
     }
   };
 
-  // Function to save API key - moved to top level
-  const handleSaveApiKey = () => {
-    if (apiKeyInput.trim()) {
-      localStorage.setItem('geminiApiKey', apiKeyInput.trim());
-      setInfoDialog({
-        visible: true,
-        title: 'API Key Saved',
-        message: 'API key saved! You can now use the "Extract Datasheet Information" feature.',
-        type: 'success',
-      });
-    } else {
-      localStorage.removeItem('geminiApiKey');
-      setInfoDialog({
-        visible: true,
-        title: 'API Key Removed',
-        message: 'API key removed.',
-        type: 'info',
-      });
-    }
-  };
 
   return (
     <>
@@ -2391,6 +2705,7 @@ ${truncatedText}`;
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowApiKeyDialog(false);
+            onGeminiSettingsDialogClose?.();
           }
         }}
       >
@@ -2408,7 +2723,7 @@ ${truncatedText}`;
         >
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              Google Gemini API Key Required
+              Google Gemini API Configuration
             </h3>
             <button
               onClick={() => setShowApiKeyDialog(false)}
@@ -2436,8 +2751,7 @@ ${truncatedText}`;
               Benefits of Adding Your API Key:
             </p>
             <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
-              <li>Automatically extract pin names from datasheet PDFs</li>
-              <li>Extract component properties (voltage, current, temperature, etc.)</li>
+              <li>Automatically extract pin names and component properties (voltage, current, temperature, etc.) from datasheet PDFs</li>
               <li>Get datasheet summary for component notes</li>
               <li>Save time by avoiding manual data entry</li>
             </ul>
@@ -2480,46 +2794,122 @@ ${truncatedText}`;
                 autoFocus
               />
             </div>
+            
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                Select Gemini Model:
+              </label>
+              <select
+                value={geminiModelInput}
+                onChange={(e) => setGeminiModelInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  background: '#1f1f24',
+                  color: '#fff',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Lightweight, Fast)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Balanced)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (High Quality, Slower)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy High Quality)</option>
+              </select>
+              <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px', lineHeight: '1.4' }}>
+                Choose the model based on your needs: Flash models are faster and use fewer tokens, while Pro models provide higher quality responses.
+              </p>
+            </div>
+            
+            <div style={{ marginTop: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
+              <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff', fontSize: '13px' }}>
+                Storage & Security Information:
+              </p>
+              <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                Your API key will be stored in your browser's <strong>localStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+              </p>
+              <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                ⚠️ Security Warnings:
+              </p>
+              <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                <li>localStorage is accessible via browser DevTools</li>
+                <li>Do not use on shared or public computers</li>
+                <li>Malicious browser extensions could access your key</li>
+                <li>XSS attacks could potentially read your key</li>
+                <li>The key is stored in plain text (not encrypted)</li>
+              </ul>
+              <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
+                For maximum security, consider using API key restrictions in Google Cloud Console and regularly rotating your keys.
+              </p>
+            </div>
           </div>
           
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
             <button
-              onClick={() => setShowApiKeyDialog(false)}
+              onClick={handleRemoveApiKey}
+              disabled={!hasStoredApiKey}
               style={{
                 padding: '8px 16px',
-                background: '#555',
+                background: !hasStoredApiKey ? '#444' : '#d32f2f',
                 color: '#fff',
                 border: '1px solid #666',
                 borderRadius: 6,
-                cursor: 'pointer',
+                cursor: !hasStoredApiKey ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
                 fontWeight: 600,
+                opacity: !hasStoredApiKey ? 0.5 : 1,
               }}
+              title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser localStorage'}
             >
-              Cancel
+              Remove API Key
             </button>
-            <button
-              onClick={() => {
-                handleSaveApiKey();
-                setShowApiKeyDialog(false);
-              }}
-              style={{
-                padding: '8px 16px',
-                background: '#4CAF50',
-                color: '#fff',
-                border: '1px solid #45a049',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              Save API Key
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setShowApiKeyDialog(false);
+                  onGeminiSettingsDialogClose?.();
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#555',
+                  color: '#fff',
+                  border: '1px solid #666',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleSaveApiKey();
+                  setShowApiKeyDialog(false);
+                  onGeminiSettingsDialogClose?.();
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#4CAF50',
+                  color: '#fff',
+                  border: '1px solid #45a049',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                }}
+                >
+                  Save API Key
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     
     {/* Gemini Response Dialog - shows full API response for debugging */}
     {showResponseDialog && geminiRawResponse && (

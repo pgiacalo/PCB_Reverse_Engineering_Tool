@@ -60,6 +60,7 @@ export interface MenuBarProps {
   // Dialogs
   setNewProjectDialog: (dialog: { visible: boolean }) => void;
   setAutoSaveDialog: (dialog: { visible: boolean; interval: number | null }) => void;
+  onShowGeminiSettings: () => void;
   
   // Image operations
   topImage: PCBImage | null;
@@ -224,6 +225,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setBomExportFormat: _setBomExportFormat,
   setNewProjectDialog,
   setAutoSaveDialog,
+  onShowGeminiSettings,
   topImage,
   bottomImage,
   setCurrentTool,
@@ -878,6 +880,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               Restore from History…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={() => {
+                onShowGeminiSettings();
+                setOpenMenu(null);
+              }} 
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              AI Settings…
+            </button>
             <button 
               onClick={async () => { 
                 if (isReadOnlyMode) return;

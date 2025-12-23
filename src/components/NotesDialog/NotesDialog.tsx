@@ -123,7 +123,6 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
   // Local state for notes editing - preserve user edits even when selection changes
   const [notesMap, setNotesMap] = useState<Map<string, string>>(new Map());
   const lastSelectionKeyRef = useRef<string>('');
-  const inputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
   // Dialog resize state
   const [dialogSize, setDialogSize] = useState(() => {
     const saved = localStorage.getItem('notesDialogSize');
