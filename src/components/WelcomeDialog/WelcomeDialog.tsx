@@ -162,6 +162,9 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
         3) Use the tools to draw vias, traces, components, etc.
       </div>
+      <div style={{ fontSize: '12px', color: '#666', marginTop: '16px', textAlign: 'center', fontStyle: 'italic' }}>
+        Best viewed in browser's full screen mode.
+      </div>
       </div>
     </div>
   );

@@ -39,30 +39,19 @@ The application is hosted on GitHub and is available globally. No installation r
 
 3. **Configure AI API key (optional)**
    
-   For AI-powered pin name extraction from datasheets, you have two options:
+   For AI-powered pin name extraction from datasheets, enter your API key in the application:
    
-   **Option A: For Development (Local)**
-   Create a `.env` file in the project root:
-   ```bash
-   cp .env.example .env
-   ```
-   Then edit `.env` and add your Google Gemini API key:
-   ```
-   VITE_GEMINI_API_KEY=your_api_key_here
-   ```
-   
-   **Option B: For Production/GitHub Pages (Recommended)**
-   Enter your API key directly in the Component Properties dialog:
    1. Open any Integrated Circuit component's properties
-   2. In the "Pin Name" column header, you'll see an API key input field
-   3. Enter your API key and click "Save API Key"
-   4. The key is stored in your browser's localStorage (secure, not exposed in code)
+   2. Go to File → AI Settings (or the API key dialog will appear when you try to extract datasheet information)
+   3. Enter your Google Gemini API key and click "Save API Key"
+   4. The key is stored in your browser's localStorage (secure, not exposed in code or build)
    
    Get your free API key from: https://aistudio.google.com/apikey
    
    **Security Note:** 
-   - For GitHub Pages deployment, use Option B (localStorage) to avoid exposing your API key in the build
-   - The `.env` file is for local development only and is already in `.gitignore`
+   - API keys are stored only in browser localStorage and never bundled into the build
+   - Environment variables are NOT used to prevent API keys from being exposed in production builds
+   - Never commit API keys to the repository
 
 4. **Start the development server**
    

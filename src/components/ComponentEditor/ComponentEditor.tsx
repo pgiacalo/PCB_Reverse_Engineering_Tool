@@ -41,20 +41,19 @@ if (typeof window !== 'undefined') {
 }
 
 // Google Gemini API configuration
-// API key priority:
-// 1. User-provided key from localStorage (for production/GitHub Pages)
-// 2. Build-time environment variable (for development)
+// API key source: User-provided key from localStorage only
 // This ensures no API key is exposed in production builds
+// Note: Environment variables are NOT used to prevent API keys from being bundled into the build
 const getGeminiApiKey = (): string | null => {
-  // First check localStorage (user-provided, secure for production)
+  // Only use localStorage (user-provided, secure for production)
+  // Never use environment variables as they get bundled into the JavaScript build
   if (typeof window !== 'undefined') {
     const userKey = localStorage.getItem('geminiApiKey');
     if (userKey && userKey.trim()) {
       return userKey.trim();
     }
   }
-  // Fallback to build-time env var (development only)
-  return import.meta.env.VITE_GEMINI_API_KEY || null;
+  return null;
 };
 
 // Get Gemini model from localStorage, default to gemini-2.5-flash-lite
