@@ -1,5 +1,7 @@
 # PCB Reverse Engineering Tool v3.0
 
+![PCB Tracer Screenshot](images/PCB_Tracer_Image.png)
+
 A powerful, browser-based tool designed for reverse engineering, troubleshooting, signal path tracing, and electronics learning on 2 to 4 layer printed circuit boards (PCBs). Perfect for engineers, technicians, and hobbyists who need to analyze and document PCB layouts.
 
 ## What Can You Do?
