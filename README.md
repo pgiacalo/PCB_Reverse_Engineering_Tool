@@ -1,4 +1,4 @@
-# PCB Reverse Engineering Tool v2.9
+# PCB Reverse Engineering Tool v3.0
 
 A browser-based tool designed for reverse engineering, troubleshooting, signal path tracing, and electronics learning on 2 to 4 layer printed circuit boards (PCBs). This tool allows engineers, technicians, and hobbyists to load PCB photos from multiple layers, overlay them with precise alignment, control photo transparency, and add comprehensive annotations including components, traces, vias, pads, power nodes, and ground connections to facilitate PCB analysis and understanding.
 
@@ -529,4 +529,4 @@ For support and questions:
 ---
 
 *Last Updated: [Current Date]*
-*Version: 2.9*
+*Version: 3.0*
