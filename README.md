@@ -211,6 +211,12 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Pad Tool** (<code>P</code>): Place component pads (SMD and through-hole)
 - **Test Point Tool** (<code>Y</code>): Place test points for circuit testing
 - **Component Tool** (<code>C</code>): Place and annotate components
+- **Copy/Paste Components**: Select a component and use <code>Ctrl+C</code> / <code>Cmd+C</code> to copy, then <code>Ctrl+V</code> / <code>Cmd+V</code> to paste. The pasted component is a clone with:
+  - Same properties as the original (type, value, pin count, etc.)
+  - New unique ID and designator (maintains prefix, increments number, e.g., U8 → U9)
+  - No pin connections (all connections cleared)
+  - Position offset by 5mm (right and down from original)
+  - All other properties preserved (pin names, notes, etc.)
 - **Power Tool** (<code>B</code>): Place power nodes
 - **Ground Tool** (<code>G</code>): Place ground nodes
 - **Eraser Tool** (<code>E</code>): Click and drag to erase drawn lines
@@ -247,6 +253,8 @@ See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES
 - **Trace** — <code>T</code>
 - **Component** — <code>C</code>
 - **Component Properties** — <code>A</code> (opens dialog for selected component)
+- **Copy Component** — <code>Ctrl</code> + <code>C</code> / <code>Cmd</code> + <code>C</code> (copies selected component)
+- **Paste Component** — <code>Ctrl</code> + <code>V</code> / <code>Cmd</code> + <code>V</code> (pastes copied component with new designator)
 - **Power** — <code>B</code>
 - **Ground** — <code>G</code>
 - **Erase** — <code>E</code>

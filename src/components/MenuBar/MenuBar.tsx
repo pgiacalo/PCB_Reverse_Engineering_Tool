@@ -1277,6 +1277,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Notes Dialog</strong> — <code>N</code></li>
                         <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
                         <li><strong>Undo</strong> — <code>Ctrl</code> + <code>Z</code></li>
+                        <li><strong>Copy Component</strong> — <code>Ctrl</code> + <code>C</code> / <code>Cmd</code> + <code>C</code></li>
+                        <li><strong>Paste Component</strong> — <code>Ctrl</code> + <code>V</code> / <code>Cmd</code> + <code>V</code></li>
                       </ul>
                     </div>
                   </div>
@@ -1574,6 +1576,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li><strong>Notes</strong> — <code>N</code></li>
                       <li><strong>Project Notes</strong> — <code>L</code></li>
                       <li><strong>Undo</strong> — <code>Ctrl+Z</code> / <code>Cmd+Z</code></li>
+                      <li><strong>Copy Component</strong> — <code>Ctrl+C</code> / <code>Cmd+C</code></li>
+                      <li><strong>Paste Component</strong> — <code>Ctrl+V</code> / <code>Cmd+V</code></li>
                     </ul>
                   </div>
                 </div>
