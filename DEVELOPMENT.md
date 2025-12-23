@@ -92,7 +92,7 @@ Get your free API key from: https://aistudio.google.com/apikey
 
 ## Deployment to GitHub Pages
 
-See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](README_FOR_GITHUB_PAGES.md)
+See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](docs/setup/README_FOR_GITHUB_PAGES.md)
 
 ## Configuration
 
@@ -254,7 +254,7 @@ export const exportDrawing: (drawing: DrawingData) => string;
 For development support and questions:
 - Create an issue in the repository
 - Check the documentation in the `/docs` folder
-- Review the requirements in `REQUIREMENTS.md`
+- Review the requirements in `docs/REQUIREMENTS.md`
 
 ---
 
