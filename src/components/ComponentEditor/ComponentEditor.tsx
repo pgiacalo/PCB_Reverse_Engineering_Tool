@@ -57,9 +57,9 @@ const getGeminiApiKey = (): string | null => {
   return import.meta.env.VITE_GEMINI_API_KEY || null;
 };
 
-// Use v1 API and gemini-2.5-flash (latest stable, fast model)
+// Use v1 API and gemini-2.5-flash-lite (lightweight, fast model)
 // Alternative: 'gemini-2.5-pro' for better quality (slower)
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const getGeminiApiUrl = (): string | null => {
   const apiKey = getGeminiApiKey();
   return apiKey 
@@ -1128,6 +1128,19 @@ ${truncatedText}`;
           extractedPropertiesList.forEach(prop => {
             message += `\n  • ${prop.label}: ${prop.value}`;
           });
+        }
+        
+        // Add pin names list below all other properties
+        const pinNamesList: string[] = [];
+        pinNames.forEach((name, index) => {
+          if (name && name.trim()) {
+            pinNamesList.push(`Pin ${index + 1}: ${name.trim()}`);
+          }
+        });
+        
+        if (pinNamesList.length > 0) {
+          message += '\n\nPin Names:';
+          message += '\n  ' + pinNamesList.join(', ');
         }
         
         setInfoDialog({

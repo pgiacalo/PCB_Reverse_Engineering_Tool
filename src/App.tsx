@@ -22,7 +22,7 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
-import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter, isComponentPolarized } from './utils/components';
+import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter, isComponentPolarized, getNextDesignatorNumber } from './utils/components';
 import { createComponentInstance } from './dataDrivenComponents/runtime/instanceFactory';
 import {
   applyTransform,
@@ -43,7 +43,7 @@ import {
   COLOR_PALETTE,
   COMPONENT_ICON,
 } from './constants';
-import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId } from './utils/coordinates';
+import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId, generateUniqueId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
@@ -2075,6 +2075,9 @@ function App() {
   const groundButtonRef = useRef<HTMLButtonElement>(null);
   // Store pending component position (set by click, used when type is selected)
   const [pendingComponentPosition, setPendingComponentPosition] = useState<{ x: number; y: number; layer: 'top' | 'bottom' } | null>(null);
+  
+  // Copy/paste state for components
+  const [copiedComponent, setCopiedComponent] = useState<PCBComponent | null>(null);
   
   const [isSnapDisabled, setIsSnapDisabled] = useState(false); // Control key disables snap-to
   // Selection state (selectedIds, isSelecting are now provided by useSelection hook - see above)
@@ -7263,6 +7266,123 @@ function App() {
         setGroundSymbols(snapshot.groundSymbols);
         // Clear any in-progress drawing
         setCurrentStroke([]);
+      }
+      return;
+    }
+
+    // Copy component: CMD-C (Mac) or CTRL-C (Windows/Linux)
+    if ((e.key === 'c' || e.key === 'C') && 
+        (e.ctrlKey || e.metaKey) && 
+        !e.shiftKey && !e.altKey) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Let browser handle copy in text fields
+      }
+      
+      // Only copy if exactly one component is selected
+      if (selectedComponentIds.size === 1) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const componentId = Array.from(selectedComponentIds)[0];
+        const component = [...componentsTop, ...componentsBottom].find(c => c.id === componentId);
+        
+        if (component) {
+          setCopiedComponent(component);
+          console.log('Component copied:', component.id, component.designator);
+        }
+      }
+      return;
+    }
+
+    // Paste component: CMD-V (Mac) or CTRL-V (Windows/Linux)
+    if ((e.key === 'v' || e.key === 'V') && 
+        (e.ctrlKey || e.metaKey) && 
+        !e.shiftKey && !e.altKey) {
+      // Ignore if user is typing in an input field, textarea, or contenteditable
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing =
+        !!active &&
+        ((active.tagName === 'INPUT' && 
+          (active as HTMLInputElement).type !== 'range' &&
+          (active as HTMLInputElement).type !== 'checkbox' &&
+          (active as HTMLInputElement).type !== 'radio') ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable);
+      if (isEditing) {
+        return; // Let browser handle paste in text fields
+      }
+      
+      if (copiedComponent && !areComponentsLocked) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Get all existing components to assign next designator
+        const allComponents = [...componentsTop, ...componentsBottom];
+        const counters = loadDesignatorCounters();
+        
+        // Extract prefix from the original designator (e.g., "U8" -> "U")
+        // Maintain the same prefix signature but increment the number
+        let prefix: string;
+        if (copiedComponent.designator) {
+          // Match letters followed by numbers (e.g., "U8", "R1", "C5", "Q12")
+          const designatorMatch = copiedComponent.designator.match(/^([A-Za-z]+)(\d+)$/);
+          if (designatorMatch) {
+            prefix = designatorMatch[1]; // Extract the prefix (letters part)
+          } else {
+            // Fallback to default prefix if designator doesn't match expected pattern
+            prefix = getDefaultPrefix(copiedComponent.componentType);
+          }
+        } else {
+          // Fallback to default prefix if no designator exists
+          prefix = getDefaultPrefix(copiedComponent.componentType);
+        }
+        
+        const nextNumber = getNextDesignatorNumber(prefix, allComponents, counters);
+        const newDesignator = `${prefix}${nextNumber}`;
+        
+        // Update designator counter
+        updateDesignatorCounter(prefix, nextNumber, counters);
+        saveDesignatorCounters(counters);
+        
+        // Clone the component with new ID, new designator, and no connections
+        const clonedComponent: PCBComponent = {
+          ...copiedComponent,
+          id: generateUniqueId('comp'),
+          designator: newDesignator,
+          pinConnections: new Array(copiedComponent.pinCount).fill(''), // Clear all connections
+          pinPolarities: copiedComponent.pinPolarities ? new Array(copiedComponent.pinCount).fill('') : undefined, // Clear polarities
+          // Position offset by 5mm to the right and down
+          x: copiedComponent.x + 5,
+          y: copiedComponent.y + 5,
+        };
+        
+        // Preserve pinNames if they exist
+        if ((copiedComponent as any).pinNames) {
+          (clonedComponent as any).pinNames = [...(copiedComponent as any).pinNames];
+        }
+        
+        // Add to the appropriate layer
+        if (clonedComponent.layer === 'top') {
+          setComponentsTop(prev => [...prev, clonedComponent]);
+        } else {
+          setComponentsBottom(prev => [...prev, clonedComponent]);
+        }
+        
+        // Select the newly pasted component
+        clearAllSelections();
+        setSelectedComponentIds(new Set([clonedComponent.id]));
+        
+        console.log('Component pasted:', clonedComponent.id, clonedComponent.designator);
       }
       return;
     }
