@@ -1,4 +1,4 @@
 ---
 alwaysApply: true
 ---
-There shall be no shared data between projects. Each project's data and state information shall be maintained separately and persisted/reloaded to/from the .json file. 
+There shall be no shared data between projects. Each project's data and state information shall be maintained separately and persisted/reloaded to/from the project's .json file. 

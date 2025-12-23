@@ -194,11 +194,11 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     // So we don't return early - instead, we'll render dynamic fields and continue to hardcoded section
     // For other components, just return the dynamic fields
     if (!isSemiconductor) {
-      return (
-        <>
-          {fields.map(renderField).filter(Boolean)}
-        </>
-      );
+    return (
+      <>
+        {fields.map(renderField).filter(Boolean)}
+      </>
+    );
     }
     
     // For semiconductors, don't return early - continue to hardcoded section below
@@ -1040,22 +1040,22 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                   disabled={areComponentsLocked}
                   style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
                 >
-                  <option value="Op-Amp">Op-Amp</option>
-                  <option value="Microcontroller">Microcontroller</option>
-                  <option value="Microprocessor">Microprocessor</option>
-                  <option value="Logic">Logic</option>
-                  <option value="Memory">Memory</option>
-                  <option value="Voltage Regulator">Voltage Regulator</option>
-                  <option value="Timer">Timer</option>
-                  <option value="ADC">ADC (Analog-to-Digital)</option>
-                  <option value="DAC">DAC (Digital-to-Analog)</option>
-                  <option value="Comparator">Comparator</option>
-                  <option value="Transceiver">Transceiver</option>
-                  <option value="Driver">Driver</option>
-                  <option value="Amplifier">Amplifier</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
+              <option value="Op-Amp">Op-Amp</option>
+              <option value="Microcontroller">Microcontroller</option>
+              <option value="Microprocessor">Microprocessor</option>
+              <option value="Logic">Logic</option>
+              <option value="Memory">Memory</option>
+              <option value="Voltage Regulator">Voltage Regulator</option>
+              <option value="Timer">Timer</option>
+              <option value="ADC">ADC (Analog-to-Digital)</option>
+              <option value="DAC">DAC (Digital-to-Analog)</option>
+              <option value="Comparator">Comparator</option>
+              <option value="Transceiver">Transceiver</option>
+              <option value="Driver">Driver</option>
+              <option value="Amplifier">Amplifier</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
             ) : null;
             
             // Insert IC Type after manufacturer field
@@ -1106,12 +1106,12 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                 <label htmlFor={`component-packagetype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
                   Package Type:
-                </label>
+            </label>
                 <select
                   id={`component-packagetype-${comp.id}`}
                   value={(componentEditor as any).packageType || ''}
                   onChange={(e) => setComponentEditor({ ...componentEditor, packageType: e.target.value })}
-                  disabled={areComponentsLocked}
+              disabled={areComponentsLocked}
                   style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
                 >
                   <option value="">-- Select --</option>
@@ -1127,7 +1127,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
                   <option value="Various">Various</option>
                   <option value="Other">Other</option>
                 </select>
-              </div>
+          </div>
             </>
           )}
           

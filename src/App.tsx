@@ -8307,6 +8307,11 @@ function App() {
     // === STEP 13: Reset point ID counter and clear allocated IDs tracking ===
     resetPointIdCounter();
     
+    // === STEP 13.5: Reset module-level singleton state ===
+    // CRITICAL: Reset toolInstanceManager to prevent state leakage between projects
+    // This module-level singleton persists across component remounts, so must be explicitly reset
+    toolInstanceManager.initialize();
+    
     // === STEP 14: Close all dialogs ===
     setOpenMenu(null);
     setDebugDialog({ visible: false, text: '' });
@@ -14732,11 +14737,24 @@ function App() {
           const file = e.target.files?.[0];
           if (file) {
             try {
+              // CRITICAL: Close current project first to release all browser permissions and clear all state
+              // This prevents state leakage from the previous project into the newly opened project
+              closeProject();
+              
+              // Small delay to ensure state is cleared before proceeding
+              await new Promise(resolve => setTimeout(resolve, 0));
+              
               // Update current project file path
               setCurrentProjectFilePath(file.name);
               const text = await file.text();
               const project = JSON.parse(text);
-              await loadProject(project);
+              
+              // Get directory handle if possible (for auto-save)
+              let projectDirHandle: FileSystemDirectoryHandle | null = null;
+              // Note: With fallback file input, we can't get directory handle directly
+              // User will need to set up auto-save directory separately if needed
+              
+              await loadProject(project, projectDirHandle);
               
               // Extract project name from project data or filename (no localStorage)
               let projectNameToUse: string;

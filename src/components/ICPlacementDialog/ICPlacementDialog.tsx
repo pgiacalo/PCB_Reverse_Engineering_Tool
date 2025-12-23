@@ -165,7 +165,7 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
       }
       if (num % 4 !== 0) {
         return { valid: false, error: '4-sided components must have a number of pins divisible by 4.' };
-      }
+    }
       return { valid: true, error: '', numPins: num };
     }
 
@@ -234,36 +234,36 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
           margin-right: 4px;
         }
       `}</style>
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 10000,
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
       <div
         style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10000,
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onClose();
-          }
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: '#fff',
-            padding: '20px',
-            borderRadius: '8px',
+          backgroundColor: '#fff',
+          padding: '20px',
+          borderRadius: '8px',
             minWidth: '320px',
             maxWidth: '380px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#222', fontSize: '18px' }}>
           {isPad ? 'Pad Pattern' : 'Via Pattern'} Placement
         </h2>
@@ -439,8 +439,8 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
             OK
           </button>
         </div>
-        </div>
       </div>
+    </div>
     </>
   );
 };
