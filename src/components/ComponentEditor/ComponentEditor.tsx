@@ -128,6 +128,8 @@ export interface ComponentEditorProps {
   setSelectedComponentIds: (ids: Set<string>) => void;
   /** Set notes dialog visible */
   setNotesDialogVisible: (visible: boolean) => void;
+  /** Project directory handle for accessing files */
+  projectDirHandle: FileSystemDirectoryHandle | null;
 }
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
@@ -149,10 +151,14 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   areComponentsLocked,
   setSelectedComponentIds,
   setNotesDialogVisible,
+  projectDirHandle,
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
   const [showApiKeyInstructions, setShowApiKeyInstructions] = useState(false);
+  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
+  const [geminiRawResponse, setGeminiRawResponse] = useState<string | null>(null);
+  const [showResponseDialog, setShowResponseDialog] = useState(false);
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -174,11 +180,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
-  const [infoDialog, setInfoDialog] = useState({
+  const [infoDialog, setInfoDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'success';
+    onShowResponse?: () => void;
+  }>({
     visible: false,
     title: '',
     message: '',
-    type: 'info' as 'info' | 'success',
+    type: 'info',
   });
   
   // Find the component being edited - check both layers in case layer was changed
@@ -216,26 +228,21 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     
     if (compType === 'IntegratedCircuit' || compTypeAny === 'Semiconductor') {
       const ic = comp as any;
-      if (ic.datasheetFileName) {
-        // We have the file name and potentially file data stored in the component
-        // The file input will be empty, but we can display the file name as a clickable link
-        // Set uploadedDatasheetFile to null since we don't have the actual File object
-        setUploadedDatasheetFile(null);
-        // Restore file data to componentEditor if available
-        if (ic.datasheetFileData && componentEditor && !componentEditor.datasheetFileData) {
-          setComponentEditor({
-            ...componentEditor,
-            datasheetFileData: ic.datasheetFileData,
-            datasheetFileName: ic.datasheetFileName,
-          });
-        }
-      } else {
-        setUploadedDatasheetFile(null);
+      // Set uploadedDatasheetFile to null since we don't have the actual File object
+      // The file will be loaded from project directory when needed
+      setUploadedDatasheetFile(null);
+      // Always restore file path from component data to componentEditor
+      // This ensures the path is available for display and file opening
+      if (componentEditor) {
+        setComponentEditor({
+          ...componentEditor,
+          datasheetFileName: ic.datasheetFileName || undefined,
+        });
       }
     } else {
       setUploadedDatasheetFile(null);
     }
-  }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName, (comp as any)?.datasheetFileData]);
+  }, [comp?.id, comp?.componentType, (comp as any)?.datasheetFileName]);
   
   // Handle resize mouse events
   useEffect(() => {
@@ -322,10 +329,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     // Derive abbreviation from designator (first character)
     const abbreviation = designator.length > 0 ? designator.charAt(0).toUpperCase() : getDefaultAbbreviation(comp.componentType);
     (updated as any).abbreviation = abbreviation;
-    if ('manufacturer' in updated) {
+    // Save manufacturer and partNumber if they exist in componentEditor
+    // (These are saved specifically for IntegratedCircuit in the type-specific section below,
+    // but we also save them here for other component types that might have these fields)
+    if (componentEditor.manufacturer !== undefined) {
       (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
     }
-    if ('partNumber' in updated) {
+    if (componentEditor.partNumber !== undefined) {
       (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
     }
     // Update pin count if changed
@@ -506,21 +516,19 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       }
       updated.icType = componentEditor.icType || undefined;
       
-      // Save uploaded datasheet file name and file data (as data URL)
-      if (uploadedDatasheetFile) {
-        (updated as any).datasheetFileName = uploadedDatasheetFile.name;
-        // File data should already be in componentEditor.datasheetFileData from the onChange handler
-        if (componentEditor.datasheetFileData) {
-          (updated as any).datasheetFileData = componentEditor.datasheetFileData;
-        }
-      } else if (componentEditor.datasheetFileData) {
-        // Keep existing file data if no new file is uploaded
-        (updated as any).datasheetFileData = componentEditor.datasheetFileData;
-        (updated as any).datasheetFileName = componentEditor.datasheetFileName || (comp as any)?.datasheetFileName;
+      // Save manufacturer, part number, and operating temperature for Integrated Circuits
+      (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
+      (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
+      (updated as any).operatingTemperature = (componentEditor as any).operatingTemperature?.trim() || undefined;
+      
+      // Save uploaded datasheet file path (relative to project root, e.g., "datasheets/filename.pdf")
+      // The path is stored in componentEditor.datasheetFileName when file is selected
+      if (componentEditor.datasheetFileName) {
+        // Keep the full path (e.g., "datasheets/filename.pdf" or just "filename.pdf" for root)
+        (updated as any).datasheetFileName = componentEditor.datasheetFileName;
       } else {
-        // Clear file data if explicitly removed
+        // Clear file path if explicitly removed
         (updated as any).datasheetFileName = undefined;
-        (updated as any).datasheetFileData = undefined;
       }
     } else {
       // For non-IC components, save description from the Description field
@@ -671,20 +679,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     const apiUrl = getGeminiApiUrl();
     
     if (!apiKey || !apiUrl) {
-      const message = 'Gemini API key is not configured.\n\n' +
-        'For production/GitHub Pages: Enter your API key in the field below.\n' +
-        'For development: Create a .env file with VITE_GEMINI_API_KEY=your_api_key_here\n\n' +
-        'Get your free API key from: https://aistudio.google.com/apikey';
-      alert(message);
+      setShowApiKeyDialog(true);
       return;
     }
     
-    // Require uploaded file
-    if (!uploadedDatasheetFile) {
+    // Require uploaded file or file in project directory
+    const datasheetPath = (comp as any)?.datasheetFileName;
+    if (!uploadedDatasheetFile && (!projectDirHandle || !datasheetPath)) {
       setInfoDialog({
         visible: true,
         title: 'Datasheet Required',
-        message: 'Please upload a datasheet PDF file before extracting information.',
+        message: 'Please choose a datasheet file before extracting information.',
         type: 'info',
       });
       return;
@@ -693,8 +698,41 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     setIsFetchingPinNames(true);
     
     try {
-      // Use uploaded file - no CORS issues!
-      const arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
+      // Use uploaded file or read from project directory
+      let arrayBuffer: ArrayBuffer;
+      if (uploadedDatasheetFile) {
+        // Read directly from File object
+        arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
+      } else if (projectDirHandle && datasheetPath) {
+        // Read from project directory
+        const pathParts = datasheetPath.split('/');
+        let dirHandle = projectDirHandle;
+        
+        // Navigate to subdirectory if path contains '/'
+        // Use getDirectoryHandle without create: true (same as images)
+        // Handle case sensitivity like image loading does
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          const dirName = pathParts[i];
+          try {
+            dirHandle = await dirHandle.getDirectoryHandle(dirName);
+          } catch (e) {
+            // Try alternative case if first attempt fails
+            const altName = dirName === 'datasheets' ? 'Datasheets' : 
+                           dirName === 'Datasheets' ? 'datasheets' : dirName;
+            try {
+              dirHandle = await dirHandle.getDirectoryHandle(altName);
+            } catch (e2) {
+              throw new Error(`Directory '${dirName}' not found in project folder.`);
+            }
+          }
+        }
+        
+        const fileHandle = await dirHandle.getFileHandle(pathParts[pathParts.length - 1]);
+        const file = await fileHandle.getFile();
+        arrayBuffer = await file.arrayBuffer();
+      } else {
+        throw new Error('No datasheet file available');
+      }
       
       // Load PDF document
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -841,8 +879,13 @@ ${truncatedText}`;
       }
 
       if (!responseText) {
+        setGeminiRawResponse(null); // Clear any previous response
         throw new Error('No response text from Gemini API. The API may have returned an empty response.');
       }
+
+      // Store raw response for error display
+      const rawResponseText = responseText;
+      setGeminiRawResponse(rawResponseText);
 
       // Parse JSON response
       // Remove markdown code blocks if present (Gemini sometimes wraps in ```json or ```)
@@ -852,6 +895,7 @@ ${truncatedText}`;
       try {
         extractedData = JSON.parse(responseText);
       } catch (parseError) {
+        // Keep the raw response stored for display
         throw new Error(`Failed to parse JSON response from Gemini API: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
       }
 
@@ -1038,7 +1082,7 @@ ${truncatedText}`;
         if (extractedPropertiesList.length > 0) {
           message += '\n\nExtracted Properties:';
           extractedPropertiesList.forEach(prop => {
-            message += `\n  • ${prop.label}: ${prop.value}`;
+            message += `\n  • ${prop.value}`;
           });
         }
         
@@ -1048,6 +1092,8 @@ ${truncatedText}`;
           message: message,
           type: 'success',
         });
+        // Clear raw response on success
+        setGeminiRawResponse(null);
       }
     } catch (error) {
       console.error('Error fetching pin names:', error);
@@ -1056,6 +1102,7 @@ ${truncatedText}`;
         title: 'Extraction Failed',
         message: `Failed to extract information: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`,
         type: 'info',
+        onShowResponse: geminiRawResponse ? () => setShowResponseDialog(true) : undefined,
       });
     } finally {
       setIsFetchingPinNames(false);
@@ -1345,24 +1392,46 @@ ${truncatedText}`;
                       const file = e.target.files?.[0] || null;
                       if (file) {
                         setUploadedDatasheetFile(file);
-                        // Read file as data URL and store in componentEditor for persistence
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          const dataUrl = event.target?.result as string;
-                          if (dataUrl) {
-                            setComponentEditor({
-                              ...componentEditor,
-                              datasheetFileData: dataUrl,
-                              datasheetFileName: file.name,
-                            });
+                        
+                        // Copy file to project directory if available
+                        let datasheetFilePath = file.name; // Default to just filename
+                        if (projectDirHandle) {
+                          try {
+                            // Create datasheets subdirectory if it doesn't exist
+                            let datasheetsDirHandle: FileSystemDirectoryHandle;
+                            try {
+                              datasheetsDirHandle = await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
+                            } catch (e) {
+                              console.error('Failed to get/create datasheets directory:', e);
+                              // Fall back to root directory
+                              datasheetsDirHandle = projectDirHandle;
+                            }
+                            
+                            // Copy file to project directory
+                            const fileHandle = await datasheetsDirHandle.getFileHandle(file.name, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(await file.arrayBuffer());
+                            await writable.close();
+                            
+                            // Store relative path from project root
+                            datasheetFilePath = datasheetsDirHandle === projectDirHandle 
+                              ? file.name 
+                              : `datasheets/${file.name}`;
+                          } catch (error) {
+                            console.error('Failed to copy datasheet to project directory:', error);
+                            // Continue with just filename if copy fails
                           }
-                        };
-                        reader.readAsDataURL(file);
+                        }
+                        
+                        // Store the file path (relative to project root)
+                        setComponentEditor({
+                          ...componentEditor,
+                          datasheetFileName: datasheetFilePath,
+                        });
                       } else {
                         setUploadedDatasheetFile(null);
                         setComponentEditor({
                           ...componentEditor,
-                          datasheetFileData: undefined,
                           datasheetFileName: undefined,
                         });
                       }
@@ -1396,64 +1465,184 @@ ${truncatedText}`;
                     Choose File
                   </label>
                   {(() => {
-                    // Determine which file to use: uploaded file (in memory) or stored file data (from component)
-                    const fileToUse = uploadedDatasheetFile || 
-                      ((comp as any)?.datasheetFileData ? { 
-                        name: (comp as any).datasheetFileName || 'PDF file',
-                        data: (comp as any).datasheetFileData 
-                      } : null);
+                    // Extract just the filename from the path
+                    const datasheetPath = (comp as any)?.datasheetFileName;
+                    const fileName = uploadedDatasheetFile?.name || (datasheetPath ? datasheetPath.split('/').pop() : null);
+                    const hasFileObject = !!uploadedDatasheetFile;
                     
-                    const fileName = uploadedDatasheetFile?.name || (comp as any)?.datasheetFileName;
-                    
-                    if (fileToUse && fileName) {
-                      return (
-                        <a
-                          href="#"
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            try {
-                              let blobUrl: string;
-                              if (uploadedDatasheetFile) {
+                    if (fileName) {
+                      if (hasFileObject) {
+                        // File object is available - make it clickable
+                        return (
+                          <a
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              try {
                                 // Use the in-memory file
-                                blobUrl = URL.createObjectURL(uploadedDatasheetFile);
-                              } else if ((comp as any)?.datasheetFileData) {
-                                // Convert data URL to blob URL
-                                const response = await fetch((comp as any).datasheetFileData);
-                                const blob = await response.blob();
-                                blobUrl = URL.createObjectURL(blob);
-                              } else {
-                                return;
+                                const file = uploadedDatasheetFile!;
+                                
+                                // Create blob URL
+                                const blobUrl = URL.createObjectURL(file);
+                                
+                                // Try opening with window.open first
+                                const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                                
+                                if (!newWindow || newWindow.closed) {
+                                  // Fallback: create a temporary anchor and click it
+                                  URL.revokeObjectURL(blobUrl);
+                                  const link = document.createElement('a');
+                                  const fallbackBlobUrl = URL.createObjectURL(file);
+                                  link.href = fallbackBlobUrl;
+                                  link.target = '_blank';
+                                  link.rel = 'noopener noreferrer';
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  // Don't revoke fallback URL immediately
+                                } else {
+                                  // Don't revoke immediately - let browser handle it when window closes
+                                }
+                              } catch (error) {
+                                console.error('Error opening datasheet:', error);
+                                alert('Failed to open datasheet file.');
                               }
-                              
-                              const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
-                              if (newWindow) {
-                                setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                            }}
+                            style={{
+                              fontSize: '11px', 
+                              color: '#0066cc', 
+                              whiteSpace: 'nowrap',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              flex: '0 0 auto'
+                            }}
+                            title="Click to open PDF in new window"
+                          >
+                            {fileName}
+                          </a>
+                        );
+                      } else {
+                        // Only filename/path is stored - try to read from project directory
+                        const datasheetPath = (comp as any)?.datasheetFileName;
+                        return (
+                          <a
+                            href="#"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              try {
+                                if (projectDirHandle && datasheetPath) {
+                                  // Read file from project directory
+                                  // Follow the same pattern as image loading
+                                  const pathParts = datasheetPath.split('/');
+                                  let dirHandle = projectDirHandle;
+                                  
+                                  // Navigate to subdirectory if path contains '/'
+                                  // Use getDirectoryHandle without create: true (same as images)
+                                  // Handle case sensitivity like image loading does
+                                  for (let i = 0; i < pathParts.length - 1; i++) {
+                                    const dirName = pathParts[i];
+                                    try {
+                                      dirHandle = await dirHandle.getDirectoryHandle(dirName);
+                                    } catch (e) {
+                                      // Try alternative case if first attempt fails
+                                      const altName = dirName === 'datasheets' ? 'Datasheets' : 
+                                                     dirName === 'Datasheets' ? 'datasheets' : dirName;
+                                      try {
+                                        dirHandle = await dirHandle.getDirectoryHandle(altName);
+                                      } catch (e2) {
+                                        throw new Error(`Directory '${dirName}' not found in project folder.`);
+                                      }
+                                    }
+                                  }
+                                  
+                                  // Get file handle and read file
+                                  // Keep references to handles to prevent garbage collection
+                                  const fileHandle = await dirHandle.getFileHandle(pathParts[pathParts.length - 1]);
+                                  const file = await fileHandle.getFile();
+                                  
+                                  // Workaround for macOS quarantine attributes:
+                                  // Read file as ArrayBuffer first to fully load it into memory,
+                                  // then create a Blob, then convert to data URL.
+                                  // This ensures the file is completely in memory before use,
+                                  // bypassing macOS quarantine attribute checks.
+                                  const arrayBuffer = await file.arrayBuffer();
+                                  const blob = new Blob([arrayBuffer], { type: file.type || 'application/pdf' });
+                                  
+                                  // Create data URL from the in-memory blob
+                                  // Data URLs work reliably and don't depend on file handles
+                                  const dataUrl = await new Promise<string>((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => {
+                                      if (reader.result) {
+                                        resolve(reader.result as string);
+                                      } else {
+                                        reject(new Error('FileReader returned no result'));
+                                      }
+                                    };
+                                    reader.onerror = () => reject(new Error('FileReader error'));
+                                    reader.readAsDataURL(blob);
+                                  });
+                                  
+                                  // Open data URL directly in new window
+                                  // Data URLs are self-contained and don't have quarantine issues
+                                  const newWindow = window.open(dataUrl, '_blank', 'noopener,noreferrer');
+                                  if (!newWindow) {
+                                    alert('Popup blocked. Please allow popups for this site.');
+                                  }
+                                } else {
+                                  alert('Project directory not available. Please re-select the file.');
+                                }
+                              } catch (error) {
+                                console.error('Error opening datasheet from project directory:', error);
+                                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                                alert(`Failed to open datasheet file: ${errorMessage}. Please re-select the file.`);
                               }
-                            } catch (error) {
-                              console.error('Error opening datasheet:', error);
-                              alert('Failed to open datasheet file.');
-                            }
-                          }}
-                          style={{
-                            fontSize: '11px', 
-                            color: '#0066cc', 
-                            whiteSpace: 'nowrap',
-                            textDecoration: 'underline',
-                            cursor: 'pointer',
-                            flex: '0 0 auto'
-                          }}
-                          title="Click to open PDF in new window"
-                        >
-                          {fileName}
-                        </a>
-                      );
+                            }}
+                            style={{
+                              fontSize: '11px', 
+                              color: '#0066cc', 
+                              whiteSpace: 'nowrap',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              flex: '0 0 auto'
+                            }}
+                            title="Click to open PDF in new window"
+                          >
+                            {fileName}
+                          </a>
+                        );
+                      }
                     } else {
                       return (
                         <span style={{ fontSize: '11px', color: '#666', flex: '0 0 auto' }}>No file chosen</span>
                       );
                     }
                   })()}
+                </div>
+                {/* Extract Datasheet Information button - below Choose File, aligned left */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  <button
+                    onClick={handleFetchPinNames}
+                    disabled={isFetchingPinNames || areComponentsLocked}
+                    className={isFetchingPinNames ? 'fetch-pin-names-pulse' : ''}
+                    style={{
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      background: areComponentsLocked ? '#ccc' : '#4CAF50',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
+                      opacity: areComponentsLocked ? 0.6 : 1,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      transition: 'background 0.2s'
+                    }}
+                  >
+                    {isFetchingPinNames ? 'Extracting...' : 'Extract Datasheet Information'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1462,6 +1651,36 @@ ${truncatedText}`;
             {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
               <>
                 <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000', marginBottom: '4px' }}>IC Properties:</div>
+                
+                {/* Manufacturer */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label htmlFor={`component-manufacturer-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    Manufacturer:
+                  </label>
+                  <input
+                    id={`component-manufacturer-ic-${comp.id}`}
+                    type="text"
+                    value={componentEditor.manufacturer || ''}
+                    onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
+                    disabled={areComponentsLocked}
+                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                  />
+                </div>
+                
+                {/* Part Number */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                  <label htmlFor={`component-partnumber-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
+                    Part Number:
+                  </label>
+                  <input
+                    id={`component-partnumber-ic-${comp.id}`}
+                    type="text"
+                    value={componentEditor.partNumber || ''}
+                    onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
+                    disabled={areComponentsLocked}
+                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
+                  />
+                </div>
                 
                 {/* Pin Count */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
@@ -1513,116 +1732,7 @@ ${truncatedText}`;
                     style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
                   />
                 </div>
-                
-                {/* Manufacturer */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <label htmlFor={`component-manufacturer-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                    Manufacturer:
-                  </label>
-                  <input
-                    id={`component-manufacturer-ic-${comp.id}`}
-                    type="text"
-                    value={componentEditor.manufacturer || ''}
-                    onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-                    disabled={areComponentsLocked}
-                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    placeholder="e.g., Texas Instruments"
-                  />
-                </div>
-                
-                {/* Part Number */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <label htmlFor={`component-partnumber-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                    Part Number:
-                  </label>
-                  <input
-                    id={`component-partnumber-ic-${comp.id}`}
-                    type="text"
-                    value={componentEditor.partNumber || ''}
-                    onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-                    disabled={areComponentsLocked}
-                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                    placeholder="e.g., LM358"
-                  />
-                </div>
               </>
-            )}
-            
-            {/* Gemini API Key and Extract button - right below datasheet */}
-            {((comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor')) && (
-              <div style={{ marginBottom: '8px', padding: '4px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '3px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', marginBottom: '2px' }}>
-                    <span
-                      onClick={() => setShowApiKeyInstructions(true)}
-                      style={{
-                        color: '#0066cc',
-                        textDecoration: 'underline',
-                        cursor: 'pointer',
-                      }}
-                      title="Click for instructions on how to get an API key"
-                    >
-                      Google Gemini API Key
-                    </span>
-                    {' '}(to extract information from the Datasheet):
-                  </label>
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <input
-                      type="password"
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      placeholder="Enter your Gemini API key"
-                      style={{
-                        flex: 1,
-                        minWidth: '200px',
-                        padding: '3px 6px',
-                        fontSize: '11px',
-                        border: '1px solid #ddd',
-                        borderRadius: '2px',
-                        background: '#fff',
-                        color: '#000'
-                      }}
-                      title="Enter your Google Gemini API key. Get one free at https://aistudio.google.com/apikey"
-                    />
-                    <button
-                      onClick={handleSaveApiKey}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        background: '#2196F3',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      Save API Key
-                    </button>
-                    <button
-                      onClick={handleFetchPinNames}
-                      disabled={isFetchingPinNames || areComponentsLocked}
-                      className={isFetchingPinNames ? 'fetch-pin-names-pulse' : ''}
-                      style={{
-                        padding: '3px 8px',
-                        fontSize: '11px',
-                        background: areComponentsLocked ? '#ccc' : '#4CAF50',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '3px',
-                        cursor: isFetchingPinNames || areComponentsLocked ? 'not-allowed' : 'pointer',
-                        opacity: areComponentsLocked ? 0.6 : 1,
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        transition: 'background 0.2s'
-                      }}
-                    >
-                      {isFetchingPinNames ? 'Extracting...' : 'Extract Datasheet Information'}
-                    </button>
-                  </div>
-                </div>
-              </div>
             )}
           </>
         )}
@@ -2282,12 +2392,291 @@ ${truncatedText}`;
       />
     </div>
     
+    {/* API Key Dialog - shown when user tries to extract without API key */}
+    {showApiKeyDialog && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10005,
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowApiKeyDialog(false);
+          }
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#2b2b31',
+            borderRadius: 8,
+            padding: '24px',
+            minWidth: '500px',
+            maxWidth: '600px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            border: '1px solid #1f1f24',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+              Google Gemini API Key Required
+            </h3>
+            <button
+              onClick={() => setShowApiKeyDialog(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: 0,
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
+            <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+              Benefits of Adding Your API Key:
+            </p>
+            <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
+              <li>Automatically extract pin names from datasheet PDFs</li>
+              <li>Extract component properties (voltage, current, temperature, etc.)</li>
+              <li>Get datasheet summary for component notes</li>
+              <li>Save time by avoiding manual data entry</li>
+            </ul>
+            
+            <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+              How to Get Your Free API Key:
+            </p>
+            <p style={{ margin: '0 0 16px 0' }}>
+              Go to{' '}
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#4CAF50', textDecoration: 'underline' }}
+              >
+                Google AI Studio (aistudio.google.com/app/apikey)
+              </a>
+              , sign in with your Google account, and click "Get API key" or "Create API key" in the Dashboard to generate a key for a new or existing Google Cloud project, then copy it and paste it below.
+            </p>
+            
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                Enter Your API Key:
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="Paste your Gemini API key here"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  background: '#1f1f24',
+                  color: '#fff',
+                  boxSizing: 'border-box'
+                }}
+                autoFocus
+              />
+            </div>
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              onClick={() => setShowApiKeyDialog(false)}
+              style={{
+                padding: '8px 16px',
+                background: '#555',
+                color: '#fff',
+                border: '1px solid #666',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                handleSaveApiKey();
+                setShowApiKeyDialog(false);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#4CAF50',
+                color: '#fff',
+                border: '1px solid #45a049',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Save API Key
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    {/* Gemini Response Dialog - shows full API response for debugging */}
+    {showResponseDialog && geminiRawResponse && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10006,
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowResponseDialog(false);
+          }
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#2b2b31',
+            borderRadius: 8,
+            padding: '24px',
+            minWidth: '600px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            border: '2px solid #2196F3',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
+              Gemini API Response
+            </h3>
+            <button
+              onClick={() => {
+                setShowResponseDialog(false);
+                setGeminiRawResponse(null);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: 0,
+                width: '30px',
+                height: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Close"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div style={{ 
+            marginBottom: '20px', 
+            color: '#ddd', 
+            fontSize: '13px', 
+            lineHeight: '1.6',
+            overflow: 'auto',
+            flex: 1,
+            padding: '12px',
+            background: '#1f1f24',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            maxHeight: '60vh',
+          }}>
+            {geminiRawResponse}
+          </div>
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(geminiRawResponse || '');
+                alert('Response copied to clipboard');
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#555',
+                color: '#fff',
+                border: '1px solid #666',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Copy to Clipboard
+            </button>
+            <button
+              onClick={() => {
+                setShowResponseDialog(false);
+                setGeminiRawResponse(null);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#4CAF50',
+                color: '#fff',
+                border: '1px solid #45a049',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
     <InfoDialog
       visible={infoDialog.visible}
       title={infoDialog.title}
       message={infoDialog.message}
       type={infoDialog.type}
-      onClose={() => setInfoDialog({ visible: false, title: '', message: '', type: 'info' })}
+      onClose={() => {
+        setInfoDialog({ visible: false, title: '', message: '', type: 'info' });
+        // Clear raw response when dialog is closed (unless showing response)
+        if (!showResponseDialog) {
+          setGeminiRawResponse(null);
+        }
+      }}
+      onShowResponse={infoDialog.onShowResponse}
     />
     </>
   );

@@ -10816,6 +10816,20 @@ function App() {
     }
     }
     
+    // Create standard subdirectories for the project
+    try {
+      // Create history subdirectory (for auto-save history)
+      await projectDirHandle.getDirectoryHandle('history', { create: true });
+      // Create images subdirectory (for PCB images)
+      await projectDirHandle.getDirectoryHandle('images', { create: true });
+      // Create datasheets subdirectory (for component datasheets)
+      await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
+      console.log('Created project subdirectories: history, images, datasheets');
+    } catch (e) {
+      console.error('Failed to create project subdirectories:', e);
+      // Continue anyway - subdirectories will be created when needed
+    }
+    
     // CRITICAL: Close current project first to release all browser permissions and clear all state
     // This prevents state leakage from the previous project into the new project
     closeProject();
@@ -12377,6 +12391,22 @@ function App() {
           // We MUST use this handle, not any cached/stale handle from a previous project
           setProjectDirHandle(projectDirHandle);
           projectDirHandleRef.current = projectDirHandle;
+          
+          // Create standard subdirectories if they don't exist (for existing projects)
+          if (projectDirHandle) {
+            try {
+              // Create history subdirectory (for auto-save history)
+              await projectDirHandle.getDirectoryHandle('history', { create: true });
+              // Create images subdirectory (for PCB images)
+              await projectDirHandle.getDirectoryHandle('images', { create: true });
+              // Create datasheets subdirectory (for component datasheets)
+              await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
+              console.log('Created/verified project subdirectories: history, images, datasheets');
+            } catch (e) {
+              console.error('Failed to create/verify project subdirectories:', e);
+              // Continue anyway - subdirectories will be created when needed
+            }
+          }
         } catch (e) {
           console.error('Failed to get directory handle from file handle:', e);
           // No alert needed - the auto-save prompt dialog will be shown shortly,
@@ -14144,6 +14174,7 @@ function App() {
             areComponentsLocked={areComponentsLocked}
             setSelectedComponentIds={setSelectedComponentIds}
             setNotesDialogVisible={setNotesDialogVisible}
+            projectDirHandle={projectDirHandle}
             componentDefinition={componentEditor ? (() => {
               // Find the component being edited to resolve its definition
               const comp = componentsTop.find(c => c.id === componentEditor.id) || 
@@ -14620,6 +14651,7 @@ function App() {
         onFindPower={findAndCenterPower}
         onFindGround={findAndCenterGround}
         onOpenNotesDialog={() => setNotesDialogVisible(true)}
+        projectDirHandle={projectDirHandle}
         position={detailedInfoDialogPosition}
         isDragging={isDraggingDetailedInfoDialog}
         onDragStart={(e) => {

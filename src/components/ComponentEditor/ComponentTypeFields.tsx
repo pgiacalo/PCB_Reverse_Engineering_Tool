@@ -122,6 +122,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       if (isIntegratedCircuit && field.name === 'datasheet') {
         return null; // Skip - will be rendered in the hardcoded section below
       }
+      // Skip Manufacturer and Part Number for ICs - they're rendered in IC Properties section
+      if (isIntegratedCircuit && (field.name === 'manufacturer' || field.name === 'partNumber')) {
+        return null;
+      }
       // Skip Description - it's rendered above Notes in ComponentEditor (for all component types)
       if (field.name === 'description') {
         return null;
@@ -957,6 +961,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
               }
               // Skip Operating Temperature - it's rendered after Notes in ComponentEditor
               if (field.name === 'operatingTemperature') {
+                return null;
+              }
+              // Skip Manufacturer and Part Number for ICs - they're rendered in IC Properties section
+              if (isSemiconductor && (field.name === 'manufacturer' || field.name === 'partNumber')) {
                 return null;
               }
               // Special handling for IC Type - render as dropdown

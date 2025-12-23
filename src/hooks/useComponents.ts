@@ -479,7 +479,13 @@ export function useComponents() {
       editor.description = ic.description || component.designator || '';
       // Use 'datasheet' field consistently (not 'datasheetUrl')
       editor.datasheet = ic.datasheet || '';
-      console.log('[useComponents] Loading IC component - datasheet from component:', ic.datasheet, 'editor datasheet:', editor.datasheet);
+      // Restore datasheet file path (relative to project root, e.g., "datasheets/filename.pdf")
+      editor.datasheetFileName = ic.datasheetFileName || undefined;
+      // Restore manufacturer, part number, and operating temperature
+      editor.manufacturer = ic.manufacturer || '';
+      editor.partNumber = ic.partNumber || '';
+      (editor as any).operatingTemperature = ic.operatingTemperature || '';
+      console.log('[useComponents] Loading IC component - datasheet from component:', ic.datasheet, 'editor datasheet:', editor.datasheet, 'datasheetFileName:', ic.datasheetFileName);
       editor.icType = ic.icType || 'Op-Amp';
     } else if (compType === 'VacuumTube') {
       const vt = component as any;

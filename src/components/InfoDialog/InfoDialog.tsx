@@ -38,6 +38,8 @@ export interface InfoDialogProps {
   onClose: () => void;
   /** Dialog type: 'success' or 'info' */
   type?: 'success' | 'info';
+  /** Optional callback to show response (for error dialogs) */
+  onShowResponse?: () => void;
 }
 
 export const InfoDialog: React.FC<InfoDialogProps> = ({
@@ -46,6 +48,7 @@ export const InfoDialog: React.FC<InfoDialogProps> = ({
   message,
   onClose,
   type = 'info',
+  onShowResponse,
 }) => {
   if (!visible) return null;
 
@@ -96,6 +99,26 @@ export const InfoDialog: React.FC<InfoDialogProps> = ({
           {message}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          {onShowResponse && (
+            <button
+              onClick={() => {
+                onShowResponse();
+                onClose();
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#555',
+                color: '#fff',
+                border: '1px solid #666',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Show Response
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{
