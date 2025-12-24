@@ -33,12 +33,6 @@ import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 import { isComponentPolarized } from '../../utils/components';
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure PDF.js worker - use jsdelivr CDN which is more reliable
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-}
 
 // Google Gemini API configuration
 // API key source: User-provided key from localStorage only
@@ -66,6 +60,7 @@ const getGeminiModel = (): string => {
   }
   return 'gemini-2.5-flash-lite'; // Default model
 };
+
 
 const getGeminiApiUrl = (): string | null => {
   const apiKey = getGeminiApiKey();
@@ -176,6 +171,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [geminiRawResponse, setGeminiRawResponse] = useState<string | null>(null);
   const [showResponseDialog, setShowResponseDialog] = useState(false);
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState<string>('');
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -216,6 +213,22 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       setHasStoredApiKey(!!localStorage.getItem('geminiApiKey') || !!apiKeyInput.trim());
     }
   }, [apiKeyInput]);
+
+  // Load custom prompt from component when editor opens
+  useEffect(() => {
+    if (componentEditor) {
+      const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+      const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+      if (currentComp) {
+        const customPromptValue = (currentComp as any).customGeminiPrompt;
+        if (customPromptValue) {
+          setCustomPrompt(customPromptValue);
+        } else {
+          setCustomPrompt(''); // Reset to empty if no custom prompt
+        }
+      }
+    }
+  }, [componentEditor?.id, componentsTop, componentsBottom]); // Reload when component ID changes
 
   // Function to save API key and model - moved to top level (before early return)
   const handleSaveApiKey = () => {
@@ -288,6 +301,68 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     // Select all matching components (override the single selection from onFindComponent)
     const matchingIds = new Set(matchingComponents.map(c => c.id));
     setSelectedComponentIds(matchingIds);
+  };
+
+  // Function to build the default Gemini prompt dynamically based on component fields
+  const buildDefaultPrompt = (fieldsToExtract: Array<{
+    name: string;
+    label: string;
+    type: string;
+    hasUnits: boolean;
+    units: string[];
+  }>): string => {
+    return `You are analyzing an electronic component datasheet PDF. Extract pin information, component properties, a datasheet summary, IC type, and pin count, then return the data as a JSON object.
+
+Requirements:
+1. Return a JSON object with three sections: "pins", "properties", and "summary"
+2. First, determine the total number of pins (pinCount) for this component from the datasheet. This should be a positive integer representing the total number of pins/pads on the component.
+3. For pins, extract information for ALL pins found in the datasheet (not just a subset). For each pin, provide:
+   - pinNumber: The pin number (1, 2, 3, etc.)
+   - pinName: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
+   - pinDescription: A brief description of the pin's function (optional, can be empty string)
+4. For component properties, extract the following information if available in the datasheet:
+${fieldsToExtract.map(field => {
+  if (field.hasUnits) {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} value (as a number) and ${field.name}Unit: The unit (one of: ${field.units.join(', ')})`;
+  } else if (field.type === 'enum') {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string)`;
+  } else {
+    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string or number, depending on the field type)`;
+  }
+}).join('\n')}
+5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
+6. For Package Type (packageType), determine the package type from the datasheet. Choose from: "DIP", "PDIP", "SOIC", "QFP", "LQFP", "TQFP", "BGA", "SSOP", "TSOP", "Various", or "Other". If multiple package types are mentioned in the datasheet, use "Various". If it's a plastic DIP, use "PDIP". If it's a standard DIP, use "DIP".
+7. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
+8. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
+9. Only include properties that are actually found in the datasheet - do not make up values
+10. For numeric fields with units, extract both the numeric value and the appropriate unit
+11. Return ONLY valid JSON, no additional text, explanations, or markdown formatting
+
+Example JSON format:
+{
+  "pins": [
+    {"pinNumber": 1, "pinName": "VCC", "pinDescription": "Power supply positive"},
+    {"pinNumber": 2, "pinName": "GND", "pinDescription": "Ground"},
+    {"pinNumber": 3, "pinName": "IN+", "pinDescription": "Non-inverting input"},
+    {"pinNumber": 4, "pinName": "IN-", "pinDescription": "Inverting input"},
+    {"pinNumber": 5, "pinName": "OUT", "pinDescription": "Output"}
+  ],
+  "properties": {
+    "partNumber": "LM358",
+    "manufacturer": "Texas Instruments",
+    "voltage": 36,
+    "voltageUnit": "V",
+    "description": "Dual operational amplifier",
+    "icType": "Op-Amp",
+    "packageType": "PDIP",
+    "pinCount": 5
+  },
+  "summary": {
+    "datasheetSummary": "The LM358 is a dual operational amplifier featuring low power consumption and wide supply voltage range. It is designed for single supply operation from 3V to 32V or dual supplies from ±1.5V to ±16V. The device offers high gain bandwidth product and low input offset voltage."
+  }
+}
+
+Analyze the attached PDF datasheet and extract the information according to the requirements above.`;
   };
   
   // Dialog resize state
@@ -1066,9 +1141,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     try {
       // Use uploaded file or read from project directory
       let arrayBuffer: ArrayBuffer;
+      let fileSize: number;
+      
       if (uploadedDatasheetFile) {
         // Read directly from File object
         arrayBuffer = await uploadedDatasheetFile.arrayBuffer();
+        fileSize = uploadedDatasheetFile.size;
       } else if (projectDirHandle && datasheetPath) {
         // Read from project directory
         const pathParts = datasheetPath.split('/');
@@ -1096,31 +1174,38 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
         const fileHandle = await dirHandle.getFileHandle(pathParts[pathParts.length - 1]);
         const file = await fileHandle.getFile();
         arrayBuffer = await file.arrayBuffer();
+        fileSize = file.size;
       } else {
         throw new Error('No datasheet file available');
       }
       
-      // Load PDF document
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      
-      // Extract text from all pages
-      let fullText = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        fullText += pageText + '\n';
+      // Check file size limit (20MB for Gemini API inline data)
+      const maxFileSize = 20 * 1024 * 1024; // 20MB in bytes
+      if (fileSize > maxFileSize) {
+        const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+        throw new Error(`PDF file is too large (${fileSizeMB} MB). Maximum file size is 20 MB. Please use a smaller file or split the datasheet.`);
       }
       
-      // Use Google Gemini AI to extract pin information
-      // Limit text length to avoid token limits (Gemini Pro has ~32k token limit)
-      const maxTextLength = 20000; // Conservative limit to leave room for prompt and response
-      const truncatedText = fullText.length > maxTextLength 
-        ? fullText.substring(0, maxTextLength) + '\n[... text truncated ...]'
-        : fullText;
-
+      // Convert PDF to base64 for inline data submission
+      // Base64 encoding increases size by ~33%, but we've already checked the original size
+      // Use FileReader API for reliable base64 encoding
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          // Extract base64 data from data URL (remove "data:application/pdf;base64," prefix)
+          const base64 = dataUrl.split(',')[1];
+          if (!base64) {
+            reject(new Error('Failed to extract base64 data from FileReader result'));
+            return;
+          }
+          resolve(base64);
+        };
+        reader.onerror = () => reject(new Error('FileReader failed to read PDF file'));
+        reader.readAsDataURL(blob);
+      });
+      
       // Get the current component
       const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
       const currentComp = currentCompList.find(c => c.id === componentEditor.id);
@@ -1144,61 +1229,18 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
           units: field.units || []
         }));
 
-      const prompt = `You are analyzing an electronic component datasheet. Extract pin information, component properties, a datasheet summary, IC type, and pin count, then return the data as a JSON object.
+      // Use custom prompt if available, otherwise build default prompt
+      let prompt: string;
+      const componentCustomPrompt = (currentComp as any).customGeminiPrompt;
+      if (componentCustomPrompt && componentCustomPrompt.trim()) {
+        // Use custom prompt as-is (no text replacement needed with PDF submission)
+        prompt = componentCustomPrompt;
+      } else {
+        // Build default prompt (references attached PDF instead of embedded text)
+        prompt = buildDefaultPrompt(fieldsToExtract);
+      }
 
-Requirements:
-1. Return a JSON object with three sections: "pins", "properties", and "summary"
-2. First, determine the total number of pins (pinCount) for this component from the datasheet. This should be a positive integer representing the total number of pins/pads on the component.
-3. For pins, extract information for ALL pins found in the datasheet (not just a subset). For each pin, provide:
-   - pinNumber: The pin number (1, 2, 3, etc.)
-   - pinName: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
-   - pinDescription: A brief description of the pin's function (optional, can be empty string)
-4. For component properties, extract the following information if available in the datasheet:
-${fieldsToExtract.map(field => {
-  if (field.hasUnits) {
-    return `   - ${field.name}: The ${field.label.toLowerCase()} value (as a number) and ${field.name}Unit: The unit (one of: ${field.units.join(', ')})`;
-  } else if (field.type === 'enum') {
-    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string)`;
-  } else {
-    return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string or number, depending on the field type)`;
-  }
-}).join('\n')}
-5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
-6. For Package Type (packageType), determine the package type from the datasheet. Choose from: "DIP", "PDIP", "SOIC", "QFP", "LQFP", "TQFP", "BGA", "SSOP", "TSOP", "Various", or "Other". If multiple package types are mentioned in the datasheet, use "Various". If it's a plastic DIP, use "PDIP". If it's a standard DIP, use "DIP".
-7. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
-8. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
-9. Only include properties that are actually found in the datasheet - do not make up values
-10. For numeric fields with units, extract both the numeric value and the appropriate unit
-11. Return ONLY valid JSON, no additional text, explanations, or markdown formatting
-
-Example JSON format:
-{
-  "pins": [
-    {"pinNumber": 1, "pinName": "VCC", "pinDescription": "Power supply positive"},
-    {"pinNumber": 2, "pinName": "GND", "pinDescription": "Ground"},
-    {"pinNumber": 3, "pinName": "IN+", "pinDescription": "Non-inverting input"},
-    {"pinNumber": 4, "pinName": "IN-", "pinDescription": "Inverting input"},
-    {"pinNumber": 5, "pinName": "OUT", "pinDescription": "Output"}
-  ],
-  "properties": {
-    "partNumber": "LM358",
-    "manufacturer": "Texas Instruments",
-    "voltage": 36,
-    "voltageUnit": "V",
-    "description": "Dual operational amplifier",
-    "icType": "Op-Amp",
-    "packageType": "PDIP",
-    "pinCount": 5
-  },
-  "summary": {
-    "datasheetSummary": "The LM358 is a dual operational amplifier featuring low power consumption and wide supply voltage range. It is designed for single supply operation from 3V to 32V or dual supplies from ±1.5V to ±16V. The device offers high gain bandwidth product and low input offset voltage."
-  }
-}
-
-Datasheet text:
-${truncatedText}`;
-
-      // Call Google Gemini API
+      // Call Google Gemini API with PDF as inline data
       const geminiResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -1206,9 +1248,17 @@ ${truncatedText}`;
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{
-              text: prompt
-            }]
+            parts: [
+              {
+                text: prompt
+              },
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: base64Data
+                }
+              }
+            ]
           }]
         })
       });
@@ -1219,10 +1269,33 @@ ${truncatedText}`;
         try {
           const errorJson = JSON.parse(errorText);
           if (errorJson.error && errorJson.error.message) {
-            errorMessage += `. ${errorJson.error.message}`;
+            // Clean up error message - remove base64 data if present (it's just noise)
+            let cleanMessage = errorJson.error.message;
+            // If message contains a very long base64-like string, truncate it
+            if (cleanMessage.length > 500) {
+              // Look for base64-like patterns and truncate them
+              cleanMessage = cleanMessage.replace(/"([A-Za-z0-9+/]{100,})"/g, (_match: string, base64: string) => {
+                return `"[Base64 data truncated - ${base64.length} characters]"`;
+              });
+            }
+            errorMessage += `.\n\n${cleanMessage}`;
+          }
+          // Include error details if available (but truncate any long base64 strings)
+          if (errorJson.error && errorJson.error.details) {
+            let detailsStr = JSON.stringify(errorJson.error.details, null, 2);
+            // Truncate any very long base64-like strings in details
+            detailsStr = detailsStr.replace(/"([A-Za-z0-9+/]{100,})"/g, (_match: string, base64: string) => {
+              return `"[Base64 data truncated - ${base64.length} characters]"`;
+            });
+            errorMessage += `\n\nDetails:\n${detailsStr}`;
           }
         } catch {
-          errorMessage += `. ${errorText.substring(0, 200)}`;
+          // If JSON parsing fails, include the error text but truncate if very long
+          if (errorText.length > 1000) {
+            errorMessage += `.\n\n${errorText.substring(0, 1000)}... [truncated]`;
+          } else {
+            errorMessage += `.\n\n${errorText}`;
+          }
         }
         throw new Error(errorMessage);
       }
@@ -1976,7 +2049,60 @@ ${truncatedText}`;
                     }
                   })()}
                 </div>
-                {/* Extract Datasheet Information button - below Choose File, aligned left */}
+                {/* View/Edit Prompt button - below Choose File */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                  <button
+                    onClick={() => {
+                      // Build the current prompt to show in the dialog
+                      if (componentEditor && comp) {
+                        const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                        const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                        if (currentComp) {
+                          const def: ComponentDefinition | undefined = componentDefinition || resolveComponentDefinition(currentComp as any);
+                          const availableFields = def?.fields || [];
+                          const fieldsToExtract = availableFields
+                            .filter(field => field.name !== 'datasheet')
+                            .map(field => ({
+                              name: field.name,
+                              label: field.label,
+                              type: field.type,
+                              hasUnits: Boolean(field.units && field.units.length > 0),
+                              units: field.units || []
+                            }));
+                          
+                          // If there's a custom prompt, use it; otherwise build default (with placeholder for datasheet text)
+                          const componentCustomPrompt = (currentComp as any).customGeminiPrompt;
+                          if (componentCustomPrompt && componentCustomPrompt.trim()) {
+                            setCustomPrompt(componentCustomPrompt);
+                          } else {
+                            // Build default prompt (references attached PDF)
+                            const defaultPrompt = buildDefaultPrompt(fieldsToExtract);
+                            setCustomPrompt(defaultPrompt);
+                          }
+                        }
+                      }
+                      setShowPromptDialog(true);
+                    }}
+                    disabled={areComponentsLocked}
+                    style={{
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      background: areComponentsLocked ? '#ccc' : '#0066cc',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '3px',
+                      cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+                      opacity: areComponentsLocked ? 0.6 : 1,
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      transition: 'background 0.2s'
+                    }}
+                    title="View and edit the AI prompt that will be sent to Gemini"
+                  >
+                    View/Edit Prompt
+                  </button>
+                </div>
+                {/* Extract Datasheet Information button - below View/Edit Prompt, aligned left */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
                   <button
                     onClick={handleFetchPinNames}
@@ -3089,6 +3215,137 @@ ${truncatedText}`;
               }}
             >
               Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
+    {/* Prompt Dialog - shows and allows editing of the Gemini prompt */}
+    {showPromptDialog && (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+        }}
+        onClick={(e) => {
+          // Close dialog when clicking outside
+          if (e.target === e.currentTarget) {
+            setShowPromptDialog(false);
+          }
+        }}
+      >
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 8,
+            padding: '20px',
+            maxWidth: '90%',
+            maxHeight: '90%',
+            width: '800px',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div style={{ marginBottom: '16px' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#333' }}>
+              AI Prompt Editor
+            </h3>
+            <p style={{ margin: '0', fontSize: '13px', color: '#666', lineHeight: '1.5' }}>
+              This is the prompt that will be sent to Gemini when you click "Extract Datasheet Information".
+              You can customize it for this component. The prompt will be saved with this component and reloaded when you open it again.
+            </p>
+            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#888', fontStyle: 'italic' }}>
+              Note: The PDF datasheet will be automatically attached to your prompt when extracting information. You can reference it in your prompt as "the attached PDF" or "the datasheet".
+            </p>
+          </div>
+          
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            style={{
+              flex: 1,
+              minHeight: '400px',
+              padding: '12px',
+              border: '1px solid #ddd',
+              borderRadius: 4,
+              fontSize: '13px',
+              fontFamily: 'monospace',
+              resize: 'vertical',
+              color: '#000',
+              background: '#fff',
+              lineHeight: '1.5',
+            }}
+            placeholder="Enter your custom prompt here..."
+          />
+          
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+            <button
+              onClick={() => {
+                setShowPromptDialog(false);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#f5f5f5',
+                border: '1px solid #ddd',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: '#333',
+                fontSize: '14px',
+                fontWeight: 500,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                // Save custom prompt to component
+                if (componentEditor && comp) {
+                  const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
+                  const currentComp = currentCompList.find(c => c.id === componentEditor.id);
+                  if (currentComp) {
+                    const updatedComp = {
+                      ...currentComp,
+                      customGeminiPrompt: customPrompt.trim() || undefined, // Remove if empty
+                    };
+                    
+                    if (componentEditor.layer === 'top') {
+                      setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                    } else {
+                      setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
+                    }
+                    
+                    // Also update componentEditor to reflect the change
+                    setComponentEditor({
+                      ...componentEditor,
+                      customGeminiPrompt: customPrompt.trim() || undefined,
+                    });
+                  }
+                }
+                setShowPromptDialog(false);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: '#4CAF50',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 600,
+              }}
+            >
+              Save Prompt
             </button>
           </div>
         </div>

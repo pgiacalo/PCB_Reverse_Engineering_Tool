@@ -83,19 +83,34 @@ export const InfoDialog: React.FC<InfoDialogProps> = ({
           borderRadius: 8,
           padding: '24px',
           minWidth: '300px',
-          maxWidth: '500px',
+          maxWidth: '90vw',
+          maxHeight: '90vh',
+          width: '600px',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
           border: `2px solid ${borderColor}`,
+          display: 'flex',
+          flexDirection: 'column',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
           <div style={{ fontSize: '24px', color: iconColor }}>{icon}</div>
           <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
             {title}
           </h3>
         </div>
-        <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+        <div style={{ 
+          marginBottom: '20px', 
+          color: '#ddd', 
+          fontSize: '14px', 
+          lineHeight: '1.5', 
+          whiteSpace: 'pre-wrap',
+          wordWrap: 'break-word',
+          overflowY: 'auto',
+          maxHeight: '60vh',
+          paddingRight: '8px',
+          flex: 1,
+        }}>
           {message}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
