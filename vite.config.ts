@@ -16,6 +16,24 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false, // If port is in use, try next available port
+    proxy: {
+      // Proxy API requests to the backend to avoid CORS issues
+      '/auth': {
+        target: 'https://pcbtracer-staging-bd8cca44225e.herokuapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/api': {
+        target: 'https://pcbtracer-staging-bd8cca44225e.herokuapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/health': {
+        target: 'https://pcbtracer-staging-bd8cca44225e.herokuapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   build: {
     // Suppress the chunk size warning for our main bundle

@@ -53,6 +53,8 @@ import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances'
 import type { ComponentType, PCBComponent, HomeView } from './types';
 import { MenuBar } from './components/MenuBar';
 import { WelcomeDialog } from './components/WelcomeDialog';
+import { AuthScreen } from './components/AuthScreen';
+import { getNetworkManager, type User } from './network';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
@@ -142,6 +144,27 @@ interface TraceSegment {
 function App() {
   const CONTENT_BORDER = 5; // fixed border (in canvas pixels) where nothing is drawn
   
+  // Authentication state - check if user is logged in on mount
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return getNetworkManager().isLoggedIn();
+  });
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    return getNetworkManager().getStoredUser();
+  });
+
+  // Handle successful authentication
+  const handleAuthSuccess = useCallback((user: User) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+  }, []);
+
+  // Handle logout
+  const handleLogout = useCallback(() => {
+    getNetworkManager().logout();
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+  }, []);
+
   // Tool instances are initialized at module load time (see toolInstances.ts)
   // Re-initialize from project data if needed (handled in loadProject)
   
@@ -12686,10 +12709,46 @@ function App() {
     }
   }, [hasUnsavedChanges, performOpenProject]);
 
+  // Show auth screen if not authenticated
+  if (!isAuthenticated) {
+    return <AuthScreen onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>🔧 PCB Tracer (v3.0)</h1>
+      <header className="app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>🔧 PCB Tracer (v3.1)</h1>
+        <button
+          onClick={handleLogout}
+          style={{
+            background: 'rgba(255, 255, 255, 0.2)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: '6px',
+            color: 'white',
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+          }}
+          title={currentUser?.email ? `Logged in as ${currentUser.email}` : 'Logout'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          Logout
+        </button>
       </header>
 
       {/* Application menu bar */}
