@@ -13039,8 +13039,18 @@ function App() {
             </button>
             <button 
               ref={traceButtonRef}
-              onClick={() => { 
-                if (!isReadOnlyMode) {
+              onMouseDown={(e) => {
+                if (e.altKey && !isReadOnlyMode) {
+                  // Option+click: open IC placement dialog
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setICPlacementIsPad(false);
+                  setShowICPlacementDialog(true);
+                  return;
+                }
+              }}
+              onClick={(e) => { 
+                if (!isReadOnlyMode && !e.altKey) {
                   console.log('Trace tool clicked');
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('trace'); 
