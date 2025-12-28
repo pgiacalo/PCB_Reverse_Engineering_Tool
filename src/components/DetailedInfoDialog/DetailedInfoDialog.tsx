@@ -571,6 +571,12 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                           // Sort components by ID for consistent assignment
                           const sortedComponents = [...allSelectedComponents].sort((a, b) => a.id.localeCompare(b.id));
 
+                          // Create a filtered list of only selected drawing strokes for polarity assignment
+                          // This ensures we only consider selected vias/pads when determining polarity
+                          const selectedDrawingStrokes = drawingStrokes.filter(s => 
+                            selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad')
+                          );
+
                           // Assign pins to each component sequentially
                           sortedComponents.forEach((component, compIndex) => {
                             const startIndex = compIndex * pinsPerComponent;
@@ -581,7 +587,8 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             const newPinConnections = componentNodeIds.map(item => item.nodeId.toString());
 
                             // Auto-assign polarity for 2-pin components with polarity
-                            const newPolarities = autoAssignPolarity(component, newPinConnections, drawingStrokes as any);
+                            // Pass only selected drawing strokes to ensure we only consider selected vias/pads
+                            const newPolarities = autoAssignPolarity(component, newPinConnections, selectedDrawingStrokes as any);
 
                             // Update component based on layer
                             if (component.layer === 'top') {

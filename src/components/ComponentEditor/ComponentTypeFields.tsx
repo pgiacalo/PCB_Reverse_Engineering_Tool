@@ -139,10 +139,22 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       const unit = (componentEditor as any)[unitKey] ?? (comp as any)[unitKey] ?? (field.units && field.defaultUnit ? field.defaultUnit : '');
 
       const onValueChange = (val: string) => {
-        setComponentEditor({ ...componentEditor, [valueKey]: val });
+        // Use functional update to avoid stale closure issues
+        // React state setters support functional updates: setState(prev => newState)
+        // TypeScript doesn't know setComponentEditor accepts functions, so we cast it
+        const updater = (prev: any) => {
+          if (!prev) return prev;
+          return { ...prev, [valueKey]: val };
+        };
+        (setComponentEditor as any)(updater);
       };
       const onUnitChange = (val: string) => {
-        setComponentEditor({ ...componentEditor, [unitKey]: val });
+        // Use functional update to avoid stale closure issues
+        const updater = (prev: any) => {
+          if (!prev) return prev;
+          return { ...prev, [unitKey]: val };
+        };
+        (setComponentEditor as any)(updater);
       };
 
       const hasUnits = Boolean(field.units && field.units.length > 0);

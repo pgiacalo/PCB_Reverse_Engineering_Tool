@@ -47,6 +47,7 @@ import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, r
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
+import { generateKiCadNetlist, generateProtelNetlist, generateSpiceNetlist, generatePadsNetlist } from './utils/netlist';
 import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
@@ -56,7 +57,7 @@ import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
-import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
+import { ProjectNotesDialog, type ProjectNote, type ProjectMetadata } from './components/ProjectNotesDialog';
 import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
@@ -176,6 +177,17 @@ function App() {
   React.useEffect(() => {
     localStorage.setItem('bomExportFormat', bomExportFormat);
   }, [bomExportFormat]);
+  
+  // Netlist export format state
+  const [netlistExportFormat, setNetlistExportFormat] = useState<'kicad' | 'protel' | 'spice' | 'pads'>(() => {
+    const saved = localStorage.getItem('netlistExportFormat');
+    return (saved === 'kicad' || saved === 'protel' || saved === 'spice' || saved === 'pads') ? saved : 'kicad';
+  });
+  
+  // Persist netlist export format to localStorage when it changes
+  React.useEffect(() => {
+    localStorage.setItem('netlistExportFormat', netlistExportFormat);
+  }, [netlistExportFormat]);
   // Layer settings hook
   const layerSettings = useLayerSettings();
   const {
@@ -1397,6 +1409,12 @@ function App() {
   const [notesDialogDragOffset, setNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Project Notes
   const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
+  const [projectMetadata, setProjectMetadata] = useState<{ productName: string; productVersion: string; manufacturer: string; date: string }>({
+    productName: '',
+    productVersion: '',
+    manufacturer: '',
+    date: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
+  });
   const [projectNotesDialogVisible, setProjectNotesDialogVisible] = useState(false);
   const [projectNotesDialogPosition, setProjectNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
@@ -4209,19 +4227,19 @@ function App() {
             point2: area.end,
           });
           
-          // Generate NodeIds starting from the lowest available
-          const existingIds = new Set(drawingStrokes.flatMap(s => 
-            s.points.map(p => p.id || 0).filter(id => id > 0)
-          ));
-          const nextNodeId = existingIds.size > 0 ? Math.max(...Array.from(existingIds)) + 1 : 1;
-          
+          // CRITICAL: Use generatePointId() for each pad to ensure globally unique NodeIds
+          // This matches the approach used for individual via/pad creation and ensures:
+          // 1. IDs are properly registered in the allocatedIds set
+          // 2. The global nextPointId counter is correctly incremented
+          // 3. No duplicate IDs can ever be generated
           // Create drawing strokes for each pad location
-          const newStrokes: DrawingStroke[] = padLocations.map((pad, idx) => {
+          const newStrokes: DrawingStroke[] = padLocations.map((pad) => {
             const instanceId = icPlacementIsPadRef.current 
               ? ((padToolLayer || 'top') === 'top' ? 'padTop' : 'padBottom')
               : 'via';
             const instance = toolInstanceManager.get(instanceId);
-            const nodeId = nextNodeId + idx;
+            // Use generatePointId() to ensure uniqueness (same as individual via/pad creation)
+            const nodeId = generatePointId();
             const layer = icPlacementIsPadRef.current ? (padToolLayer || 'top') : 'top';
             return {
               id: nodeId.toString(),
@@ -8229,8 +8247,14 @@ function App() {
     setSelectedGroundIds(new Set());
     setIsSelecting(false);
     
-    // === STEP 5: Clear project notes ===
+    // === STEP 5: Clear project notes and metadata ===
     setProjectNotes([]);
+    setProjectMetadata({
+      productName: '',
+      productVersion: '',
+      manufacturer: '',
+      date: new Date().toISOString().split('T')[0], // Auto-fill with current date
+    });
     
     // === STEP 6: Reset view state ===
     setCurrentView('overlay');
@@ -10013,11 +10037,12 @@ function App() {
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
       projectNotes, // Save project notes (Name, Value pairs)
+      projectMetadata, // Save project metadata (Product Name, Version, Manufacturer, Date)
       homeViews, // Save all home view locations (0-9)
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, homeViews]);
+  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, projectMetadata, homeViews]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -10663,8 +10688,107 @@ function App() {
   }, [projectDirHandle, componentsTop, componentsBottom, projectName, bomExportFormat, generateBOMPDF]);
 
   // Export netlist function
-  // exportNetlist function removed - menu item was commented out and function is unused
-  // If needed in the future, uncomment the menu item and restore this function
+  // Accept format as parameter to avoid stale state issues (React state updates are async)
+  const handleExportNetlist = useCallback(async (format?: 'kicad' | 'protel' | 'spice' | 'pads') => {
+    if (!projectDirHandle) {
+      alert('Please create or open a project before exporting netlist.');
+      return;
+    }
+
+    // Use provided format or fall back to current state
+    const exportFormat = format || netlistExportFormat;
+
+    try {
+      // Collect all components from both layers
+      const allComponents = [...componentsTop, ...componentsBottom];
+      
+      // Generate netlist based on selected format
+      // Format names and extensions must match the submenu labels exactly:
+      // - "KiCad (.net)" → formatName: "KiCad", extension: ".net"
+      // - "Protel (.net)" → formatName: "Protel", extension: ".net"
+      // - "SPICE (.cir)" → formatName: "SPICE", extension: ".cir"
+      let netlistContent: string;
+      let formatName: string;
+      let extension: string;
+      
+      if (exportFormat === 'kicad') {
+        netlistContent = generateKiCadNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses
+        );
+        formatName = 'KiCad';
+        extension = '.net';
+      } else if (exportFormat === 'protel') {
+        netlistContent = generateProtelNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses
+        );
+        formatName = 'Protel';
+        extension = '.net';
+      } else if (exportFormat === 'spice') {
+        netlistContent = generateSpiceNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses
+        );
+        formatName = 'SPICE';
+        extension = '.cir';
+      } else { // pads
+        netlistContent = generatePadsNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses,
+          projectName
+        );
+        formatName = 'PADS';
+        extension = '.json';
+      }
+      
+      const filename = `${projectName}_${formatName}${extension}`;
+      
+      // Create blob with appropriate MIME type
+      const mimeType = exportFormat === 'pads' ? 'application/json' : 'text/plain';
+      const blob = new Blob([netlistContent], { type: mimeType });
+      
+      // Try to save using File System Access API in netlists subdirectory
+      try {
+        // Create or get the netlists subdirectory
+        const netlistsDirHandle = await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+        
+        // Save file in netlists subdirectory
+        const fileHandle = await netlistsDirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        alert(`Netlist exported successfully to netlists/${filename}!`);
+      } catch (fsError) {
+        // Fallback to download if File System Access API fails
+        console.warn('File System Access API failed, using download fallback:', fsError);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert(`Netlist downloaded as ${filename}!`);
+      }
+    } catch (e) {
+      console.error('Failed to export netlist:', e);
+      alert(`Failed to export netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
+    }
+  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName, netlistExportFormat]);
 
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
@@ -10902,8 +11026,9 @@ function App() {
     const w = window as any;
     if (typeof w.showDirectoryPicker === 'function') {
       try {
-        // Request readwrite permission upfront to avoid a second permission dialog
-        // when creating the project file
+        // Get the parent directory handle without requesting permissions yet
+        // We'll request permissions for the actual project directory after it's created
+        // This avoids showing a permission dialog for the parent directory
         const locationHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
         // Try to get a display name for the path (browser limitation - we can't get full path)
         // Store the handle and update the dialog
@@ -10913,6 +11038,7 @@ function App() {
           locationPath: locationHandle.name || 'Selected folder',
         }));
         // Note: Location path is stored in project file, not localStorage
+        // Note: We don't request permissions here - we'll request them for the project directory after creation
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') {
           console.error('Failed to get directory:', e);
@@ -10953,13 +11079,32 @@ function App() {
     } else {
       // Create project folder inside the selected location (standard IDE pattern)
       parentDirHandle = selectedDirHandle;
-    try {
-      projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
-    } catch (e) {
-      console.error('Failed to create project folder:', e);
-      alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
-      return;
+      try {
+        projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
+      } catch (e) {
+        console.error('Failed to create project folder:', e);
+        alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
+        return;
+      }
     }
+    
+    // CRITICAL: Request permissions for the project directory (not the parent)
+    // This ensures the permission dialog shows the actual project directory the user is creating
+    // The dialog will show "Hello" (the project directory) instead of the parent directory
+    try {
+      if (projectDirHandle.queryPermission) {
+        const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') {
+          const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
+          if (requestResult !== 'granted') {
+            alert('Full access to the project directory is required to create and manage project files.');
+            return;
+          }
+        }
+      }
+    } catch (permError) {
+      console.warn('Permission check failed (may not be supported in this browser):', permError);
+      // Continue anyway - try to create subdirectories and files anyway
     }
     
     // Create standard subdirectories for the project
@@ -10970,7 +11115,9 @@ function App() {
       await projectDirHandle.getDirectoryHandle('images', { create: true });
       // Create datasheets subdirectory (for component datasheets)
       await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
-      console.log('Created project subdirectories: history, images, datasheets');
+      // Create netlists subdirectory (for exported netlists)
+      await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+      console.log('Created project subdirectories: history, images, datasheets, netlists');
     } catch (e) {
       console.error('Failed to create project subdirectories:', e);
       // Continue anyway - subdirectories will be created when needed
@@ -10997,12 +11144,11 @@ function App() {
     setIsBottomView(false);
     setTransparency(0); // Show only top image
     
-    // Save the project file immediately with project name and timestamp
+    // Save the project file with the same name as the project directory
     try {
-      const { project, timestamp } = buildProjectData();
-      // Remove any existing timestamp from project name and add current timestamp
-      const projectNameWithoutTimestamp = removeTimestampFromFilename(cleanProjectName);
-      const filename = `${projectNameWithoutTimestamp}_${timestamp}.json`;
+      const { project } = buildProjectData();
+      // Use project name for filename (same as directory name)
+      const filename = `${cleanProjectName}.json`;
       const json = JSON.stringify(project, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       
@@ -11015,13 +11161,13 @@ function App() {
       setCurrentProjectFilePath(filename);
       console.log(`New project created: ${cleanProjectName}/${filename}`);
       
-      // Prompt user to enable auto-save
-      setAutoSavePromptDialog({ visible: true, source: 'new', interval: 5 });
+      // Enable auto-save by default with 5 minute interval
+      await handleAutoSaveApply(5, true);
     } catch (e) {
       console.error('Failed to save new project:', e);
       alert('Failed to save new project file. See console for details.');
     }
-  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject, resetView, setIsBottomView, setTransparency]);
+  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject, resetView, setIsBottomView, setTransparency, handleAutoSaveApply]);
 
   // Handle canceling new project setup
   const handleNewProjectSetupCancel = useCallback(() => {
@@ -11286,6 +11432,23 @@ function App() {
         setProjectNotes(project.projectNotes);
       } else {
         setProjectNotes([]);
+      }
+      // Restore project metadata
+      if (project.projectMetadata) {
+        setProjectMetadata({
+          productName: project.projectMetadata.productName || '',
+          productVersion: project.projectMetadata.productVersion || '',
+          manufacturer: project.projectMetadata.manufacturer || '',
+          date: project.projectMetadata.date || new Date().toISOString().split('T')[0],
+        });
+      } else {
+        // Initialize with current date if no metadata exists
+        setProjectMetadata({
+          productName: '',
+          productVersion: '',
+          manufacturer: '',
+          date: new Date().toISOString().split('T')[0],
+        });
       }
       // Restore trace colors, sizes, and layer choice
       if (project.traceColors) {
@@ -12457,15 +12620,27 @@ function App() {
   // Internal function to perform the actual project opening (called after user confirms or has no unsaved changes)
   const performOpenProject = useCallback(async () => {
     const w = window as any;
-    if (typeof w.showOpenFilePicker === 'function') {
+    if (typeof w.showDirectoryPicker === 'function') {
       try {
-        const [handle] = await w.showOpenFilePicker({
-          multiple: false,
-        });
-        const file = await handle.getFile();
-        if (!file.name.toLowerCase().endsWith('.json')) {
-          alert('Please select a .json project file.');
-          return;
+        // Request directory access with readwrite permissions
+        // This grants access to the directory and all files/subdirectories within it
+        const projectDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+        
+        // Verify we have write access
+        try {
+          if (projectDirHandle.queryPermission) {
+            const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') {
+              const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
+              if (requestResult !== 'granted') {
+                alert('Full access to the project directory is required to open and manage project files.');
+                return;
+              }
+            }
+          }
+        } catch (permError) {
+          console.warn('Permission check failed (may not be supported in this browser):', permError);
+          // Continue anyway - the directory picker should have already requested permissions
         }
         
         // CRITICAL: Set flag BEFORE closing project to prevent useEffect from overwriting refs
@@ -12481,89 +12656,69 @@ function App() {
         // This ensures projectDirHandle state is null before we set the new one
         await new Promise(resolve => setTimeout(resolve, 0));
         
-        setCurrentProjectFilePath(file.name);
-        const text = await file.text();
-        const project = JSON.parse(text);
+        // The project file should have the same name as the directory
+        const projectFileName = `${projectDirHandle.name}.json`;
+        let projectFileHandle: FileSystemFileHandle | null = null;
+        let project: any = null;
         
-        // Get the directory handle from the file handle (parent directory)
-        // This sets the project directory so that when auto-save is enabled,
-        // it will automatically use this directory (no need to prompt user)
-        // CRITICAL: getParent() returns a handle to the parent directory, but the browser
-        // may reuse permissions from previous sessions. We MUST verify the handle is correct
-        // by checking that the opened file actually exists in that directory.
-        // Set flag to prevent useEffect from overwriting the ref during async operations
-        isOpeningProjectRef.current = true;
-        
-        let projectDirHandle: FileSystemDirectoryHandle | null = null;
         try {
-          // Check if getParent() method exists (browser support varies)
-          if (typeof (handle as any).getParent === 'function') {
-            projectDirHandle = await (handle as any).getParent();
-          } else {
-            // getParent() is not available - we need to prompt for directory access
-            console.warn('getParent() not available. Prompting user for directory access...');
-            const w = window as any;
-            if (typeof w.showDirectoryPicker === 'function') {
-              // Prompt user to select the directory containing the opened file
-              // This ensures we get the correct directory handle with proper permissions
-              // Use the file handle as startIn to open the picker in the same directory as the selected file
-              projectDirHandle = await w.showDirectoryPicker({
-                startIn: handle, // Start in the same directory as the opened file
-              });
-            } else {
-              throw new Error('Directory picker not available in this browser');
-            }
-          }
-          
-          // CRITICAL VERIFICATION: Verify the directory handle is correct by checking
-          // that the file we just opened actually exists in this directory
-          // This ensures we're not using a stale/cached directory handle
-          if (projectDirHandle) {
-            try {
-              const verifyFileHandle = await projectDirHandle.getFileHandle(file.name);
-              const verifyFile = await verifyFileHandle.getFile();
-              if (verifyFile.name !== file.name) {
-                throw new Error(`Directory verification failed: file name mismatch`);
+          // Try to open the project file with the same name as the directory
+          projectFileHandle = await projectDirHandle.getFileHandle(projectFileName);
+          const file = await projectFileHandle.getFile();
+          const text = await file.text();
+          project = JSON.parse(text);
+          setCurrentProjectFilePath(projectFileName);
+        } catch (fileError) {
+          // If file doesn't exist, try to find any .json file in the directory
+          console.warn(`Project file ${projectFileName} not found, searching for .json files...`);
+          let foundFile = false;
+          try {
+            for await (const [name, handle] of projectDirHandle.entries()) {
+              if (handle.kind === 'file' && name.toLowerCase().endsWith('.json')) {
+                const file = await (handle as FileSystemFileHandle).getFile();
+                const text = await file.text();
+                project = JSON.parse(text);
+                setCurrentProjectFilePath(name);
+                foundFile = true;
+                console.log(`Found project file: ${name}`);
+                break;
               }
-            } catch (verifyError) {
-              console.error(`Directory verification failed:`, verifyError);
-              console.error(`The selected directory might not contain the opened file`);
-              // Don't continue - we need the correct directory
-              throw new Error('Directory verification failed - selected directory does not contain the opened file');
             }
+          } catch (searchError) {
+            console.error('Failed to search for project files:', searchError);
           }
           
-          // CRITICAL FIX: Always update the ref with the NEW handle
-          // We MUST use this handle, not any cached/stale handle from a previous project
-          setProjectDirHandle(projectDirHandle);
-          projectDirHandleRef.current = projectDirHandle;
-          
-          // Create standard subdirectories if they don't exist (for existing projects)
-          if (projectDirHandle) {
-            try {
-              // Create history subdirectory (for auto-save history)
-              await projectDirHandle.getDirectoryHandle('history', { create: true });
-              // Create images subdirectory (for PCB images)
-              await projectDirHandle.getDirectoryHandle('images', { create: true });
-              // Create datasheets subdirectory (for component datasheets)
-              await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
-              console.log('Created/verified project subdirectories: history, images, datasheets');
-            } catch (e) {
-              console.error('Failed to create/verify project subdirectories:', e);
-              // Continue anyway - subdirectories will be created when needed
-            }
+          if (!foundFile) {
+            alert(`Project file "${projectFileName}" not found in the selected directory. Please ensure the project file has the same name as the directory.`);
+            return;
           }
-        } catch (e) {
-          console.error('Failed to get directory handle from file handle:', e);
-          // No alert needed - the auto-save prompt dialog will be shown shortly,
-          // allowing the user to set up auto-save with a directory at that time
-        } finally {
-          // Clear the flag after a short delay to allow state updates to complete
-          // This ensures the useEffect can sync the ref once state is stable
-          setTimeout(() => {
-            isOpeningProjectRef.current = false;
-          }, 1000);
         }
+        
+        // We already have the project directory handle from the directory picker
+        // Store it and update refs
+        setProjectDirHandle(projectDirHandle);
+        projectDirHandleRef.current = projectDirHandle;
+        
+        // Create standard subdirectories if they don't exist (for existing projects)
+        try {
+          // Create history subdirectory (for auto-save history)
+          await projectDirHandle.getDirectoryHandle('history', { create: true });
+          // Create images subdirectory (for PCB images)
+          await projectDirHandle.getDirectoryHandle('images', { create: true });
+          // Create datasheets subdirectory (for component datasheets)
+          await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
+          // Create netlists subdirectory (for exported netlists)
+          await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+          console.log('Created/verified project subdirectories: history, images, datasheets, netlists');
+        } catch (e) {
+          console.error('Failed to create/verify project subdirectories:', e);
+          // Continue anyway - subdirectories will be created when needed
+        }
+        
+        // Clear the flag after a short delay to allow state updates to complete
+        setTimeout(() => {
+          isOpeningProjectRef.current = false;
+        }, 1000);
         
         // Check if auto-save was enabled in the project file BEFORE calling loadProject
         // This ensures we can update the directory handle immediately if needed
@@ -12577,8 +12732,8 @@ function App() {
         if (project.projectInfo?.name) {
           projectNameToUse = project.projectInfo.name;
         } else {
-          const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-          projectNameToUse = projectNameFromFile || 'pcb_project';
+          // Use directory name as project name
+          projectNameToUse = projectDirHandle.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
           setProjectName(projectNameToUse);
         }
         
@@ -12621,9 +12776,10 @@ function App() {
           // when autoSaveDirHandle or autoSaveBaseName changes
         }
         
-        setTimeout(() => {
-          // Always show auto-save prompt dialog after opening a project
-          setAutoSavePromptDialog({ visible: true, source: 'open', interval: 5 });
+        // Enable auto-save by default with 5 minute interval
+        // Use setTimeout to ensure project state is fully loaded first
+        setTimeout(async () => {
+          await handleAutoSaveApply(5, true);
         }, 100);
       } catch (e) {
         if ((e as any)?.name === 'AbortError') return;
@@ -12633,59 +12789,23 @@ function App() {
     } else {
       openProjectRef.current?.click();
     }
-  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, setAutoSavePromptDialog, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName, closeProject]);
+  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName, closeProject, handleAutoSaveApply]);
 
-  // Handler functions for open project dialog (defined after performOpenProject)
-  const handleOpenProjectYes = useCallback(async () => {
-    setOpenProjectDialog({ visible: false });
-    await saveProject();
-    await performOpenProject();
-  }, [saveProject, performOpenProject]);
 
-  const handleOpenProjectNo = useCallback(async () => {
-    setOpenProjectDialog({ visible: false });
-    await performOpenProject();
-  }, [performOpenProject]);
-
-  const handleOpenProjectCancel = useCallback(() => {
-    setOpenProjectDialog({ visible: false });
-  }, []);
-
-  // Focus Yes button when open project dialog opens and handle keyboard
-  React.useEffect(() => {
-    if (openProjectDialog.visible) {
-      // Focus Yes button after a short delay to ensure it's rendered
-      setTimeout(() => {
-        openProjectYesButtonRef.current?.focus();
-      }, 0);
-      
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          // Yes - save and open project
-          handleOpenProjectYes();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          // Cancel - close dialog
-          setOpenProjectDialog({ visible: false });
-        }
-      };
-      
-      window.addEventListener('keydown', handleKeyDown);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-      };
-    }
-  }, [openProjectDialog.visible, handleOpenProjectYes]);
-
-  // Public handler for opening a project file (checks for unsaved changes first)
+  // Public handler for opening a project file (auto-saves silently if there are unsaved changes, then opens directory picker)
   const handleOpenProject = useCallback(async () => {
-    if (hasUnsavedChanges()) {
-      setOpenProjectDialog({ visible: true });
-    } else {
-      await performOpenProject();
+    // Auto-save silently if there are unsaved changes to avoid data loss
+    if (hasUnsavedChanges() && projectDirHandle) {
+      try {
+        await saveProject();
+      } catch (e) {
+        console.warn('Failed to auto-save before opening project:', e);
+        // Continue anyway - user can still open the project
+      }
     }
-  }, [hasUnsavedChanges, performOpenProject]);
+    // Proceed directly to directory picker (single dialog)
+    await performOpenProject();
+  }, [hasUnsavedChanges, performOpenProject, saveProject, projectDirHandle]);
 
   return (
     <div className="app">
@@ -12710,6 +12830,9 @@ function App() {
         onExportBOM={handleExportBOM}
         bomExportFormat={bomExportFormat}
         setBomExportFormat={setBomExportFormat}
+        onExportNetlist={handleExportNetlist}
+        netlistExportFormat={netlistExportFormat}
+        setNetlistExportFormat={setNetlistExportFormat}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}
@@ -14786,10 +14909,10 @@ function App() {
                 setProjectName(projectNameToUse);
               }
               
-              // Always show auto-save prompt dialog after opening a project
+              // Enable auto-save by default with 5 minute interval
               // Use setTimeout to allow React state updates from loadProject to complete
-              setTimeout(() => {
-                setAutoSavePromptDialog({ visible: true, source: 'open', interval: 5 });
+              setTimeout(async () => {
+                await handleAutoSaveApply(5, true);
               }, 100);
             } catch (err) {
               console.error('Failed to open project', err);
@@ -14885,6 +15008,8 @@ function App() {
         visible={projectNotesDialogVisible}
         projectNotes={projectNotes}
         setProjectNotes={setProjectNotes}
+        projectMetadata={projectMetadata}
+        setProjectMetadata={setProjectMetadata}
         onClose={() => {
           setProjectNotesDialogVisible(false);
           // Don't reset position - keep it for next time
@@ -14951,16 +15076,6 @@ function App() {
         yesButtonRef={newProjectYesButtonRef}
       />
 
-      {/* Open Project Confirmation Dialog */}
-      <ConfirmationDialog
-        visible={openProjectDialog.visible}
-        title="Open Project"
-        message="You have unsaved changes. Do you want to save your project before opening another one?"
-        onYes={handleOpenProjectYes}
-        onNo={handleOpenProjectNo}
-        onCancel={handleOpenProjectCancel}
-        yesButtonRef={openProjectYesButtonRef}
-      />
 
       {/* New Project Setup Dialog */}
       {newProjectSetupDialog.visible && (
@@ -15062,7 +15177,7 @@ function App() {
             <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#e0e0e0', fontWeight: 500 }}>
               Location:
             </label>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
               <input
                 type="text"
                 value={newProjectSetupDialog.locationPath || 'Not selected'}
@@ -15095,6 +15210,18 @@ function App() {
               >
                 Browse...
               </button>
+            </div>
+            <div style={{ 
+              marginBottom: '12px', 
+              padding: '6px 10px', 
+              background: '#2a2a2f', 
+              border: '1px solid #444', 
+              borderRadius: 4,
+              fontSize: '11px',
+              color: '#aaa',
+              fontStyle: 'italic',
+            }}>
+              Note: Select an existing parent directory. The project directory will be created automatically when you click Create.
             </div>
             
             {/* Project Path Preview */}

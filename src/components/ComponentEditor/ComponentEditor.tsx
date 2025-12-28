@@ -815,135 +815,136 @@ Analyze the attached PDF datasheet and extract the information according to the 
     
     // Update type-specific fields based on component type
     // Save separate value and unit fields
+    // Note: Preserve empty strings explicitly (don't convert to undefined) so values are retained
     if (comp.componentType === 'Resistor') {
-      (updated as any).resistance = componentEditor.resistance || undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
+      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
       // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
       (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
     } else if (comp.componentType === 'Capacitor') {
-      (updated as any).capacitance = componentEditor.capacitance || undefined;
-      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
-      (updated as any).dielectric = componentEditor.dielectric || undefined;
+      (updated as any).capacitance = componentEditor.capacitance !== undefined ? componentEditor.capacitance : undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit !== undefined ? componentEditor.capacitanceUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
+      (updated as any).dielectric = componentEditor.dielectric !== undefined ? componentEditor.dielectric : undefined;
     } else if (comp.componentType === 'Electrolytic Capacitor') {
-      (updated as any).capacitance = componentEditor.capacitance || undefined;
-      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).capacitance = componentEditor.capacitance !== undefined ? componentEditor.capacitance : undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit !== undefined ? componentEditor.capacitanceUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
       // polarized is now a fixed property from definition, not user-editable
-      (updated as any).esr = componentEditor.esr || undefined;
-      (updated as any).esrUnit = componentEditor.esrUnit || undefined;
-      (updated as any).temperature = componentEditor.temperature || undefined;
+      (updated as any).esr = componentEditor.esr !== undefined ? componentEditor.esr : undefined;
+      (updated as any).esrUnit = componentEditor.esrUnit !== undefined ? componentEditor.esrUnit : undefined;
+      (updated as any).temperature = componentEditor.temperature !== undefined ? componentEditor.temperature : undefined;
     } else if (comp.componentType === 'Film Capacitor') {
-      (updated as any).capacitance = componentEditor.capacitance || undefined;
-      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).capacitance = componentEditor.capacitance !== undefined ? componentEditor.capacitance : undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit !== undefined ? componentEditor.capacitanceUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
       (updated as any).filmType = componentEditor.filmType || undefined;
     } else if (comp.componentType === 'Diode') {
       // Pre-fill diodeType from component's diodeType property (set during creation from radio button selection)
       (updated as any).diodeType = componentEditor.diodeType || (comp as any).diodeType || 'Standard';
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
-      (updated as any).ledColor = componentEditor.ledColor || undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
+      (updated as any).ledColor = componentEditor.ledColor !== undefined ? componentEditor.ledColor : undefined;
     } else if (comp.componentType === 'Battery') {
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).capacity = componentEditor.capacity || undefined;
-      (updated as any).capacityUnit = componentEditor.capacityUnit || undefined;
-      (updated as any).chemistry = componentEditor.chemistry || undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).capacity = componentEditor.capacity !== undefined ? componentEditor.capacity : undefined;
+      (updated as any).capacityUnit = componentEditor.capacityUnit !== undefined ? componentEditor.capacityUnit : undefined;
+      (updated as any).chemistry = componentEditor.chemistry !== undefined ? componentEditor.chemistry : undefined;
     } else if (comp.componentType === 'Fuse') {
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).fuseType = componentEditor.fuseType || undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).fuseType = componentEditor.fuseType !== undefined ? componentEditor.fuseType : undefined;
     } else if (comp.componentType === 'FerriteBead') {
-      (updated as any).impedance = componentEditor.impedance || undefined;
-      (updated as any).impedanceUnit = componentEditor.impedanceUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).impedance = componentEditor.impedance !== undefined ? componentEditor.impedance : undefined;
+      (updated as any).impedanceUnit = componentEditor.impedanceUnit !== undefined ? componentEditor.impedanceUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
     } else if (comp.componentType === 'Connector') {
       (updated as any).connectorType = componentEditor.connectorType || undefined;
       (updated as any).gender = componentEditor.gender || undefined;
     } else if (comp.componentType === 'Jumper') {
       (updated as any).positions = componentEditor.positions || undefined;
     } else if (comp.componentType === 'Relay') {
-      (updated as any).coilVoltage = componentEditor.coilVoltage || undefined;
-      (updated as any).coilVoltageUnit = componentEditor.coilVoltageUnit || undefined;
-      (updated as any).contactType = componentEditor.contactType || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).coilVoltage = componentEditor.coilVoltage !== undefined ? componentEditor.coilVoltage : undefined;
+      (updated as any).coilVoltageUnit = componentEditor.coilVoltageUnit !== undefined ? componentEditor.coilVoltageUnit : undefined;
+      (updated as any).contactType = componentEditor.contactType !== undefined ? componentEditor.contactType : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
     } else if (comp.componentType === 'Inductor') {
-      (updated as any).inductance = componentEditor.inductance || undefined;
-      (updated as any).inductanceUnit = componentEditor.inductanceUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
-      (updated as any).resistance = componentEditor.resistance || undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+      (updated as any).inductance = componentEditor.inductance !== undefined ? componentEditor.inductance : undefined;
+      (updated as any).inductanceUnit = componentEditor.inductanceUnit !== undefined ? componentEditor.inductanceUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
+      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
+      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
     } else if (comp.componentType === 'Speaker') {
-      (updated as any).impedance = componentEditor.impedance || undefined;
-      (updated as any).impedanceUnit = componentEditor.impedanceUnit || undefined;
+      (updated as any).impedance = componentEditor.impedance !== undefined ? componentEditor.impedance : undefined;
+      (updated as any).impedanceUnit = componentEditor.impedanceUnit !== undefined ? componentEditor.impedanceUnit : undefined;
       // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
       (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
     } else if (comp.componentType === 'Motor') {
-      (updated as any).motorType = componentEditor.motorType || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).motorType = componentEditor.motorType !== undefined ? componentEditor.motorType : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
     } else if (comp.componentType === 'PowerSupply') {
-      (updated as any).inputVoltage = componentEditor.inputVoltage || undefined;
-      (updated as any).inputVoltageUnit = componentEditor.inputVoltageUnit || undefined;
-      (updated as any).outputVoltage = componentEditor.outputVoltage || undefined;
-      (updated as any).outputVoltageUnit = componentEditor.outputVoltageUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).inputVoltage = componentEditor.inputVoltage !== undefined ? componentEditor.inputVoltage : undefined;
+      (updated as any).inputVoltageUnit = componentEditor.inputVoltageUnit !== undefined ? componentEditor.inputVoltageUnit : undefined;
+      (updated as any).outputVoltage = componentEditor.outputVoltage !== undefined ? componentEditor.outputVoltage : undefined;
+      (updated as any).outputVoltageUnit = componentEditor.outputVoltageUnit !== undefined ? componentEditor.outputVoltageUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
     } else if (comp.componentType === 'Transistor') {
-      (updated as any).transistorType = componentEditor.transistorType || undefined;
-      (updated as any).polarity = componentEditor.polarity || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).transistorType = componentEditor.transistorType !== undefined ? componentEditor.transistorType : undefined;
+      (updated as any).polarity = componentEditor.polarity !== undefined ? componentEditor.polarity : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
     } else if (comp.componentType === 'ResistorNetwork') {
-      (updated as any).resistance = componentEditor.resistance || undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
+      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
       (updated as any).configuration = componentEditor.configuration || undefined;
     } else if (comp.componentType === 'Thermistor') {
-      (updated as any).resistance = componentEditor.resistance || undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
+      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
       (updated as any).thermistorType = componentEditor.thermistorType || undefined;
       (updated as any).beta = componentEditor.beta || undefined;
     } else if (comp.componentType === 'Switch') {
-      (updated as any).switchType = componentEditor.switchType || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
+      (updated as any).switchType = componentEditor.switchType !== undefined ? componentEditor.switchType : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
     } else if (comp.componentType === 'Transformer') {
-      (updated as any).primaryVoltage = componentEditor.primaryVoltage || undefined;
-      (updated as any).primaryVoltageUnit = componentEditor.primaryVoltageUnit || undefined;
-      (updated as any).secondaryVoltage = componentEditor.secondaryVoltage || undefined;
-      (updated as any).secondaryVoltageUnit = componentEditor.secondaryVoltageUnit || undefined;
+      (updated as any).primaryVoltage = componentEditor.primaryVoltage !== undefined ? componentEditor.primaryVoltage : undefined;
+      (updated as any).primaryVoltageUnit = componentEditor.primaryVoltageUnit !== undefined ? componentEditor.primaryVoltageUnit : undefined;
+      (updated as any).secondaryVoltage = componentEditor.secondaryVoltage !== undefined ? componentEditor.secondaryVoltage : undefined;
+      (updated as any).secondaryVoltageUnit = componentEditor.secondaryVoltageUnit !== undefined ? componentEditor.secondaryVoltageUnit : undefined;
       // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
       (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
       (updated as any).turns = componentEditor.turns || undefined;
     } else if (comp.componentType === 'TestPoint') {
       (updated as any).signal = componentEditor.signal || undefined;
     } else if ((comp.componentType as string) === 'Film Capacitor') {
-      (updated as any).capacitance = componentEditor.capacitance || undefined;
-      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit || undefined;
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).capacitance = componentEditor.capacitance !== undefined ? componentEditor.capacitance : undefined;
+      (updated as any).capacitanceUnit = componentEditor.capacitanceUnit !== undefined ? componentEditor.capacitanceUnit : undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
       (updated as any).filmType = componentEditor.filmType || undefined;
     } else if (comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') {
       // For ICs, save description from the Description field
@@ -979,22 +980,22 @@ Analyze the attached PDF datasheet and extract the information according to the 
     if (comp.componentType === 'VacuumTube') {
       (updated as any).tubeType = componentEditor.tubeType || undefined;
     } else if (comp.componentType === 'VariableResistor') {
-      (updated as any).vrType = componentEditor.vrType || undefined;
-      (updated as any).resistance = componentEditor.resistance || undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit || undefined;
+      (updated as any).vrType = componentEditor.vrType !== undefined ? componentEditor.vrType : undefined;
+      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
+      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
       // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
       (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
       (updated as any).taper = componentEditor.taper || undefined;
     } else if (comp.componentType === 'Crystal') {
-      (updated as any).frequency = componentEditor.frequency || undefined;
-      (updated as any).loadCapacitance = componentEditor.loadCapacitance || undefined;
-      (updated as any).tolerance = componentEditor.tolerance || undefined;
+      (updated as any).frequency = componentEditor.frequency !== undefined ? componentEditor.frequency : undefined;
+      (updated as any).loadCapacitance = componentEditor.loadCapacitance !== undefined ? componentEditor.loadCapacitance : undefined;
+      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
     } else if (comp.componentType === 'GenericComponent') {
       (updated as any).genericType = componentEditor.genericType || 'Attenuator';
-      (updated as any).voltage = componentEditor.voltage || undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit || undefined;
-      (updated as any).current = componentEditor.current || undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit || undefined;
+      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
+      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
+      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
+      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
       (updated as any).power = componentEditor.power || undefined;
       (updated as any).frequency = componentEditor.frequency || undefined;
       (updated as any).model = componentEditor.model || undefined;
@@ -1028,7 +1029,26 @@ Analyze the attached PDF datasheet and extract the information according to the 
           fullEditor: componentEditor
         });
       }
+      // Debug: Log componentEditor state before update
+      console.log('[ComponentEditor] handleSave - componentEditor state before update:', {
+        resistance: componentEditor.resistance,
+        resistanceUnit: componentEditor.resistanceUnit,
+        capacitance: componentEditor.capacitance,
+        capacitanceUnit: componentEditor.capacitanceUnit,
+        componentType: currentComp.componentType,
+      });
+      
       const updatedComp = updateComponent(currentComp);
+      
+      // Debug: Log updated component after save
+      console.log('[ComponentEditor] handleSave - updatedComp after save:', {
+        resistance: (updatedComp as any).resistance,
+        resistanceUnit: (updatedComp as any).resistanceUnit,
+        capacitance: (updatedComp as any).capacitance,
+        capacitanceUnit: (updatedComp as any).capacitanceUnit,
+        componentType: updatedComp.componentType,
+      });
+      
       if (currentComp.componentType === 'IntegratedCircuit') {
         console.log('[ComponentEditor] handleSave - After updateComponent call:', {
           updatedComponentDatasheet: (updatedComp as any).datasheet,
@@ -1058,14 +1078,34 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const updated = prev.map(c => {
               if (c.id === componentEditor.id) {
                 console.log('[ComponentEditor] Updating component in top array - datasheet:', (updatedComp as any).datasheet);
+                // Debug: Log the updated component values
+                if (updatedComp.componentType === 'Resistor' || updatedComp.componentType === 'Capacitor') {
+                  console.log('[ComponentEditor] Updated component values:', {
+                    resistance: (updatedComp as any).resistance,
+                    resistanceUnit: (updatedComp as any).resistanceUnit,
+                    capacitance: (updatedComp as any).capacitance,
+                    capacitanceUnit: (updatedComp as any).capacitanceUnit,
+                  });
+                }
                 return updatedComp;
               }
               return c;
             });
             // Verify the update worked
             const found = updated.find(c => c.id === componentEditor.id);
-            if (found && found.componentType === 'IntegratedCircuit') {
-              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+            if (found) {
+              if (found.componentType === 'IntegratedCircuit') {
+                console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+              }
+              // Debug: Verify values were saved
+              if (found.componentType === 'Resistor' || found.componentType === 'Capacitor') {
+                console.log('[ComponentEditor] After state update - component values in array:', {
+                  resistance: (found as any).resistance,
+                  resistanceUnit: (found as any).resistanceUnit,
+                  capacitance: (found as any).capacitance,
+                  capacitanceUnit: (found as any).capacitanceUnit,
+                });
+              }
             }
             return updated;
           });
@@ -1074,14 +1114,34 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const updated = prev.map(c => {
               if (c.id === componentEditor.id) {
                 console.log('[ComponentEditor] Updating component in bottom array - datasheet:', (updatedComp as any).datasheet);
+                // Debug: Log the updated component values
+                if (updatedComp.componentType === 'Resistor' || updatedComp.componentType === 'Capacitor') {
+                  console.log('[ComponentEditor] Updated component values:', {
+                    resistance: (updatedComp as any).resistance,
+                    resistanceUnit: (updatedComp as any).resistanceUnit,
+                    capacitance: (updatedComp as any).capacitance,
+                    capacitanceUnit: (updatedComp as any).capacitanceUnit,
+                  });
+                }
                 return updatedComp;
               }
               return c;
             });
             // Verify the update worked
             const found = updated.find(c => c.id === componentEditor.id);
-            if (found && found.componentType === 'IntegratedCircuit') {
-              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+            if (found) {
+              if (found.componentType === 'IntegratedCircuit') {
+                console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+              }
+              // Debug: Verify values were saved
+              if (found.componentType === 'Resistor' || found.componentType === 'Capacitor') {
+                console.log('[ComponentEditor] After state update - component values in array:', {
+                  resistance: (found as any).resistance,
+                  resistanceUnit: (found as any).resistanceUnit,
+                  capacitance: (found as any).capacitance,
+                  capacitanceUnit: (found as any).capacitanceUnit,
+                });
+              }
             }
             return updated;
           });
@@ -2219,7 +2279,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         )}
         
         {/* Type-specific value fields - moved near top for easy access */}
-        <ComponentTypeFields
+          <ComponentTypeFields
             component={comp}
             componentEditor={componentEditor}
             componentDefinition={componentDefinition}

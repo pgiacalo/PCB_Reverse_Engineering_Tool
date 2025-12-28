@@ -1259,6 +1259,424 @@ export function generateProtelNetlist(
 }
 
 /**
+ * Generate SPICE netlist (coordinate-based version)
+ * SPICE format is used for circuit simulation
+ */
+export function generateSpiceNetlist(
+  components: PCBComponent[],
+  drawingStrokes: DrawingStroke[],
+  powerSymbols: PowerSymbol[],
+  groundSymbols: GroundSymbol[],
+  powerBuses: PowerBus[]
+): string {
+  // Use coordinate-based connectivity
+  const coordinateToNode = buildConnectivityGraphCoordinateBased(
+    drawingStrokes,
+    components,
+    powerSymbols,
+    groundSymbols,
+    powerBuses
+  );
+  
+  const connections = buildConnectionsCoordinateBased(drawingStrokes, coordinateToNode);
+  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections);
+  const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
+  
+  // Build component map
+  const componentMap = new Map<string, PCBComponent>();
+  for (const comp of components) {
+    const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
+    if (designator) {
+      componentMap.set(designator, comp);
+    }
+  }
+  
+  // Map component types to SPICE prefixes
+  const getSpicePrefix = (comp: PCBComponent): string => {
+    switch (comp.componentType) {
+      case 'Resistor': return 'R';
+      case 'Capacitor': return 'C';
+      case 'Electrolytic Capacitor': return 'C';
+      case 'Film Capacitor': return 'C';
+      case 'Inductor': return 'L';
+      case 'Diode': return 'D';
+      case 'Transistor': return 'Q';
+      case 'IntegratedCircuit': return 'X'; // ICs need subcircuit definitions
+      case 'Switch': return 'S'; // Voltage-controlled switch
+      case 'Battery': return 'V'; // Voltage source
+      case 'Fuse': return 'R'; // Model fuse as small resistance
+      case 'Jumper': return 'R'; // Model jumper as very small resistance
+      default: return 'X'; // Generic subcircuit (needs definition)
+    }
+  };
+  
+  // Extract numeric part from designator (e.g., "R1" -> "1", "C2" -> "2")
+  const getSpiceDesignator = (comp: PCBComponent): string => {
+    const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim() || '';
+    // Extract number from designator (e.g., "R1" -> "1", "C2" -> "2", "U3" -> "3")
+    const match = designator.match(/\d+/);
+    if (match) {
+      return match[0];
+    }
+    // Fallback: use component ID hash or index
+    return comp.id.substring(0, 8);
+  };
+  
+  // Get SPICE value string for component
+  const getSpiceValue = (comp: PCBComponent): string => {
+    // For Resistor: use resistance
+    if (comp.componentType === 'Resistor' && 'resistance' in comp) {
+      const { value, unit } = readValueAndUnit(comp, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      if (value && value.trim() !== '') {
+        return combineValueAndUnit(value, unit);
+      }
+    }
+    
+    // For Capacitor/Electrolytic Capacitor: use capacitance
+    if ((comp.componentType === 'Capacitor' || comp.componentType === 'Electrolytic Capacitor') && 'capacitance' in comp) {
+      const { value, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      if (value && value.trim() !== '') {
+        return combineValueAndUnit(value, unit);
+      }
+    }
+    
+    // For Inductor: use inductance
+    if (comp.componentType === 'Inductor' && 'inductance' in comp) {
+      const { value, unit } = readValueAndUnit(comp, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
+      if (value && value.trim() !== '') {
+        return combineValueAndUnit(value, unit);
+      }
+    }
+    
+    // For active components: use part number or part name
+    const partName = (comp as any).partName?.trim();
+    if (partName && partName !== '') {
+      return partName;
+    }
+    
+    const partNumber = (comp as any).partNumber?.trim();
+    if (partNumber && partNumber !== '') {
+      return partNumber;
+    }
+    
+    // Fallback
+    return comp.componentType;
+  };
+  
+  // Build net to node name mapping
+  const netToNodeName = new Map<string, string>();
+  let signalNetCounter = 1;
+  
+  for (const [rootCoordKey, netNodes] of netGroups) {
+    const netName = netNames.get(rootCoordKey);
+    if (!netName) continue;
+    
+    // Convert net name to SPICE node name
+    let nodeName: string;
+    if (netName === 'GND') {
+      nodeName = '0'; // SPICE uses '0' for ground
+    } else if (netName.startsWith('+') || netName.startsWith('-')) {
+      // Power net: clean up the name (remove spaces, ensure valid SPICE identifier)
+      nodeName = netName.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_+-]/g, '_');
+    } else {
+      // Signal net: use N1, N2, etc.
+      nodeName = `N${signalNetCounter++}`;
+    }
+    
+    netToNodeName.set(rootCoordKey, nodeName);
+  }
+  
+  // Create reverse mapping: netName -> nodeName for power nets
+  const powerNetToNodeName = new Map<string, string>();
+  for (const [rootCoordKey, nodeName] of netToNodeName.entries()) {
+    const netName = netNames.get(rootCoordKey);
+    if (netName && (netName.startsWith('+') || netName.startsWith('-'))) {
+      powerNetToNodeName.set(netName, nodeName);
+    }
+  }
+  
+  // Generate SPICE netlist
+  let output = '* SPICE Netlist\n';
+  output += `* Generated from PCB Reverse Engineering Tool\n*\n\n`;
+  
+  // Generate components
+  const sortedDesignators = Array.from(componentMap.keys()).sort();
+  for (const designator of sortedDesignators) {
+    const comp = componentMap.get(designator)!;
+    const prefix = getSpicePrefix(comp);
+    const value = getSpiceValue(comp);
+    
+    // Get connected pins and their net assignments
+    const pinConnections: Array<{ pinIndex: number; nodeName: string }> = [];
+    
+    for (const [rootCoordKey, netNodes] of netGroups) {
+      const nodeName = netToNodeName.get(rootCoordKey);
+      if (!nodeName) continue;
+      
+      for (const node of netNodes) {
+        if (node.type === 'component_pin' && node.componentId === comp.id && node.pinIndex !== undefined) {
+          pinConnections.push({ pinIndex: node.pinIndex, nodeName });
+        }
+      }
+    }
+    
+    // Sort by pin index
+    pinConnections.sort((a, b) => a.pinIndex - b.pinIndex);
+    
+    // Generate component line
+    // Format: PREFIX NUMBER NODE1 NODE2 ... VALUE
+    // Use numeric part of designator (e.g., "R1" -> "1", not "RR1")
+    const spiceDesignator = getSpiceDesignator(comp);
+    
+    // Handle special cases for components that need different SPICE syntax
+    if (comp.componentType === 'Switch') {
+      // Voltage-controlled switch: S<name> <+node> <-node> <+cont> <-cont> <model> [ON|OFF]
+      // For now, use a simple behavioral model or comment it out
+      if (pinConnections.length >= 2) {
+        output += `* Switch ${designator}: ${comp.componentType} - needs manual modeling\n`;
+        output += `* S${spiceDesignator} ${pinConnections[0].nodeName} ${pinConnections[1].nodeName} 0 0 SW_MODEL\n`;
+      }
+    } else if (comp.componentType === 'IntegratedCircuit') {
+      // ICs need subcircuit definitions - use X prefix and part number as subcircuit name
+      const partNum = (comp as any).partNumber?.trim() || (comp as any).partName?.trim() || comp.componentType;
+      if (pinConnections.length > 0) {
+        output += `X${spiceDesignator}`;
+        for (const conn of pinConnections) {
+          output += ` ${conn.nodeName}`;
+        }
+        // Use part number as subcircuit name (user needs to define .subckt)
+        output += ` ${partNum}\n`;
+        output += `* Note: Subcircuit definition for ${partNum} must be provided\n`;
+      }
+    } else if (comp.componentType === 'Battery') {
+      // Battery as voltage source: V<name> <+node> <-node> [DC|AC] <value>
+      const voltage = getSpiceValue(comp);
+      if (pinConnections.length >= 2) {
+        output += `V${spiceDesignator} ${pinConnections[0].nodeName} ${pinConnections[1].nodeName} DC ${voltage || '5'}\n`;
+      }
+    } else {
+      // Standard components (R, C, L, D, Q, etc.)
+      if (pinConnections.length > 0) {
+        output += `${prefix}${spiceDesignator}`;
+        for (const conn of pinConnections) {
+          output += ` ${conn.nodeName}`;
+        }
+        // Only add value if it's not empty and component type supports it
+        if (value && value.trim() !== '' && 
+            (comp.componentType === 'Resistor' || 
+             comp.componentType === 'Capacitor' || 
+             comp.componentType === 'Electrolytic Capacitor' ||
+             comp.componentType === 'Film Capacitor' ||
+             comp.componentType === 'Inductor' ||
+             comp.componentType === 'Diode')) {
+          output += ` ${value}`;
+        }
+        output += '\n';
+      } else {
+        // Component with no connections - still include it but with placeholder nodes
+        const pinCount = comp.pinCount || 2;
+        output += `${prefix}${spiceDesignator}`;
+        for (let i = 0; i < pinCount; i++) {
+          output += ` NC${i + 1}`; // NC = No Connection
+        }
+        if (value && value.trim() !== '') {
+          output += ` ${value}`;
+        }
+        output += '\n';
+      }
+    }
+  }
+  
+  // Add power/voltage sources if we have power nets
+  const powerNets = new Set<string>();
+  for (const [rootCoordKey, netNodes] of netGroups) {
+    const netName = netNames.get(rootCoordKey);
+    if (netName && (netName.startsWith('+') || netName.startsWith('-'))) {
+      powerNets.add(netName);
+    }
+  }
+  
+  if (powerNets.size > 0) {
+    output += '\n* Power sources (user should define these)\n';
+    let powerSourceCounter = 1;
+    for (const powerNet of Array.from(powerNets).sort()) {
+      const nodeName = powerNetToNodeName.get(powerNet) || powerNet.replace(/\s+/g, '').replace(/[^a-zA-Z0-9_+-]/g, '_');
+      // Extract voltage value from power net name (e.g., "+5V" -> "5")
+      const voltageMatch = powerNet.match(/[+-]?[\d.]+/);
+      const voltageValue = voltageMatch ? voltageMatch[0] : '5';
+      output += `* V${powerSourceCounter++} ${nodeName} 0 DC ${voltageValue}\n`;
+    }
+  }
+  
+  // Add basic simulation command template
+  output += '\n* Simulation commands (uncomment and modify as needed):\n';
+  output += '* .op                    ; DC operating point\n';
+  output += '* .tran 1ms 10ms         ; Transient analysis\n';
+  output += '* .ac dec 10 1 1k        ; AC analysis\n';
+  output += '\n.end\n';
+  
+  return output;
+}
+
+/**
+ * Generate PADS-PCB ASCII Format (JSON)
+ */
+export function generatePadsNetlist(
+  components: PCBComponent[],
+  drawingStrokes: DrawingStroke[],
+  powerSymbols: PowerSymbol[],
+  groundSymbols: GroundSymbol[],
+  powerBuses: PowerBus[],
+  projectName?: string
+): string {
+  // Use coordinate-based connectivity
+  const coordinateToNode = buildConnectivityGraphCoordinateBased(
+    drawingStrokes,
+    components,
+    powerSymbols,
+    groundSymbols,
+    powerBuses
+  );
+  
+  const connections = buildConnectionsCoordinateBased(drawingStrokes, coordinateToNode);
+  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections);
+  const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
+  
+  // Build component map
+  const componentMap = new Map<string, PCBComponent>();
+  for (const comp of components) {
+    const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
+    if (designator) {
+      componentMap.set(designator, comp);
+    }
+  }
+  
+  // Build components array
+  const padsComponents: Array<{
+    designator: string;
+    value: string;
+    package: string;
+    pins: string[];
+  }> = [];
+  
+  // Sort designators for consistent output
+  const sortedDesignators = Array.from(componentMap.keys()).sort();
+  
+  for (const designator of sortedDesignators) {
+    const comp = componentMap.get(designator)!;
+    
+    // Get component value
+    let value = '';
+    if (comp.componentType === 'Resistor' && 'resistance' in comp) {
+      const { value: val, unit } = readValueAndUnit(comp, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      value = val && val.trim() !== '' ? combineValueAndUnit(val, unit) : '';
+    } else if ((comp.componentType === 'Capacitor' || comp.componentType === 'Electrolytic Capacitor' || comp.componentType === 'Film Capacitor') && 'capacitance' in comp) {
+      const { value: val, unit } = readValueAndUnit(comp, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      value = val && val.trim() !== '' ? combineValueAndUnit(val, unit) : '';
+    } else if (comp.componentType === 'Inductor' && 'inductance' in comp) {
+      const { value: val, unit } = readValueAndUnit(comp, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
+      value = val && val.trim() !== '' ? combineValueAndUnit(val, unit) : '';
+    } else {
+      // For other components, use part number or part name
+      const partName = (comp as any).partName?.trim();
+      const partNumber = (comp as any).partNumber?.trim();
+      value = partNumber || partName || comp.componentType;
+    }
+    
+    // Get package (footprint)
+    const packageName = (comp as any).package?.trim() || (comp as any).footprint?.trim() || '';
+    
+    // Get pin list (as strings "1", "2", etc.)
+    const pinCount = comp.pinCount || 0;
+    const pins: string[] = [];
+    for (let i = 0; i < pinCount; i++) {
+      pins.push(String(i + 1));
+    }
+    
+    padsComponents.push({
+      designator,
+      value: value || '',
+      package: packageName,
+      pins
+    });
+  }
+  
+  // Build nets array (includes power, ground, and signal nets)
+  const padsNets: Array<{
+    name: string;
+    nodes: Array<{ component: string; pin: string }>;
+  }> = [];
+  
+  // Process each net group
+  for (const [rootCoordKey, netNodes] of netGroups) {
+    const netName = netNames.get(rootCoordKey);
+    if (!netName) continue;
+    
+    // Extract component pin connections
+    const nodes: Array<{ component: string; pin: string }> = [];
+    
+    for (const node of netNodes) {
+      if (node.type === 'component_pin' && node.componentId && node.pinIndex !== undefined) {
+        const comp = components.find(c => c.id === node.componentId);
+        if (comp) {
+          const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
+          if (designator) {
+            nodes.push({
+              component: designator,
+              pin: String(node.pinIndex + 1) // Convert 0-based to 1-based
+            });
+          }
+        }
+      }
+    }
+    
+    // Only include nets that have component connections
+    if (nodes.length > 0) {
+      padsNets.push({
+        name: netName,
+        nodes
+      });
+    }
+  }
+  
+  // Sort nets: GND first, then power nets (by voltage), then signal nets
+  padsNets.sort((a, b) => {
+    // Sort GND first
+    if (a.name === 'GND') return -1;
+    if (b.name === 'GND') return 1;
+    
+    // Sort power nets (starting with + or -) before signal nets
+    const aIsPower = a.name.startsWith('+') || a.name.startsWith('-');
+    const bIsPower = b.name.startsWith('+') || b.name.startsWith('-');
+    if (aIsPower && !bIsPower) return -1;
+    if (!aIsPower && bIsPower) return 1;
+    
+    // If both are power nets, sort by voltage (higher first)
+    if (aIsPower && bIsPower) {
+      const aVolt = parseFloat(a.name.replace(/[^0-9.-]/g, '')) || 0;
+      const bVolt = parseFloat(b.name.replace(/[^0-9.-]/g, '')) || 0;
+      if (bVolt !== aVolt) return bVolt - aVolt;
+    }
+    
+    // Otherwise sort alphabetically
+    return a.name.localeCompare(b.name);
+  });
+  
+  // Build JSON structure
+  const padsData = {
+    design_info: {
+      name: projectName || 'reversed_pcb',
+      date: new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
+    },
+    components: padsComponents,
+    nets: padsNets
+  };
+  
+  // Return formatted JSON string
+  return JSON.stringify(padsData, null, 2);
+}
+
+/**
  * Generate net names based on node types
  */
 export function generateNetNames(

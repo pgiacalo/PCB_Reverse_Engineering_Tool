@@ -21,5 +21,5 @@
  */
 
 export { ProjectNotesDialog } from './ProjectNotesDialog';
-export type { ProjectNotesDialogProps, ProjectNote } from './ProjectNotesDialog';
+export type { ProjectNotesDialogProps, ProjectNote, ProjectMetadata } from './ProjectNotesDialog';
 

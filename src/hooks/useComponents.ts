@@ -49,10 +49,13 @@ function readValueAndUnit(
   }
   
   // Try to read separate fields first (new format)
+  // Check if either field exists (including empty strings)
   if (component[valueField] !== undefined || component[unitField] !== undefined) {
     return {
-      value: component[valueField] || '',
-      unit: component[unitField] || defaultUnit,
+      // Preserve empty strings explicitly - don't use || which converts empty strings to ''
+      value: component[valueField] !== undefined ? String(component[valueField]) : '',
+      // Preserve empty strings for units too, but default to defaultUnit if undefined
+      unit: component[unitField] !== undefined ? String(component[unitField]) : defaultUnit,
     };
   }
   
@@ -292,7 +295,14 @@ export function useComponents() {
     // Read type-specific fields
     if (compType === 'Resistor') {
       const r = component as any;
+      // Debug: Log component values before reading
+      console.log('[openComponentEditor] Resistor - component values:', {
+        resistance: r.resistance,
+        resistanceUnit: r.resistanceUnit,
+        resistanceType: typeof r.resistance,
+      });
       const resistance = readValueAndUnit(r, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
+      console.log('[openComponentEditor] Resistor - readValueAndUnit result:', resistance);
       editor.resistance = resistance.value;
       editor.resistanceUnit = resistance.unit;
       // Power is stored as combined "valueW" (e.g., "1/4W", "1W")
@@ -301,7 +311,14 @@ export function useComponents() {
       editor.tolerance = r.tolerance || '±5%';
     } else if (compType === 'Capacitor') {
       const c = component as any;
+      // Debug: Log component values before reading
+      console.log('[openComponentEditor] Capacitor - component values:', {
+        capacitance: c.capacitance,
+        capacitanceUnit: c.capacitanceUnit,
+        capacitanceType: typeof c.capacitance,
+      });
       const capacitance = readValueAndUnit(c, 'capacitance', 'capacitanceUnit', getDefaultUnit('capacitance'));
+      console.log('[openComponentEditor] Capacitor - readValueAndUnit result:', capacitance);
       editor.capacitance = capacitance.value;
       editor.capacitanceUnit = capacitance.unit;
       const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));

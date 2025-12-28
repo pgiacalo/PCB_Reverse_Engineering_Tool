@@ -33,6 +33,13 @@ export interface ProjectNote {
   checked?: boolean;
 }
 
+export interface ProjectMetadata {
+  productName: string;
+  productVersion: string;
+  manufacturer: string;
+  date: string;
+}
+
 export interface ProjectNotesDialogProps {
   /** Whether the dialog is visible */
   visible: boolean;
@@ -40,6 +47,10 @@ export interface ProjectNotesDialogProps {
   projectNotes: ProjectNote[];
   /** Callback to update project notes */
   setProjectNotes: (notes: ProjectNote[]) => void;
+  /** Project metadata */
+  projectMetadata: ProjectMetadata;
+  /** Callback to update project metadata */
+  setProjectMetadata: (metadata: ProjectMetadata) => void;
   /** Callback to close the dialog */
   onClose: () => void;
   /** Dialog position for dragging */
@@ -54,12 +65,20 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   visible,
   projectNotes,
   setProjectNotes,
+  projectMetadata,
+  setProjectMetadata,
   onClose,
   position,
   isDragging,
   onDragStart,
 }) => {
   const [localNotes, setLocalNotes] = useState<ProjectNote[]>([]);
+  const [localMetadata, setLocalMetadata] = useState<ProjectMetadata>({
+    productName: '',
+    productVersion: '',
+    manufacturer: '',
+    date: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
+  });
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingField, setEditingField] = useState<'name' | 'value' | null>(null);
   const inputRefs = useRef<Map<string, HTMLTextAreaElement>>(new Map());
@@ -72,11 +91,19 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   useEffect(() => {
     if (visible) {
       setLocalNotes([...projectNotes]);
+      setLocalMetadata({ ...projectMetadata });
+      // Auto-fill date if empty
+      if (!projectMetadata.date || projectMetadata.date.trim() === '') {
+        setLocalMetadata(prev => ({
+          ...prev,
+          date: new Date().toISOString().split('T')[0]
+        }));
+      }
       setEditingIndex(null);
       setEditingField(null);
       setSearchQuery(''); // Clear search when dialog opens
     }
-  }, [visible, projectNotes]);
+  }, [visible, projectNotes, projectMetadata]);
 
   // Filter notes based on search query
   const filteredNotes = searchQuery.trim() === '' 
@@ -149,11 +176,13 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
     // Filter out empty notes
     const filtered = localNotes.filter(note => note.name.trim() !== '' || note.value.trim() !== '');
     setProjectNotes(filtered);
+    setProjectMetadata(localMetadata);
     onClose(); // Save and close
   };
 
   const handleCancel = () => {
     setLocalNotes([...projectNotes]);
+    setLocalMetadata({ ...projectMetadata });
     setEditingIndex(null);
     setEditingField(null);
     onClose();
@@ -432,6 +461,98 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         >
           ×
         </button>
+      </div>
+
+      {/* Product Metadata Fields */}
+      <div style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid #e0e0e0',
+        backgroundColor: '#f9f9f9',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr 1fr',
+        gap: '12px',
+        alignItems: 'center',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
+            Product Name:
+          </label>
+          <input
+            type="text"
+            value={localMetadata.productName}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, productName: e.target.value })}
+            placeholder="Enter product name"
+            style={{
+              padding: '6px 8px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#000',
+              background: '#fff',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
+            Product Version:
+          </label>
+          <input
+            type="text"
+            value={localMetadata.productVersion}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, productVersion: e.target.value })}
+            placeholder="Enter version"
+            style={{
+              padding: '6px 8px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#000',
+              background: '#fff',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
+            Manufacturer:
+          </label>
+          <input
+            type="text"
+            value={localMetadata.manufacturer}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, manufacturer: e.target.value })}
+            placeholder="Enter manufacturer"
+            style={{
+              padding: '6px 8px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#000',
+              background: '#fff',
+              outline: 'none',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
+            Date:
+          </label>
+          <input
+            type="date"
+            value={localMetadata.date}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, date: e.target.value })}
+            style={{
+              padding: '6px 8px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#000',
+              background: '#fff',
+              outline: 'none',
+            }}
+          />
+        </div>
       </div>
 
       {/* Search Bar */}
