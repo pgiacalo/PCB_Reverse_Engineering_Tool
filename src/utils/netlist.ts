@@ -358,14 +358,20 @@ export function buildConnectivityGraphCoordinateBased(
             connectedPinCount++;
             console.log(`[Connectivity] Component ${designator} pin ${pinIndex + 1}: Connected to point ID ${pointId} at coord(${x},${y})`);
           } else {
-            // Point ID not found in drawingStrokes - pin is not actually connected
-            unconnectedPins.push({
-              compId: comp.id,
-              designator,
+            // Point ID not found in pointIdToCoord - check if it's a power/ground node
+            // Power and ground nodes might not be in pointIdToCoord if they don't have pointId set
+            // But we should still add the component pin at its calculated position
+            // The pin will be connected through the net grouping if it's in the same net
+            const pinPos = _calculateComponentPinPosition(comp, pinIndex);
+            getOrCreateNode(pinPos.x, pinPos.y, 'component_pin', {
+              componentId: comp.id,
               pinIndex: pinIndex,
-              pointId: pinConnection.trim()
             });
-            console.warn(`[Connectivity] Component ${designator} pin ${pinIndex + 1}: Point ID ${pointId} not found in drawingStrokes - pin is NOT connected`);
+            // Also add the point ID to pointIdToCoord for future lookups
+            const pinCoordKey = createCoordKey(pinPos.x, pinPos.y);
+            pointIdToCoord.set(pointId, pinCoordKey);
+            connectedPinCount++;
+            console.warn(`[Connectivity] Component ${designator} pin ${pinIndex + 1}: Point ID ${pointId} not in pointIdToCoord, but adding pin at calculated position (${pinPos.x},${pinPos.y}) - may be connected to power/ground`);
           }
         } else {
           // Invalid point ID - pin is not connected
@@ -1823,8 +1829,13 @@ export function generatePadsNetlist(
       }
     }
     
-    // Only include nets that have component connections
-    if (connections.length > 0) {
+    // Include nets that have component connections OR are power/ground nets
+    // Power and ground nets should be included even if they don't have component pins yet,
+    // as they represent important power distribution nodes
+    const isPowerNet = netName.startsWith('+') || netName.startsWith('-');
+    const isGroundNet = netName === 'GND' || netName.toUpperCase().includes('GROUND');
+    
+    if (connections.length > 0 || isPowerNet || isGroundNet) {
       padsNets.push({
         name: netName,
         connections
