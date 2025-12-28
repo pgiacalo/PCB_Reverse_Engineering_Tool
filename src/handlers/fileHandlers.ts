@@ -27,6 +27,7 @@
 
 import { useCallback } from 'react';
 import { generateSimpleSchematic } from '../utils/schematic';
+import { formatTimestamp, removeTimestampFromFilename } from '../utils/fileOperations';
 import type { DrawingStroke, PCBComponent, DrawingStroke as ImportedDrawingStroke } from '../types';
 import type { PowerSymbol, GroundSymbol, PowerBus } from '../hooks/usePowerGround';
 
@@ -174,9 +175,12 @@ export const createFileHandlers = (props: FileHandlersProps): FileHandlers => {
 
     if (projectDirHandle && projectName) {
       try {
-        // Use project name for filename instead of hardcoded 'project.json'
+        // Always use project name + timestamp for JSON filename
         const cleanProjectName = projectName.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-        const filename = `${cleanProjectName}.json`;
+        // Remove any existing timestamp from project name
+        const projectNameWithoutTimestamp = removeTimestampFromFilename(cleanProjectName);
+        const timestamp = formatTimestamp();
+        const filename = `${projectNameWithoutTimestamp}_${timestamp}.json`;
         const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);

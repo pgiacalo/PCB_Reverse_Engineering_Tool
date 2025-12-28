@@ -20,7 +20,7 @@
  * SOFTWARE.
  */
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { PenLine, MousePointer } from 'lucide-react';
 import { autoAssignPolarity, loadDesignatorCounters, saveDesignatorCounters, getDefaultPrefix, updateDesignatorCounter, isComponentPolarized, getNextDesignatorNumber } from './utils/components';
 import { createComponentInstance } from './dataDrivenComponents/runtime/instanceFactory';
@@ -47,6 +47,10 @@ import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, r
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
+import { createCloseProject, ensureProjectIsolation, type ProjectIsolationState } from './utils/projectOperations/projectIsolation';
+import { createNewProject, openProject, saveProject as saveProjectOperation, closeProject as closeProjectOperation } from './utils/projectOperations/projectOperations';
+import { performAutoSave as performAutoSaveModule, configureAutoSave } from './utils/projectOperations/autoSave';
+import { restoreFromHistory, listHistoryFiles, type HistoryFile } from './utils/projectOperations/projectHistory';
 import { generateKiCadNetlist, generateProtelNetlist, generateSpiceNetlist, generatePadsNetlist } from './utils/netlist';
 import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
@@ -1156,6 +1160,39 @@ function App() {
     hasChangesSinceLastAutoSaveRef,
     prevAutoSaveEnabledRef,
   } = fileOperations;
+  
+  // Refs to store latest auto save configuration (declared early so they're available for useCallback hooks)
+  const autoSaveDirHandleRef = useRef(autoSaveDirHandle);
+  const autoSaveBaseNameRef = useRef(autoSaveBaseName);
+  const currentProjectFilePathRef = useRef(currentProjectFilePath);
+  const autoSaveFileHistoryRef = useRef<string[]>([]);
+  const currentFileIndexRef = useRef<number>(-1);
+  const projectDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
+  const isOpeningProjectRef = useRef<boolean>(false);
+  
+  // Update refs to match current state values
+  React.useEffect(() => {
+    autoSaveDirHandleRef.current = autoSaveDirHandle;
+  }, [autoSaveDirHandle]);
+  React.useEffect(() => {
+    autoSaveBaseNameRef.current = autoSaveBaseName;
+  }, [autoSaveBaseName]);
+  React.useEffect(() => {
+    currentProjectFilePathRef.current = currentProjectFilePath;
+  }, [currentProjectFilePath]);
+  React.useEffect(() => {
+    autoSaveFileHistoryRef.current = autoSaveFileHistory;
+  }, [autoSaveFileHistory]);
+  React.useEffect(() => {
+    currentFileIndexRef.current = currentFileIndex;
+  }, [currentFileIndex]);
+  React.useEffect(() => {
+    // Only sync if we're not in the middle of opening a project
+    if (!isOpeningProjectRef.current) {
+      projectDirHandleRef.current = projectDirHandle;
+    }
+  }, [projectDirHandle]);
+  
   const fileInputTopRef = useRef<HTMLInputElement>(null);
   const fileInputBottomRef = useRef<HTMLInputElement>(null);
   const performAutoSaveRef = useRef<(() => Promise<void>) | null>(null);
@@ -6445,88 +6482,25 @@ function App() {
 
   // Handle applying auto-save interval from dialog (used by both prompt dialog and menu dialog)
   const handleAutoSaveApply = useCallback(async (interval: number | null, closePromptDialog: boolean = false) => {
-    // If interval is null, disable auto-save
-    if (interval === null) {
-      setAutoSaveEnabled(false);
-      setAutoSaveInterval(null);
-      if (autoSaveIntervalRef.current) {
-        clearInterval(autoSaveIntervalRef.current);
-        autoSaveIntervalRef.current = null;
-      }
-      setAutoSaveDialog({ visible: false, interval: 5 });
-      if (closePromptDialog) {
-        setAutoSavePromptDialog({ visible: false, source: null, interval: 5 });
-      }
-      console.log('Auto save: Disabled');
-      return;
-    }
-    
-    // Use project name (should be set from New Project or Open Project)
-    if (!projectName) {
-      alert('Please create a new project (File -> New Project) or open an existing project (File -> Open Project) first.');
-      return;
-    }
-    
-    // Use project directory for auto-save (same directory as project.json)
-    // For both New Project and Open Project, projectDirHandle should be set
-    // When a file is opened, projectDirHandle is automatically set to the opened file's directory
-    // This ensures auto-save uses the same directory as the opened file
-    let dirHandleToUse = projectDirHandle;
-    if (!dirHandleToUse) {
-      // This should only happen in fallback scenarios (file input without File System Access API)
-      // Prompt user once to select the project directory
-      const w = window as any;
-      if (typeof w.showDirectoryPicker === 'function') {
-        try {
-          dirHandleToUse = await w.showDirectoryPicker();
-          setProjectDirHandle(dirHandleToUse);
-        } catch (e) {
-          if ((e as any)?.name !== 'AbortError') {
-            console.error('Failed to get directory:', e);
-            alert('Failed to select project directory.');
-          }
-          return; // User cancelled
-        }
-      } else {
-        alert('Directory picker is not supported in this browser. Auto-save requires a directory handle.');
-        return;
-      }
-    }
-    
-    // Use project directory for auto-save (same directory as project.json)
-    setAutoSaveDirHandle(dirHandleToUse);
-    // Use project name as base name for auto-save files, removing any existing timestamp
-    const projectNameWithoutExt = projectName.replace(/\.json$/i, '');
-    const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
-    const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
-    setAutoSaveBaseName(cleanBaseName);
-    
-    // Update refs immediately so performAutoSave can use them
-    // Note: projectDirHandleRef is updated automatically when projectDirHandle changes (see above)
-    autoSaveDirHandleRef.current = dirHandleToUse;
-    autoSaveBaseNameRef.current = cleanBaseName;
-    
-    // Set interval and enable auto-save
-    setAutoSaveInterval(interval);
-    setAutoSaveEnabled(true);
-    
-    // Mark that we have changes so initial save will happen
-    hasChangesSinceLastAutoSaveRef.current = true;
-    
-    // Close dialogs
-    setAutoSaveDialog({ visible: false, interval: 5 });
-    if (closePromptDialog) {
-      setAutoSavePromptDialog({ visible: false, source: null, interval: 5 });
-    }
-    
-    // Perform initial save immediately after state updates
-    setTimeout(() => {
-      console.log(`Auto save: Enabled with interval ${interval} minutes`);
-      if (performAutoSaveRef.current) {
-        performAutoSaveRef.current();
-      }
-    }, 200);
-  }, [projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle]);
+    await configureAutoSave(
+      interval,
+      projectName,
+      projectDirHandle,
+      setAutoSaveEnabled,
+      setAutoSaveInterval,
+      setAutoSaveDirHandle,
+      setAutoSaveBaseName,
+      autoSaveDirHandleRef,
+      autoSaveBaseNameRef,
+      autoSaveIntervalRef,
+      hasChangesSinceLastAutoSaveRef,
+      setAutoSaveDialog,
+      setAutoSavePromptDialog,
+      setProjectDirHandle,
+      performAutoSaveRef,
+      closePromptDialog
+    );
+  }, [projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle, performAutoSaveRef]);
 
   // Helper function to switch to Select tool and deselect all icons
   const switchToSelectTool = useCallback(() => {
@@ -6933,7 +6907,7 @@ function App() {
         
         e.preventDefault();
         e.stopPropagation();
-        handleOpenProjectNotes();
+        setProjectNotesDialogVisible(true);
         return;
       }
     }
@@ -6955,7 +6929,7 @@ function App() {
         
         e.preventDefault();
         e.stopPropagation();
-        if (!isReadOnlyMode) {
+        if (currentFileIndexRef.current <= 0) {
           setTransformAllDialogVisible(true);
         }
         return;
@@ -8155,10 +8129,158 @@ function App() {
     clearSnapshot();
   }, [saveDefaultColor, saveDefaultSize, clearSnapshot]);
 
-  // Close the current project and release all browser permissions
-  // This function clears ALL project state to ensure a clean slate before opening/creating a new project
-  // CRITICAL: This prevents state leakage between projects (directory permissions, file paths, project notes, etc.)
+  // NOTE: closeProject will be replaced with module version after refs are defined (see below around line 10304)
+  // Temporary legacy implementation - keeping for now until module version is fully integrated
   const closeProject = useCallback(() => {
+    // === STEP 1: Release browser file system permissions ===
+    setProjectDirHandle(null);
+    setAutoSaveDirHandle(null);
+    
+    // Clear refs that hold directory handles
+    // NOTE: Refs are defined later in the file, so we can't access them here
+    // The module version (created after refs) will handle this properly
+    
+    // === STEP 2: Clear file operation state ===
+    setCurrentProjectFilePath('');
+    setProjectName('');
+    setAutoSaveEnabled(false);
+    setAutoSaveInterval(null);
+    setAutoSaveBaseName('');
+    setAutoSaveFileHistory([]);
+    setCurrentFileIndex(-1);
+    
+    // Clear auto-save refs
+    // NOTE: Refs are defined later in the file, so we can't access them here
+    // The module version (created after refs) will handle this properly
+    // hasChangesSinceLastAutoSaveRef.current = false; // Commented out - ref not available yet
+    setHasUnsavedChangesState(false);
+    setIsBottomView(false);
+    setOriginalTopFlipX(null);
+    setOriginalBottomFlipX(null);
+    
+    // Clear auto-save interval timer
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
+    }
+    
+    // === STEP 3: Clear all project data ===
+    setTopImage(null);
+    setBottomImage(null);
+    clearSnapshot();
+    setDrawingStrokes([]);
+    setVias([]);
+    setPads([]);
+    setTracesTop([]);
+    setTracesBottom([]);
+    setCurrentStroke([]);
+    currentStrokeRef.current = [];
+    setComponentsTop([]);
+    setComponentsBottom([]);
+    setComponentEditor(null);
+    setConnectingPin(null);
+    setPowerSymbols([]);
+    setGroundSymbols([]);
+    setPowerEditor(null);
+    setPowerBuses([{ id: 'powerbus-default', name: '+5VDC', voltage: '+5', color: '#ff0000' }]);
+    setGroundBuses([{ id: 'groundbus-circuit', name: 'GND', color: '#000000' }]);
+    setSelectedIds(new Set());
+    setSelectedComponentIds(new Set());
+    setSelectedPowerIds(new Set());
+    setSelectedGroundIds(new Set());
+    setIsSelecting(false);
+    setProjectNotes([]);
+    setProjectMetadata({ productName: '', productVersion: '', manufacturer: '', date: new Date().toISOString().split('T')[0] });
+    setCurrentView('overlay');
+    setViewScale(1);
+    setCameraCenter(0, 0);
+    setShowBothLayers(true);
+    setSelectedDrawingLayer('top');
+    setHomeViews({});
+    setIsWaitingForHomeViewKey(false);
+    if (homeViewTimeoutRef.current) {
+      clearTimeout(homeViewTimeoutRef.current);
+      homeViewTimeoutRef.current = null;
+    }
+    setSelectedImageForTransform(null);
+    setIsTransforming(false);
+    setTransformStartPos(null);
+    setTransformMode('nudge');
+    setIsGrayscale(false);
+    setTransparency(50);
+    setIsTransparencyCycling(false);
+    setTransparencyCycleSpeed(2000);
+    setAreImagesLocked(false);
+    setAreViasLocked(false);
+    setArePadsLocked(false);
+    setAreTestPointsLocked(false);
+    setAreTracesLocked(false);
+    setAreComponentsLocked(false);
+    setAreGroundNodesLocked(false);
+    setArePowerNodesLocked(false);
+    setShowTopImage(true);
+    setShowBottomImage(true);
+    setShowViasLayer(true);
+    setShowTopTracesLayer(true);
+    setShowBottomTracesLayer(true);
+    setShowTopPadsLayer(true);
+    setShowBottomPadsLayer(true);
+    setShowTopTestPointsLayer(true);
+    setShowBottomTestPointsLayer(true);
+    setShowTopComponents(true);
+    setShowBottomComponents(true);
+    setShowPowerLayer(true);
+    setShowGroundLayer(true);
+    setShowConnectionsLayer(true);
+    setShowTraceCornerDots(true);
+    setCurrentTool('select');
+    setDrawingMode('trace');
+    setTraceToolLayer('top');
+    setPadToolLayer('top');
+    setTestPointToolLayer('top');
+    setComponentToolLayer('top');
+    traceToolLayerRef.current = 'top';
+    padToolLayerRef.current = 'top';
+    testPointToolLayerRef.current = 'top';
+    componentToolLayerRef.current = 'top';
+    sessionDesignatorCountersRef.current = {};
+    setAutoAssignDesignators(true);
+    setUseGlobalDesignatorCounters(false);
+    resetPointIdCounter();
+    toolInstanceManager.initialize();
+    setOpenMenu(null);
+    setDebugDialog({ visible: false, text: '' });
+    setErrorDialog({ visible: false, title: '', message: '' });
+    setNewProjectDialog({ visible: false });
+    setOpenProjectDialog({ visible: false });
+    setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
+    setSaveAsDialog({ visible: false, filename: '', locationPath: '', locationHandle: null });
+    setAutoSaveDialog({ visible: false, interval: null });
+    setAutoSavePromptDialog({ visible: false, source: 'new', interval: 5 });
+    setShowColorPicker(false);
+    setShowPowerBusManager(false);
+    setShowGroundBusManager(false);
+    setShowDesignatorManager(false);
+    setShowBoardDimensionsDialog(false);
+    setNotesDialogVisible(false);
+    setProjectNotesDialogVisible(false);
+    setTransformImagesDialogVisible(false);
+    setTransformAllDialogVisible(false);
+    setBoardDimensions(null);
+    setHoverComponent(null);
+    setHoverTestPoint(null);
+    setIsPanning(false);
+    panStartRef.current = null;
+    panClientStartRef.current = null;
+    setIsDrawing(false);
+    setTracePreviewMousePos(null);
+    lastTraceClickTimeRef.current = 0;
+    isDoubleClickingTraceRef.current = false;
+    console.log('Project closed: All state cleared and browser permissions released');
+  }, []); // Empty dependency array - this is the legacy implementation, replaced by module version
+
+  // Legacy closeProject implementation (replaced by module version above)
+  const _closeProjectLegacy = useCallback(() => {
     // === STEP 1: Release browser file system permissions ===
     // Clear directory handles to release browser permissions
     // Note: Browser permissions are automatically released when handles are garbage collected,
@@ -8176,7 +8298,7 @@ function App() {
     
     // === STEP 2: Clear file operation state ===
     setCurrentProjectFilePath('');
-    setProjectName('pcb_project');
+    setProjectName('');
     setAutoSaveEnabled(false);
     setAutoSaveInterval(null);
     setAutoSaveBaseName('');
@@ -8418,6 +8540,8 @@ function App() {
     // Other setters
     setBoardDimensions, setHoverComponent, setHoverTestPoint, setIsPanning, setIsDrawing, setTracePreviewMousePos,
   ]);
+
+  // NOTE: ensureProjectIsolationCallback will be created after refs are defined (see below)
 
   // Initialize application with default keyboard shortcuts (o and s)
   // This function performs the same initialization as when the app first loads
@@ -10048,214 +10172,259 @@ function App() {
   const buildProjectDataRef = useRef(buildProjectData);
   buildProjectDataRef.current = buildProjectData;
 
-  // Refs to store latest auto save configuration
-  const autoSaveDirHandleRef = useRef(autoSaveDirHandle);
-  autoSaveDirHandleRef.current = autoSaveDirHandle;
-  const autoSaveBaseNameRef = useRef(autoSaveBaseName);
-  autoSaveBaseNameRef.current = autoSaveBaseName;
   // Ref to store the setter for current project file path so we can update it from auto save
   const setCurrentProjectFilePathRef = useRef(setCurrentProjectFilePath);
   setCurrentProjectFilePathRef.current = setCurrentProjectFilePath;
-  // Ref to access current project file path in callbacks
-  const currentProjectFilePathRef = useRef(currentProjectFilePath);
-  currentProjectFilePathRef.current = currentProjectFilePath;
-  // Refs to access current state values in callbacks
-  const autoSaveFileHistoryRef = useRef<string[]>([]);
-  autoSaveFileHistoryRef.current = autoSaveFileHistory;
-  const currentFileIndexRef = useRef<number>(-1);
-  currentFileIndexRef.current = currentFileIndex;
-  // Ref to access projectDirHandle in performAutoSave callback
-  // This ensures Auto Save ALWAYS uses the directory from which the project was created or opened
-  const projectDirHandleRef = useRef<FileSystemDirectoryHandle | null>(null);
-  // Flag to track if we're in the middle of opening a project
-  // This prevents the useEffect from overwriting the ref with stale state
-  const isOpeningProjectRef = useRef<boolean>(false);
-  // Use useEffect to sync ref with state, but only if we're not explicitly setting it
-  React.useEffect(() => {
-    // Only sync if we're not in the middle of opening a project
-    // When opening a project, we set the ref explicitly and don't want it overwritten
-    if (!isOpeningProjectRef.current) {
-      projectDirHandleRef.current = projectDirHandle;
+
+  // Create project isolation state object for use with isolation module
+  // Must be created after all refs are defined
+  const isolationState: ProjectIsolationState = {
+    // File operation setters
+    setProjectDirHandle,
+    setAutoSaveDirHandle,
+    setCurrentProjectFilePath,
+    setProjectName,
+    setAutoSaveEnabled,
+    setAutoSaveInterval,
+    setAutoSaveBaseName,
+    setAutoSaveFileHistory,
+    setCurrentFileIndex,
+    setHasUnsavedChangesState,
+    // Image setters
+    setTopImage,
+    setBottomImage,
+    // Drawing setters
+    setDrawingStrokes,
+    setCurrentStroke,
+    setVias,
+    setPads,
+    setTracesTop,
+    setTracesBottom,
+    // Component setters
+    setComponentsTop,
+    setComponentsBottom,
+    setComponentEditor,
+    setConnectingPin,
+    // Power/Ground setters
+    setPowerSymbols,
+    setGroundSymbols,
+    setPowerEditor,
+    setPowerBuses,
+    setGroundBuses,
+    // Selection setters
+    setSelectedIds,
+    setSelectedComponentIds,
+    setSelectedPowerIds,
+    setSelectedGroundIds,
+    setIsSelecting,
+    // Project notes setter
+    setProjectNotes,
+    setProjectMetadata,
+    // View setters
+    setCurrentView,
+    setViewScale,
+    setCameraCenter,
+    setCameraWorldCenter,
+    setShowBothLayers,
+    setSelectedDrawingLayer,
+    setHomeViews,
+    setIsWaitingForHomeViewKey,
+    // Transform setters
+    setSelectedImageForTransform,
+    setIsTransforming,
+    setTransformStartPos,
+    setTransformMode,
+    setIsBottomView,
+    setOriginalTopFlipX,
+    setOriginalBottomFlipX,
+    // Image filter setters
+    setIsGrayscale,
+    setTransparency,
+    setIsTransparencyCycling,
+    setTransparencyCycleSpeed,
+    // Lock setters
+    setAreImagesLocked,
+    setAreViasLocked,
+    setArePadsLocked,
+    setAreTestPointsLocked,
+    setAreTracesLocked,
+    setAreComponentsLocked,
+    setAreGroundNodesLocked,
+    setArePowerNodesLocked,
+    // Visibility setters
+    setShowTopImage,
+    setShowBottomImage,
+    setShowViasLayer,
+    setShowTopTracesLayer,
+    setShowBottomTracesLayer,
+    setShowTopPadsLayer,
+    setShowBottomPadsLayer,
+    setShowTopTestPointsLayer,
+    setShowBottomTestPointsLayer,
+    setShowTopComponents,
+    setShowBottomComponents,
+    setShowPowerLayer,
+    setShowGroundLayer,
+    setShowConnectionsLayer,
+    setShowTraceCornerDots,
+    // Tool setters
+    setCurrentTool,
+    setDrawingMode,
+    setTraceToolLayer,
+    setPadToolLayer,
+    setTestPointToolLayer,
+    setComponentToolLayer,
+    // Designator setters
+    setAutoAssignDesignators,
+    setUseGlobalDesignatorCounters,
+    // Dialog setters
+    setOpenMenu,
+    setDebugDialog,
+    setErrorDialog,
+    setNewProjectDialog,
+    setOpenProjectDialog,
+    setNewProjectSetupDialog,
+    setSaveAsDialog,
+    setAutoSaveDialog,
+    setAutoSavePromptDialog,
+    setShowColorPicker,
+    setShowPowerBusManager,
+    setShowGroundBusManager,
+    setShowDesignatorManager,
+    setShowBoardDimensionsDialog,
+    setNotesDialogVisible,
+    setProjectNotesDialogVisible,
+    setTransformImagesDialogVisible,
+    setTransformAllDialogVisible,
+    // Other setters
+    setBoardDimensions,
+    setHoverComponent,
+    setHoverTestPoint,
+    setIsPanning,
+    setIsDrawing,
+    setTracePreviewMousePos,
+    // Undo hook
+    clearSnapshot,
+    // Refs
+    projectDirHandleRef,
+    autoSaveDirHandleRef,
+    autoSaveBaseNameRef,
+    autoSaveIntervalRef,
+    hasChangesSinceLastAutoSaveRef,
+    currentProjectFilePathRef,
+    autoSaveFileHistoryRef,
+    currentFileIndexRef,
+    currentStrokeRef,
+    sessionDesignatorCountersRef,
+    traceToolLayerRef,
+    padToolLayerRef,
+    testPointToolLayerRef,
+    componentToolLayerRef,
+    homeViewTimeoutRef,
+    panStartRef,
+    panClientStartRef,
+    lastTraceClickTimeRef,
+    isDoubleClickingTraceRef,
+  };
+
+  // Close the current project and release all browser permissions
+  // This function clears ALL project state to ensure a clean slate before opening/creating a new project
+  // CRITICAL: This prevents state leakage between projects (directory permissions, file paths, project notes, etc.)
+  const closeProjectReal = useMemo(() => createCloseProject(isolationState), [
+    // File operation setters
+    setProjectDirHandle, setAutoSaveDirHandle, setCurrentProjectFilePath, setProjectName,
+    setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveBaseName, setAutoSaveFileHistory, setCurrentFileIndex,
+    // Image setters
+    setTopImage, setBottomImage,
+    // Drawing setters
+    setDrawingStrokes, setCurrentStroke, setVias, setPads, setTracesTop, setTracesBottom,
+    // Component setters
+    setComponentsTop, setComponentsBottom, setComponentEditor, setConnectingPin,
+    // Power/Ground setters
+    setPowerSymbols, setGroundSymbols, setPowerEditor, setPowerBuses, setGroundBuses,
+    // Selection setters
+    setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setIsSelecting,
+    // Project notes setter
+    setProjectNotes, setProjectMetadata,
+    // View setters
+    setCurrentView, setViewScale, setCameraCenter, setCameraWorldCenter, setShowBothLayers, setSelectedDrawingLayer, setHomeViews, setIsWaitingForHomeViewKey,
+    // Transform setters
+    setSelectedImageForTransform, setIsTransforming, setTransformStartPos, setTransformMode, setIsBottomView, setOriginalTopFlipX, setOriginalBottomFlipX,
+    // Image filter setters
+    setIsGrayscale, setTransparency, setIsTransparencyCycling, setTransparencyCycleSpeed,
+    // Lock setters
+    setAreImagesLocked, setAreViasLocked, setArePadsLocked, setAreTestPointsLocked, setAreTracesLocked,
+    setAreComponentsLocked, setAreGroundNodesLocked, setArePowerNodesLocked,
+    // Visibility setters
+    setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer,
+    setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer,
+    setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setShowTraceCornerDots,
+    // Tool setters
+    setCurrentTool, setDrawingMode, setTraceToolLayer, setPadToolLayer, setTestPointToolLayer, setComponentToolLayer,
+    // Designator setters
+    setAutoAssignDesignators, setUseGlobalDesignatorCounters,
+    // Dialog setters
+    setOpenMenu, setDebugDialog, setErrorDialog, setNewProjectDialog, setNewProjectSetupDialog, setSaveAsDialog,
+    setAutoSaveDialog, setAutoSavePromptDialog,
+    // Undo hook
+    clearSnapshot, setShowColorPicker, setShowPowerBusManager, setShowGroundBusManager,
+    setShowDesignatorManager, setShowBoardDimensionsDialog, setNotesDialogVisible, setProjectNotesDialogVisible, setTransformImagesDialogVisible, setTransformAllDialogVisible,
+    // Other setters
+    setBoardDimensions, setHoverComponent, setHoverTestPoint, setIsPanning, setIsDrawing, setTracePreviewMousePos,
+    // Refs
+    projectDirHandleRef, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef,
+    currentProjectFilePathRef, autoSaveFileHistoryRef, currentFileIndexRef, currentStrokeRef, sessionDesignatorCountersRef,
+    traceToolLayerRef, padToolLayerRef, testPointToolLayerRef, componentToolLayerRef, homeViewTimeoutRef,
+    panStartRef, panClientStartRef, lastTraceClickTimeRef, isDoubleClickingTraceRef,
+  ]);
+
+  // Replace placeholder closeProject with real implementation
+  // Store the real implementation in a ref so it can be used
+  const closeProjectRef = useRef<() => void>(closeProjectReal);
+  
+  // Wrapper that uses the real implementation
+  const closeProjectWrapper = useCallback(() => {
+    if (closeProjectRef.current) {
+      closeProjectRef.current();
     }
-  }, [projectDirHandle]);
+  }, []);
+
+  // Encapsulated function to ensure complete project isolation before opening/creating a new project
+  // This function ensures NO state information can leak from the previous project to the new one
+  const ensureProjectIsolationCallback = useCallback(async (): Promise<void> => {
+    await ensureProjectIsolation(closeProjectWrapper);
+  }, [closeProjectWrapper]);
 
   // Auto Save function - saves to a file handle with timestamped filename
   // Use refs to avoid recreating this function on every state change
   // Uses autoSaveDirHandle (set when auto-save is enabled) or falls back to projectDirHandle
   // NOTE: Do NOT show success alerts - the green circle indicator (setHasUnsavedChangesState(false))
   // is the only user feedback for auto-save completion
+  // Wrapper that calls the module version
   const performAutoSave = useCallback(async () => {
-    console.log('Auto save: performAutoSave called');
-    
-    // Use autoSaveDirHandle if available, otherwise fall back to projectDirHandle
-    // This ensures Auto Save uses the directory configured for auto-save
-    let dirHandle = autoSaveDirHandleRef.current || projectDirHandleRef.current;
-    let baseName = autoSaveBaseNameRef.current;
-    
-    console.log(`Auto save: dirHandle=${dirHandle ? `set (using ${autoSaveDirHandleRef.current ? 'autoSaveDirHandle' : 'projectDirHandle'})` : 'missing'}, baseName=${baseName || 'missing'}`);
-    
-    // If directory handle is missing, we cannot save
-    // Directory should be set when project is created or opened (which is a user gesture)
+    const dirHandle = autoSaveDirHandleRef.current || projectDirHandleRef.current;
+    const baseName = autoSaveBaseNameRef.current;
     if (!dirHandle || !baseName) {
-      console.warn(`Auto save: Missing project directory handle (${!dirHandle}) or base name (${!baseName}). Please create a new project or open an existing project first.`);
-      // Disable auto save if configuration is incomplete
-      setAutoSaveEnabled(false);
-      if (autoSaveIntervalRef.current) {
-        clearInterval(autoSaveIntervalRef.current);
-        autoSaveIntervalRef.current = null;
-      }
       return;
     }
-    
-    // Only save if there have been changes since the last save
-    if (!hasChangesSinceLastAutoSaveRef.current) {
-      console.log('Auto save: Skipping - no changes since last save');
-      return;
-    }
-    
-    // Clean up single-point traces before saving
-    // Remove traces that have less than 2 points (traces need at least 2 points to form a line)
-    // Keep vias (which are single points by design)
-    const currentDrawingStrokes = drawingStrokesRef.current;
-    const singlePointTraces = currentDrawingStrokes.filter(s => s.type === 'trace' && s.points.length < 2);
-    if (singlePointTraces.length > 0) {
-      console.log(`Auto save: Cleaning up ${singlePointTraces.length} single-point trace(s) before save`);
-      singlePointTraces.forEach(s => console.log(`  - Removing single-point trace ${s.id}`));
-      const cleanedDrawingStrokes = currentDrawingStrokes.filter(s => {
-        if (s.type === 'trace' && s.points.length < 2) {
-          return false; // Remove single-point traces
-        }
-        return true; // Keep vias and valid traces
-      });
-      // Update state to remove single-point traces
-      setDrawingStrokes(cleanedDrawingStrokes);
-      // Update ref immediately so buildProjectData uses cleaned version
-      drawingStrokesRef.current = cleanedDrawingStrokes;
-    }
-    
-    console.log('Auto save: Starting save...');
-    // Use ref to get latest buildProjectData without causing dependency changes
-    // buildProjectData will use the cleaned drawingStrokes from the ref
-    const { project, timestamp } = buildProjectDataRef.current();
-    // Remove any existing timestamp from baseName before appending new timestamp
-    const cleanBaseName = removeTimestampFromFilename(baseName);
-    const filename = `${cleanBaseName}_${timestamp}.json`;
-    const json = JSON.stringify(project, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    
-    try {
-      // Get or create history directory
-      let historyDirHandle: FileSystemDirectoryHandle;
-      try {
-        historyDirHandle = await dirHandle.getDirectoryHandle('history', { create: true });
-      } catch (e) {
-        console.error('Failed to get/create history directory:', e);
-        return;
-      }
-      
-      // Before saving new file, check if there's a previous project file in root directory
-      // and move it to history/ (including the file that was opened, if it's in this directory)
-      try {
-        // Look for project files in root directory by checking file content
-        const rootFiles: string[] = [];
-        const currentFilePath = currentProjectFilePathRef.current;
-        
-        for await (const name of (dirHandle as any).keys()) {
-          try {
-            // Skip directories and the file we're about to create
-            if (name === 'history' || name === filename) {
-              continue;
-            }
-            
-            const fileHandle = await dirHandle.getFileHandle(name);
-            const file = await fileHandle.getFile();
-            
-            // Only check .json files
-            if (!name.endsWith('.json')) {
-              continue;
-            }
-            
-            // Read file content to check if it's a PCB project file
-            const fileContent = await file.text();
-            try {
-              const parsed = JSON.parse(fileContent);
-              // Check if this is a PCB project file (has version field)
-              // Move it to history if it's either:
-              // 1. An auto-saved file (has fileType field), OR
-              // 2. A manually saved/opened project file (has version but no fileType)
-              // This includes the file that was just opened, which should be moved to history
-              // when auto-save is first invoked
-              if (parsed.version && (
-                parsed.fileType === 'PCB_REVERSE_ENGINEERING_AUTOSAVE' ||
-                !parsed.fileType // Manually saved files don't have fileType
-              )) {
-                rootFiles.push(name);
-                const fileType = parsed.fileType ? 'auto-saved' : 'manually saved/opened';
-                const isOpenedFile = name === currentFilePath;
-                console.log(`Auto save: Found PCB project file in root: ${name} (${fileType}${isOpenedFile ? ' - this is the opened file' : ''})`);
-              }
-            } catch (parseError) {
-              // Not valid JSON, skip
-              continue;
-            }
-          } catch (e) {
-            // Skip if not a file or doesn't exist
-            continue;
-          }
-        }
-        
-        // Move any existing auto-saved files from root to history
-        for (const oldFilename of rootFiles) {
-          try {
-            const oldFileHandle = await dirHandle.getFileHandle(oldFilename);
-            const oldFile = await oldFileHandle.getFile();
-            const oldFileContent = await oldFile.text();
-            
-            // Write to history directory
-            const historyFileHandle = await historyDirHandle.getFileHandle(oldFilename, { create: true });
-            const historyWritable = await historyFileHandle.createWritable();
-            await historyWritable.write(new Blob([oldFileContent], { type: 'application/json' }));
-            await historyWritable.close();
-            
-            // Remove from root directory
-            await dirHandle.removeEntry(oldFilename);
-            console.log(`Auto save: Moved ${oldFilename} from root to history/`);
-          } catch (e) {
-            console.warn(`Auto save: Failed to move ${oldFilename} to history:`, e);
-            // Continue with other files even if one fails
-          }
-        }
-      } catch (e) {
-        console.warn('Auto save: Error checking for old files in root:', e);
-        // Continue with save even if moving old files fails
-      }
-      
-      // Save new file to root directory (most recent file stays in root)
-      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      console.log(`Auto save: Successfully saved ${filename} to root directory`);
-      
-      // Update the displayed file path to reflect the current auto-saved file
-      setCurrentProjectFilePathRef.current(filename);
-      // Refresh file history and update index
-      const history = autoSaveFileHistoryRef.current;
-      const newHistory = [filename, ...history.filter(f => f !== filename)].sort((a, b) => b.localeCompare(a));
-      setAutoSaveFileHistory(newHistory);
-      autoSaveFileHistoryRef.current = newHistory;
-      setCurrentFileIndex(0); // Newest file is at index 0
-      currentFileIndexRef.current = 0;
-      // Reset the changes flag after successful save
-      hasChangesSinceLastAutoSaveRef.current = false;
-      // Clear the save status indicator (project is saved - green)
-      // This is the ONLY user feedback for auto-save - no alerts should be shown
-      setHasUnsavedChangesState(false);
-    } catch (e) {
-      console.error('Auto save failed:', e);
-      // Don't clear indicator on failure - keep showing that changes exist
-    }
-  }, []); // Empty dependencies - function never changes
+    await performAutoSaveModule(
+      dirHandle,
+      baseName,
+      hasChangesSinceLastAutoSaveRef,
+      drawingStrokesRef,
+      setDrawingStrokes,
+      buildProjectDataRef.current,
+      setCurrentProjectFilePath,
+      currentProjectFilePathRef,
+      setAutoSaveFileHistory,
+      autoSaveFileHistoryRef,
+      setCurrentFileIndex,
+      currentFileIndexRef,
+      setHasUnsavedChangesState,
+      setAutoSaveEnabled,
+      autoSaveIntervalRef
+    );
+  }, [autoSaveDirHandleRef, projectDirHandleRef, autoSaveBaseNameRef, hasChangesSinceLastAutoSaveRef, drawingStrokesRef, setDrawingStrokes, buildProjectDataRef, setCurrentProjectFilePath, currentProjectFilePathRef, setAutoSaveFileHistory, autoSaveFileHistoryRef, setCurrentFileIndex, currentFileIndexRef, setHasUnsavedChangesState, setAutoSaveEnabled, autoSaveIntervalRef]);
   
   // Update ref so it can be accessed by handleAutoSaveApply
   performAutoSaveRef.current = performAutoSave;
@@ -11058,117 +11227,59 @@ function App() {
       alert('Please enter a project name.');
       return;
     }
-    const cleanProjectName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
     
     if (!newProjectSetupDialog.locationHandle) {
       alert('Please select a location for the project.');
       return;
     }
     
-    const selectedDirHandle = newProjectSetupDialog.locationHandle;
-    
-    // Smart folder handling: If the selected folder name matches the project name,
-    // use it directly instead of creating a redundant subfolder.
-    // This prevents paths like "My_Project/My_Project/My_Project.json"
-    let projectDirHandle: FileSystemDirectoryHandle;
-    let parentDirHandle: FileSystemDirectoryHandle;
-    
-    if (selectedDirHandle.name === cleanProjectName) {
-      // User already selected/created a folder with the project name - use it directly
-      projectDirHandle = selectedDirHandle;
-      parentDirHandle = selectedDirHandle; // For localStorage, we'll just use the same name
-    } else {
-      // Create project folder inside the selected location (standard IDE pattern)
-      parentDirHandle = selectedDirHandle;
-      try {
-        projectDirHandle = await parentDirHandle.getDirectoryHandle(cleanProjectName, { create: true });
-      } catch (e) {
-        console.error('Failed to create project folder:', e);
-        alert(`Failed to create project folder "${cleanProjectName}". See console for details.`);
-        return;
+    const result = await createNewProject(
+      projectNameInput,
+      newProjectSetupDialog.locationHandle,
+      ensureProjectIsolationCallback,
+      setProjectName,
+      setProjectDirHandle,
+      setCurrentProjectFilePath,
+      projectDirHandleRef,
+      buildProjectData,
+      initializeApplicationDefaults,
+      resetView,
+      setIsBottomView,
+      setTransparency,
+      async (interval: number, projectNameParam: string, projectDirHandleParam: FileSystemDirectoryHandle | null, closePromptDialog: boolean) => {
+        await configureAutoSave(
+          interval,
+          projectNameParam,
+          projectDirHandleParam,
+          setAutoSaveEnabled,
+          setAutoSaveInterval,
+          setAutoSaveDirHandle,
+          setAutoSaveBaseName,
+          autoSaveDirHandleRef,
+          autoSaveBaseNameRef,
+          autoSaveIntervalRef,
+          hasChangesSinceLastAutoSaveRef,
+          setAutoSaveDialog,
+          setAutoSavePromptDialog,
+          setProjectDirHandle,
+          performAutoSaveRef,
+          closePromptDialog
+        );
       }
-    }
+    );
     
-    // CRITICAL: Request permissions for the project directory (not the parent)
-    // This ensures the permission dialog shows the actual project directory the user is creating
-    // The dialog will show "Hello" (the project directory) instead of the parent directory
-    try {
-      if (projectDirHandle.queryPermission) {
-        const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
-        if (permission !== 'granted') {
-          const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
-          if (requestResult !== 'granted') {
-            alert('Full access to the project directory is required to create and manage project files.');
-            return;
-          }
-        }
+    if (!result.success) {
+      if (result.error) {
+        alert(result.error);
       }
-    } catch (permError) {
-      console.warn('Permission check failed (may not be supported in this browser):', permError);
-      // Continue anyway - try to create subdirectories and files anyway
+      return;
     }
     
-    // Create standard subdirectories for the project
-    try {
-      // Create history subdirectory (for auto-save history)
-      await projectDirHandle.getDirectoryHandle('history', { create: true });
-      // Create images subdirectory (for PCB images)
-      await projectDirHandle.getDirectoryHandle('images', { create: true });
-      // Create datasheets subdirectory (for component datasheets)
-      await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
-      // Create netlists subdirectory (for exported netlists)
-      await projectDirHandle.getDirectoryHandle('netlists', { create: true });
-      console.log('Created project subdirectories: history, images, datasheets, netlists');
-    } catch (e) {
-      console.error('Failed to create project subdirectories:', e);
-      // Continue anyway - subdirectories will be created when needed
-    }
-    
-    // CRITICAL: Close current project first to release all browser permissions and clear all state
-    // This prevents state leakage from the previous project into the new project
-    closeProject();
-    
-    // Close the dialog (already closed by closeProject, but set again for clarity)
+    // Close the dialog
     setNewProjectSetupDialog({ visible: false, projectName: '', locationPath: '', locationHandle: null });
     
-    // Store project name and project directory handle (not parent)
-    // Note: Project name and location are stored in project file, not localStorage
-    setProjectName(cleanProjectName);
-    setProjectDirHandle(projectDirHandle);
-    
-    // Use consolidated initialization function for all defaults
-    initializeApplicationDefaults();
-    
-    // Reset view to origin (0,0) with Top View perspective
-    // Use resetView from useView hook to properly center origin on canvas
-    resetView();
-    setIsBottomView(false);
-    setTransparency(0); // Show only top image
-    
-    // Save the project file with the same name as the project directory
-    try {
-      const { project } = buildProjectData();
-      // Use project name for filename (same as directory name)
-      const filename = `${cleanProjectName}.json`;
-      const json = JSON.stringify(project, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      
-      const fileHandle = await projectDirHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      
-      // Update current project file path
-      setCurrentProjectFilePath(filename);
-      console.log(`New project created: ${cleanProjectName}/${filename}`);
-      
-      // Enable auto-save by default with 5 minute interval
-      await handleAutoSaveApply(5, true);
-    } catch (e) {
-      console.error('Failed to save new project:', e);
-      alert('Failed to save new project file. See console for details.');
-    }
-  }, [initializeApplicationDefaults, buildProjectData, newProjectSetupDialog, closeProject, resetView, setIsBottomView, setTransparency, handleAutoSaveApply]);
+    console.log(`New project created successfully: ${result.projectName}/${result.projectFileName}`);
+  }, [newProjectSetupDialog, ensureProjectIsolationCallback, setProjectName, setProjectDirHandle, setCurrentProjectFilePath, projectDirHandleRef, buildProjectData, initializeApplicationDefaults, resetView, setIsBottomView, setTransparency, projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, performAutoSaveRef]);
 
   // Handle canceling new project setup
   const handleNewProjectSetupCancel = useCallback(() => {
@@ -11311,10 +11422,31 @@ function App() {
   // Load project from JSON (images embedded)
   // Optional dirHandle parameter allows passing directory handle directly to avoid race condition
   const loadProject = useCallback(async (project: any, dirHandleOverride?: FileSystemDirectoryHandle | null) => {
-    // Set flag to skip change tracking during project load
     isLoadingProjectRef.current = true;
     try {
-      // Clear undo snapshot when loading a project
+      // CRITICAL: Clear ALL project data BEFORE loading new project data
+      // This ensures no data from the previous project leaks into the new project
+      console.log('loadProject: Clearing all existing project data before loading...');
+      setTopImage(null);
+      setBottomImage(null);
+      setDrawingStrokes([]);
+      setVias([]);
+      setPads([]);
+      setTracesTop([]);
+      setTracesBottom([]);
+      setCurrentStroke([]);
+      currentStrokeRef.current = [];
+      setComponentsTop([]);
+      setComponentsBottom([]);
+      setComponentEditor(null);
+      setConnectingPin(null);
+      setPowerSymbols([]);
+      setGroundSymbols([]);
+      setPowerEditor(null);
+      setSelectedIds(new Set());
+      setSelectedComponentIds(new Set());
+      setSelectedPowerIds(new Set());
+      setSelectedGroundIds(new Set());
       clearSnapshot();
       
       // Restore tool instances from project data
@@ -12619,202 +12751,140 @@ function App() {
   const isReadOnlyMode = currentFileIndex > 0;
 
   // Internal function to perform the actual project opening (called after user confirms or has no unsaved changes)
+  // Internal function to perform the actual project opening with a pre-selected directory handle
+  const performOpenProjectWithHandle = useCallback(async (preSelectedDirHandle: FileSystemDirectoryHandle | null) => {
+    // Create a wrapper function for configureAutoSave that matches the expected signature
+    // Now accepts projectName and projectDirHandle as parameters to avoid timing issues with state updates
+    const configureAutoSaveWrapper = async (interval: number, projectNameParam: string, projectDirHandleParam: FileSystemDirectoryHandle | null, closePromptDialog: boolean) => {
+      await configureAutoSave(
+        interval,
+        projectNameParam,
+        projectDirHandleParam,
+        setAutoSaveEnabled,
+        setAutoSaveInterval,
+        setAutoSaveDirHandle,
+        setAutoSaveBaseName,
+        autoSaveDirHandleRef,
+        autoSaveBaseNameRef,
+        autoSaveIntervalRef,
+        hasChangesSinceLastAutoSaveRef,
+        setAutoSaveDialog,
+        setAutoSavePromptDialog,
+        setProjectDirHandle,
+        performAutoSaveRef,
+        closePromptDialog
+      );
+    };
+
+    const result = await openProject(
+      ensureProjectIsolationCallback,
+      setProjectDirHandle,
+      setCurrentProjectFilePath,
+      setProjectName,
+      projectDirHandleRef,
+      isOpeningProjectRef,
+      loadProject,
+      configureAutoSaveWrapper,
+      preSelectedDirHandle
+    );
+    
+    return result;
+  }, [ensureProjectIsolationCallback, setProjectDirHandle, setCurrentProjectFilePath, setProjectName, projectDirHandleRef, isOpeningProjectRef, loadProject, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle, performAutoSaveRef, configureAutoSave]);
+
   const performOpenProject = useCallback(async () => {
+    // Create a wrapper function for configureAutoSave that matches the expected signature
+    // Now accepts projectName and projectDirHandle as parameters to avoid timing issues with state updates
+    const configureAutoSaveWrapper = async (interval: number, projectNameParam: string, projectDirHandleParam: FileSystemDirectoryHandle | null, closePromptDialog: boolean) => {
+      await configureAutoSave(
+        interval,
+        projectNameParam,
+        projectDirHandleParam,
+        setAutoSaveEnabled,
+        setAutoSaveInterval,
+        setAutoSaveDirHandle,
+        setAutoSaveBaseName,
+        autoSaveDirHandleRef,
+        autoSaveBaseNameRef,
+        autoSaveIntervalRef,
+        hasChangesSinceLastAutoSaveRef,
+        setAutoSaveDialog,
+        setAutoSavePromptDialog,
+        setProjectDirHandle,
+        performAutoSaveRef,
+        closePromptDialog
+      );
+    };
+
+    const result = await openProject(
+      ensureProjectIsolationCallback,
+      setProjectDirHandle,
+      setCurrentProjectFilePath,
+      setProjectName,
+      projectDirHandleRef,
+      isOpeningProjectRef,
+      loadProject,
+      configureAutoSaveWrapper
+    );
+    
+    if (!result.success) {
+      if (result.error && result.error !== 'User cancelled directory selection.') {
+        alert(result.error);
+      }
+      // If user cancelled, don't show an alert
+      if (result.error === 'User cancelled directory selection.') {
+        return;
+      }
+      // Fallback to file input if directory picker is not supported
+      if (result.error?.includes('not supported')) {
+        openProjectRef.current?.click();
+      }
+    }
+  }, [ensureProjectIsolationCallback, setProjectDirHandle, setCurrentProjectFilePath, setProjectName, projectDirHandleRef, isOpeningProjectRef, loadProject, projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle, performAutoSaveRef, openProjectRef, configureAutoSave]);
+
+
+  // Public handler for opening a project file
+  // Shows directory picker first (preserving user gesture), then saves current project, then opens new project
+  const handleOpenProject = useCallback(async () => {
     const w = window as any;
-    if (typeof w.showDirectoryPicker === 'function') {
+    if (typeof w.showDirectoryPicker !== 'function') {
+      alert('Directory picker is not supported in this browser.');
+      return;
+    }
+
+    let selectedDirHandle: FileSystemDirectoryHandle | null = null;
+    
+    try {
+      // Show directory picker FIRST to preserve user gesture
+      selectedDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+      
+      // Verify we have write access
       try {
-        // Request directory access with readwrite permissions
-        // This grants access to the directory and all files/subdirectories within it
-        const projectDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
-        
-        // Verify we have write access
-        try {
-          if (projectDirHandle.queryPermission) {
-            const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
-            if (permission !== 'granted') {
-              const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
+        if (selectedDirHandle && 'queryPermission' in selectedDirHandle && typeof (selectedDirHandle as any).queryPermission === 'function') {
+          const permission = await (selectedDirHandle as any).queryPermission({ mode: 'readwrite' });
+          if (permission !== 'granted') {
+            if ('requestPermission' in selectedDirHandle && typeof (selectedDirHandle as any).requestPermission === 'function') {
+              const requestResult = await (selectedDirHandle as any).requestPermission({ mode: 'readwrite' });
               if (requestResult !== 'granted') {
                 alert('Full access to the project directory is required to open and manage project files.');
                 return;
               }
             }
           }
-        } catch (permError) {
-          console.warn('Permission check failed (may not be supported in this browser):', permError);
-          // Continue anyway - the directory picker should have already requested permissions
         }
-        
-        // CRITICAL: Set flag BEFORE closing project to prevent useEffect from overwriting refs
-        // This ensures the ref sync useEffect doesn't interfere with our directory handle setup
-        isOpeningProjectRef.current = true;
-        
-        // CRITICAL: Close current project first to release all browser permissions and clear all state
-        // This prevents state leakage from the previous project into the newly opened project
-        // Must clear state BEFORE getting the new directory handle to avoid using stale handles
-        closeProject();
-        
-        // Small delay to ensure state is cleared before proceeding
-        // This ensures projectDirHandle state is null before we set the new one
-        await new Promise(resolve => setTimeout(resolve, 0));
-        
-        // Find the most recent project JSON file that starts with the directory name
-        const directoryName = projectDirHandle.name;
-        let projectFileHandle: FileSystemFileHandle | null = null;
-        let project: any = null;
-        let projectFileName: string = '';
-        
-        try {
-          // Collect all JSON files that start with the directory name
-          const candidateFiles: Array<{ name: string; handle: FileSystemFileHandle; lastModified: number }> = [];
-          
-          for await (const [name, handle] of projectDirHandle.entries()) {
-            if (handle.kind === 'file' && name.toLowerCase().endsWith('.json')) {
-              // Check if filename starts with directory name (case-insensitive)
-              const nameWithoutExt = name.replace(/\.json$/i, '');
-              if (nameWithoutExt.toLowerCase().startsWith(directoryName.toLowerCase())) {
-                try {
-                  const file = await (handle as FileSystemFileHandle).getFile();
-                  candidateFiles.push({
-                    name,
-                    handle: handle as FileSystemFileHandle,
-                    lastModified: file.lastModified,
-                  });
-                } catch (fileError) {
-                  console.warn(`Failed to read file ${name}:`, fileError);
-                  // Continue to next file
-                }
-              }
-            }
-          }
-          
-          if (candidateFiles.length === 0) {
-            alert(`No project file found in the selected directory that starts with "${directoryName}". Please ensure the project file name starts with the directory name.`);
-            return;
-          }
-          
-          // Sort by lastModified (most recent first) and select the first one
-          candidateFiles.sort((a, b) => b.lastModified - a.lastModified);
-          const selectedFile = candidateFiles[0];
-          projectFileHandle = selectedFile.handle;
-          projectFileName = selectedFile.name;
-          
-          const file = await projectFileHandle.getFile();
-          const text = await file.text();
-          project = JSON.parse(text);
-          setCurrentProjectFilePath(projectFileName);
-          
-          if (candidateFiles.length > 1) {
-            console.log(`Found ${candidateFiles.length} project files starting with "${directoryName}". Selected most recent: ${projectFileName}`);
-          } else {
-            console.log(`Found project file: ${projectFileName}`);
-          }
-        } catch (error) {
-          console.error('Failed to find or open project file:', error);
-          alert(`Failed to open project file: ${error instanceof Error ? error.message : String(error)}. See console for details.`);
-          return;
-        }
-        
-        // We already have the project directory handle from the directory picker
-        // Store it and update refs
-        setProjectDirHandle(projectDirHandle);
-        projectDirHandleRef.current = projectDirHandle;
-        
-        // Create standard subdirectories if they don't exist (for existing projects)
-        try {
-          // Create history subdirectory (for auto-save history)
-          await projectDirHandle.getDirectoryHandle('history', { create: true });
-          // Create images subdirectory (for PCB images)
-          await projectDirHandle.getDirectoryHandle('images', { create: true });
-          // Create datasheets subdirectory (for component datasheets)
-          await projectDirHandle.getDirectoryHandle('datasheets', { create: true });
-          // Create netlists subdirectory (for exported netlists)
-          await projectDirHandle.getDirectoryHandle('netlists', { create: true });
-          console.log('Created/verified project subdirectories: history, images, datasheets, netlists');
-        } catch (e) {
-          console.error('Failed to create/verify project subdirectories:', e);
-          // Continue anyway - subdirectories will be created when needed
-        }
-        
-        // Clear the flag after a short delay to allow state updates to complete
-        setTimeout(() => {
-          isOpeningProjectRef.current = false;
-        }, 1000);
-        
-        // Check if auto-save was enabled in the project file BEFORE calling loadProject
-        // This ensures we can update the directory handle immediately if needed
-        const wasAutoSaveEnabledInFile = project.autoSave?.enabled === true;
-        
-        // CRITICAL: Pass directory handle directly to avoid race condition with state update
-        // After closeProject() clears the state, we need to pass the new handle directly
-        await loadProject(project, projectDirHandle);
-        
-        let projectNameToUse: string;
-        if (project.projectInfo?.name) {
-          projectNameToUse = project.projectInfo.name;
-        } else {
-          // Use directory name as project name
-          projectNameToUse = projectDirHandle.name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
-          setProjectName(projectNameToUse);
-        }
-        
-        if (!projectName) {
-          setProjectName(projectNameToUse);
-        }
-        
-        // CRITICAL FIX: When opening a project with auto-save enabled, we MUST:
-        // 1. Update projectDirHandleRef immediately (already done above)
-        // 2. Update baseName to match the OPENED project, NOT the baseName from the file
-        // 3. Force restart the auto-save interval to ensure it uses the new directory
-        // The issue is that performAutoSave uses projectDirHandleRef.current, not autoSaveDirHandle
-        // Also, loadProject restores the old baseName from the file, which might be from a different project
-        if (wasAutoSaveEnabledInFile && projectDirHandle) {
-          // CRITICAL: Update base name to match the CURRENT project name, not the one from the file
-          // The file might have an old baseName from when it was last saved (e.g., PROJ_2)
-          // but we're opening it as PROJ_1, so we need to use PROJ_1 as the baseName
-          const projectNameWithoutExt = projectNameToUse.replace(/\.json$/i, '');
-          const projectNameWithoutTimestamp = removeTimestampFromFilename(projectNameWithoutExt);
-          const cleanBaseName = projectNameWithoutTimestamp.replace(/[^a-zA-Z0-9_-]/g, '_');
-          
-          // Update autoSaveDirHandle state (for the useEffect dependency)
-          setAutoSaveDirHandle(projectDirHandle);
-          
-          // Update base name to match CURRENT project name, not the one from the file
-          setAutoSaveBaseName(cleanBaseName);
-          
-          // Update refs immediately so performAutoSave can use them
-          // Note: projectDirHandleRef was already updated above, but update autoSaveDirHandleRef too
-          autoSaveDirHandleRef.current = projectDirHandle;
-          autoSaveBaseNameRef.current = cleanBaseName;
-          
-          // CRITICAL: Force restart the interval by clearing it and letting the useEffect recreate it
-          // This ensures the interval callback uses the updated projectDirHandleRef
-          if (autoSaveIntervalRef.current) {
-            clearInterval(autoSaveIntervalRef.current);
-            autoSaveIntervalRef.current = null;
-          }
-          // Note: The useEffect at line 8296 will automatically restart the interval
-          // when autoSaveDirHandle or autoSaveBaseName changes
-        }
-        
-        // Enable auto-save by default with 5 minute interval
-        // Use setTimeout to ensure project state is fully loaded first
-        setTimeout(async () => {
-          await handleAutoSaveApply(5, true);
-        }, 100);
-      } catch (e) {
-        if ((e as any)?.name === 'AbortError') return;
-        console.warn('showOpenFilePicker failed, falling back to input', e);
-        openProjectRef.current?.click();
+      } catch (permError) {
+        console.warn('Permission check failed (may not be supported in this browser):', permError);
+        // Continue anyway
       }
-    } else {
-      openProjectRef.current?.click();
+    } catch (e) {
+      if ((e as any)?.name === 'AbortError') {
+        // User cancelled - silently return
+        return;
+      }
+      alert(`Failed to open directory picker: ${e instanceof Error ? e.message : String(e)}`);
+      return;
     }
-  }, [loadProject, projectName, setCurrentProjectFilePath, setProjectName, setProjectDirHandle, autoSaveEnabled, setAutoSaveDirHandle, setAutoSaveBaseName, closeProject, handleAutoSaveApply]);
 
-
-  // Public handler for opening a project file (auto-saves silently if there are unsaved changes, then opens directory picker)
-  const handleOpenProject = useCallback(async () => {
-    // Auto-save silently if there are unsaved changes to avoid data loss
+    // Now save the current project if there are unsaved changes (user gesture is preserved)
     if (hasUnsavedChanges() && projectDirHandle) {
       try {
         await saveProject();
@@ -12823,9 +12893,29 @@ function App() {
         // Continue anyway - user can still open the project
       }
     }
-    // Proceed directly to directory picker (single dialog)
-    await performOpenProject();
-  }, [hasUnsavedChanges, performOpenProject, saveProject, projectDirHandle]);
+
+    // Now proceed with opening the new project using the selected directory
+    const result = await performOpenProjectWithHandle(selectedDirHandle);
+    
+    if (!result.success && result.error && result.error !== 'User cancelled directory selection.') {
+      alert(result.error);
+    }
+  }, [hasUnsavedChanges, saveProject, projectDirHandle, performOpenProjectWithHandle]);
+
+  // Public handler for closing a project (saves if there are unsaved changes, then closes and clears all project data)
+  const handleCloseProject = useCallback(async () => {
+    // Save silently if there are unsaved changes to avoid data loss
+    if (hasUnsavedChanges() && projectDirHandle) {
+      try {
+        await saveProject();
+      } catch (e) {
+        console.warn('Failed to save before closing project:', e);
+        // Continue anyway - user can still close the project
+      }
+    }
+    // Close the project and clear all state
+    closeProjectWrapper();
+  }, [hasUnsavedChanges, saveProject, projectDirHandle, closeProjectWrapper]);
 
   return (
     <div className="app">
@@ -12846,6 +12936,7 @@ function App() {
         onNewProject={newProject}
         onOpenProject={handleOpenProject}
         onSaveProject={saveProject}
+        onCloseProject={handleCloseProject}
         onPrint={handlePrint}
         onExportBOM={handleExportBOM}
         bomExportFormat={bomExportFormat}
@@ -14253,7 +14344,7 @@ function App() {
           {/* Active tool layer chooser for Component */}
 
           {/* Layers miniatures (Pages-like) with visibility toggles and transparency */}
-          <div style={{ position: 'absolute', top: 6, left: 60, bottom: 6, width: 168, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 3 }}>
+          <div style={{ position: 'absolute', top: 6, left: 60, bottom: 6, width: 168, padding: 6, display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(250,250,255,0.95)', borderRadius: 8, border: '1px solid #ddd', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', zIndex: 15 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#333', marginBottom: 2 }}>Layers</div>
             <div onClick={() => setSelectedDrawingLayer('top')} title="Top layer" style={{ cursor: 'pointer', padding: 2, borderRadius: 4, border: selectedImageForTransform === 'top' ? '2px solid #0b5fff' : '1px solid #ddd', background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -14920,7 +15011,12 @@ function App() {
               } else {
                 // Extract from filename (remove .json extension)
                 const projectNameFromFile = file.name.replace(/\.json$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_');
-                projectNameToUse = projectNameFromFile || 'pcb_project';
+                projectNameToUse = projectNameFromFile;
+                if (!projectNameToUse) {
+                  console.error('Failed to extract project name from filename');
+                  alert('Warning: Could not determine project name from filename. Please ensure the project file has a valid name.');
+                  return;
+                }
                 setProjectName(projectNameToUse);
               }
               
@@ -15264,7 +15360,10 @@ function App() {
                     }
                     // Sanitize the project name the same way handleNewProjectCreate does
                     const projectNameInput = newProjectSetupDialog.projectName.trim();
-                    const cleanName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_') || 'pcb_project';
+                    const cleanName = projectNameInput.replace(/[^a-zA-Z0-9_-]/g, '_');
+                    if (!cleanName) {
+                      return '';
+                    }
                     const filename = `${cleanName}.json`;
                     // Smart path preview: If selected folder matches project name, don't show redundant subfolder
                     if (newProjectSetupDialog.locationPath === cleanName) {
@@ -15654,8 +15753,8 @@ function App() {
         onIntervalChange={(interval) => setAutoSaveDialog({ visible: true, interval })}
         onApply={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
         onCancel={() => setAutoSaveDialog({ visible: false, interval: 5 })}
-            />
-            
+      />
+
       {/* Auto Save Prompt Dialog (shown after New Project or Open Project) - Combined with interval selector */}
       <AutoSavePromptDialog
         visible={autoSavePromptDialog.visible}
@@ -15687,30 +15786,30 @@ function App() {
       />
 
       {/* Donate Button - fixed position in lower right corner */}
-        <div 
-          style={{
-            position: 'fixed',
-            bottom: 8,
+      <div 
+        style={{
+          position: 'fixed',
+          bottom: 8,
           right: 8,
-            zIndex: 100,
-          }}
+          zIndex: 100,
+        }}
       >
-              <button
+        <button
           onClick={() => {
             // Open donate page in new window to avoid losing user's work
             window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
           }}
-                style={{
+          style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '6px 12px',
             background: 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)',
             border: '1px solid rgba(27, 31, 36, 0.15)',
-                  borderRadius: 6,
-                  cursor: 'pointer',
+            borderRadius: 6,
+            cursor: 'pointer',
             fontSize: 12,
-                  fontWeight: 500,
+            fontWeight: 500,
             color: '#24292f',
             boxShadow: '0 1px 0 rgba(27, 31, 36, 0.04)',
             transition: 'background 0.2s',
@@ -15727,9 +15826,8 @@ function App() {
             <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
           </svg>
           Donate
-              </button>
-            </div>
-
+        </button>
+      </div>
     </div>
   );
 }

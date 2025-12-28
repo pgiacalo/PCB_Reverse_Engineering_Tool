@@ -49,6 +49,7 @@ export interface MenuBarProps {
   onNewProject: () => void;
   onOpenProject: () => Promise<void>;
   onSaveProject: () => Promise<void>;
+  onCloseProject: () => Promise<void>;
   onPrint: () => void;
   onExportBOM: () => Promise<void>;
   hasUnsavedChanges: () => boolean;
@@ -223,6 +224,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onNewProject,
   onOpenProject,
   onSaveProject,
+  onCloseProject,
   onPrint,
   onExportBOM,
   hasUnsavedChanges,
@@ -1012,6 +1014,19 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               Save Project…
             </button>
+            <button 
+              onClick={async () => { 
+                if (!isReadOnlyMode && isProjectActive) {
+                  await onCloseProject();
+                  setOpenMenu(null);
+                }
+              }} 
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer' }}
+            >
+              Close Project…
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
               onClick={() => { 
                 if (!isReadOnlyMode) { 
