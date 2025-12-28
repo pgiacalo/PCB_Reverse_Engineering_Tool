@@ -2135,7 +2135,7 @@
       "description": "Connector",
       "searchText": "connector",
       "designator": "J",
-      "defaultPins": 4,
+      "defaultPins": 2,
       "properties": {
         "connectorType": "Connector"
       },
@@ -2191,7 +2191,7 @@
       "description": "Jumper link",
       "searchText": "jumper link",
       "designator": "JP",
-      "defaultPins": 3,
+      "defaultPins": 2,
       "properties": {
         "connectorType": "Jumper"
       },
@@ -2303,7 +2303,7 @@
       "description": "Relay or contactor",
       "searchText": "relay contactor",
       "designator": "K",
-      "defaultPins": 5,
+      "defaultPins": 2,
       "properties": {
         "switchType": "Relay"
       },
