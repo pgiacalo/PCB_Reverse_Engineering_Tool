@@ -9,12 +9,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+# Change to project root (parent of scripts directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 BASE_PATH="${1:-}"
 
 echo "🔧 Building PCB Reverse Engineering Tool..."
-echo "📁 Project directory: $SCRIPT_DIR"
+echo "📁 Project directory: $PROJECT_ROOT"
 echo ""
 
 # Check if node_modules exists
@@ -62,7 +64,7 @@ if [ -d "dist" ]; then
     echo "   npm run preview"
     echo ""
     echo "📝 To deploy to GitHub Pages, run:"
-    echo "   ./build_and_deploy_to_github_pages.sh"
+    echo "   ./deploy_main.sh"
 else
     echo "❌ Build failed - dist/ directory not found"
     exit 1
