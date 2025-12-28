@@ -10748,6 +10748,7 @@ function App() {
           powers,
           grounds,
           powerBuses,
+          groundBuses,
           projectName
         );
         formatName = 'PADS';
@@ -12656,42 +12657,61 @@ function App() {
         // This ensures projectDirHandle state is null before we set the new one
         await new Promise(resolve => setTimeout(resolve, 0));
         
-        // The project file should have the same name as the directory
-        const projectFileName = `${projectDirHandle.name}.json`;
+        // Find the most recent project JSON file that starts with the directory name
+        const directoryName = projectDirHandle.name;
         let projectFileHandle: FileSystemFileHandle | null = null;
         let project: any = null;
+        let projectFileName: string = '';
         
         try {
-          // Try to open the project file with the same name as the directory
-          projectFileHandle = await projectDirHandle.getFileHandle(projectFileName);
+          // Collect all JSON files that start with the directory name
+          const candidateFiles: Array<{ name: string; handle: FileSystemFileHandle; lastModified: number }> = [];
+          
+          for await (const [name, handle] of projectDirHandle.entries()) {
+            if (handle.kind === 'file' && name.toLowerCase().endsWith('.json')) {
+              // Check if filename starts with directory name (case-insensitive)
+              const nameWithoutExt = name.replace(/\.json$/i, '');
+              if (nameWithoutExt.toLowerCase().startsWith(directoryName.toLowerCase())) {
+                try {
+                  const file = await (handle as FileSystemFileHandle).getFile();
+                  candidateFiles.push({
+                    name,
+                    handle: handle as FileSystemFileHandle,
+                    lastModified: file.lastModified,
+                  });
+                } catch (fileError) {
+                  console.warn(`Failed to read file ${name}:`, fileError);
+                  // Continue to next file
+                }
+              }
+            }
+          }
+          
+          if (candidateFiles.length === 0) {
+            alert(`No project file found in the selected directory that starts with "${directoryName}". Please ensure the project file name starts with the directory name.`);
+            return;
+          }
+          
+          // Sort by lastModified (most recent first) and select the first one
+          candidateFiles.sort((a, b) => b.lastModified - a.lastModified);
+          const selectedFile = candidateFiles[0];
+          projectFileHandle = selectedFile.handle;
+          projectFileName = selectedFile.name;
+          
           const file = await projectFileHandle.getFile();
           const text = await file.text();
           project = JSON.parse(text);
           setCurrentProjectFilePath(projectFileName);
-        } catch (fileError) {
-          // If file doesn't exist, try to find any .json file in the directory
-          console.warn(`Project file ${projectFileName} not found, searching for .json files...`);
-          let foundFile = false;
-          try {
-            for await (const [name, handle] of projectDirHandle.entries()) {
-              if (handle.kind === 'file' && name.toLowerCase().endsWith('.json')) {
-                const file = await (handle as FileSystemFileHandle).getFile();
-                const text = await file.text();
-                project = JSON.parse(text);
-                setCurrentProjectFilePath(name);
-                foundFile = true;
-                console.log(`Found project file: ${name}`);
-                break;
-              }
-            }
-          } catch (searchError) {
-            console.error('Failed to search for project files:', searchError);
-          }
           
-          if (!foundFile) {
-            alert(`Project file "${projectFileName}" not found in the selected directory. Please ensure the project file has the same name as the directory.`);
-            return;
+          if (candidateFiles.length > 1) {
+            console.log(`Found ${candidateFiles.length} project files starting with "${directoryName}". Selected most recent: ${projectFileName}`);
+          } else {
+            console.log(`Found project file: ${projectFileName}`);
           }
+        } catch (error) {
+          console.error('Failed to find or open project file:', error);
+          alert(`Failed to open project file: ${error instanceof Error ? error.message : String(error)}. See console for details.`);
+          return;
         }
         
         // We already have the project directory handle from the directory picker

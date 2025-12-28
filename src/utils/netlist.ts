@@ -47,6 +47,13 @@ interface PowerBus {
   color: string;
 }
 
+// GroundBus interface (matches usePowerGround.ts definition)
+interface GroundBus {
+  id: string;
+  name: string;
+  color: string;
+}
+
 /**
  * Represents a node in the connectivity graph
  */
@@ -63,6 +70,9 @@ export interface NetlistNode {
   // For power nodes
   voltage?: string; // e.g., "+5V", "+3.3V"
   powerBusId?: string;
+  
+  // For ground nodes
+  groundBusId?: string;
 }
 
 /**
@@ -211,10 +221,36 @@ export function buildConnectivityGraphCoordinateBased(
       const existing = coordinateToNode.get(coordKey)!;
       // Merge extra data if provided
       if (extraData) {
-        Object.assign(existing, extraData);
-        // Preserve component_pin type if it exists
+        // CRITICAL: Preserve component pin information (componentId, pinIndex) when merging
+        // This ensures component pins are properly identified even when merged with vias/pads/power/ground
+        // Component pins should always preserve their componentId and pinIndex
+        if (extraData.componentId && extraData.pinIndex !== undefined) {
+          existing.componentId = extraData.componentId;
+          existing.pinIndex = extraData.pinIndex;
+        }
+        // CRITICAL: Preserve power/ground information when merging with component pins
+        // This ensures power/ground nodes retain their voltage/bus info when component pins are added
+        if (extraData.voltage !== undefined) {
+          existing.voltage = extraData.voltage;
+        }
+        if (extraData.powerBusId !== undefined) {
+          existing.powerBusId = extraData.powerBusId;
+        }
+        if (extraData.groundBusId !== undefined) {
+          existing.groundBusId = extraData.groundBusId;
+        }
+        // Merge other properties (but don't overwrite component pin info if it already exists)
+        for (const key in extraData) {
+          if (key !== 'componentId' && key !== 'pinIndex' && key !== 'voltage' && key !== 'powerBusId' && key !== 'groundBusId') {
+            (existing as any)[key] = (extraData as any)[key];
+          }
+        }
+        // Preserve component_pin type if it exists, but also preserve power/ground type
         if (extraData.type === 'component_pin' || existing.type === 'component_pin') {
+          // If we have both component pin AND power/ground, keep component_pin type but preserve power/ground properties
           existing.type = 'component_pin';
+        } else if (extraData.type && !existing.type) {
+          existing.type = extraData.type;
         }
       }
       return existing;
@@ -276,12 +312,15 @@ export function buildConnectivityGraphCoordinateBased(
   
   // 4. Add ground nodes (single pass, O(n))
   for (const ground of groundSymbols) {
-    getOrCreateNode(ground.x, ground.y, 'ground');
+    // Store groundBusId if available (for grouping by bus name)
+    const groundWithBusId = ground as GroundSymbol & { groundBusId?: string; pointId?: number };
+    getOrCreateNode(ground.x, ground.y, 'ground', {
+      groundBusId: groundWithBusId.groundBusId,
+    });
     // Note: GroundSymbol may have pointId if added dynamically
-    const groundWithPointId = ground as GroundSymbol & { pointId?: number };
-    if (groundWithPointId.pointId !== undefined) {
+    if (groundWithBusId.pointId !== undefined) {
       const coordKey = createCoordKey(ground.x, ground.y);
-      pointIdToCoord.set(groundWithPointId.pointId, coordKey);
+      pointIdToCoord.set(groundWithBusId.pointId, coordKey);
     }
   }
   
@@ -444,14 +483,14 @@ function normalizeVoltage(voltage: string): string {
 
 /**
  * Group connected nodes into nets using union-find (coordinate-based)
- * CRITICAL: All ground points are connected by definition (single common ground plane).
- * CRITICAL: All power points with the same voltage are connected by definition (common power bus).
- *           For example, all nodes at +3.3V are connected, and all nodes at -3.3V are connected
- *           (these are separate power buses - positive and negative).
+ * CRITICAL: All power nodes with the same PowerBus name are directly connected by definition.
+ * CRITICAL: All ground nodes with the same GroundBus name are directly connected by definition.
  */
 export function groupNodesIntoNetsCoordinateBased(
   coordinateToNode: Map<string, NetlistNode>,
-  connections: Array<[string, string]>
+  connections: Array<[string, string]>,
+  powerBuses: PowerBus[] = [],
+  groundBuses: GroundBus[] = []
 ): Map<string, NetlistNode[]> {
   const uf = new UnionFind();
   
@@ -472,56 +511,69 @@ export function groupNodesIntoNetsCoordinateBased(
     uf.union(intId1, intId2);
   }
   
-  // CRITICAL: Union all ground nodes together (all ground points are connected by definition)
-  // This represents connections to a single, common ground plane
-  const groundCoordKeys: string[] = [];
+  // CRITICAL: Union all ground nodes with the same GroundBus name together
+  // All ground nodes with the same GroundBus name are directly connected by definition
+  // Group ground nodes by groundBusId (or default to single bus if no bus specified)
+  const groundNodesByBus = new Map<string, string[]>();
   for (const [coordKey, node] of coordinateToNode) {
     if (node.type === 'ground') {
-      groundCoordKeys.push(coordKey);
+      // Use groundBusId if available, otherwise use 'default' for nodes without a bus
+      const busId = node.groundBusId || 'default';
+      if (!groundNodesByBus.has(busId)) {
+        groundNodesByBus.set(busId, []);
+      }
+      groundNodesByBus.get(busId)!.push(coordKey);
       getIntId(coordKey); // Ensure it's in the union-find structure
     }
   }
-  // Union all ground nodes with each other
-  if (groundCoordKeys.length > 0) {
-    if (groundCoordKeys.length > 1) {
-      const firstGroundId = getIntId(groundCoordKeys[0]);
-      for (let i = 1; i < groundCoordKeys.length; i++) {
-        const otherGroundId = getIntId(groundCoordKeys[i]);
-        uf.union(firstGroundId, otherGroundId);
+  // Union all ground nodes with the same bus ID
+  for (const [busId, coordKeys] of groundNodesByBus) {
+    if (coordKeys.length > 0) {
+      // Get bus name for logging
+      const bus = groundBuses.find(b => b.id === busId);
+      const busName = bus?.name || (busId === 'default' ? 'GND' : busId);
+      if (coordKeys.length > 1) {
+        const firstGroundId = getIntId(coordKeys[0]);
+        for (let i = 1; i < coordKeys.length; i++) {
+          const otherGroundId = getIntId(coordKeys[i]);
+          uf.union(firstGroundId, otherGroundId);
+        }
+        console.log(`[Connectivity] Unified ${coordKeys.length} ground nodes with bus "${busName}" into a single net (common ground bus)`);
+      } else {
+        console.log(`[Connectivity] Found 1 ground node with bus "${busName}" (common ground bus)`);
       }
-      console.log(`[Connectivity] Unified ${groundCoordKeys.length} ground nodes into a single net (common ground plane)`);
-    } else {
-      console.log(`[Connectivity] Found 1 ground node (common ground plane)`);
     }
   }
   
-  // CRITICAL: Union all power nodes with the same voltage together
-  // This represents connections to a common power bus at that voltage
-  // Group power nodes by normalized voltage (handles variations like "+3.3V", "3.3V", "+3.3 VDC")
-  const powerNodesByVoltage = new Map<string, string[]>();
+  // CRITICAL: Union all power nodes with the same PowerBus name together
+  // All power nodes with the same PowerBus name are directly connected by definition
+  // Group power nodes by powerBusId (not just voltage, since multiple buses can have same voltage)
+  const powerNodesByBus = new Map<string, string[]>();
   for (const [coordKey, node] of coordinateToNode) {
-    if (node.type === 'power' && node.voltage) {
-      // Normalize voltage to handle format variations
-      const normalizedVoltage = normalizeVoltage(node.voltage);
-      if (!powerNodesByVoltage.has(normalizedVoltage)) {
-        powerNodesByVoltage.set(normalizedVoltage, []);
+    if (node.type === 'power' && node.powerBusId) {
+      const busId = node.powerBusId;
+      if (!powerNodesByBus.has(busId)) {
+        powerNodesByBus.set(busId, []);
       }
-      powerNodesByVoltage.get(normalizedVoltage)!.push(coordKey);
+      powerNodesByBus.get(busId)!.push(coordKey);
       getIntId(coordKey); // Ensure it's in the union-find structure
     }
   }
-  // Union all power nodes with the same normalized voltage
-  for (const [voltage, coordKeys] of powerNodesByVoltage) {
+  // Union all power nodes with the same bus ID
+  for (const [busId, coordKeys] of powerNodesByBus) {
     if (coordKeys.length > 0) {
+      // Get bus name for logging
+      const bus = powerBuses.find(b => b.id === busId);
+      const busName = bus?.name || busId;
       if (coordKeys.length > 1) {
         const firstPowerId = getIntId(coordKeys[0]);
         for (let i = 1; i < coordKeys.length; i++) {
           const otherPowerId = getIntId(coordKeys[i]);
           uf.union(firstPowerId, otherPowerId);
         }
-        console.log(`[Connectivity] Unified ${coordKeys.length} power nodes with voltage "${voltage}" into a single net (common power bus)`);
+        console.log(`[Connectivity] Unified ${coordKeys.length} power nodes with bus "${busName}" into a single net (common power bus)`);
       } else {
-        console.log(`[Connectivity] Found 1 power node with voltage "${voltage}" (common power bus)`);
+        console.log(`[Connectivity] Found 1 power node with bus "${busName}" (common power bus)`);
       }
     }
   }
@@ -1527,6 +1579,7 @@ export function generatePadsNetlist(
   powerSymbols: PowerSymbol[],
   groundSymbols: GroundSymbol[],
   powerBuses: PowerBus[],
+  groundBuses: GroundBus[],
   projectName?: string
 ): string {
   // Use coordinate-based connectivity
@@ -1539,24 +1592,63 @@ export function generatePadsNetlist(
   );
   
   const connections = buildConnectionsCoordinateBased(drawingStrokes, coordinateToNode);
-  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections);
+  // CRITICAL: Pass powerBuses and groundBuses to ensure nodes with same bus name are grouped together
+  // All power nodes with the same PowerBus name are directly connected by definition
+  // All ground nodes with the same GroundBus name are directly connected by definition
+  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections, powerBuses, groundBuses);
   const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
   
   // Build component map
+  // CRITICAL: Use full designator (e.g., "R1", "C2", "U3") to uniquely identify components
+  // Abbreviation is just the first letter and should not be used for identification
   const componentMap = new Map<string, PCBComponent>();
   for (const comp of components) {
-    const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
+    const designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
     if (designator) {
       componentMap.set(designator, comp);
     }
   }
   
+  // Helper function to infer pin type from pin name
+  const inferPinType = (pinName: string): string => {
+    if (!pinName || pinName.trim() === '') return 'unknown';
+    const upperName = pinName.toUpperCase().trim();
+    // Power pins
+    if (upperName === 'VCC' || upperName === 'VDD' || upperName.startsWith('VCC') || upperName.startsWith('VDD') || 
+        upperName === 'V+' || upperName.startsWith('V+') || upperName === 'VP' || upperName === 'VPOS') {
+      return 'power';
+    }
+    // Ground pins
+    if (upperName === 'GND' || upperName === 'VSS' || upperName === 'V-' || upperName.startsWith('V-') || 
+        upperName === 'VN' || upperName === 'VNEG' || upperName === 'GROUND') {
+      return 'ground';
+    }
+    // Input pins (common patterns)
+    if (upperName.startsWith('IN') || upperName.startsWith('INPUT') || upperName.includes('IN+') || 
+        upperName.includes('IN-') || upperName === 'A' || upperName === 'B' || upperName.startsWith('CLK') ||
+        upperName.startsWith('EN') || upperName.startsWith('CS') || upperName.startsWith('CE')) {
+      return 'input';
+    }
+    // Output pins (common patterns)
+    if (upperName.startsWith('OUT') || upperName.startsWith('OUTPUT') || upperName.includes('OUT+') || 
+        upperName.includes('OUT-') || upperName === 'Y' || upperName === 'Q' || upperName.startsWith('DO')) {
+      return 'output';
+    }
+    // Default to unknown if we can't determine
+    return 'unknown';
+  };
+  
   // Build components array
   const padsComponents: Array<{
     designator: string;
-    value: string;
+    part_number?: string;
+    value?: string;
     package: string;
-    pins: string[];
+    pins: Array<{
+      number: string;
+      name: string;
+      type: string;
+    }>;
   }> = [];
   
   // Sort designators for consistent output
@@ -1565,7 +1657,10 @@ export function generatePadsNetlist(
   for (const designator of sortedDesignators) {
     const comp = componentMap.get(designator)!;
     
-    // Get component value
+    // Get part number (preferred for ICs)
+    const partNumber = (comp as any).partNumber?.trim() || '';
+    
+    // Get component value (for passive components)
     let value = '';
     if (comp.componentType === 'Resistor' && 'resistance' in comp) {
       const { value: val, unit } = readValueAndUnit(comp, 'resistance', 'resistanceUnit', getDefaultUnit('resistance'));
@@ -1576,35 +1671,82 @@ export function generatePadsNetlist(
     } else if (comp.componentType === 'Inductor' && 'inductance' in comp) {
       const { value: val, unit } = readValueAndUnit(comp, 'inductance', 'inductanceUnit', getDefaultUnit('inductance'));
       value = val && val.trim() !== '' ? combineValueAndUnit(val, unit) : '';
-    } else {
-      // For other components, use part number or part name
+    } else if (!partNumber) {
+      // For other components without part number, use part name or component type
       const partName = (comp as any).partName?.trim();
-      const partNumber = (comp as any).partNumber?.trim();
-      value = partNumber || partName || comp.componentType;
+      value = partName || comp.componentType;
     }
     
     // Get package (footprint)
-    const packageName = (comp as any).package?.trim() || (comp as any).footprint?.trim() || '';
+    const packageName = (comp as any).packageType?.trim() || (comp as any).package?.trim() || (comp as any).footprint?.trim() || '';
     
-    // Get pin list (as strings "1", "2", etc.)
+    // Get pin data (preferred) or pin names (legacy fallback)
+    const pinData = (comp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
+    const pinNames = (comp as any).pinNames as string[] | undefined;
+    
+    // Build pins array with number, name, and type
     const pinCount = comp.pinCount || 0;
-    const pins: string[] = [];
+    const pins: Array<{ number: string; name: string; type: string }> = [];
     for (let i = 0; i < pinCount; i++) {
-      pins.push(String(i + 1));
+      const pinNumber = String(i + 1);
+      
+      // Get pin name from pinData (preferred) or pinNames (legacy), or use pin number as fallback
+      let pinName = pinNumber;
+      if (pinData && i < pinData.length && pinData[i]?.name?.trim()) {
+        pinName = pinData[i].name.trim();
+      } else if (pinNames && i < pinNames.length && pinNames[i]?.trim()) {
+        pinName = pinNames[i].trim();
+      }
+      
+      // Get pin type from pinData (preferred) or infer from pin name (fallback)
+      let pinType: string;
+      if (pinData && i < pinData.length && pinData[i]?.type && pinData[i].type.trim() !== '') {
+        pinType = pinData[i].type.trim();
+      } else {
+        pinType = inferPinType(pinName);
+      }
+      
+      pins.push({
+        number: pinNumber,
+        name: pinName,
+        type: pinType
+      });
     }
     
-    padsComponents.push({
+    const componentEntry: {
+      designator: string;
+      part_number?: string;
+      value?: string;
+      package: string;
+      pins: Array<{ number: string; name: string; type: string }>;
+    } = {
       designator,
-      value: value || '',
       package: packageName,
       pins
-    });
+    };
+    
+    // Include part_number if available (for ICs)
+    if (partNumber) {
+      componentEntry.part_number = partNumber;
+    }
+    
+    // Include value if available (for passive components or components without part number)
+    if (value) {
+      componentEntry.value = value;
+    }
+    
+    padsComponents.push(componentEntry);
   }
   
   // Build nets array (includes power, ground, and signal nets)
   const padsNets: Array<{
     name: string;
-    nodes: Array<{ component: string; pin: string }>;
+    connections: Array<{
+      component: string;
+      pin_number: string;
+      pin_name: string;
+      pin_type?: string;
+    }>;
   }> = [];
   
   // Process each net group
@@ -1613,28 +1755,79 @@ export function generatePadsNetlist(
     if (!netName) continue;
     
     // Extract component pin connections
-    const nodes: Array<{ component: string; pin: string }> = [];
+    // CRITICAL: Check for componentId and pinIndex properties, not just type === 'component_pin'
+    // This ensures we find component pins even when they're merged with vias/pads/power/ground at the same coordinates
+    // We need to crawl through ALL nodes in the net to find ALL component pins that are connected
+    // through traces, vias, pads, power nodes, ground nodes, or direct connections
+    // 
+    // IMPORTANT: Component pins connected to power or ground nodes (either directly at same coordinates
+    // or through traces) will be in the same net group and will be included here.
+    const connections: Array<{
+      component: string;
+      pin_number: string;
+      pin_name: string;
+      pin_type?: string;
+    }> = [];
     
     for (const node of netNodes) {
-      if (node.type === 'component_pin' && node.componentId && node.pinIndex !== undefined) {
+      // Check if this node represents a component pin (either directly or merged with via/pad/power/ground)
+      // Component pins have componentId and pinIndex properties regardless of the node type
+      // This includes component pins that are:
+      // 1. Directly at the same coordinates as power/ground nodes (merged nodes)
+      // 2. Connected to power/ground nodes through traces (in the same net group)
+      if (node.componentId && node.pinIndex !== undefined) {
         const comp = components.find(c => c.id === node.componentId);
         if (comp) {
-          const designator = (comp as any).abbreviation?.trim() || comp.designator?.trim();
+          // CRITICAL: Use full designator (e.g., "R1", "C2", "U3") to uniquely identify components
+          // Abbreviation is just the first letter and should not be used for identification
+          const designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
           if (designator) {
-            nodes.push({
+            const pinNumber = String(node.pinIndex + 1); // Convert 0-based to 1-based
+            // Get pin data from component's pinData (preferred) or pinNames (legacy), or use pin number as fallback
+            const pinData = (comp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
+            const pinNames = (comp as any).pinNames as string[] | undefined;
+            
+            // Get pin name
+            let pinName = pinNumber; // Default fallback
+            if (pinData && node.pinIndex < pinData.length && pinData[node.pinIndex]?.name?.trim()) {
+              pinName = pinData[node.pinIndex].name.trim();
+            } else if (pinNames && node.pinIndex < pinNames.length && pinNames[node.pinIndex]?.trim()) {
+              pinName = pinNames[node.pinIndex].trim();
+            }
+            
+            // Get pin type (if available)
+            let pinType: string | undefined;
+            if (pinData && node.pinIndex < pinData.length && pinData[node.pinIndex]?.type && pinData[node.pinIndex].type.trim() !== '') {
+              pinType = pinData[node.pinIndex].type.trim();
+            }
+            
+            const connection: {
+              component: string;
+              pin_number: string;
+              pin_name: string;
+              pin_type?: string;
+            } = {
               component: designator,
-              pin: String(node.pinIndex + 1) // Convert 0-based to 1-based
-            });
+              pin_number: pinNumber,
+              pin_name: pinName
+            };
+            
+            // Only include pin_type if it's available
+            if (pinType) {
+              connection.pin_type = pinType;
+            }
+            
+            connections.push(connection);
           }
         }
       }
     }
     
     // Only include nets that have component connections
-    if (nodes.length > 0) {
+    if (connections.length > 0) {
       padsNets.push({
         name: netName,
-        nodes
+        connections
       });
     }
   }

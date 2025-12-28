@@ -320,6 +320,8 @@ Requirements:
    - pinNumber: The pin number (1, 2, 3, etc.)
    - pinName: The signal name (e.g., VCC, GND, IN+, OUT, etc.). Use the exact name from the datasheet.
    - pinDescription: A brief description of the pin's function (optional, can be empty string)
+   - pinType: The pin type (optional): "input", "output", "bidirectional", "power", "ground", "no_connect", or "passive". Only include if clearly identifiable from the datasheet.
+   - alternateFunctions: An array of alternate function names for this pin (optional, only if the pin has multiple functions). For example, a microcontroller GPIO pin might have ["SPI_MOSI", "I2C_SDA"] as alternate functions.
 4. For component properties, extract the following information if available in the datasheet:
 ${fieldsToExtract.map(field => {
   if (field.hasUnits) {
@@ -341,11 +343,12 @@ ${fieldsToExtract.map(field => {
 Example JSON format:
 {
   "pins": [
-    {"pinNumber": 1, "pinName": "VCC", "pinDescription": "Power supply positive"},
-    {"pinNumber": 2, "pinName": "GND", "pinDescription": "Ground"},
-    {"pinNumber": 3, "pinName": "IN+", "pinDescription": "Non-inverting input"},
-    {"pinNumber": 4, "pinName": "IN-", "pinDescription": "Inverting input"},
-    {"pinNumber": 5, "pinName": "OUT", "pinDescription": "Output"}
+    {"pinNumber": 1, "pinName": "VCC", "pinDescription": "Power supply positive", "pinType": "power"},
+    {"pinNumber": 2, "pinName": "GND", "pinDescription": "Ground", "pinType": "ground"},
+    {"pinNumber": 3, "pinName": "IN+", "pinDescription": "Non-inverting input", "pinType": "input"},
+    {"pinNumber": 4, "pinName": "IN-", "pinDescription": "Inverting input", "pinType": "input"},
+    {"pinNumber": 5, "pinName": "OUT", "pinDescription": "Output", "pinType": "output"},
+    {"pinNumber": 6, "pinName": "GPIO1", "pinDescription": "General purpose I/O", "pinType": "bidirectional", "alternateFunctions": ["SPI_MOSI", "I2C_SDA"]}
   ],
   "properties": {
     "partNumber": "LM358",
@@ -793,7 +796,14 @@ Analyze the attached PDF datasheet and extract the information according to the 
           i < currentPolarities.length ? currentPolarities[i] : ''
         );
       }
-      // Resize pinNames array if it exists, preserving existing names
+      // Resize pinData array if it exists, preserving existing data
+      if ((comp as any).pinData && Array.isArray((comp as any).pinData)) {
+        const currentPinData = (comp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }>;
+        (updated as any).pinData = new Array(componentEditor.pinCount).fill(null).map((_, i) => 
+          i < currentPinData.length && currentPinData[i] ? currentPinData[i] : { name: '' }
+        );
+      }
+      // Also resize pinNames array for backward compatibility
       if ((comp as any).pinNames) {
         const currentPinNames = (comp as any).pinNames || [];
         (updated as any).pinNames = new Array(componentEditor.pinCount).fill('').map((_, i) => 
@@ -807,7 +817,11 @@ Analyze the attached PDF datasheet and extract the information according to the 
       if (comp.pinPolarities) {
         updated.pinPolarities = comp.pinPolarities;
       }
-      // Preserve existing pinNames if they exist
+      // Preserve existing pinData if it exists
+      if ((comp as any).pinData) {
+        (updated as any).pinData = (comp as any).pinData;
+      }
+      // Preserve existing pinNames if they exist (for backward compatibility)
       if ((comp as any).pinNames) {
         (updated as any).pinNames = (comp as any).pinNames;
       }
@@ -1427,8 +1441,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
         }
       }
 
-      // Extract pin names - use extracted pin count
-      const pinNames: string[] = new Array(extractedPinCount).fill('');
+      // Extract pin data - use extracted pin count
+      // Structure: Array of { name: string, type?: string, alternate_functions?: string[] }
+      const pinData: Array<{ name: string; type?: string; alternate_functions?: string[] }> = new Array(extractedPinCount).fill(null).map(() => ({ name: '' }));
       let parsedPinCount = 0;
       
       if (extractedData.pins && Array.isArray(extractedData.pins)) {
@@ -1436,7 +1451,14 @@ Analyze the attached PDF datasheet and extract the information according to the 
           if (pin && typeof pin === 'object' && pin.pinNumber && pin.pinName) {
             const pinNum = parseInt(String(pin.pinNumber), 10);
             if (!isNaN(pinNum) && pinNum >= 1 && pinNum <= extractedPinCount) {
-              pinNames[pinNum - 1] = String(pin.pinName).trim();
+              const pinIndex = pinNum - 1;
+              pinData[pinIndex] = {
+                name: String(pin.pinName).trim(),
+                type: pin.pinType && String(pin.pinType).trim() ? String(pin.pinType).trim() : undefined,
+                alternate_functions: pin.alternateFunctions && Array.isArray(pin.alternateFunctions) && pin.alternateFunctions.length > 0
+                  ? pin.alternateFunctions.map((af: any) => String(af).trim()).filter((af: string) => af !== '')
+                  : undefined
+              };
               parsedPinCount++;
             }
           }
@@ -1446,6 +1468,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
       if (parsedPinCount === 0) {
         throw new Error('Could not parse any pin information from the JSON response.');
       }
+      
+      // Also maintain pinNames array for backward compatibility (extract names from pinData)
+      const pinNames: string[] = pinData.map(pd => pd.name);
 
       // Extract component properties and update componentEditor
       const updatedEditor: any = { ...componentEditor };
@@ -1588,15 +1613,19 @@ Analyze the attached PDF datasheet and extract the information according to the 
           i < existingPinPolarities.length ? existingPinPolarities[i] : ''
         );
         
-        // Ensure pinNames array matches pin count
-        const adjustedPinNames = [...pinNames];
-        while (adjustedPinNames.length < extractedPinCount) {
-          adjustedPinNames.push('');
+        // Ensure pinData array matches pin count
+        const adjustedPinData = [...pinData];
+        while (adjustedPinData.length < extractedPinCount) {
+          adjustedPinData.push({ name: '' });
         }
+        
+        // Also maintain pinNames array for backward compatibility
+        const adjustedPinNames = adjustedPinData.map(pd => pd.name);
         
         const updatedComp = { 
           ...currentComp, 
-          pinNames: adjustedPinNames,
+          pinData: adjustedPinData,
+          pinNames: adjustedPinNames, // Keep for backward compatibility
           pinCount: extractedPinCount,
           pinConnections: newPinConnections,
           pinPolarities: newPinPolarities,
@@ -2503,10 +2532,11 @@ Analyze the attached PDF datasheet and extract the information according to the 
             // Determine if this component type has polarity using definition
             const showPolarityColumn = isComponentPolarized(comp);
             
-            // Get pin names from component instance (user-editable) or definition (defaults)
+            // Get pin data from component instance (user-editable) or definition (defaults)
             const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
             const currentComp = currentCompList.find(c => c.id === componentEditor.id);
-            const instancePinNames = (currentComp as any)?.pinNames as string[] | undefined;
+            const instancePinData = (currentComp as any)?.pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
+            const instancePinNames = (currentComp as any)?.pinNames as string[] | undefined; // Fallback for legacy data
             // Resolve definition if not provided as prop
             const resolvedDef = componentDefinition || resolveComponentDefinition(comp as any);
             const definitionPinNames = resolvedDef?.properties?.pinNames as string[] | undefined;
@@ -2519,6 +2549,10 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const useDropdown = hasPinNames && !isChipDependent; // Dropdown for predefined names
             const useTextInput = isChipDependent; // Text input for CHIP_DEPENDENT
             const showNameColumn = hasPinNames; // Show if pinNames are defined
+            
+            // Check if any pin has type or alternate_functions to determine if we should show those columns
+            const hasPinTypes = instancePinData && instancePinData.some(pd => pd && pd.type && pd.type.trim() !== '');
+            const hasAlternateFunctions = instancePinData && instancePinData.some(pd => pd && pd.alternate_functions && pd.alternate_functions.length > 0);
 
             return (
               <div>
@@ -2530,6 +2564,12 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     {showNameColumn && (
                       <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '70px' }}>Pin Name</th>
                     )}
+                    {hasPinTypes && (
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '80px' }}>Type</th>
+                    )}
+                    {hasAlternateFunctions && (
+                      <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '120px' }}>Alt Functions</th>
+                    )}
                     {showPolarityColumn && (
                       <th style={{ padding: '2px 4px', textAlign: 'left', fontWeight: 600, fontSize: '11px', color: '#333', width: '50px' }}>Polarity</th>
                     )}
@@ -2540,14 +2580,17 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   {Array.from({ length: componentEditor.pinCount }, (_, i) => {
                     const pinConnection = currentComp?.pinConnections && currentComp.pinConnections.length > i ? currentComp.pinConnections[i] : '';
                     const pinPolarity = (currentComp?.pinPolarities && currentComp.pinPolarities.length > i) ? (currentComp.pinPolarities[i] || '') : '';
-                    // Get pin name from instance (user-edited) or default from definition
-                    // For CHIP_DEPENDENT, show empty string (user fills in custom names)
-                    const instancePinName = instancePinNames && i < instancePinNames.length ? instancePinNames[i] : '';
+                    
+                    // Get pin data from instance (preferred) or fallback to pinNames (legacy)
+                    const pinDataItem = instancePinData && i < instancePinData.length && instancePinData[i] ? instancePinData[i] : null;
+                    const instancePinName = pinDataItem?.name || (instancePinNames && i < instancePinNames.length ? instancePinNames[i] : '');
                     const defaultPinName = definitionPinNames && i < definitionPinNames.length ? definitionPinNames[i] : '';
                     const isChipDependent = defaultPinName === 'CHIP_DEPENDENT';
                     // Use instance value if it exists and is not empty, otherwise use default (unless it's CHIP_DEPENDENT)
                     const currentPinName = (instancePinName && instancePinName.trim() !== '') ? instancePinName : 
                                           (isChipDependent ? '' : defaultPinName);
+                    const pinType = pinDataItem?.type;
+                    const alternateFunctions = pinDataItem?.alternate_functions;
                     const isSelected = connectingPin && connectingPin.componentId === comp.id && connectingPin.pinIndex === i;
                     
                     return (
@@ -2668,13 +2711,24 @@ Analyze the attached PDF datasheet and extract the information according to the 
                                   const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
                                   const currentComp = currentCompList.find(c => c.id === componentEditor.id);
                                   if (currentComp) {
-                                    const existingPinNames = (currentComp as any).pinNames || [];
-                                    const newPinNames = [...existingPinNames];
-                                    while (newPinNames.length < componentEditor.pinCount) {
-                                      newPinNames.push('');
+                                    const existingPinData = (currentComp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
+                                  const existingPinNames = (currentComp as any).pinNames || [];
+                                    // Update pinData (preferred) or create from pinNames (legacy)
+                                    let newPinData: Array<{ name: string; type?: string; alternate_functions?: string[] }>;
+                                    if (existingPinData && Array.isArray(existingPinData)) {
+                                      newPinData = [...existingPinData];
+                                    } else {
+                                      // Create from existing pinNames
+                                      newPinData = existingPinNames.map((name: string) => ({ name }));
                                     }
-                                    newPinNames[i] = newPinName;
-                                    const updatedComp = { ...currentComp, pinNames: newPinNames };
+                                    while (newPinData.length < componentEditor.pinCount) {
+                                      newPinData.push({ name: '' });
+                                    }
+                                    // Preserve type and alternate_functions when updating name
+                                    newPinData[i] = { ...newPinData[i], name: newPinName };
+                                    // Also maintain pinNames for backward compatibility
+                                    const newPinNames = newPinData.map(pd => pd.name);
+                                    const updatedComp = { ...currentComp, pinData: newPinData, pinNames: newPinNames };
                                     if (componentEditor.layer === 'top') {
                                       setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
                                     } else {
@@ -2698,6 +2752,26 @@ Analyze the attached PDF datasheet and extract the information according to the 
                                   cursor: areComponentsLocked ? 'not-allowed' : 'text'
                                 }}
                               />
+                            )}
+                          </td>
+                        )}
+                        {hasPinTypes && (
+                          <td style={{ padding: '2px 4px', color: '#333', fontSize: '11px' }}>
+                            {pinType && pinType.trim() !== '' ? (
+                              <span style={{ fontFamily: 'monospace', color: '#666' }}>{pinType}</span>
+                            ) : (
+                              <span style={{ color: '#ccc' }}>-</span>
+                            )}
+                          </td>
+                        )}
+                        {hasAlternateFunctions && (
+                          <td style={{ padding: '2px 4px', color: '#333', fontSize: '11px' }}>
+                            {alternateFunctions && alternateFunctions.length > 0 ? (
+                              <span style={{ fontFamily: 'monospace', color: '#666', fontSize: '10px' }}>
+                                {alternateFunctions.join(', ')}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#ccc' }}>-</span>
                             )}
                           </td>
                         )}
