@@ -17,7 +17,7 @@ trap cleanup EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🔧 Building and deploying PCB Reverse Engineering Tool to GitHub Pages..."
+echo "🔧 Deploying main branch to GitHub Pages..."
 
 # Ensure a clean working tree to avoid accidentally publishing uncommitted code
 if ! git diff --quiet || ! git diff --cached --quiet; then
@@ -60,7 +60,7 @@ PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
 echo "🏗️  Building production bundle with base: ${BASE_PATH}"
 # Use build.sh script to ensure consistent build process
 # build.sh will skip dependency installation since node_modules already exists
-"${SCRIPT_DIR}/build.sh" "${BASE_PATH}"
+"${SCRIPT_DIR}/scripts/build.sh" "${BASE_PATH}"
 
 echo "🚀 Preparing deployment target..."
 # ORIGIN_URL/OWNER/REPO already determined above
