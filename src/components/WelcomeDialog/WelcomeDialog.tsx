@@ -107,7 +107,8 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
   return (
     <div 
       ref={containerRef}
-      style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 10 }}
+      onClick={stopAndRemoveVideo}
+      style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#ffffff', pointerEvents: 'auto', zIndex: 10 }}
     >
       {/* Video background - matches canvas area exactly */}
       {showVideo && (
@@ -131,27 +132,30 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         />
       )}
       {/* Dialog content - centered on top of video */}
-    <div style={{
+    <div 
+      onClick={stopAndRemoveVideo}
+      style={{
       position: 'absolute',
       top: '50%',
       left: '50%',
       transform: 'translate(-50%, -50%)',
       textAlign: 'center',
       padding: '24px 32px',
-      background: 'rgba(255, 255, 255, 0.85)',
+      background: '#ffffff',
       borderRadius: 8,
       border: '2px solid #4CAF50',
       boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         maxWidth: '500px',
         pointerEvents: 'auto',
         zIndex: 2,
+        cursor: 'pointer',
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
         PCB Tracer: An Electronics Tool
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-        Reverse Engineer, Troubleshoot, Repair, Signal Trace,<br />
-        Document Test Results
+        Reverse Engineer, Troubleshoot, Trace Signals,<br />
+        Document Tests, Aid Repairs
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1) Use the File menu to start a new project.

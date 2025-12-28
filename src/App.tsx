@@ -810,6 +810,7 @@ function App() {
   // Tracks whether the user has manually dismissed the component selection dialog
   // so it is not auto-reopened while the Component tool remains active.
   const [hasDismissedComponentDialog, setHasDismissedComponentDialog] = useState(false);
+  const [hasDismissedSplash, setHasDismissedSplash] = useState(false);
 
   // Show component selection dialog when component tool is selected,
   // unless the user has manually dismissed it for the current tool session.
@@ -13055,7 +13056,9 @@ function App() {
                   clearAllSelections(); // Clear all selections when tool is selected
                   setDrawingMode('trace'); 
                   setCurrentTool('draw'); 
-                  // The useEffect hook will automatically apply the default layer and show the layer chooser
+                  // Explicitly show layer chooser on every click (like pads and test points)
+                  setShowTraceLayerChooser(true);
+                  // The useEffect hook will automatically apply the default layer
                   // Force position recalculation on every click, even if dialog is already visible
                   setTimeout(() => updateTraceChooserPosition(), 0);
                 }
@@ -14259,9 +14262,10 @@ function App() {
 
           {/* Canvas welcome note - shown when no project is loaded */}
           <WelcomeDialog 
-            visible={!topImage && !bottomImage} 
+            visible={!topImage && !bottomImage && !hasDismissedSplash} 
             canvasSize={canvasSize}
             canvasPosition={{ left: 244, top: 6 }}
+            onDismiss={() => setHasDismissedSplash(true)}
           />
 
           <canvas

@@ -201,15 +201,21 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
   // Initialize position when dialog becomes visible
   useEffect(() => {
     if (visible && position === null) {
-      // Position dialog on the right side, below the menu bar and file name
-      const dialogWidth = 400;
-      const rightMargin = 8; // Slight margin from right edge
-      const topMargin = 130; // Below menu bar + filename area
-      
-      setPosition({
-        x: window.innerWidth - dialogWidth - rightMargin,
-        y: topMargin,
-      });
+      // Position dialog at the upper left of the canvas
+      const canvas = document.querySelector('.pcb-canvas') as HTMLCanvasElement;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        setPosition({
+          x: rect.left,
+          y: rect.top,
+        });
+      } else {
+        // Fallback: use known canvas position (left: 244px, top: 6px)
+        setPosition({
+          x: 244,
+          y: 6,
+        });
+      }
     }
   }, [visible, position]);
 
@@ -387,9 +393,9 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
           left: position ? `${position.x}px` : undefined,
           backgroundColor: '#fff',
           borderRadius: 8,
-          minWidth: '300px',
-          maxWidth: '400px',
-          width: 'fit-content',
+          minWidth: '250px',
+          maxWidth: '300px',
+          width: '280px',
           maxHeight: '80%',
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
           border: '1px solid #ddd',
@@ -494,14 +500,14 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                   onMouseDown={(e) => e.stopPropagation()}
                   style={{ 
                     marginRight: '8px',
-                    width: '20px',
-                    height: '20px',
+                    width: '14px',
+                    height: '14px',
                     cursor: 'pointer',
                     accentColor: '#0066cc',
                     appearance: 'none',
                     WebkitAppearance: 'none',
                     MozAppearance: 'none',
-                    border: selectedLayer === 'top' ? '2px solid #0066cc' : '2px solid #999',
+                    border: selectedLayer === 'top' ? '1.5px solid #0066cc' : '1.5px solid #999',
                     borderRadius: '50%',
                     backgroundColor: selectedLayer === 'top' ? '#0066cc' : 'transparent',
                     position: 'relative',
@@ -529,14 +535,14 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                   onMouseDown={(e) => e.stopPropagation()}
                   style={{ 
                     marginRight: '8px',
-                    width: '20px',
-                    height: '20px',
+                    width: '14px',
+                    height: '14px',
                     cursor: 'pointer',
                     accentColor: '#0066cc',
                     appearance: 'none',
                     WebkitAppearance: 'none',
                     MozAppearance: 'none',
-                    border: selectedLayer === 'bottom' ? '2px solid #0066cc' : '2px solid #999',
+                    border: selectedLayer === 'bottom' ? '1.5px solid #0066cc' : '1.5px solid #999',
                     borderRadius: '50%',
                     backgroundColor: selectedLayer === 'bottom' ? '#0066cc' : 'transparent',
                     position: 'relative',
@@ -571,8 +577,10 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
                         style={{
-                          display: 'block',
+                          display: 'flex',
+                          alignItems: 'center',
                           width: '100%',
+                          maxWidth: '100%',
                           textAlign: 'left',
                           padding: '8px 12px',
                           marginBottom: '4px',
@@ -582,6 +590,8 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                           cursor: 'pointer',
                           fontSize: '12px',
                           color: '#333',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
                         }}
                       >
                         <input
@@ -592,21 +602,29 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                           onClick={(e) => e.stopPropagation()}
                           onMouseDown={(e) => e.stopPropagation()}
                           style={{ 
-                            marginRight: '10px',
-                            width: '20px',
-                            height: '20px',
+                            marginRight: '8px',
+                            width: '14px',
+                            height: '14px',
                             cursor: 'pointer',
                             appearance: 'none',
                             WebkitAppearance: 'none',
                             MozAppearance: 'none',
-                            border: isSelected ? '2px solid #0066cc' : '2px solid #999',
+                            border: isSelected ? '1.5px solid #0066cc' : '1.5px solid #999',
                             borderRadius: '50%',
                             backgroundColor: isSelected ? '#0066cc' : 'transparent',
                             position: 'relative',
                             flexShrink: 0,
                           }}
                         />
-                        <strong>{labelText}</strong>
+                        <span style={{ 
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                          minWidth: 0,
+                        }}>
+                          <strong>{labelText}</strong>
+                        </span>
                       </label>
                     );
                   })
@@ -653,8 +671,10 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                             style={{
-                              display: 'block',
+                              display: 'flex',
+                              alignItems: 'center',
                               width: '100%',
+                              maxWidth: '100%',
                               textAlign: 'left',
                               padding: '6px 12px',
                               marginBottom: '2px',
@@ -664,6 +684,8 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                               cursor: 'pointer',
                               fontSize: '12px',
                               color: '#333',
+                              boxSizing: 'border-box',
+                              overflow: 'hidden',
                             }}
                           >
                             <input
@@ -673,21 +695,29 @@ export const ComponentSelectionDialog: React.FC<ComponentSelectionDialogProps> =
                                 onChange={() => onComponentTypeChange(metadata.componentType, uniqueKey, metadata)}
                               onMouseDown={(e) => e.stopPropagation()}
                               style={{ 
-                                marginRight: '10px',
-                                width: '20px',
-                                height: '20px',
+                                marginRight: '8px',
+                                width: '14px',
+                                height: '14px',
                                 cursor: 'pointer',
                                 appearance: 'none',
                                 WebkitAppearance: 'none',
                                 MozAppearance: 'none',
-                                border: isSelected ? '2px solid #0066cc' : '2px solid #999',
+                                border: isSelected ? '1.5px solid #0066cc' : '1.5px solid #999',
                                 borderRadius: '50%',
                                 backgroundColor: isSelected ? '#0066cc' : 'transparent',
                                 position: 'relative',
                                 flexShrink: 0,
                               }}
                             />
-                            {displayText}
+                            <span style={{ 
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1,
+                              minWidth: 0,
+                            }}>
+                              {displayText}
+                            </span>
                           </label>
                         );
                       })}
