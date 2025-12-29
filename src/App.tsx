@@ -1435,6 +1435,7 @@ function App() {
   const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
   // Trace corner dots (circles at each vertex/turn)
   const [showTraceCornerDots, setShowTraceCornerDots] = useState(true);
+  const [showCrosshairs, setShowCrosshairs] = useState(false);
   // Detailed Info Dialog position and drag state
   const [detailedInfoDialogPosition, setDetailedInfoDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingDetailedInfoDialog, setIsDraggingDetailedInfoDialog] = useState(false);
@@ -5535,65 +5536,67 @@ function App() {
       ctx.restore();
     }
     
-    // Draw coordinate axes at world origin (0, 0) AFTER view transform
+    // Draw coordinate axes at world origin (0, 0) AFTER view transform (if enabled)
     // This ensures axes rotate and flip with perspective changes
     // After the view transform (pan, scale, rotation, flip), the world origin (0,0) 
     // should already be positioned at the canvas center (when cameraWorldCenter = {x: 0, y: 0})
-    ctx.save();
-    // Draw axes at world origin (0,0) - no additional translation needed
-    // The view transform has already positioned the world origin correctly
-    
-    // Axes length and width - reduced for better appearance
-    const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
-    const screenLineWidth = 2; // 2 pixels - thinner
-    const lineWidthInWorld = screenLineWidth / viewScale;
-    
-    // Draw X axis (horizontal, symmetric about origin) in red
-    ctx.strokeStyle = '#FF0000'; // Bright red
-    ctx.lineWidth = lineWidthInWorld;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-axisLength, 0); // Start at negative X
-    ctx.lineTo(axisLength, 0); // Draw to positive X (symmetric)
-    ctx.stroke();
-    
-    // Label +X axis (positive direction)
-    ctx.fillStyle = '#FF0000'; // Red text
-    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
-    
-    // Label -X axis (negative direction)
-    ctx.textAlign = 'right';
-    ctx.fillText('-X', -axisLength - 2 / viewScale, 2 / viewScale);
-    
-    // Draw Y axis (vertical, symmetric about origin) in blue
-    ctx.strokeStyle = '#0000FF'; // Bright blue
-    ctx.lineWidth = lineWidthInWorld;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -axisLength); // Start at negative Y
-    ctx.lineTo(0, axisLength); // Draw to positive Y (symmetric)
-    ctx.stroke();
-    
-    // Label +Y axis (positive direction)
-    ctx.fillStyle = '#0000FF'; // Blue text
-    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
-    
-    // Label -Y axis (negative direction)
-    ctx.textBaseline = 'bottom';
-    ctx.fillText('-Y', 2 / viewScale, -axisLength - 2 / viewScale);
-    ctx.restore();
+    if (showCrosshairs) {
+      ctx.save();
+      // Draw axes at world origin (0,0) - no additional translation needed
+      // The view transform has already positioned the world origin correctly
+      
+      // Axes length and width - reduced for better appearance
+      const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
+      const screenLineWidth = 2; // 2 pixels - thinner
+      const lineWidthInWorld = screenLineWidth / viewScale;
+      
+      // Draw X axis (horizontal, symmetric about origin) in red
+      ctx.strokeStyle = '#FF0000'; // Bright red
+      ctx.lineWidth = lineWidthInWorld;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-axisLength, 0); // Start at negative X
+      ctx.lineTo(axisLength, 0); // Draw to positive X (symmetric)
+      ctx.stroke();
+      
+      // Label +X axis (positive direction)
+      ctx.fillStyle = '#FF0000'; // Red text
+      ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
+      
+      // Label -X axis (negative direction)
+      ctx.textAlign = 'right';
+      ctx.fillText('-X', -axisLength - 2 / viewScale, 2 / viewScale);
+      
+      // Draw Y axis (vertical, symmetric about origin) in blue
+      ctx.strokeStyle = '#0000FF'; // Bright blue
+      ctx.lineWidth = lineWidthInWorld;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, -axisLength); // Start at negative Y
+      ctx.lineTo(0, axisLength); // Draw to positive Y (symmetric)
+      ctx.stroke();
+      
+      // Label +Y axis (positive direction)
+      ctx.fillStyle = '#0000FF'; // Blue text
+      ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
+      
+      // Label -Y axis (negative direction)
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('-Y', 2 / viewScale, -axisLength - 2 / viewScale);
+      ctx.restore();
+    }
     
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, cameraWorldCenter, isICPlacementMode, icPlacementArea]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, showCrosshairs, cameraWorldCenter, isICPlacementMode, icPlacementArea]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -12989,6 +12992,8 @@ function App() {
         setArePowerNodesLocked={setArePowerNodesLocked}
         showTraceCornerDots={showTraceCornerDots}
         setShowTraceCornerDots={setShowTraceCornerDots}
+        showCrosshairs={showCrosshairs}
+        setShowCrosshairs={setShowCrosshairs}
         setSelectedIds={setSelectedIds}
         setSelectedComponentIds={setSelectedComponentIds}
         setSelectedPowerIds={setSelectedPowerIds}

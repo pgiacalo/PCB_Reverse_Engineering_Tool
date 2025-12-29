@@ -1604,6 +1604,116 @@ export function generatePadsNetlist(
   const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections, powerBuses, groundBuses);
   const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
   
+  // Trace power and ground bus connections through traces and pass-through components
+  // Pass-through components: Jumper, Connector, Switch (no resistance, pass power/ground through)
+  const componentPinBusNames = new Map<string, Set<string>>(); // Map: "componentId:pinIndex" -> Set of bus names
+  
+  // Helper to check if a component is a pass-through component
+  const isPassThroughComponent = (comp: PCBComponent): boolean => {
+    return comp.componentType === 'Jumper' || 
+           comp.componentType === 'Connector' || 
+           comp.componentType === 'Switch';
+  };
+  
+  // Build a map of component pins to their coordinate keys
+  const componentPinToCoordKey = new Map<string, string>(); // Map: "componentId:pinIndex" -> coordKey
+  for (const [coordKey, node] of coordinateToNode) {
+    if (node.componentId && node.pinIndex !== undefined) {
+      const pinKey = `${node.componentId}:${node.pinIndex}`;
+      componentPinToCoordKey.set(pinKey, coordKey);
+    }
+  }
+  
+  // Build adjacency list for coordinate-based graph
+  const coordAdjacencyList = new Map<string, Set<string>>();
+  for (const [coordKey] of coordinateToNode.keys()) {
+    coordAdjacencyList.set(coordKey, new Set());
+  }
+  for (const [coordKey1, coordKey2] of connections) {
+    if (coordAdjacencyList.has(coordKey1)) {
+      coordAdjacencyList.get(coordKey1)!.add(coordKey2);
+    }
+    if (coordAdjacencyList.has(coordKey2)) {
+      coordAdjacencyList.get(coordKey2)!.add(coordKey1);
+    }
+  }
+  
+  // Helper function to trace from a coordinate key and mark all reachable component pins
+  const traceAndMarkPins = (startCoordKey: string, busName: string, visited: Set<string>) => {
+    if (visited.has(startCoordKey)) return;
+    visited.add(startCoordKey);
+    
+    const node = coordinateToNode.get(startCoordKey);
+    if (!node) return;
+    
+    // CRITICAL: Check if this node represents a component pin (even if merged with power/ground)
+    // Component pins can be at the same coordinates as power/ground nodes, so the node might
+    // have both componentId/pinIndex AND powerBusId/groundBusId properties
+    if (node.componentId && node.pinIndex !== undefined) {
+      const pinKey = `${node.componentId}:${node.pinIndex}`;
+      if (!componentPinBusNames.has(pinKey)) {
+        componentPinBusNames.set(pinKey, new Set());
+      }
+      componentPinBusNames.get(pinKey)!.add(busName);
+      
+      // If this component is a pass-through component, continue tracing through all its pins
+      const comp = components.find(c => c.id === node.componentId);
+      if (comp && isPassThroughComponent(comp)) {
+        // For pass-through components, all pins are connected internally (no resistance)
+        // So if one pin has the bus, all pins should have it
+        // Find all pins of this component in the coordinate graph and continue tracing from them
+        for (let pinIndex = 0; pinIndex < comp.pinCount; pinIndex++) {
+          const otherPinKey = `${comp.id}:${pinIndex}`;
+          // Mark all pins of this pass-through component with the bus name
+          if (!componentPinBusNames.has(otherPinKey)) {
+            componentPinBusNames.set(otherPinKey, new Set());
+          }
+          componentPinBusNames.get(otherPinKey)!.add(busName);
+          
+          // Continue tracing from this pin's coordinate if it exists in the graph
+          const otherPinCoordKey = componentPinToCoordKey.get(otherPinKey);
+          if (otherPinCoordKey && !visited.has(otherPinCoordKey)) {
+            traceAndMarkPins(otherPinCoordKey, busName, visited);
+          }
+        }
+      }
+    }
+    
+    // Continue tracing through connected nodes (traces)
+    const neighbors = coordAdjacencyList.get(startCoordKey);
+    if (neighbors) {
+      for (const neighborCoordKey of neighbors) {
+        traceAndMarkPins(neighborCoordKey, busName, visited);
+      }
+    }
+  };
+  
+  // Trace from each power bus node
+  for (const powerBus of powerBuses) {
+    const busName = powerBus.name;
+    const visited = new Set<string>();
+    
+    // Start DFS from all power nodes with this bus ID
+    for (const [coordKey, node] of coordinateToNode) {
+      if (node.type === 'power' && node.powerBusId === powerBus.id) {
+        traceAndMarkPins(coordKey, busName, visited);
+      }
+    }
+  }
+  
+  // Trace from each ground bus node
+  for (const groundBus of groundBuses) {
+    const busName = groundBus.name;
+    const visited = new Set<string>();
+    
+    // Start DFS from all ground nodes with this bus ID
+    for (const [coordKey, node] of coordinateToNode) {
+      if (node.type === 'ground' && node.groundBusId === groundBus.id) {
+        traceAndMarkPins(coordKey, busName, visited);
+      }
+    }
+  }
+  
   // Build component map
   // CRITICAL: Use full designator (e.g., "R1", "C2", "U3") to uniquely identify components
   // Abbreviation is just the first letter and should not be used for identification
@@ -1755,7 +1865,7 @@ export function generatePadsNetlist(
     }>;
   }> = [];
   
-  // Process each net group
+    // Process each net group
   for (const [rootCoordKey, netNodes] of netGroups) {
     const netName = netNames.get(rootCoordKey);
     if (!netName) continue;
@@ -1773,7 +1883,26 @@ export function generatePadsNetlist(
       pin_number: string;
       pin_name: string;
       pin_type?: string;
+      power_bus?: string;
+      ground_bus?: string;
     }> = [];
+    
+    // First pass: Identify power and ground bus names in this net
+    let netPowerBusName: string | undefined;
+    let netGroundBusName: string | undefined;
+    for (const node of netNodes) {
+      if (node.type === 'power' && node.powerBusId) {
+        const powerBus = powerBuses.find(b => b.id === node.powerBusId);
+        if (powerBus) {
+          netPowerBusName = powerBus.name;
+        }
+      } else if (node.type === 'ground' && node.groundBusId) {
+        const groundBus = groundBuses.find(b => b.id === node.groundBusId);
+        if (groundBus) {
+          netGroundBusName = groundBus.name;
+        }
+      }
+    }
     
     for (const node of netNodes) {
       // Check if this node represents a component pin (either directly or merged with via/pad/power/ground)
@@ -1812,6 +1941,8 @@ export function generatePadsNetlist(
               pin_number: string;
               pin_name: string;
               pin_type?: string;
+              power_bus?: string;
+              ground_bus?: string;
             } = {
               component: designator,
               pin_number: pinNumber,
@@ -1821,6 +1952,48 @@ export function generatePadsNetlist(
             // Only include pin_type if it's available
             if (pinType) {
               connection.pin_type = pinType;
+            }
+            
+            // Add power/ground bus names if this pin is connected to a bus
+            const pinKey = `${comp.id}:${node.pinIndex}`;
+            const busNames = componentPinBusNames.get(pinKey);
+            if (busNames && busNames.size > 0) {
+              // Find power and ground buses (a pin could theoretically be connected to multiple buses)
+              for (const busName of busNames) {
+                const powerBus = powerBuses.find(b => b.name === busName);
+                const groundBus = groundBuses.find(b => b.name === busName);
+                if (powerBus && !connection.power_bus) {
+                  // Only set if not already set (take first power bus found)
+                  connection.power_bus = busName;
+                } else if (groundBus && !connection.ground_bus) {
+                  // Only set if not already set (take first ground bus found)
+                  connection.ground_bus = busName;
+                }
+              }
+            }
+            
+            // CRITICAL: Also check if this node is directly merged with a power/ground node at the same coordinates
+            // This handles the case where a connector pin is directly at the same coordinates as a power/ground node
+            // The node will have both componentId/pinIndex AND powerBusId/groundBusId properties
+            if (!connection.power_bus && node.powerBusId) {
+              const powerBus = powerBuses.find(b => b.id === node.powerBusId);
+              if (powerBus) {
+                connection.power_bus = powerBus.name;
+              }
+            }
+            if (!connection.ground_bus && node.groundBusId) {
+              const groundBus = groundBuses.find(b => b.id === node.groundBusId);
+              if (groundBus) {
+                connection.ground_bus = groundBus.name;
+              }
+            }
+            
+            // Also check if this net contains power/ground nodes (for indirect connections)
+            if (!connection.power_bus && netPowerBusName) {
+              connection.power_bus = netPowerBusName;
+            }
+            if (!connection.ground_bus && netGroundBusName) {
+              connection.ground_bus = netGroundBusName;
             }
             
             connections.push(connection);

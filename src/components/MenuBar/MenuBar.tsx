@@ -120,6 +120,9 @@ export interface MenuBarProps {
   // Trace display options
   showTraceCornerDots: boolean;
   setShowTraceCornerDots: React.Dispatch<React.SetStateAction<boolean>>;
+  // Crosshair display options
+  showCrosshairs: boolean;
+  setShowCrosshairs: React.Dispatch<React.SetStateAction<boolean>>;
   
   // Selection operations
   setSelectedIds: (ids: Set<string>) => void;
@@ -277,6 +280,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setArePowerNodesLocked,
   showTraceCornerDots,
   setShowTraceCornerDots,
+  showCrosshairs,
+  setShowCrosshairs,
   setSelectedIds: _setSelectedIds,
   setSelectedComponentIds: _setSelectedComponentIds,
   setSelectedPowerIds: _setSelectedPowerIds,
@@ -1415,6 +1420,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={() => { if (isProjectActive) { setShowCrosshairs(!showCrosshairs); setOpenMenu(null); } }} 
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
+            >
+              {showCrosshairs ? '✓ ' : '   '}Show X-Y Axis Crosshairs
             </button>
           </div>
         )}
