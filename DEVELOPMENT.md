@@ -81,12 +81,17 @@ For AI-powered pin name extraction from datasheets, you can configure the API ke
 1. Open any Integrated Circuit component's properties
 2. Go to File → AI Settings (or the API key dialog will appear when you try to extract datasheet information)
 3. Enter your Google Gemini API key and click "Save API Key"
-4. The key is stored in your browser's localStorage (secure, not exposed in code or build)
+4. The key is stored in your browser's sessionStorage (secure, not exposed in code or build)
 
 Get your free API key from: https://aistudio.google.com/apikey
 
-**Security Note:** 
-- API keys are stored only in browser localStorage and never bundled into the build
+**How API Keys Work:**
+- **API Key Storage**: The Gemini API key is stored in browser `sessionStorage`, which means:
+  - The key is automatically cleared when you close the browser tab or window
+  - You'll need to re-enter your API key each time you start a new session
+  - This provides better security than persistent storage
+- **Model Preference**: Your selected Gemini model is stored in `localStorage` and persists across sessions
+- **Security**: API keys are never bundled into the build or exposed in the application code
 - Environment variables are NOT used to prevent API keys from being exposed in production builds
 - Never commit API keys to the repository
 

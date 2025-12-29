@@ -61,7 +61,7 @@ The tool includes AI-powered features for extracting component information from 
 
 To use these features, simply go to **File → AI Settings** in the application and enter your Google Gemini API key (get a free key from [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
 
-**Security Note:** API keys are stored securely in your browser's localStorage and never exposed in code or shared with anyone.
+**Security Note:** API keys are stored in your browser's sessionStorage (automatically cleared when you close the tab) and are never exposed in code or shared with anyone. The model preference is saved in localStorage and persists across sessions.
 
 ## For Developers
 

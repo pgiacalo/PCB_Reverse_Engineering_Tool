@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI-powered pin name extraction feature works on GitHub Pages **without any special configuration**. The feature uses a user-provided API key stored in the browser's localStorage, so no API keys are exposed in the build.
+The AI-powered pin name extraction feature works on GitHub Pages **without any special configuration**. The feature uses a user-provided API key stored in the browser's sessionStorage, so no API keys are exposed in the build.
 
 ## ✅ No Configuration Required
 
@@ -10,7 +10,8 @@ The AI-powered pin name extraction feature works on GitHub Pages **without any s
 
 - ✅ No API keys are embedded in the build
 - ✅ Users enter their own API keys in the UI
-- ✅ Keys are stored securely in browser localStorage
+- ✅ API keys are stored securely in browser sessionStorage (cleared when tab is closed)
+- ✅ Model preferences persist in localStorage across sessions
 - ✅ No backend server required
 - ✅ No environment variables needed for production
 
@@ -77,7 +78,7 @@ Once your site is deployed, users need to configure their own API key:
    - Paste your API key
    - Click **Save API Key**
 
-4. The key is now saved in your browser's localStorage and will persist across sessions
+4. The key is now saved in your browser's sessionStorage for this session (it will be cleared when you close the browser tab)
 
 ### Step 3: Use the Feature
 
@@ -93,7 +94,8 @@ Once your site is deployed, users need to configure their own API key:
 
 ✅ **No API keys in code:** The build contains no API keys  
 ✅ **User-specific keys:** Each user uses their own API key and quota  
-✅ **Browser storage:** Keys stored in localStorage (not sent to any server)  
+✅ **Session-based storage:** API keys stored in sessionStorage (automatically cleared when tab closes)  
+✅ **Persistent preferences:** Model selection stored in localStorage (persists across sessions)  
 ✅ **Free tier available:** Google provides free API keys with generous limits  
 
 ## Troubleshooting
@@ -104,8 +106,10 @@ Once your site is deployed, users need to configure their own API key:
 
 ### API Key Not Persisting
 
-**Check:**
-- Browser allows localStorage (not in private/incognito mode)
+**Note:** API keys are stored in sessionStorage, which means they are intentionally cleared when you close the browser tab. This is a security feature. You will need to re-enter your API key when you start a new session.
+
+**If the key is not saving at all, check:**
+- Browser allows sessionStorage (not blocked by settings)
 - Browser settings allow site data storage
 - Try saving the key again
 
@@ -134,20 +138,22 @@ Once your site is deployed, users need to configure their own API key:
 ## Development vs Production
 
 ### Development (Local)
-- Use `.env` file with `VITE_GEMINI_API_KEY` (optional, for convenience)
-- Or use the UI to enter API key (same as production)
+- Use the UI to enter API key (same as production)
+- API key is stored in sessionStorage (cleared when tab closes)
+- Model preference is stored in localStorage (persists)
 
 ### Production (GitHub Pages)
 - Users must enter API key in the UI
 - No `.env` file needed (and shouldn't be committed)
 - Works automatically after deployment
+- API keys are session-based for security
 
 ## Best Practices
 
 1. **Documentation:** Add a note in your README about the AI feature
 2. **User instructions:** Consider adding a tooltip or help text in the UI
 3. **Error handling:** The app already shows helpful error messages
-4. **Privacy:** Remind users that API keys are stored locally in their browser
+4. **Privacy:** Remind users that API keys are stored in sessionStorage (cleared on tab close) for security
 
 ## Summary
 

@@ -72,7 +72,8 @@ The AI-powered pin name extraction feature works automatically on GitHub Pages. 
 ### How It Works
 
 - Users enter their own Google Gemini API key in the Component Properties dialog
-- API keys are stored in browser localStorage (secure, not exposed in code)
+- **API keys** are stored in browser `sessionStorage` (automatically cleared when the tab is closed)
+- **Model preference** is stored in browser `localStorage` (persists across sessions)
 - No API keys are embedded in the build
 - Each user uses their own free API key and quota
 

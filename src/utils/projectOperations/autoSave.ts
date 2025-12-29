@@ -183,6 +183,7 @@ export async function performAutoSave(
     console.log(`Auto save: Successfully saved ${filename} to root directory`);
 
     // Update the displayed file path to reflect the current auto-saved file
+    setCurrentProjectFilePath(filename);  // Update state to trigger UI re-render
     currentProjectFilePathRef.current = filename;
     // Refresh file history and update index
     const history = autoSaveFileHistoryRef.current;

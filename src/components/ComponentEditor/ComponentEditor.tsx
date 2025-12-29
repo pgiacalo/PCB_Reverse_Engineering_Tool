@@ -35,14 +35,17 @@ import { resolveComponentDefinition } from '../../utils/componentDefinitionResol
 import { isComponentPolarized } from '../../utils/components';
 
 // Google Gemini API configuration
-// API key source: User-provided key from localStorage only
+// API key source: User-provided key from sessionStorage only
 // This ensures no API key is exposed in production builds
 // Note: Environment variables are NOT used to prevent API keys from being bundled into the build
+// sessionStorage is used instead of localStorage for better security:
+// - API key is automatically cleared when the browser tab/window is closed
+// - Reduces risk of key exposure from persistent storage
 const getGeminiApiKey = (): string | null => {
-  // Only use localStorage (user-provided, secure for production)
+  // Only use sessionStorage (user-provided, secure for production)
   // Never use environment variables as they get bundled into the JavaScript build
   if (typeof window !== 'undefined') {
-    const userKey = localStorage.getItem('geminiApiKey');
+    const userKey = sessionStorage.getItem('geminiApiKey');
     if (userKey && userKey.trim()) {
       return userKey.trim();
     }
@@ -176,7 +179,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('geminiApiKey') || '';
+      return sessionStorage.getItem('geminiApiKey') || '';
     }
     return '';
   });
@@ -188,10 +191,10 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     return 'gemini-2.5-flash-lite';
   });
   
-  // Check if API key exists in localStorage (for Remove button state)
+  // Check if API key exists in sessionStorage (for Remove button state)
   const [hasStoredApiKey, setHasStoredApiKey] = useState(() => {
     if (typeof window !== 'undefined') {
-      return !!localStorage.getItem('geminiApiKey');
+      return !!sessionStorage.getItem('geminiApiKey');
     }
     return false;
   });
@@ -199,9 +202,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Handle external trigger to show Gemini settings dialog
   useEffect(() => {
     if (showGeminiSettingsDialog) {
-      // Reload API key and model from localStorage when dialog opens
+      // Reload API key from sessionStorage and model from localStorage when dialog opens
       if (typeof window !== 'undefined') {
-        const savedKey = localStorage.getItem('geminiApiKey');
+        const savedKey = sessionStorage.getItem('geminiApiKey');
         const savedModel = localStorage.getItem('geminiModel');
         if (savedKey) {
           setApiKeyInput(savedKey);
@@ -219,10 +222,10 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
   }, [showGeminiSettingsDialog]);
 
-  // Update hasStoredApiKey when apiKeyInput changes or when checking localStorage
+  // Update hasStoredApiKey when apiKeyInput changes or when checking sessionStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setHasStoredApiKey(!!localStorage.getItem('geminiApiKey') || !!apiKeyInput.trim());
+      setHasStoredApiKey(!!sessionStorage.getItem('geminiApiKey') || !!apiKeyInput.trim());
     }
   }, [apiKeyInput]);
 
@@ -246,19 +249,19 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const handleSaveApiKey = () => {
     if (apiKeyInput.trim()) {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+        sessionStorage.setItem('geminiApiKey', apiKeyInput.trim());
         localStorage.setItem('geminiModel', geminiModelInput);
       }
       setHasStoredApiKey(true);
       setInfoDialog({
         visible: true,
         title: 'API Key and Model Saved',
-        message: `API key and model (${geminiModelInput}) saved! You can now use the "Extract Datasheet Information" feature.`,
+        message: `API key and model (${geminiModelInput}) saved! You can now use the "Extract Datasheet Information" feature. Note: The API key will be cleared when you close the browser tab.`,
         type: 'success',
       });
     } else {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('geminiApiKey');
+        sessionStorage.removeItem('geminiApiKey');
         localStorage.setItem('geminiModel', geminiModelInput); // Still save model even if removing key
       }
       setHasStoredApiKey(false);
@@ -271,17 +274,17 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
   };
 
-  // Function to remove API key from localStorage
+  // Function to remove API key from sessionStorage
   const handleRemoveApiKey = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('geminiApiKey');
+      sessionStorage.removeItem('geminiApiKey');
     }
     setApiKeyInput(''); // Clear the input field
     setHasStoredApiKey(false); // Update state
     setInfoDialog({
       visible: true,
       title: 'API Key Removed',
-      message: 'API key has been removed from browser localStorage. You will need to enter it again to use AI features.',
+      message: 'API key has been removed from browser session storage. You will need to enter it again to use AI features.',
       type: 'info',
     });
   };
@@ -565,29 +568,11 @@ Analyze the attached PDF datasheet and extract the information according to the 
               </div>
               
               <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+                <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff' }}>
                   Benefits of Adding Your API Key:
                 </p>
-                <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
-                  <li>Automatically extract pin names and component properties (voltage, current, temperature, etc.) from datasheet PDFs</li>
-                  <li>Get datasheet summary for component notes</li>
-                  <li>Save time by avoiding manual data entry</li>
-                </ul>
-                
-                <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
-                  How to Get Your Free API Key:
-                </p>
                 <p style={{ margin: '0 0 16px 0' }}>
-                  Go to{' '}
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: '#4CAF50', textDecoration: 'underline' }}
-                  >
-                    Google AI Studio (aistudio.google.com/app/apikey)
-                  </a>
-                  , sign in with your Google account, and click "Get API key" or "Create API key" in the Dashboard to generate a key for a new or existing Google Cloud project, then copy it and paste it below.
+                  Extract datasheet information for components — avoiding manual data entry
                 </p>
                 
                 <div style={{ marginBottom: '12px' }}>
@@ -648,16 +633,22 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     Storage & Security Information:
                   </p>
                   <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                    Your API key will be stored in your browser's <strong>localStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+                    Your API key will be stored in your browser's <strong>sessionStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
                   </p>
-                  <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                    ⚠️ Security Warnings:
+                  <p style={{ margin: '0 0 8px 0', color: '#4CAF50', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                    ✓ Session-Based Security:
                   </p>
                   <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                    <li>localStorage is accessible via browser DevTools</li>
+                    <li>API key is automatically cleared when you close the browser tab</li>
+                    <li>Not persisted across browser sessions</li>
+                    <li>Reduces risk of key exposure from persistent storage</li>
+                  </ul>
+                  <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                    ⚠️ Security Notes:
+                  </p>
+                  <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                    <li>sessionStorage is accessible via browser DevTools</li>
                     <li>Do not use on shared or public computers</li>
-                    <li>Malicious browser extensions could access your key</li>
-                    <li>XSS attacks could potentially read your key</li>
                     <li>The key is stored in plain text (not encrypted)</li>
                   </ul>
                   <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
@@ -681,7 +672,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     fontWeight: 600,
                     opacity: !hasStoredApiKey ? 0.5 : 1,
                   }}
-                  title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser localStorage'}
+                  title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser session storage'}
                 >
                   Remove API Key
                 </button>
@@ -3079,29 +3070,11 @@ Analyze the attached PDF datasheet and extract the information according to the 
           </div>
           
           <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-            <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
+            <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff' }}>
               Benefits of Adding Your API Key:
             </p>
-            <ul style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
-              <li>Automatically extract pin names and component properties (voltage, current, temperature, etc.) from datasheet PDFs</li>
-              <li>Get datasheet summary for component notes</li>
-              <li>Save time by avoiding manual data entry</li>
-            </ul>
-            
-            <p style={{ margin: '0 0 12px 0', fontWeight: 600, color: '#fff' }}>
-              How to Get Your Free API Key:
-            </p>
             <p style={{ margin: '0 0 16px 0' }}>
-              Go to{' '}
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#4CAF50', textDecoration: 'underline' }}
-              >
-                Google AI Studio (aistudio.google.com/app/apikey)
-              </a>
-              , sign in with your Google account, and click "Get API key" or "Create API key" in the Dashboard to generate a key for a new or existing Google Cloud project, then copy it and paste it below.
+              Extract datasheet information for components — avoiding manual data entry
             </p>
             
             <div style={{ marginBottom: '12px' }}>
@@ -3162,16 +3135,22 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 Storage & Security Information:
               </p>
               <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                Your API key will be stored in your browser's <strong>localStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+                Your API key will be stored in your browser's <strong>sessionStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
               </p>
-              <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                ⚠️ Security Warnings:
+              <p style={{ margin: '0 0 8px 0', color: '#4CAF50', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                ✓ Session-Based Security:
               </p>
               <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                <li>localStorage is accessible via browser DevTools</li>
+                <li>API key is automatically cleared when you close the browser tab</li>
+                <li>Not persisted across browser sessions</li>
+                <li>Reduces risk of key exposure from persistent storage</li>
+              </ul>
+              <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
+                ⚠️ Security Notes:
+              </p>
+              <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
+                <li>sessionStorage is accessible via browser DevTools</li>
                 <li>Do not use on shared or public computers</li>
-                <li>Malicious browser extensions could access your key</li>
-                <li>XSS attacks could potentially read your key</li>
                 <li>The key is stored in plain text (not encrypted)</li>
               </ul>
               <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
@@ -3195,7 +3174,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 fontWeight: 600,
                 opacity: !hasStoredApiKey ? 0.5 : 1,
               }}
-              title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser localStorage'}
+              title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser session storage'}
             >
               Remove API Key
             </button>
