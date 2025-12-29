@@ -5541,57 +5541,57 @@ function App() {
     // After the view transform (pan, scale, rotation, flip), the world origin (0,0) 
     // should already be positioned at the canvas center (when cameraWorldCenter = {x: 0, y: 0})
     if (showCrosshairs) {
-      ctx.save();
-      // Draw axes at world origin (0,0) - no additional translation needed
-      // The view transform has already positioned the world origin correctly
-      
-      // Axes length and width - reduced for better appearance
-      const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
-      const screenLineWidth = 2; // 2 pixels - thinner
-      const lineWidthInWorld = screenLineWidth / viewScale;
-      
-      // Draw X axis (horizontal, symmetric about origin) in red
-      ctx.strokeStyle = '#FF0000'; // Bright red
-      ctx.lineWidth = lineWidthInWorld;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-axisLength, 0); // Start at negative X
-      ctx.lineTo(axisLength, 0); // Draw to positive X (symmetric)
-      ctx.stroke();
-      
-      // Label +X axis (positive direction)
-      ctx.fillStyle = '#FF0000'; // Red text
-      ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
-      
-      // Label -X axis (negative direction)
-      ctx.textAlign = 'right';
-      ctx.fillText('-X', -axisLength - 2 / viewScale, 2 / viewScale);
-      
-      // Draw Y axis (vertical, symmetric about origin) in blue
-      ctx.strokeStyle = '#0000FF'; // Bright blue
-      ctx.lineWidth = lineWidthInWorld;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(0, -axisLength); // Start at negative Y
-      ctx.lineTo(0, axisLength); // Draw to positive Y (symmetric)
-      ctx.stroke();
-      
-      // Label +Y axis (positive direction)
-      ctx.fillStyle = '#0000FF'; // Blue text
-      ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
-      
-      // Label -Y axis (negative direction)
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('-Y', 2 / viewScale, -axisLength - 2 / viewScale);
-      ctx.restore();
+    ctx.save();
+    // Draw axes at world origin (0,0) - no additional translation needed
+    // The view transform has already positioned the world origin correctly
+    
+    // Axes length and width - reduced for better appearance
+    const axisLength = 50; // 50mm in world coordinates (world is 1000mm x 1000mm, so 1 unit = 1mm)
+    const screenLineWidth = 2; // 2 pixels - thinner
+    const lineWidthInWorld = screenLineWidth / viewScale;
+    
+    // Draw X axis (horizontal, symmetric about origin) in red
+    ctx.strokeStyle = '#FF0000'; // Bright red
+    ctx.lineWidth = lineWidthInWorld;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-axisLength, 0); // Start at negative X
+    ctx.lineTo(axisLength, 0); // Draw to positive X (symmetric)
+    ctx.stroke();
+    
+    // Label +X axis (positive direction)
+    ctx.fillStyle = '#FF0000'; // Red text
+    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('+X', axisLength + 2 / viewScale, 2 / viewScale);
+    
+    // Label -X axis (negative direction)
+    ctx.textAlign = 'right';
+    ctx.fillText('-X', -axisLength - 2 / viewScale, 2 / viewScale);
+    
+    // Draw Y axis (vertical, symmetric about origin) in blue
+    ctx.strokeStyle = '#0000FF'; // Bright blue
+    ctx.lineWidth = lineWidthInWorld;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -axisLength); // Start at negative Y
+    ctx.lineTo(0, axisLength); // Draw to positive Y (symmetric)
+    ctx.stroke();
+    
+    // Label +Y axis (positive direction)
+    ctx.fillStyle = '#0000FF'; // Blue text
+    ctx.font = `${12 / viewScale}px sans-serif`; // Scale font with zoom
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('+Y', 2 / viewScale, axisLength + 2 / viewScale);
+    
+    // Label -Y axis (negative direction)
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('-Y', 2 / viewScale, -axisLength - 2 / viewScale);
+    ctx.restore();
     }
     
     // Restore after view scaling
@@ -12878,7 +12878,7 @@ function App() {
         console.warn('Permission check failed (may not be supported in this browser):', permError);
         // Continue anyway
       }
-    } catch (e) {
+      } catch (e) {
       if ((e as any)?.name === 'AbortError') {
         // User cancelled - silently return
         return;
@@ -12890,7 +12890,7 @@ function App() {
     // Now save the current project if there are unsaved changes (user gesture is preserved)
     if (hasUnsavedChanges() && projectDirHandle) {
       try {
-        await saveProject();
+    await saveProject();
       } catch (e) {
         console.warn('Failed to auto-save before opening project:', e);
         // Continue anyway - user can still open the project
@@ -12923,7 +12923,41 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🔧 PCB Tracer (v3.0)</h1>
+        <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer</h1>
+        <button
+          onClick={() => {
+            // Open donate page in new window to avoid losing user's work
+            window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            background: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            borderRadius: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 500,
+            color: '#000000',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+            transition: 'background 0.2s',
+            marginLeft: 'auto',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#f0f0f0';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#ffffff';
+          }}
+          title="Donate to support this project"
+        >
+          <svg height="16" width="16" viewBox="0 0 16 16" fill="#ff0000" aria-hidden="true">
+            <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
+          </svg>
+          Donate
+        </button>
       </header>
 
       {/* Application menu bar */}
@@ -15758,8 +15792,8 @@ function App() {
         onIntervalChange={(interval) => setAutoSaveDialog({ visible: true, interval })}
         onApply={() => handleAutoSaveApply(autoSaveDialog.interval, false)}
         onCancel={() => setAutoSaveDialog({ visible: false, interval: 5 })}
-      />
-
+            />
+            
       {/* Auto Save Prompt Dialog (shown after New Project or Open Project) - Combined with interval selector */}
       <AutoSavePromptDialog
         visible={autoSavePromptDialog.visible}
@@ -15790,49 +15824,6 @@ function App() {
         }}
       />
 
-      {/* Donate Button - fixed position in lower right corner */}
-      <div 
-        style={{
-          position: 'fixed',
-          bottom: 8,
-          right: 8,
-          zIndex: 100,
-        }}
-      >
-        <button
-          onClick={() => {
-            // Open donate page in new window to avoid losing user's work
-            window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            background: 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)',
-            border: '1px solid rgba(27, 31, 36, 0.15)',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 500,
-            color: '#24292f',
-            boxShadow: '0 1px 0 rgba(27, 31, 36, 0.04)',
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(180deg, #f3f4f6 0%, #e5e6e9 100%)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(180deg, #f6f8fa 0%, #ebecef 100%)';
-          }}
-          title="Donate to support this project"
-        >
-          <svg height="16" width="16" viewBox="0 0 16 16" fill="#bf3989" aria-hidden="true">
-            <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
-          </svg>
-          Donate
-        </button>
-      </div>
     </div>
   );
 }

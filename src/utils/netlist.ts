@@ -542,10 +542,10 @@ export function groupNodesIntoNetsCoordinateBased(
         const firstGroundId = getIntId(coordKeys[0]);
         for (let i = 1; i < coordKeys.length; i++) {
           const otherGroundId = getIntId(coordKeys[i]);
-          uf.union(firstGroundId, otherGroundId);
-        }
+        uf.union(firstGroundId, otherGroundId);
+      }
         console.log(`[Connectivity] Unified ${coordKeys.length} ground nodes with bus "${busName}" into a single net (common ground bus)`);
-      } else {
+    } else {
         console.log(`[Connectivity] Found 1 ground node with bus "${busName}" (common ground bus)`);
       }
     }

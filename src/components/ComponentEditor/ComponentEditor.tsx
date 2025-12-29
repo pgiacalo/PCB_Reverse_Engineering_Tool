@@ -199,6 +199,18 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Handle external trigger to show Gemini settings dialog
   useEffect(() => {
     if (showGeminiSettingsDialog) {
+      // Reload API key and model from localStorage when dialog opens
+      if (typeof window !== 'undefined') {
+        const savedKey = localStorage.getItem('geminiApiKey');
+        const savedModel = localStorage.getItem('geminiModel');
+        if (savedKey) {
+          setApiKeyInput(savedKey);
+        }
+        if (savedModel) {
+          setGeminiModelInput(savedModel);
+        }
+        setHasStoredApiKey(!!savedKey);
+      }
       // Use a small timeout to ensure state updates properly
       const timer = setTimeout(() => {
         setShowApiKeyDialog(true);
