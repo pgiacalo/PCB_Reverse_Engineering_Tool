@@ -264,5 +264,5 @@ For development support and questions:
 ---
 
 *Last Updated: [Current Date]*
-*Version: 3.0*
+*Version: 3.1*
 

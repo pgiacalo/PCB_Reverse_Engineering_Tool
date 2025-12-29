@@ -26,8 +26,8 @@
 // Core project operations: create, open, save, close
 
 import React from 'react';
-import { formatTimestamp, removeTimestampFromFilename } from '../fileOperations';
-import { ensureProjectIsolation } from './projectIsolation';
+import { removeTimestampFromFilename } from '../fileOperations';
+// ensureProjectIsolation available if needed from './projectIsolation'
 import type { ProjectOperationResult, ProjectFileInfo } from './types';
 
 /**
@@ -67,11 +67,13 @@ export async function createNewProject(
   }
 
   // Request permissions for the project directory
+  // Note: queryPermission/requestPermission are part of File System Access API but not in standard TypeScript types
   try {
-    if (projectDirHandle.queryPermission) {
-      const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
+    const dirHandleAny = projectDirHandle as any;
+    if (dirHandleAny.queryPermission) {
+      const permission = await dirHandleAny.queryPermission({ mode: 'readwrite' });
       if (permission !== 'granted') {
-        const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
+        const requestResult = await dirHandleAny.requestPermission({ mode: 'readwrite' });
         if (requestResult !== 'granted') {
           return { success: false, error: 'Full access to the project directory is required to create and manage project files.' };
         }
@@ -181,11 +183,13 @@ export async function openProject(
   try {
 
     // Verify we have write access
+    // Note: queryPermission/requestPermission are part of File System Access API but not in standard TypeScript types
     try {
-      if (projectDirHandle.queryPermission) {
-        const permission = await projectDirHandle.queryPermission({ mode: 'readwrite' });
+      const dirHandleAny = projectDirHandle as any;
+      if (dirHandleAny.queryPermission) {
+        const permission = await dirHandleAny.queryPermission({ mode: 'readwrite' });
         if (permission !== 'granted') {
-          const requestResult = await projectDirHandle.requestPermission({ mode: 'readwrite' });
+          const requestResult = await dirHandleAny.requestPermission({ mode: 'readwrite' });
           if (requestResult !== 'granted') {
             return { success: false, error: 'Full access to the project directory is required to open and manage project files.' };
           }
@@ -211,8 +215,10 @@ export async function openProject(
     try {
       // Collect all JSON files that start with the directory name
       const candidateFiles: ProjectFileInfo[] = [];
+      // Note: entries() is part of File System Access API but not in standard TypeScript types
+      const dirHandleAny = projectDirHandle as any;
 
-      for await (const [name, handle] of projectDirHandle.entries()) {
+      for await (const [name, handle] of dirHandleAny.entries()) {
         if (handle.kind === 'file' && name.toLowerCase().endsWith('.json')) {
           // Check if filename starts with directory name (case-insensitive)
           const nameWithoutExt = name.replace(/\.json$/i, '');

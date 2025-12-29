@@ -1,4 +1,4 @@
-# PCB Reverse Engineering Tool v3.0
+# PCB Reverse Engineering Tool v3.1
 
 ![PCB Tracer Screenshot](images/PCB_Tracer_Image.png)
 
@@ -80,4 +80,4 @@ For support and questions:
 
 ---
 
-*Version: 3.0*
+*Version: 3.1*

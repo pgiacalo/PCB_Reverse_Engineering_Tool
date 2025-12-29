@@ -33,17 +33,16 @@ import type {
   PCBImage, 
   DrawingStroke, 
   PCBComponent, 
-  PowerSymbol, 
-  GroundSymbol,
-  PowerBus,
-  GroundBus,
-  ProjectMetadata,
   ViewMode,
   Tool,
-  DrawingMode,
   TransformMode,
   HomeView
 } from '../../types';
+import type { PowerSymbol, PowerBus, GroundBus } from '../../hooks/usePowerGround';
+import type { ProjectMetadata } from '../../components/ProjectNotesDialog';
+
+// DrawingMode type (matches useDrawing hook)
+type DrawingMode = 'trace' | 'via' | 'pad' | 'testPoint';
 
 /**
  * Comprehensive interface for all state setters and refs needed for project isolation

@@ -1457,7 +1457,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         {openMenu === 'about' && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.0)</h2>
+              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.1)</h2>
               
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>About</h3>

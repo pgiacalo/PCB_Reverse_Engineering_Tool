@@ -53,7 +53,7 @@ export interface PCBImage {
 // ============================================================================
 
 export interface DrawingPoint {
-  id: number; // globally unique point ID (used for netlist connections)
+  id?: number; // globally unique point ID (used for netlist connections), optional during creation
   x: number;
   y: number;
 }

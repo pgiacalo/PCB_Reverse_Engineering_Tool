@@ -277,7 +277,9 @@ export function buildConnectivityGraphCoordinateBased(
       const point = stroke.points[0];
       getOrCreateNode(point.x, point.y, 'via');
       const coordKey = createCoordKey(point.x, point.y);
-      pointIdToCoord.set(point.id, coordKey);
+      if (point.id !== undefined) {
+        pointIdToCoord.set(point.id, coordKey);
+      }
       viaCount++;
     }
   }
@@ -290,7 +292,9 @@ export function buildConnectivityGraphCoordinateBased(
       for (const point of stroke.points) {
         getOrCreateNode(point.x, point.y, 'trace_point');
         const coordKey = createCoordKey(point.x, point.y);
-        pointIdToCoord.set(point.id, coordKey);
+        if (point.id !== undefined) {
+          pointIdToCoord.set(point.id, coordKey);
+        }
         tracePointCount++;
       }
     }
@@ -1425,7 +1429,7 @@ export function generateSpiceNetlist(
   const netToNodeName = new Map<string, string>();
   let signalNetCounter = 1;
   
-  for (const [rootCoordKey, netNodes] of netGroups) {
+  for (const [rootCoordKey] of netGroups) {
     const netName = netNames.get(rootCoordKey);
     if (!netName) continue;
     
@@ -1547,7 +1551,7 @@ export function generateSpiceNetlist(
   
   // Add power/voltage sources if we have power nets
   const powerNets = new Set<string>();
-  for (const [rootCoordKey, netNodes] of netGroups) {
+  for (const [rootCoordKey] of netGroups) {
     const netName = netNames.get(rootCoordKey);
     if (netName && (netName.startsWith('+') || netName.startsWith('-'))) {
       powerNets.add(netName);
@@ -1816,8 +1820,9 @@ export function generatePadsNetlist(
       
       // Get pin type from pinData (preferred) or infer from pin name (fallback)
       let pinType: string;
-      if (pinData && i < pinData.length && pinData[i]?.type && pinData[i].type.trim() !== '') {
-        pinType = pinData[i].type.trim();
+      const pinTypeFromData = pinData?.[i]?.type?.trim();
+      if (pinTypeFromData && pinTypeFromData !== '') {
+        pinType = pinTypeFromData;
       } else {
         pinType = inferPinType(pinName);
       }
@@ -1932,8 +1937,9 @@ export function generatePadsNetlist(
             
             // Get pin type (if available)
             let pinType: string | undefined;
-            if (pinData && node.pinIndex < pinData.length && pinData[node.pinIndex]?.type && pinData[node.pinIndex].type.trim() !== '') {
-              pinType = pinData[node.pinIndex].type.trim();
+            const pinTypeFromData = pinData?.[node.pinIndex]?.type?.trim();
+            if (pinTypeFromData && pinTypeFromData !== '') {
+              pinType = pinTypeFromData;
             }
             
             const connection: {

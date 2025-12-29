@@ -48,9 +48,9 @@ import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
 import { generateBOM, type BOMData } from './utils/bom';
 import { createCloseProject, ensureProjectIsolation, type ProjectIsolationState } from './utils/projectOperations/projectIsolation';
-import { createNewProject, openProject, saveProject as saveProjectOperation, closeProject as closeProjectOperation } from './utils/projectOperations/projectOperations';
+import { createNewProject, openProject } from './utils/projectOperations/projectOperations';
 import { performAutoSave as performAutoSaveModule, configureAutoSave } from './utils/projectOperations/autoSave';
-import { restoreFromHistory, listHistoryFiles, type HistoryFile } from './utils/projectOperations/projectHistory';
+// Project history imports available if needed: restoreFromHistory, listHistoryFiles, HistoryFile
 import { generateKiCadNetlist, generateProtelNetlist, generateSpiceNetlist, generatePadsNetlist } from './utils/netlist';
 import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
@@ -61,7 +61,7 @@ import { WelcomeDialog } from './components/WelcomeDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
-import { ProjectNotesDialog, type ProjectNote, type ProjectMetadata } from './components/ProjectNotesDialog';
+import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
@@ -1107,7 +1107,7 @@ function App() {
     setErrorDialog,
     newProjectDialog,
     setNewProjectDialog,
-    openProjectDialog,
+    // openProjectDialog, // Available but not currently used
     setOpenProjectDialog,
     newProjectSetupDialog,
     setNewProjectSetupDialog,
@@ -1373,7 +1373,7 @@ function App() {
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
-  const openProjectYesButtonRef = useRef<HTMLButtonElement>(null);
+  // const openProjectYesButtonRef = useRef<HTMLButtonElement>(null); // Available but not currently used
   const newProjectNameInputRef = useRef<HTMLInputElement>(null);
   const saveAsFilenameInputRef = useRef<HTMLInputElement>(null);
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -8283,6 +8283,7 @@ function App() {
   }, []); // Empty dependency array - this is the legacy implementation, replaced by module version
 
   // Legacy closeProject implementation (replaced by module version above)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const _closeProjectLegacy = useCallback(() => {
     // === STEP 1: Release browser file system permissions ===
     // Clear directory handles to release browser permissions
@@ -8543,6 +8544,8 @@ function App() {
     // Other setters
     setBoardDimensions, setHoverComponent, setHoverTestPoint, setIsPanning, setIsDrawing, setTracePreviewMousePos,
   ]);
+  // Suppress unused variable warning for legacy function (kept for reference)
+  void _closeProjectLegacy;
 
   // NOTE: ensureProjectIsolationCallback will be created after refs are defined (see below)
 
@@ -12794,7 +12797,8 @@ function App() {
     return result;
   }, [ensureProjectIsolationCallback, setProjectDirHandle, setCurrentProjectFilePath, setProjectName, projectDirHandleRef, isOpeningProjectRef, loadProject, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle, performAutoSaveRef, configureAutoSave]);
 
-  const performOpenProject = useCallback(async () => {
+  // Legacy function - kept for reference, replaced by handleOpenProject
+  const _performOpenProject = useCallback(async () => {
     // Create a wrapper function for configureAutoSave that matches the expected signature
     // Now accepts projectName and projectDirHandle as parameters to avoid timing issues with state updates
     const configureAutoSaveWrapper = async (interval: number, projectNameParam: string, projectDirHandleParam: FileSystemDirectoryHandle | null, closePromptDialog: boolean) => {
@@ -12843,7 +12847,8 @@ function App() {
       }
     }
   }, [ensureProjectIsolationCallback, setProjectDirHandle, setCurrentProjectFilePath, setProjectName, projectDirHandleRef, isOpeningProjectRef, loadProject, projectName, projectDirHandle, setAutoSaveEnabled, setAutoSaveInterval, setAutoSaveDirHandle, setAutoSaveBaseName, autoSaveDirHandleRef, autoSaveBaseNameRef, autoSaveIntervalRef, hasChangesSinceLastAutoSaveRef, setAutoSaveDialog, setAutoSavePromptDialog, setProjectDirHandle, performAutoSaveRef, openProjectRef, configureAutoSave]);
-
+  // Suppress unused variable warning for legacy function (kept for reference)
+  void _performOpenProject;
 
   // Public handler for opening a project file
   // Shows directory picker first (preserving user gesture), then saves current project, then opens new project
