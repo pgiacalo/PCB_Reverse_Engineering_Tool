@@ -2,7 +2,17 @@
 
 ## Overview
 
-The AI-powered pin name extraction feature works on GitHub Pages **without any special configuration**. The feature uses a user-provided API key stored in the browser's sessionStorage, so no API keys are exposed in the build.
+The AI-powered datasheet extraction feature works on GitHub Pages **without any special configuration**. The feature supports multiple AI services and uses user-provided API keys stored in the browser, so no API keys are exposed in the build.
+
+## Supported AI Services
+
+All three services support native PDF processing for datasheet extraction:
+
+| Service | API Key URL | Features |
+|---------|-------------|----------|
+| **Google Gemini** | https://aistudio.google.com/apikey | Free tier available, fast |
+| **Anthropic Claude** | https://console.anthropic.com/settings/keys | High quality responses |
+| **OpenAI ChatGPT** | https://platform.openai.com/api-keys | GPT-4o with PDF support |
 
 ## ✅ No Configuration Required
 
@@ -10,8 +20,8 @@ The AI-powered pin name extraction feature works on GitHub Pages **without any s
 
 - ✅ No API keys are embedded in the build
 - ✅ Users enter their own API keys in the UI
-- ✅ API keys are stored securely in browser sessionStorage (cleared when tab is closed)
-- ✅ Model preferences persist in localStorage across sessions
+- ✅ Users choose storage method: sessionStorage (secure) or localStorage (persistent)
+- ✅ Each AI service has independent API key and model settings
 - ✅ No backend server required
 - ✅ No environment variables needed for production
 
@@ -27,7 +37,7 @@ The AI-powered pin name extraction feature works on GitHub Pages **without any s
 2. **Push your code:**
    ```bash
    git add .
-   git commit -m "Add AI pin name extraction feature"
+   git commit -m "Add AI datasheet extraction feature"
    git push origin main
    ```
 
@@ -55,105 +65,95 @@ The AI-powered pin name extraction feature works on GitHub Pages **without any s
 
 ## User Configuration (After Deployment)
 
-Once your site is deployed, users need to configure their own API key:
+Once your site is deployed, users need to configure their AI service:
 
-### Step 1: Get a Free API Key
-
-1. Visit: https://aistudio.google.com/apikey
-2. Sign in with your Google account
-3. Click **Create API Key**
-4. Copy the API key (starts with `AIza...`)
-
-### Step 2: Enter API Key in the Application
+### Step 1: Open AI Settings
 
 1. Open your deployed GitHub Pages site
-2. Open any Integrated Circuit component's properties:
-   - Click the **Component** tool (or press `C`)
-   - Double-click any Integrated Circuit component
-   - Or press `A` to open properties for the selected component
+2. Go to **File → AI Settings** in the menu
 
-3. In the Component Properties dialog:
-   - Look for the **Pin Name** column header
-   - You'll see an API key input field (password field)
-   - Paste your API key
-   - Click **Save API Key**
+### Step 2: Configure AI Service
 
-4. The key is now saved in your browser's sessionStorage for this session (it will be cleared when you close the browser tab)
+In the AI Settings dialog:
 
-### Step 3: Use the Feature
+1. **Choose AI Provider:** Select from Google Gemini, Anthropic Claude, or OpenAI ChatGPT
+2. **Enter API Key:** Paste your API key for the selected provider
+3. **Select Model:** Choose the model that fits your needs (faster vs more capable)
+4. **Choose Storage Method:**
+   - **Session Storage:** More secure - cleared when you close the browser tab
+   - **Local Storage:** More convenient - persists across sessions
+5. Click **Save Settings**
+
+### Step 3: Get Your API Key
+
+- **Google Gemini:** https://aistudio.google.com/apikey (free tier available)
+- **Anthropic Claude:** https://console.anthropic.com/settings/keys
+- **OpenAI ChatGPT:** https://platform.openai.com/api-keys
+
+### Step 4: Use the Feature
 
 1. With a component's properties open, ensure you have:
    - Uploaded a PDF datasheet file, OR
-   - Entered a datasheet URL
+   - Linked a datasheet in the project directory
 
-2. Click the **Fetch Pin Names** button (green button below the API key field)
+2. Click the **Extract Datasheet Information** button
 
-3. The AI will extract pin names from the datasheet and populate the table
+3. The AI will extract pin names and component properties from the datasheet
 
 ## Security Features
 
 ✅ **No API keys in code:** The build contains no API keys  
 ✅ **User-specific keys:** Each user uses their own API key and quota  
-✅ **Session-based storage:** API keys stored in sessionStorage (automatically cleared when tab closes)  
-✅ **Persistent preferences:** Model selection stored in localStorage (persists across sessions)  
-✅ **Free tier available:** Google provides free API keys with generous limits  
+✅ **Flexible storage:** Users choose between sessionStorage (secure) or localStorage (convenient)  
+✅ **Isolated keys:** Each AI service has its own key stored separately  
+✅ **No backend required:** All processing happens client-side via API calls  
 
 ## Troubleshooting
 
-### "Gemini API key is not configured" Error
+### "API key not configured" Error
 
-**Solution:** Enter your API key in the Component Properties dialog as described above.
+**Solution:** Open **File → AI Settings** and enter your API key for the selected provider.
 
-### API Key Not Persisting
+### API Key Not Persisting (Session Storage)
 
-**Note:** API keys are stored in sessionStorage, which means they are intentionally cleared when you close the browser tab. This is a security feature. You will need to re-enter your API key when you start a new session.
+**Note:** If you chose Session Storage, API keys are intentionally cleared when you close the browser tab. This is a security feature. Switch to Local Storage if you want persistence.
 
-**If the key is not saving at all, check:**
-- Browser allows sessionStorage (not blocked by settings)
-- Browser settings allow site data storage
-- Try saving the key again
-
-### "Failed to fetch pin names" Error
+### "Failed to extract" Error
 
 **Possible causes:**
 1. **Invalid API key:** Make sure you copied the entire key correctly
-2. **API quota exceeded:** Check your Google AI Studio dashboard
+2. **API quota exceeded:** Check your provider's dashboard
 3. **Network issues:** Check browser console for CORS or network errors
 4. **PDF format issues:** Some PDFs may not be parseable
 
 **Solutions:**
-- Verify your API key at https://aistudio.google.com/apikey
+- Verify your API key at your provider's website
 - Check your API usage/quota
-- Try uploading the PDF file instead of using a URL
+- Try a different AI provider
 - Check browser console for detailed error messages
 
-### Feature Not Working After Deployment
+### CORS Errors with Claude
 
-**Verify:**
-1. The build completed successfully (check Actions tab)
-2. You're accessing the deployed site (not localhost)
-3. Browser console shows no JavaScript errors
-4. The Component Properties dialog shows the API key input field
+**Note:** Claude's API requires a special header for browser access. The application includes the `anthropic-dangerous-direct-browser-access` header, but this may require Anthropic to enable browser access for your API key.
 
 ## Development vs Production
 
 ### Development (Local)
-- Use the UI to enter API key (same as production)
-- API key is stored in sessionStorage (cleared when tab closes)
-- Model preference is stored in localStorage (persists)
+- Use the UI to configure AI service (same as production)
+- Test with any supported provider
 
 ### Production (GitHub Pages)
-- Users must enter API key in the UI
+- Users configure their own AI service in the UI
 - No `.env` file needed (and shouldn't be committed)
 - Works automatically after deployment
-- API keys are session-based for security
 
 ## Best Practices
 
-1. **Documentation:** Add a note in your README about the AI feature
-2. **User instructions:** Consider adding a tooltip or help text in the UI
-3. **Error handling:** The app already shows helpful error messages
-4. **Privacy:** Remind users that API keys are stored in sessionStorage (cleared on tab close) for security
+1. **Use Session Storage on shared computers** for better security
+2. **Use Local Storage on personal devices** for convenience
+3. **Consider API costs** when choosing providers and models
+4. **Rotate API keys periodically** for security
+5. **Use API key restrictions** when available from your provider
 
 ## Summary
 
@@ -163,9 +163,9 @@ Once your site is deployed, users need to configure their own API key:
 - ✅ Feature works immediately after deployment
 
 **For End Users:**
-- ✅ Get free API key from Google
-- ✅ Enter key in Component Properties dialog
-- ✅ Start using the feature
+- ✅ Choose your preferred AI service
+- ✅ Get API key from provider
+- ✅ Configure in File → AI Settings
+- ✅ Choose your security preference (session vs local storage)
 
 The AI feature is designed to work seamlessly on GitHub Pages without exposing any secrets!
-

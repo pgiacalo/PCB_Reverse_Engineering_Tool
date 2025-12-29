@@ -83,14 +83,17 @@ For AI-powered pin name extraction from datasheets, you can configure the API ke
 3. Enter your Google Gemini API key and click "Save API Key"
 4. The key is stored in your browser's sessionStorage (secure, not exposed in code or build)
 
-Get your free API key from: https://aistudio.google.com/apikey
+**Supported AI Services:**
+- **Google Gemini** - https://aistudio.google.com/apikey
+- **Anthropic Claude** - https://console.anthropic.com/settings/keys  
+- **OpenAI ChatGPT** - https://platform.openai.com/api-keys
+
+All three services support native PDF processing for datasheet extraction.
 
 **How API Keys Work:**
-- **API Key Storage**: The Gemini API key is stored in browser `sessionStorage`, which means:
-  - The key is automatically cleared when you close the browser tab or window
-  - You'll need to re-enter your API key each time you start a new session
-  - This provides better security than persistent storage
-- **Model Preference**: Your selected Gemini model is stored in `localStorage` and persists across sessions
+- **Storage Choice**: You can choose between `sessionStorage` (cleared on tab close, more secure) or `localStorage` (persistent, more convenient)
+- **Service Selection**: Each AI service has its own API key and model preference stored separately
+- **Model Selection**: Each service offers multiple models with different speed/capability tradeoffs
 - **Security**: API keys are never bundled into the build or exposed in the application code
 - Environment variables are NOT used to prevent API keys from being exposed in production builds
 - Never commit API keys to the repository

@@ -59,9 +59,12 @@ The tool includes AI-powered features for extracting component information from 
 - **Automatic pin name extraction** from datasheet PDFs
 - **Component property extraction** (voltage, current, temperature, IC type, package type, etc.)
 
-To use these features, simply go to **File → AI Settings** in the application and enter your Google Gemini API key (get a free key from [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+To use these features, go to **File → AI Settings** and configure your preferred AI service:
+- **Google Gemini** - [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- **Anthropic Claude** - [https://console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- **OpenAI ChatGPT** - [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 
-**Security Note:** API keys are stored in your browser's sessionStorage (automatically cleared when you close the tab) and are never exposed in code or shared with anyone. The model preference is saved in localStorage and persists across sessions.
+**Security Note:** You choose how API keys are stored: `sessionStorage` (cleared when you close the tab, more secure) or `localStorage` (persists across sessions, more convenient). API keys are never exposed in code or shared with anyone.
 
 ## For Developers
 

@@ -1462,7 +1462,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>About</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  A specialized tool useful for both reverse engineering and troubleshooting electronics by tracing and documenting circuit connections from PCB images. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
+                  A specialized tool useful for both reverse engineering and troubleshooting printed circuit boards (PCBs) by tracing and documenting circuit connections from photographs. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   This tool can assist in troubleshooting by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
@@ -1472,7 +1472,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Technologies</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  Built with <strong>TypeScript</strong> and <strong>React</strong>, with <strong>Gemini AI</strong> integration for intelligent pin name extraction from datasheets. The application runs entirely client-side in the browser, providing a responsive, interactive drawing experience with no backend server requirements.
+                  Built with <strong>TypeScript</strong> and <strong>React</strong>, with <strong>AI integration</strong> for intelligent extraction of electronic component information from datasheets. The application runs entirely client-side in the browser, providing a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 

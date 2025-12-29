@@ -34,44 +34,27 @@ import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 import { isComponentPolarized } from '../../utils/components';
 
-// Google Gemini API configuration
-// API key source: User-provided key from sessionStorage only
+// AI Service configuration - supports multiple providers (Gemini, Claude, OpenAI)
+// API keys are stored in user-selected storage (sessionStorage or localStorage)
 // This ensures no API key is exposed in production builds
-// Note: Environment variables are NOT used to prevent API keys from being bundled into the build
-// sessionStorage is used instead of localStorage for better security:
-// - API key is automatically cleared when the browser tab/window is closed
-// - Reduces risk of key exposure from persistent storage
-const getGeminiApiKey = (): string | null => {
-  // Only use sessionStorage (user-provided, secure for production)
-  // Never use environment variables as they get bundled into the JavaScript build
-  if (typeof window !== 'undefined') {
-    const userKey = sessionStorage.getItem('geminiApiKey');
-    if (userKey && userKey.trim()) {
-      return userKey.trim();
-    }
-  }
-  return null;
-};
+import {
+  getCurrentService,
+  getAIConfig,
+  saveAIConfig,
+  setCurrentProvider,
+  getApiKeyStorageType,
+  setApiKeyStorageType,
+  migrateFromLegacyStorage,
+  AVAILABLE_PROVIDERS,
+  SERVICE_INFO,
+  type AIServiceProvider,
+  type APIKeyStorageType,
+} from '../../utils/aiServices';
 
-// Get Gemini model from localStorage, default to gemini-2.5-flash-lite
-const getGeminiModel = (): string => {
-  if (typeof window !== 'undefined') {
-    const savedModel = localStorage.getItem('geminiModel');
-    if (savedModel) {
-      return savedModel;
-    }
-  }
-  return 'gemini-2.5-flash-lite'; // Default model
-};
-
-
-const getGeminiApiUrl = (): string | null => {
-  const apiKey = getGeminiApiKey();
-  const model = getGeminiModel();
-  return apiKey 
-    ? `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`
-    : null;
-};
+// Run migration on module load to preserve any existing Gemini API keys
+if (typeof window !== 'undefined') {
+  migrateFromLegacyStorage();
+}
 
 // Helper function to get default abbreviation from component type
 const getDefaultAbbreviation = (componentType: string): string => {
@@ -172,46 +155,68 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
   const [showApiKeyInstructions, setShowApiKeyInstructions] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
-  const [geminiRawResponse, setGeminiRawResponse] = useState<string | null>(null);
+  const [aiRawResponse, setAiRawResponse] = useState<string | null>(null);
   const [showResponseDialog, setShowResponseDialog] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string>('');
+  
+  // AI Service state - supports multiple providers
+  const [selectedProvider, setSelectedProvider] = useState<AIServiceProvider>(() => {
+    if (typeof window !== 'undefined') {
+      return getAIConfig().provider;
+    }
+    return 'gemini';
+  });
+  
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('geminiApiKey') || '';
+      const service = getCurrentService();
+      return service.getApiKey() || '';
     }
     return '';
   });
-  // Gemini model selection state
-  const [geminiModelInput, setGeminiModelInput] = useState(() => {
+  
+  // Model selection state
+  const [modelInput, setModelInput] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('geminiModel') || 'gemini-2.5-flash-lite';
+      const service = getCurrentService();
+      return service.getModel();
     }
-    return 'gemini-2.5-flash-lite';
+    return 'gemini-2.0-flash';
   });
   
-  // Check if API key exists in sessionStorage (for Remove button state)
+  // API key storage type (sessionStorage or localStorage)
+  const [storageType, setStorageType] = useState<APIKeyStorageType>(() => {
+    if (typeof window !== 'undefined') {
+      return getApiKeyStorageType();
+    }
+    return 'sessionStorage';
+  });
+  
+  // Check if API key exists for current provider (for Remove button state)
   const [hasStoredApiKey, setHasStoredApiKey] = useState(() => {
     if (typeof window !== 'undefined') {
-      return !!sessionStorage.getItem('geminiApiKey');
+      return getCurrentService().hasApiKey();
     }
     return false;
   });
 
-  // Handle external trigger to show Gemini settings dialog
+  // Handle external trigger to show AI settings dialog
   useEffect(() => {
     if (showGeminiSettingsDialog) {
-      // Reload API key from sessionStorage and model from localStorage when dialog opens
+      // Reload all settings when dialog opens
       if (typeof window !== 'undefined') {
-        const savedKey = sessionStorage.getItem('geminiApiKey');
-        const savedModel = localStorage.getItem('geminiModel');
-        if (savedKey) {
-          setApiKeyInput(savedKey);
-        }
-        if (savedModel) {
-          setGeminiModelInput(savedModel);
-        }
+        const config = getAIConfig();
+        setSelectedProvider(config.provider);
+        setStorageType(config.apiKeyStorageType);
+        
+        const service = getCurrentService();
+        const savedKey = service.getApiKey();
+        const savedModel = service.getModel();
+        
+        setApiKeyInput(savedKey || '');
+        setModelInput(savedModel);
         setHasStoredApiKey(!!savedKey);
       }
       // Use a small timeout to ensure state updates properly
@@ -222,12 +227,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
   }, [showGeminiSettingsDialog]);
 
-  // Update hasStoredApiKey when apiKeyInput changes or when checking sessionStorage
+  // Update hasStoredApiKey when provider changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setHasStoredApiKey(!!sessionStorage.getItem('geminiApiKey') || !!apiKeyInput.trim());
+      const service = getCurrentService();
+      setHasStoredApiKey(service.hasApiKey() || !!apiKeyInput.trim());
     }
-  }, [apiKeyInput]);
+  }, [apiKeyInput, selectedProvider]);
 
   // Load custom prompt from component when editor opens
   useEffect(() => {
@@ -245,48 +251,76 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     }
   }, [componentEditor?.id, componentsTop, componentsBottom]); // Reload when component ID changes
 
-  // Function to save API key and model - moved to top level (before early return)
+  // Function to save API key, model, and settings - moved to top level (before early return)
   const handleSaveApiKey = () => {
-    if (apiKeyInput.trim()) {
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('geminiApiKey', apiKeyInput.trim());
-        localStorage.setItem('geminiModel', geminiModelInput);
-      }
-      setHasStoredApiKey(true);
-      setInfoDialog({
-        visible: true,
-        title: 'API Key and Model Saved',
-        message: `API key and model (${geminiModelInput}) saved! You can now use the "Extract Datasheet Information" feature. Note: The API key will be cleared when you close the browser tab.`,
-        type: 'success',
+    if (typeof window !== 'undefined') {
+      // Save the provider and storage type preference
+      saveAIConfig({
+        provider: selectedProvider,
+        model: modelInput,
+        apiKeyStorageType: storageType,
       });
-    } else {
-      if (typeof window !== 'undefined') {
-        sessionStorage.removeItem('geminiApiKey');
-        localStorage.setItem('geminiModel', geminiModelInput); // Still save model even if removing key
+      setApiKeyStorageType(storageType);
+      setCurrentProvider(selectedProvider);
+      
+      const service = getCurrentService();
+      const serviceInfo = SERVICE_INFO[selectedProvider];
+      
+      if (apiKeyInput.trim()) {
+        service.saveApiKey(apiKeyInput.trim(), storageType);
+        service.saveModel(modelInput);
+        setHasStoredApiKey(true);
+        
+        const storageNote = storageType === 'sessionStorage' 
+          ? 'Note: The API key will be cleared when you close the browser tab.'
+          : 'Note: The API key will persist until you remove it.';
+        
+        setInfoDialog({
+          visible: true,
+          title: 'Settings Saved',
+          message: `${serviceInfo.name} API key and model (${modelInput}) saved! You can now use the "Extract Datasheet Information" feature. ${storageNote}`,
+          type: 'success',
+        });
+      } else {
+        service.removeApiKey();
+        service.saveModel(modelInput); // Still save model even if removing key
+        setHasStoredApiKey(false);
+        setInfoDialog({
+          visible: true,
+          title: 'API Key Removed',
+          message: 'API key removed. Model preference saved.',
+          type: 'info',
+        });
       }
-      setHasStoredApiKey(false);
-      setInfoDialog({
-        visible: true,
-        title: 'API Key Removed',
-        message: 'API key removed. Model preference saved.',
-        type: 'info',
-      });
     }
   };
 
-  // Function to remove API key from sessionStorage
+  // Function to remove API key
   const handleRemoveApiKey = () => {
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('geminiApiKey');
+      const service = getCurrentService();
+      service.removeApiKey();
     }
     setApiKeyInput(''); // Clear the input field
     setHasStoredApiKey(false); // Update state
     setInfoDialog({
       visible: true,
       title: 'API Key Removed',
-      message: 'API key has been removed from browser session storage. You will need to enter it again to use AI features.',
+      message: 'API key has been removed. You will need to enter it again to use AI features.',
       type: 'info',
     });
+  };
+  
+  // Function to handle provider change
+  const handleProviderChange = (provider: AIServiceProvider) => {
+    setSelectedProvider(provider);
+    setCurrentProvider(provider);
+    
+    // Load the API key and model for the new provider
+    const service = getCurrentService();
+    setApiKeyInput(service.getApiKey() || '');
+    setModelInput(service.getModel());
+    setHasStoredApiKey(service.hasApiKey());
   };
 
   // Function to find components by designator
@@ -505,7 +539,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
   if (!componentEditor || !componentEditor.visible) {
     return (
       <>
-        {/* API Key Dialog - shown when user tries to extract without API key or from Settings menu */}
+        {/* AI Settings Dialog - shown when user tries to extract without API key or from Settings menu */}
         {showApiKeyDialog && (
           <div
             style={{
@@ -532,8 +566,10 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 backgroundColor: '#2b2b31',
                 borderRadius: 8,
                 padding: '24px',
-                minWidth: '500px',
-                maxWidth: '600px',
+                minWidth: '520px',
+                maxWidth: '620px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
                 border: '1px solid #1f1f24',
               }}
@@ -541,7 +577,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             >
               <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-                  Google Gemini API Configuration
+                  AI Service Configuration
                 </h3>
                 <button
                   onClick={() => {
@@ -568,43 +604,18 @@ Analyze the attached PDF datasheet and extract the information according to the 
               </div>
               
               <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff' }}>
-                  Benefits of Adding Your API Key:
-                </p>
                 <p style={{ margin: '0 0 16px 0' }}>
-                  Extract datasheet information for components — avoiding manual data entry
+                  Extract datasheet information for components — avoiding manual data entry. Choose your preferred AI service below.
                 </p>
                 
-                <div style={{ marginBottom: '12px' }}>
+                {/* AI Service Provider Selection */}
+                <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
-                    Enter Your API Key:
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="Paste your Gemini API key here"
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      fontSize: '13px',
-                      border: '1px solid #555',
-                      borderRadius: '4px',
-                      background: '#1f1f24',
-                      color: '#fff',
-                      boxSizing: 'border-box'
-                    }}
-                    autoFocus
-                  />
-                </div>
-                
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
-                    Select Gemini Model:
+                    AI Service Provider:
                   </label>
                   <select
-                    value={geminiModelInput}
-                    onChange={(e) => setGeminiModelInput(e.target.value)}
+                    value={selectedProvider}
+                    onChange={(e) => handleProviderChange(e.target.value as AIServiceProvider)}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -617,42 +628,120 @@ Analyze the attached PDF datasheet and extract the information according to the 
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Lightweight, Fast)</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Balanced)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro (High Quality, Slower)</option>
-                    <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
-                    <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy High Quality)</option>
+                    {AVAILABLE_PROVIDERS.map(provider => (
+                      <option key={provider} value={provider}>
+                        {SERVICE_INFO[provider].name}
+                      </option>
+                    ))}
                   </select>
                   <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px', lineHeight: '1.4' }}>
-                    Choose the model based on your needs: Flash models are faster and use fewer tokens, while Pro models provide higher quality responses.
+                    {SERVICE_INFO[selectedProvider].description}
                   </p>
                 </div>
                 
-                <div style={{ marginTop: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
-                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff', fontSize: '13px' }}>
-                    Storage & Security Information:
+                {/* API Key Input */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                    {SERVICE_INFO[selectedProvider].name} API Key:
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder={SERVICE_INFO[selectedProvider].apiKeyPlaceholder}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      background: '#1f1f24',
+                      color: '#fff',
+                      boxSizing: 'border-box'
+                    }}
+                    autoFocus
+                  />
+                  <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px' }}>
+                    Get your API key from:{' '}
+                    <a 
+                      href={SERVICE_INFO[selectedProvider].apiKeyHelpUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: '#4CAF50' }}
+                    >
+                      {SERVICE_INFO[selectedProvider].apiKeyHelpUrl}
+                    </a>
                   </p>
-                  <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                    Your API key will be stored in your browser's <strong>sessionStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+                </div>
+                
+                {/* Model Selection */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                    Model:
+                  </label>
+                  <select
+                    value={modelInput}
+                    onChange={(e) => setModelInput(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      border: '1px solid #555',
+                      borderRadius: '4px',
+                      background: '#1f1f24',
+                      color: '#fff',
+                      boxSizing: 'border-box',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {SERVICE_INFO[selectedProvider].models.map(model => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} {model.description ? `(${model.description})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Storage Type Selection */}
+                <div style={{ marginBottom: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                    API Key Storage:
+                  </label>
+                  <div style={{ display: 'flex', gap: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ddd', fontSize: '13px' }}>
+                      <input
+                        type="radio"
+                        name="storageType"
+                        value="sessionStorage"
+                        checked={storageType === 'sessionStorage'}
+                        onChange={() => setStorageType('sessionStorage')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      Session Storage
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ddd', fontSize: '13px' }}>
+                      <input
+                        type="radio"
+                        name="storageType"
+                        value="localStorage"
+                        checked={storageType === 'localStorage'}
+                        onChange={() => setStorageType('localStorage')}
+                        style={{ cursor: 'pointer' }}
+                      />
+                      Local Storage
+                    </label>
+                  </div>
+                  <p style={{ margin: '8px 0 0 0', color: storageType === 'sessionStorage' ? '#4CAF50' : '#ffaa00', fontSize: '12px', lineHeight: '1.4' }}>
+                    {storageType === 'sessionStorage' 
+                      ? '✓ Session Storage: API key is cleared when you close the browser tab (more secure)'
+                      : '⚠ Local Storage: API key persists until you remove it (more convenient)'}
                   </p>
-                  <p style={{ margin: '0 0 8px 0', color: '#4CAF50', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                    ✓ Session-Based Security:
-                  </p>
-                  <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                    <li>API key is automatically cleared when you close the browser tab</li>
-                    <li>Not persisted across browser sessions</li>
-                    <li>Reduces risk of key exposure from persistent storage</li>
-                  </ul>
-                  <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                    ⚠️ Security Notes:
-                  </p>
-                  <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                    <li>sessionStorage is accessible via browser DevTools</li>
-                    <li>Do not use on shared or public computers</li>
-                    <li>The key is stored in plain text (not encrypted)</li>
-                  </ul>
-                  <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
-                    For maximum security, consider using API key restrictions in Google Cloud Console and regularly rotating your keys.
+                </div>
+                
+                {/* Security Notes */}
+                <div style={{ padding: '10px', background: '#1a1a1f', borderRadius: '4px', border: '1px solid #333' }}>
+                  <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4' }}>
+                    <strong style={{ color: '#ffaa00' }}>⚠️ Security:</strong> API keys are stored in plain text in browser storage and are accessible via DevTools. Do not use on shared computers. Consider using API key restrictions from your provider.
                   </p>
                 </div>
               </div>
@@ -672,9 +761,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     fontWeight: 600,
                     opacity: !hasStoredApiKey ? 0.5 : 1,
                   }}
-                  title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser session storage'}
+                  title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key'}
                 >
-                  Remove API Key
+                  Remove Key
                 </button>
                 <div style={{ display: 'flex', gap: '8px' }}>
                 <button
@@ -712,7 +801,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     fontWeight: 600,
                   }}
                 >
-                  Save API Key
+                  Save Settings
                 </button>
                 </div>
               </div>
@@ -1192,11 +1281,10 @@ Analyze the attached PDF datasheet and extract the information according to the 
 
   // Function to fetch and parse pin names from datasheet - moved to top level
   const handleFetchPinNames = async () => {
-    // Check if API key is configured
-    const apiKey = getGeminiApiKey();
-    const apiUrl = getGeminiApiUrl();
+    // Check if API key is configured for current service
+    const service = getCurrentService();
     
-    if (!apiKey || !apiUrl) {
+    if (!service.hasApiKey()) {
       setShowApiKeyDialog(true);
       return;
     }
@@ -1317,93 +1405,31 @@ Analyze the attached PDF datasheet and extract the information according to the 
         prompt = buildDefaultPrompt(fieldsToExtract);
       }
 
-      // Call Google Gemini API with PDF as inline data
-      const geminiResponse = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              {
-                text: prompt
-              },
-              {
-                inlineData: {
-                  mimeType: 'application/pdf',
-                  data: base64Data
-                }
-              }
-            ]
-          }]
-        })
+      // Call AI service with PDF
+      const aiService = getCurrentService();
+      const serviceInfo = SERVICE_INFO[getAIConfig().provider];
+      
+      const aiResponse = await aiService.extractFromPDF({
+        prompt,
+        pdfBase64: base64Data,
+        mimeType: 'application/pdf',
       });
 
-      if (!geminiResponse.ok) {
-        const errorText = await geminiResponse.text();
-        let errorMessage = `Gemini API error: ${geminiResponse.status} ${geminiResponse.statusText}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson.error && errorJson.error.message) {
-            // Clean up error message - remove base64 data if present (it's just noise)
-            let cleanMessage = errorJson.error.message;
-            // If message contains a very long base64-like string, truncate it
-            if (cleanMessage.length > 500) {
-              // Look for base64-like patterns and truncate them
-              cleanMessage = cleanMessage.replace(/"([A-Za-z0-9+/]{100,})"/g, (_match: string, base64: string) => {
-                return `"[Base64 data truncated - ${base64.length} characters]"`;
-              });
-            }
-            errorMessage += `.\n\n${cleanMessage}`;
-          }
-          // Include error details if available (but truncate any long base64 strings)
-          if (errorJson.error && errorJson.error.details) {
-            let detailsStr = JSON.stringify(errorJson.error.details, null, 2);
-            // Truncate any very long base64-like strings in details
-            detailsStr = detailsStr.replace(/"([A-Za-z0-9+/]{100,})"/g, (_match: string, base64: string) => {
-              return `"[Base64 data truncated - ${base64.length} characters]"`;
-            });
-            errorMessage += `\n\nDetails:\n${detailsStr}`;
-          }
-        } catch {
-          // If JSON parsing fails, include the error text but truncate if very long
-          if (errorText.length > 1000) {
-            errorMessage += `.\n\n${errorText.substring(0, 1000)}... [truncated]`;
-          } else {
-            errorMessage += `.\n\n${errorText}`;
-          }
-        }
-        throw new Error(errorMessage);
+      if (!aiResponse.success) {
+        setAiRawResponse(null);
+        throw new Error(aiResponse.error || `${serviceInfo.name} API error`);
       }
 
-      const geminiData = await geminiResponse.json();
+      let responseText = aiResponse.text || '';
       
-      // Extract the response text
-      let responseText = '';
-      if (geminiData.candidates && geminiData.candidates[0]) {
-        // Check for finish reason (safety/content filters)
-        if (geminiData.candidates[0].finishReason && 
-            geminiData.candidates[0].finishReason !== 'STOP') {
-          throw new Error(`Gemini API response blocked: ${geminiData.candidates[0].finishReason}`);
-        }
-        
-        if (geminiData.candidates[0].content && geminiData.candidates[0].content.parts) {
-          const parts = geminiData.candidates[0].content.parts;
-          if (parts && parts[0] && parts[0].text) {
-            responseText = parts[0].text.trim();
-          }
-        }
-      }
-
       if (!responseText) {
-        setGeminiRawResponse(null); // Clear any previous response
-        throw new Error('No response text from Gemini API. The API may have returned an empty response.');
+        setAiRawResponse(null);
+        throw new Error(`No response text from ${serviceInfo.name} API. The API may have returned an empty response.`);
       }
 
       // Store raw response for error display
       const rawResponseText = responseText;
-      setGeminiRawResponse(rawResponseText);
+      setAiRawResponse(rawResponseText);
 
       // Parse JSON response
       // Remove markdown code blocks if present (Gemini sometimes wraps in ```json or ```)
@@ -1680,7 +1706,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
           type: 'success',
         });
         // Clear raw response on success
-        setGeminiRawResponse(null);
+        setAiRawResponse(null);
       }
     } catch (error) {
       console.error('Error fetching pin names:', error);
@@ -1689,7 +1715,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         title: 'Extraction Failed',
         message: `Failed to extract information: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`,
         type: 'info',
-        onShowResponse: geminiRawResponse ? () => setShowResponseDialog(true) : undefined,
+        onShowResponse: aiRawResponse ? () => setShowResponseDialog(true) : undefined,
       });
     } finally {
       setIsFetchingPinNames(false);
@@ -3010,7 +3036,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       />
     </div>
     
-    {/* API Key Dialog - shown when user tries to extract without API key */}
+    {/* AI Settings Dialog - shown when user tries to extract without API key */}
     {showApiKeyDialog && (
       <div
         style={{
@@ -3037,8 +3063,10 @@ Analyze the attached PDF datasheet and extract the information according to the 
             backgroundColor: '#2b2b31',
             borderRadius: 8,
             padding: '24px',
-            minWidth: '500px',
-            maxWidth: '600px',
+            minWidth: '520px',
+            maxWidth: '620px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
             border: '1px solid #1f1f24',
           }}
@@ -3046,10 +3074,13 @@ Analyze the attached PDF datasheet and extract the information according to the 
         >
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              Google Gemini API Configuration
+              AI Service Configuration
             </h3>
             <button
-              onClick={() => setShowApiKeyDialog(false)}
+              onClick={() => {
+                setShowApiKeyDialog(false);
+                onGeminiSettingsDialogClose?.();
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -3070,43 +3101,18 @@ Analyze the attached PDF datasheet and extract the information according to the 
           </div>
           
           <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-            <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff' }}>
-              Benefits of Adding Your API Key:
-            </p>
             <p style={{ margin: '0 0 16px 0' }}>
-              Extract datasheet information for components — avoiding manual data entry
+              Extract datasheet information for components — avoiding manual data entry. Choose your preferred AI service below.
             </p>
             
-            <div style={{ marginBottom: '12px' }}>
+            {/* AI Service Provider Selection */}
+            <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
-                Enter Your API Key:
-              </label>
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-                placeholder="Paste your Gemini API key here"
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  fontSize: '13px',
-                  border: '1px solid #555',
-                  borderRadius: '4px',
-                  background: '#1f1f24',
-                  color: '#fff',
-                  boxSizing: 'border-box'
-                }}
-                autoFocus
-              />
-            </div>
-            
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
-                Select Gemini Model:
+                AI Service Provider:
               </label>
               <select
-                value={geminiModelInput}
-                onChange={(e) => setGeminiModelInput(e.target.value)}
+                value={selectedProvider}
+                onChange={(e) => handleProviderChange(e.target.value as AIServiceProvider)}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -3119,42 +3125,120 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   cursor: 'pointer'
                 }}
               >
-                <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Lightweight, Fast)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Fast, Balanced)</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro (High Quality, Slower)</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy Fast)</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro (Legacy High Quality)</option>
+                {AVAILABLE_PROVIDERS.map(provider => (
+                  <option key={provider} value={provider}>
+                    {SERVICE_INFO[provider].name}
+                  </option>
+                ))}
               </select>
               <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px', lineHeight: '1.4' }}>
-                Choose the model based on your needs: Flash models are faster and use fewer tokens, while Pro models provide higher quality responses.
+                {SERVICE_INFO[selectedProvider].description}
               </p>
             </div>
             
-            <div style={{ marginTop: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
-              <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#fff', fontSize: '13px' }}>
-                Storage & Security Information:
+            {/* API Key Input */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                {SERVICE_INFO[selectedProvider].name} API Key:
+              </label>
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder={SERVICE_INFO[selectedProvider].apiKeyPlaceholder}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  background: '#1f1f24',
+                  color: '#fff',
+                  boxSizing: 'border-box'
+                }}
+                autoFocus
+              />
+              <p style={{ margin: '6px 0 0 0', color: '#aaa', fontSize: '12px' }}>
+                Get your API key from:{' '}
+                <a 
+                  href={SERVICE_INFO[selectedProvider].apiKeyHelpUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ color: '#4CAF50' }}
+                >
+                  {SERVICE_INFO[selectedProvider].apiKeyHelpUrl}
+                </a>
               </p>
-              <p style={{ margin: '0 0 8px 0', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                Your API key will be stored in your browser's <strong>sessionStorage</strong> under the key <code style={{ background: '#2b2b31', padding: '2px 4px', borderRadius: '2px', color: '#4CAF50' }}>'geminiApiKey'</code>.
+            </div>
+            
+            {/* Model Selection */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                Model:
+              </label>
+              <select
+                value={modelInput}
+                onChange={(e) => setModelInput(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  background: '#1f1f24',
+                  color: '#fff',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer'
+                }}
+              >
+                {SERVICE_INFO[selectedProvider].models.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} {model.description ? `(${model.description})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Storage Type Selection */}
+            <div style={{ marginBottom: '16px', padding: '12px', background: '#1f1f24', borderRadius: '4px', border: '1px solid #444' }}>
+              <label style={{ display: 'block', marginBottom: '8px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
+                API Key Storage:
+              </label>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ddd', fontSize: '13px' }}>
+                  <input
+                    type="radio"
+                    name="storageType2"
+                    value="sessionStorage"
+                    checked={storageType === 'sessionStorage'}
+                    onChange={() => setStorageType('sessionStorage')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  Session Storage
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#ddd', fontSize: '13px' }}>
+                  <input
+                    type="radio"
+                    name="storageType2"
+                    value="localStorage"
+                    checked={storageType === 'localStorage'}
+                    onChange={() => setStorageType('localStorage')}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  Local Storage
+                </label>
+              </div>
+              <p style={{ margin: '8px 0 0 0', color: storageType === 'sessionStorage' ? '#4CAF50' : '#ffaa00', fontSize: '12px', lineHeight: '1.4' }}>
+                {storageType === 'sessionStorage' 
+                  ? '✓ Session Storage: API key is cleared when you close the browser tab (more secure)'
+                  : '⚠ Local Storage: API key persists until you remove it (more convenient)'}
               </p>
-              <p style={{ margin: '0 0 8px 0', color: '#4CAF50', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                ✓ Session-Based Security:
-              </p>
-              <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                <li>API key is automatically cleared when you close the browser tab</li>
-                <li>Not persisted across browser sessions</li>
-                <li>Reduces risk of key exposure from persistent storage</li>
-              </ul>
-              <p style={{ margin: '0 0 8px 0', color: '#ffaa00', fontSize: '12px', lineHeight: '1.5', fontWeight: 600 }}>
-                ⚠️ Security Notes:
-              </p>
-              <ul style={{ margin: '0 0 8px 0', paddingLeft: '20px', color: '#ddd', fontSize: '12px', lineHeight: '1.5' }}>
-                <li>sessionStorage is accessible via browser DevTools</li>
-                <li>Do not use on shared or public computers</li>
-                <li>The key is stored in plain text (not encrypted)</li>
-              </ul>
-              <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4', fontStyle: 'italic' }}>
-                For maximum security, consider using API key restrictions in Google Cloud Console and regularly rotating your keys.
+            </div>
+            
+            {/* Security Notes */}
+            <div style={{ padding: '10px', background: '#1a1a1f', borderRadius: '4px', border: '1px solid #333' }}>
+              <p style={{ margin: '0', color: '#aaa', fontSize: '11px', lineHeight: '1.4' }}>
+                <strong style={{ color: '#ffaa00' }}>⚠️ Security:</strong> API keys are stored in plain text in browser storage and are accessible via DevTools. Do not use on shared computers. Consider using API key restrictions from your provider.
               </p>
             </div>
           </div>
@@ -3174,9 +3258,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 fontWeight: 600,
                 opacity: !hasStoredApiKey ? 0.5 : 1,
               }}
-              title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key from browser session storage'}
+              title={!hasStoredApiKey ? 'No API key stored' : 'Remove API key'}
             >
-              Remove API Key
+              Remove Key
             </button>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -3213,17 +3297,17 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   fontSize: '14px',
                   fontWeight: 600,
                 }}
-                >
-                  Save API Key
-                </button>
-              </div>
+              >
+                Save Settings
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
     
-    {/* Gemini Response Dialog - shows full API response for debugging */}
-    {showResponseDialog && geminiRawResponse && (
+    {/* AI Response Dialog - shows full API response for debugging */}
+    {showResponseDialog && aiRawResponse && (
       <div
         style={{
           position: 'fixed',
@@ -3260,12 +3344,12 @@ Analyze the attached PDF datasheet and extract the information according to the 
         >
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              Gemini API Response
+              AI Service Response
             </h3>
             <button
               onClick={() => {
                 setShowResponseDialog(false);
-                setGeminiRawResponse(null);
+                setAiRawResponse(null);
               }}
               style={{
                 background: 'transparent',
@@ -3301,13 +3385,13 @@ Analyze the attached PDF datasheet and extract the information according to the 
             wordBreak: 'break-word',
             maxHeight: '60vh',
           }}>
-            {geminiRawResponse}
+            {aiRawResponse}
           </div>
           
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(geminiRawResponse || '');
+                navigator.clipboard.writeText(aiRawResponse || '');
                 alert('Response copied to clipboard');
               }}
               style={{
@@ -3326,7 +3410,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             <button
               onClick={() => {
                 setShowResponseDialog(false);
-                setGeminiRawResponse(null);
+                setAiRawResponse(null);
               }}
               style={{
                 padding: '8px 16px',
@@ -3486,7 +3570,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         setInfoDialog({ visible: false, title: '', message: '', type: 'info' });
         // Clear raw response when dialog is closed (unless showing response)
         if (!showResponseDialog) {
-          setGeminiRawResponse(null);
+          setAiRawResponse(null);
         }
       }}
       onShowResponse={infoDialog.onShowResponse}

@@ -46,6 +46,10 @@ import {
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId, generateUniqueId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
+import { migrateFromLegacyStorage } from './utils/aiServices';
+
+// Migrate any legacy Gemini API key storage to new multi-service format
+migrateFromLegacyStorage();
 import { generateBOM, type BOMData } from './utils/bom';
 import { createCloseProject, ensureProjectIsolation, type ProjectIsolationState } from './utils/projectOperations/projectIsolation';
 import { createNewProject, openProject } from './utils/projectOperations/projectOperations';
