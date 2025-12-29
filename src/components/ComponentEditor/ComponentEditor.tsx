@@ -444,7 +444,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       const ic = comp as any;
       // Set uploadedDatasheetFile to null since we don't have the actual File object
       // The file will be loaded from project directory when needed
-      setUploadedDatasheetFile(null);
+        setUploadedDatasheetFile(null);
       // Always restore file path from component data to componentEditor
       // This ensures the path is available for display and file opening
       if (componentEditor) {
@@ -1121,7 +1121,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const found = updated.find(c => c.id === componentEditor.id);
             if (found) {
               if (found.componentType === 'IntegratedCircuit') {
-                console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
               }
               // Debug: Verify values were saved
               if (found.componentType === 'Resistor' || found.componentType === 'Capacitor') {
@@ -1157,7 +1157,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const found = updated.find(c => c.id === componentEditor.id);
             if (found) {
               if (found.componentType === 'IntegratedCircuit') {
-                console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
+              console.log('[ComponentEditor] After state update - component datasheet in array:', (found as any).datasheet);
               }
               // Debug: Verify values were saved
               if (found.componentType === 'Resistor' || found.componentType === 'Capacitor') {
@@ -2320,7 +2320,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         )}
         
         {/* Type-specific value fields - moved near top for easy access */}
-          <ComponentTypeFields
+        <ComponentTypeFields
             component={comp}
             componentEditor={componentEditor}
             componentDefinition={componentDefinition}
@@ -2724,7 +2724,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                                   const currentComp = currentCompList.find(c => c.id === componentEditor.id);
                                   if (currentComp) {
                                     const existingPinData = (currentComp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
-                                  const existingPinNames = (currentComp as any).pinNames || [];
+                                    const existingPinNames = (currentComp as any).pinNames || [];
                                     // Update pinData (preferred) or create from pinNames (legacy)
                                     let newPinData: Array<{ name: string; type?: string; alternate_functions?: string[] }>;
                                     if (existingPinData && Array.isArray(existingPinData)) {
@@ -2966,7 +2966,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
               >
                 ×
               </button>
-            </div>
+    </div>
             <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
               <p style={{ margin: '0 0 12px 0' }}>
                 To get a Google Gemini API key, go to{' '}
