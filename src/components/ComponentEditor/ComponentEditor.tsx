@@ -1826,15 +1826,20 @@ Analyze the attached PDF datasheet and extract the information according to the 
       </div>
       
       {/* Scrollable content area */}
-      <div style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        gap: '4px',
-        padding: '6px 20px 6px 6px', // Extra right padding for scrollbar
-        overflowY: 'auto',
-        flex: 1,
-        minHeight: 0,
-      }}>
+      <div 
+        className="component-editor-content"
+        style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '4px',
+          padding: '6px 20px 6px 6px', // Extra right padding for scrollbar
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          flex: 1,
+          minHeight: 0,
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#888 #f0f0f0',
+        }}>
         {/* Category and Type (read-only) - at the top for clarity */}
         {(() => {
           // Resolve component definition if not provided as prop
