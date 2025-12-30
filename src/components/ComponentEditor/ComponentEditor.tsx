@@ -119,10 +119,10 @@ export interface ComponentEditorProps {
   setNotesDialogVisible: (visible: boolean) => void;
   /** Project directory handle for accessing files */
   projectDirHandle: FileSystemDirectoryHandle | null;
-  /** External trigger to show Gemini settings dialog */
-  showGeminiSettingsDialog?: boolean;
-  /** Callback when Gemini settings dialog is closed */
-  onGeminiSettingsDialogClose?: () => void;
+  /** External trigger to show AI settings dialog */
+  showAiSettingsDialog?: boolean;
+  /** Callback when AI settings dialog is closed */
+  onAiSettingsDialogClose?: () => void;
   /** Callback to find and center on a component */
   onFindComponent?: (componentId: string, x: number, y: number) => void;
   /** Canvas height for syncing dialog height */
@@ -149,8 +149,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   setSelectedComponentIds,
   setNotesDialogVisible,
   projectDirHandle,
-  showGeminiSettingsDialog = false,
-  onGeminiSettingsDialogClose,
+  showAiSettingsDialog = false,
+  onAiSettingsDialogClose,
   onFindComponent,
   canvasHeight,
 }) => {
@@ -207,7 +207,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
 
   // Handle external trigger to show AI settings dialog
   useEffect(() => {
-    if (showGeminiSettingsDialog) {
+    if (showAiSettingsDialog) {
       // Reload all settings when dialog opens
       if (typeof window !== 'undefined') {
         const config = getAIConfig();
@@ -228,7 +228,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [showGeminiSettingsDialog]);
+  }, [showAiSettingsDialog]);
 
   // Update hasStoredApiKey when provider changes
   useEffect(() => {
@@ -571,7 +571,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 setShowApiKeyDialog(false);
-                onGeminiSettingsDialogClose?.();
+                onAiSettingsDialogClose?.();
               }
             }}
           >
@@ -596,7 +596,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 <button
                   onClick={() => {
                     setShowApiKeyDialog(false);
-                    onGeminiSettingsDialogClose?.();
+                    onAiSettingsDialogClose?.();
                   }}
                   style={{
                     background: 'transparent',
@@ -783,7 +783,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 <button
                   onClick={() => {
                     setShowApiKeyDialog(false);
-                    onGeminiSettingsDialogClose?.();
+                    onAiSettingsDialogClose?.();
                   }}
                   style={{
                     padding: '8px 16px',
@@ -802,7 +802,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   onClick={() => {
                     handleSaveApiKey();
                     setShowApiKeyDialog(false);
-                    onGeminiSettingsDialogClose?.();
+                    onAiSettingsDialogClose?.();
                   }}
                   style={{
                     padding: '8px 16px',
@@ -3073,7 +3073,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowApiKeyDialog(false);
-            onGeminiSettingsDialogClose?.();
+            onAiSettingsDialogClose?.();
           }
         }}
       >
@@ -3098,7 +3098,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
             <button
               onClick={() => {
                 setShowApiKeyDialog(false);
-                onGeminiSettingsDialogClose?.();
+                onAiSettingsDialogClose?.();
               }}
               style={{
                 background: 'transparent',
@@ -3285,7 +3285,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
               <button
                 onClick={() => {
                   setShowApiKeyDialog(false);
-                  onGeminiSettingsDialogClose?.();
+                  onAiSettingsDialogClose?.();
                 }}
                 style={{
                   padding: '8px 16px',
@@ -3304,7 +3304,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                 onClick={() => {
                   handleSaveApiKey();
                   setShowApiKeyDialog(false);
-                  onGeminiSettingsDialogClose?.();
+                  onAiSettingsDialogClose?.();
                 }}
                 style={{
                   padding: '8px 16px',

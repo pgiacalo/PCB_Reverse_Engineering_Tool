@@ -1396,7 +1396,7 @@ function App() {
   // Layer visibility toggles
   const [showTopImage, setShowTopImage] = useState(true);
   const [showBottomImage, setShowBottomImage] = useState(true);
-  const [showGeminiSettingsDialog, setShowGeminiSettingsDialog] = useState(false);
+  const [showAiSettingsDialog, setShowAiSettingsDialog] = useState(false);
   const [showViasLayer, setShowViasLayer] = useState(true);
   const [showTopTracesLayer, setShowTopTracesLayer] = useState(true);
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
@@ -13121,7 +13121,7 @@ function App() {
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}
-        onShowGeminiSettings={() => setShowGeminiSettingsDialog(true)}
+        onShowAiSettings={() => setShowAiSettingsDialog(true)}
         topImage={topImage}
         bottomImage={bottomImage}
         setCurrentTool={setCurrentTool}
@@ -14745,8 +14745,8 @@ function App() {
             setSelectedComponentIds={setSelectedComponentIds}
             setNotesDialogVisible={setNotesDialogVisible}
             projectDirHandle={projectDirHandle}
-            showGeminiSettingsDialog={showGeminiSettingsDialog}
-            onGeminiSettingsDialogClose={() => setShowGeminiSettingsDialog(false)}
+            showAiSettingsDialog={showAiSettingsDialog}
+            onAiSettingsDialogClose={() => setShowAiSettingsDialog(false)}
             onFindComponent={findAndCenterComponent}
             componentDefinition={componentEditor ? (() => {
               // Find the component being edited to resolve its definition

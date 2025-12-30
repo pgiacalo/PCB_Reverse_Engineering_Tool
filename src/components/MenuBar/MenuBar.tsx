@@ -66,7 +66,7 @@ export interface MenuBarProps {
   // Dialogs
   setNewProjectDialog: (dialog: { visible: boolean }) => void;
   setAutoSaveDialog: (dialog: { visible: boolean; interval: number | null }) => void;
-  onShowGeminiSettings: () => void;
+  onShowAiSettings: () => void;
   
   // Image operations
   topImage: PCBImage | null;
@@ -238,7 +238,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onExportNetlist,
   setNewProjectDialog,
   setAutoSaveDialog,
-  onShowGeminiSettings,
+  onShowAiSettings,
   topImage,
   bottomImage,
   setCurrentTool,
@@ -1062,7 +1062,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
               onClick={() => {
-                onShowGeminiSettings();
+                onShowAiSettings();
                 setOpenMenu(null);
               }} 
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
