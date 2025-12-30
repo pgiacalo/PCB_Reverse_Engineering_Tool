@@ -1374,6 +1374,15 @@ function App() {
   const [isOptionPressed, setIsOptionPressed] = useState(false);
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
   const [hoverTestPoint, setHoverTestPoint] = useState<{ stroke: DrawingStroke; x: number; y: number } | null>(null);
+  // Connection hover state for displaying pin info on rollover (when Option key is held)
+  const [hoverConnection, setHoverConnection] = useState<{
+    component: PCBComponent;
+    layer: 'top' | 'bottom';
+    pinIndices: number[]; // Pin indices that connect to this node
+    nodeId: string;
+    x: number; // Mouse X for tooltip positioning
+    y: number; // Mouse Y for tooltip positioning
+  } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
   const newProjectYesButtonRef = useRef<HTMLButtonElement>(null);
@@ -3894,6 +3903,7 @@ function App() {
           y: e.clientY
         });
         setHoverTestPoint(null); // Clear test point hover when component is hovered
+        setHoverConnection(null); // Clear connection hover when component is hovered
       } else {
         setHoverComponent(null);
         
@@ -3919,13 +3929,131 @@ function App() {
             x: e.clientX,
             y: e.clientY
           });
+          setHoverConnection(null);
         } else {
           setHoverTestPoint(null);
+          
+          // Connection line hover detection (only when Option key is held and no component/test point is hovered)
+          // Only for semiconductor connections
+          const connectionHitTolerance = Math.max(6 / viewScale, 3); // Zoom-aware hit tolerance for lines
+          
+          // Helper function to calculate distance from point to line segment
+          const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const lengthSquared = dx * dx + dy * dy;
+            if (lengthSquared === 0) return Math.hypot(px - x1, py - y1);
+            // Project point onto line segment
+            let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+            t = Math.max(0, Math.min(1, t)); // Clamp to segment
+            const closestX = x1 + t * dx;
+            const closestY = y1 + t * dy;
+            return Math.hypot(px - closestX, py - closestY);
+          };
+          
+          // Helper function to find node coordinates (similar to drawCanvas)
+          const findNodeCoordinatesForHover = (pointIdStr: string): { x: number; y: number } | null => {
+            const pointId = parseInt(pointIdStr, 10);
+            if (isNaN(pointId)) return null;
+            
+            // Check vias, pads, and test points
+            for (const stroke of drawingStrokes) {
+              if ((stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') && stroke.points.length > 0) {
+                const point = stroke.points[0];
+                if (point.id === pointId) {
+                  return { x: point.x, y: point.y };
+                }
+              }
+            }
+            
+            // Check trace points
+            for (const stroke of drawingStrokes) {
+              if (stroke.type === 'trace') {
+                for (const point of stroke.points) {
+                  if (point.id === pointId) {
+                    return { x: point.x, y: point.y };
+                  }
+                }
+              }
+            }
+            
+            // Check power symbols
+            for (const power of powers) {
+              if (power.pointId === pointId) {
+                return { x: power.x, y: power.y };
+              }
+            }
+            
+            // Check ground symbols
+            for (const ground of grounds) {
+              if (ground.pointId === pointId) {
+                return { x: ground.x, y: ground.y };
+              }
+            }
+            
+            return null;
+          };
+          
+          // Find connection line near mouse position
+          const hitConnection = (() => {
+            const allComponents = [
+              ...componentsTop.map(c => ({ comp: c, layer: 'top' as const })),
+              ...componentsBottom.map(c => ({ comp: c, layer: 'bottom' as const }))
+            ];
+            
+            for (const { comp, layer } of allComponents) {
+              // Only check semiconductors
+              const compDef = resolveComponentDefinition(comp as any);
+              if (compDef?.category !== 'Semiconductors') continue;
+              
+              const pinConnections = comp.pinConnections || [];
+              
+              // Build map of node ID to pin indices (multiple pins can connect to same node)
+              const nodeToPin = new Map<string, number[]>();
+              for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
+                const connection = pinConnections[pinIndex];
+                if (connection && connection.trim() !== '') {
+                  const nodeIdStr = connection.trim();
+                  const existing = nodeToPin.get(nodeIdStr) || [];
+                  existing.push(pinIndex);
+                  nodeToPin.set(nodeIdStr, existing);
+                }
+              }
+              
+              // Check each connection line
+              for (const [nodeIdStr, pinIndices] of nodeToPin) {
+                const nodePos = findNodeCoordinatesForHover(nodeIdStr);
+                if (!nodePos) continue;
+                
+                const compCenter = { x: comp.x, y: comp.y };
+                const distance = pointToLineDistance(x, y, compCenter.x, compCenter.y, nodePos.x, nodePos.y);
+                
+                if (distance <= connectionHitTolerance) {
+                  return { comp, layer, pinIndices, nodeIdStr };
+                }
+              }
+            }
+            return null;
+          })();
+          
+          if (hitConnection) {
+            setHoverConnection({
+              component: hitConnection.comp,
+              layer: hitConnection.layer,
+              pinIndices: hitConnection.pinIndices,
+              nodeId: hitConnection.nodeIdStr,
+              x: e.clientX,
+              y: e.clientY
+            });
+          } else {
+            setHoverConnection(null);
+          }
         }
       }
     } else {
       setHoverComponent(null);
       setHoverTestPoint(null);
+      setHoverConnection(null);
     }
 
     // Component dragging is started immediately on click-and-hold, so no threshold check needed
@@ -14806,6 +14934,111 @@ function App() {
             );
           })()}
 
+          {/* Connection Hover Tooltip (only shown when Option key is held over semiconductor connections) */}
+          {hoverConnection && isOptionPressed && (() => {
+            const comp = hoverConnection.component;
+            const pinIndices = hoverConnection.pinIndices;
+            
+            // Get pin data from component
+            const pinData = (comp as any).pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
+            const pinNames = (comp as any).pinNames as string[] | undefined; // Fallback for legacy data
+            
+            // Get component definition pin names as default
+            const compDef = resolveComponentDefinition(comp as any);
+            const definitionPinNames = compDef?.properties?.pinNames as string[] | undefined;
+            
+            // Build pin info for each connected pin
+            const pinInfoList = pinIndices.map(pinIndex => {
+              // Get pin name from pinData (preferred), pinNames (legacy), or definition
+              let pinName = `Pin ${pinIndex + 1}`;
+              if (pinData && pinIndex < pinData.length && pinData[pinIndex]?.name?.trim()) {
+                pinName = pinData[pinIndex].name.trim();
+              } else if (pinNames && pinIndex < pinNames.length && pinNames[pinIndex]?.trim()) {
+                pinName = pinNames[pinIndex].trim();
+              } else if (definitionPinNames && pinIndex < definitionPinNames.length) {
+                const defName = definitionPinNames[pinIndex];
+                if (defName && defName !== 'CHIP_DEPENDENT') {
+                  pinName = defName;
+                }
+              }
+              
+              // Get pin type from pinData
+              const pinType = pinData && pinIndex < pinData.length ? pinData[pinIndex]?.type?.trim() : undefined;
+              
+              return {
+                pinNumber: pinIndex + 1,
+                pinName,
+                pinType: pinType || undefined
+              };
+            });
+            
+            // Calculate tooltip position
+            const offsetX = 10;
+            const offsetY = 10;
+            let tooltipX = hoverConnection.x + offsetX;
+            let tooltipY = hoverConnection.y + offsetY;
+            
+            // Ensure tooltip stays within screen bounds
+            const tooltipWidth = 180;
+            const tooltipHeight = 80 + pinInfoList.length * 20;
+            const margin = 10;
+            
+            if (tooltipX + tooltipWidth + margin > window.innerWidth) {
+              tooltipX = hoverConnection.x - tooltipWidth - offsetX;
+            }
+            if (tooltipY + tooltipHeight + margin > window.innerHeight) {
+              tooltipY = hoverConnection.y - tooltipHeight - offsetY;
+            }
+            tooltipX = Math.max(margin, tooltipX);
+            tooltipY = Math.max(margin, tooltipY);
+            
+            return (
+              <div
+                style={{
+                  position: 'fixed',
+                  left: `${tooltipX}px`,
+                  top: `${tooltipY}px`,
+                  background: 'rgba(0, 0, 0, 0.90)',
+                  color: '#fff',
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                  fontSize: '12px',
+                  lineHeight: '1.4',
+                  zIndex: 10000,
+                  pointerEvents: 'none',
+                  width: 'max-content',
+                  maxWidth: '300px',
+                  minWidth: '120px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  border: '1px solid rgba(100, 180, 255, 0.5)',
+                }}
+              >
+                <div style={{ fontWeight: 600, marginBottom: '6px', color: '#90caf9' }}>
+                  {comp.designator} Connection
+                </div>
+                <div style={{ fontSize: '11px', marginBottom: '4px', color: '#bbb' }}>
+                  Node ID: <span style={{ fontFamily: 'monospace', color: '#fff' }}>{hoverConnection.nodeId}</span>
+                </div>
+                {pinInfoList.map((info, idx) => (
+                  <div key={idx} style={{ 
+                    marginTop: idx > 0 ? '6px' : '0',
+                    paddingTop: idx > 0 ? '6px' : '0',
+                    borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.15)' : 'none'
+                  }}>
+                    <div style={{ fontSize: '11px', color: '#e0e0e0' }}>
+                      <span style={{ fontWeight: 500 }}>Pin {info.pinNumber}:</span>{' '}
+                      <span style={{ fontStyle: 'italic', color: '#fff' }}>{info.pinName}</span>
+                    </div>
+                    {info.pinType && (
+                      <div style={{ fontSize: '10px', marginTop: '2px', color: '#90caf9' }}>
+                        Type: {info.pinType}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Power Properties Editor Dialog */}
           {powerEditor && powerEditor.visible && (() => {
