@@ -100,6 +100,8 @@ export interface DetailedInfoDialogProps {
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
   /** Callback to open the Notes dialog */
   onOpenNotesDialog?: () => void;
+  /** Canvas height for syncing dialog height */
+  canvasHeight?: number;
 }
 
 export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
@@ -128,6 +130,7 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
   isDragging,
   onDragStart,
   onOpenNotesDialog,
+  canvasHeight,
 }) => {
   const [errorDialog, setErrorDialog] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false,
@@ -175,6 +178,17 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizing, resizeStart]);
+
+  // Sync dialog height with canvas height when canvas size changes
+  useEffect(() => {
+    if (canvasHeight && canvasHeight > 200) {
+      setDialogSize((prev: { width: number; height: number }) => {
+        const newSize = { ...prev, height: canvasHeight };
+        localStorage.setItem('detailedInfoDialogSize', JSON.stringify(newSize));
+        return newSize;
+      });
+    }
+  }, [canvasHeight]);
 
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();

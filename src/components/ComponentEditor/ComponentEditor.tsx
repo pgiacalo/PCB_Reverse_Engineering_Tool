@@ -125,6 +125,8 @@ export interface ComponentEditorProps {
   onGeminiSettingsDialogClose?: () => void;
   /** Callback to find and center on a component */
   onFindComponent?: (componentId: string, x: number, y: number) => void;
+  /** Canvas height for syncing dialog height */
+  canvasHeight?: number;
 }
 
 export const ComponentEditor: React.FC<ComponentEditorProps> = ({
@@ -150,6 +152,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   showGeminiSettingsDialog = false,
   onGeminiSettingsDialogClose,
   onFindComponent,
+  canvasHeight,
 }) => {
   const [isFetchingPinNames, setIsFetchingPinNames] = useState(false);
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
@@ -521,6 +524,17 @@ Analyze the attached PDF datasheet and extract the information according to the 
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isResizing, resizeStart]);
+
+  // Sync dialog height with canvas height when canvas size changes
+  useEffect(() => {
+    if (canvasHeight && canvasHeight > 200) {
+      setDialogSize((prev: { width: number; height: number }) => {
+        const newSize = { ...prev, height: canvasHeight };
+        localStorage.setItem('componentDialogSize', JSON.stringify(newSize));
+        return newSize;
+      });
+    }
+  }, [canvasHeight]);
 
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();

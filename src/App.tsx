@@ -14754,6 +14754,7 @@ function App() {
                           componentsBottom.find(c => c.id === componentEditor.id);
               return comp ? resolveComponentDefinition(comp as any) : undefined;
             })() : undefined}
+            canvasHeight={canvasSize.height}
           />
 
           {/* Component Hover Tooltip (only shown when Option key is held) */}
@@ -15359,6 +15360,7 @@ function App() {
             e.preventDefault();
           }
         }}
+        canvasHeight={canvasSize.height}
       />
 
       {/* Notes Dialog */}
