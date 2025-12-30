@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool/schemas/pads-netlist.schema.json",
+  "title": "PADS Netlist Schema",
+  "description": "Schema for PADS-PCB JSON netlist files exported from PCB Tracer. Contains component definitions, pin information, and net connectivity data.",
+  "type": "object",
+  "required": ["design_info", "components", "nets"],
+  "properties": {
+    "design_info": {
+      "$ref": "#/definitions/DesignInfo"
+    },
+    "components": {
+      "type": "array",
+      "description": "Array of components in the design with their pins",
+      "items": {
+        "$ref": "#/definitions/Component"
+      }
+    },
+    "nets": {
+      "type": "array",
+      "description": "Array of electrical nets connecting component pins",
+      "items": {
+        "$ref": "#/definitions/Net"
+      }
+    }
+  },
+  "definitions": {
+    "DesignInfo": {
+      "type": "object",
+      "description": "Design metadata",
+      "required": ["name", "date"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project/design name"
+        },
+        "date": {
+          "type": "string",
+          "description": "Export date in YYYY-MM-DD format",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Component": {
+      "type": "object",
+      "description": "A PCB component with its pins",
+      "required": ["designator", "package", "pins"],
+      "properties": {
+        "designator": {
+          "type": "string",
+          "description": "Reference designator (e.g., 'U1', 'R1', 'C1')",
+          "pattern": "^[A-Z][A-Z0-9]*[0-9]+$"
+        },
+        "part_number": {
+          "type": "string",
+          "description": "Manufacturer part number (e.g., 'TL072', 'LM7805')"
+        },
+        "value": {
+          "type": "string",
+          "description": "Component value (e.g., '10k', '100nF', '1µH')"
+        },
+        "package": {
+          "type": "string",
+          "description": "Package/footprint type (e.g., 'DIP-8', 'R_0805', 'SOT-23')"
+        },
+        "pins": {
+          "type": "array",
+          "description": "Array of component pins",
+          "items": {
+            "$ref": "#/definitions/Pin"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pin": {
+      "type": "object",
+      "description": "A component pin definition",
+      "required": ["number", "name", "type"],
+      "properties": {
+        "number": {
+          "type": "string",
+          "description": "Pin number as a string (e.g., '1', '2', 'A1')"
+        },
+        "name": {
+          "type": "string",
+          "description": "Pin name/function (e.g., 'VCC', 'GND', 'IN+', 'OUT')"
+        },
+        "type": {
+          "type": "string",
+          "description": "Electrical pin type",
+          "enum": [
+            "input",
+            "output",
+            "bidirectional",
+            "tristate",
+            "passive",
+            "power",
+            "ground",
+            "open_collector",
+            "open_emitter",
+            "no_connect",
+            "unspecified"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Net": {
+      "type": "object",
+      "description": "An electrical net connecting multiple component pins",
+      "required": ["name", "connections"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Net name (e.g., 'GND', '+5V', 'N$1')"
+        },
+        "connections": {
+          "type": "array",
+          "description": "Array of pin connections in this net",
+          "items": {
+            "$ref": "#/definitions/NetConnection"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "NetConnection": {
+      "type": "object",
+      "description": "A connection point in a net (component pin)",
+      "required": ["component", "pin_number", "pin_name"],
+      "properties": {
+        "component": {
+          "type": "string",
+          "description": "Component reference designator"
+        },
+        "pin_number": {
+          "type": "string",
+          "description": "Pin number on the component"
+        },
+        "pin_name": {
+          "type": "string",
+          "description": "Pin name/function"
+        },
+        "pin_type": {
+          "type": "string",
+          "description": "Electrical pin type (optional)",
+          "enum": [
+            "input",
+            "output",
+            "bidirectional",
+            "tristate",
+            "passive",
+            "power",
+            "ground",
+            "open_collector",
+            "open_emitter",
+            "no_connect",
+            "unspecified"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool/componentDefinitions.schema.json",
+  "$id": "https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool/schemas/componentDefinitions.schema.json",
   "title": "Component Definitions Schema",
   "description": "Schema for componentDefinitions.json - defines all available PCB components, their properties, and fields",
   "type": "object",
