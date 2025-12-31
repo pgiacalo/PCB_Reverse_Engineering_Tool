@@ -13073,40 +13073,6 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer</h1>
-        <button
-          onClick={() => {
-            // Open donate page in new window to avoid losing user's work
-            window.open('https://github.com/sponsors/pgiacalo', '_blank', 'noopener,noreferrer');
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            background: '#ffffff',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: 6,
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 500,
-            color: '#000000',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-            transition: 'background 0.2s',
-            marginLeft: 'auto',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f0f0f0';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#ffffff';
-          }}
-          title="Donate to support this project"
-        >
-          <svg height="16" width="16" viewBox="0 0 16 16" fill="#ff0000" aria-hidden="true">
-            <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.565 20.565 0 008 13.393a20.561 20.561 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z" />
-          </svg>
-          Donate
-        </button>
       </header>
 
       {/* Application menu bar */}

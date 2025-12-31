@@ -365,6 +365,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
   const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
+  const [showAboutDialog, setShowAboutDialog] = React.useState(false);
+  const [showDocumentationDialog, setShowDocumentationDialog] = React.useState(false);
 
   // Helper function to check if project is active before allowing menu actions
   // Returns true if action should proceed, false if blocked
@@ -1450,26 +1452,205 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         )}
       </div>
 
-      {/* About menu - simplified for now */}
+      {/* Help menu */}
       <div style={{ position: 'relative' }}>
         <button 
-          onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'about' ? null : 'about'); }} 
+          onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'help' ? null : 'help'); }} 
           style={{ 
             padding: '6px 10px', 
             borderRadius: 6, 
             border: '1px solid #ddd', 
-            background: openMenu === 'about' ? '#eef3ff' : '#fff', 
+            background: openMenu === 'help' ? '#eef3ff' : '#fff', 
             fontWeight: 600, 
             color: '#222'
           }}
         >
-          About ▾
+          Help ▾
         </button>
-        {openMenu === 'about' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.1)</h2>
-              
+        {openMenu === 'help' && (
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 8, zIndex: 100 }}>
+            <button
+              onClick={() => { setOpenMenu(null); setShowAboutDialog(true); }}
+              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', color: '#f2f2f2', fontSize: '14px', cursor: 'pointer', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              About PCB Tracer...
+            </button>
+            <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
+            <button
+              onClick={() => { setOpenMenu(null); setShowDocumentationDialog(true); }}
+              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', color: '#f2f2f2', fontSize: '14px', cursor: 'pointer', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              Documentation...
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* File path display */}
+      {currentProjectFilePath && (
+        <div style={{ 
+          marginLeft: 'auto',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          paddingLeft: '16px'
+        }}>
+          <div style={{ 
+            fontSize: '12px',
+            color: '#333',
+            fontFamily: 'monospace',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '40vw'
+          }} title={currentProjectFilePath}>
+            {currentProjectFilePath}
+          </div>
+          {/* Save status indicator - shows project save state */}
+          <div
+            style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              border: '1px solid #666',
+              backgroundColor: hasUnsavedChangesState 
+                ? (autoSaveEnabled ? '#ffaa00' : '#ff0000') // Yellow if auto-save enabled, Red if disabled
+                : '#00ff00', // Green if saved
+              flexShrink: 0,
+            }}
+            title={
+              hasUnsavedChangesState 
+                ? (autoSaveEnabled 
+                    ? `Changes detected • Auto Save: ON • Will be saved automatically every ${autoSaveInterval || 1} minute${autoSaveInterval === 1 ? '' : 's'}` 
+                    : 'Changes detected • Auto Save: OFF • You need to save manually (File → Save Project)')
+                : 'Project saved • No unsaved changes • Auto Save: ' + (autoSaveEnabled ? 'ON' : 'OFF')
+            }
+          />
+        </div>
+      )}
+    </div>
+      <SetToolSizeDialog
+        visible={setToolSizeDialogVisible}
+        toolRegistry={toolRegistry}
+        currentTool={currentTool}
+        drawingMode={drawingMode}
+        traceToolLayer={traceToolLayer}
+        padToolLayer={padToolLayer}
+        testPointToolLayer={testPointToolLayer}
+        componentToolLayer={componentToolLayer}
+        updateToolSettings={updateToolSettings}
+        updateToolLayerSettings={updateToolLayerSettings}
+        setBrushSize={setBrushSize}
+        saveToolSettings={saveToolSettings}
+        saveToolLayerSettings={saveToolLayerSettings}
+        setTopTraceSize={setTopTraceSize}
+        setBottomTraceSize={setBottomTraceSize}
+        setTopPadSize={setTopPadSize}
+        setBottomPadSize={setBottomPadSize}
+        setTopTestPointSize={setTopTestPointSize}
+        setBottomTestPointSize={setBottomTestPointSize}
+        setTopComponentSize={setTopComponentSize}
+        setBottomComponentSize={setBottomComponentSize}
+        setComponentConnectionSize={setComponentConnectionSize}
+        saveDefaultSize={saveDefaultSize}
+        onClose={() => setSetToolSizeDialogVisible(false)}
+      />
+      <SetToolColorDialog
+        visible={setToolColorDialogVisible}
+        toolRegistry={toolRegistry}
+        currentTool={currentTool}
+        drawingMode={drawingMode}
+        traceToolLayer={traceToolLayer}
+        padToolLayer={padToolLayer}
+        testPointToolLayer={testPointToolLayer}
+        componentToolLayer={componentToolLayer}
+        updateToolSettings={updateToolSettings}
+        updateToolLayerSettings={updateToolLayerSettings}
+        saveToolSettings={saveToolSettings}
+        saveToolLayerSettings={saveToolLayerSettings}
+        setBrushColor={setBrushColor}
+        setTopTraceColor={setTopTraceColor}
+        setBottomTraceColor={setBottomTraceColor}
+        setTopPadColor={setTopPadColor}
+        setBottomPadColor={setBottomPadColor}
+        setTopTestPointColor={setTopTestPointColor}
+        setBottomTestPointColor={setBottomTestPointColor}
+        setTopComponentColor={setTopComponentColor}
+        setBottomComponentColor={setBottomComponentColor}
+        setComponentConnectionColor={setComponentConnectionColor}
+        saveDefaultColor={saveDefaultColor}
+        colorPalette={colorPalette}
+        onClose={() => setSetToolColorDialogVisible(false)}
+      />
+
+      {/* About Dialog Modal */}
+      {showAboutDialog && (
+        <div 
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            background: 'rgba(0,0,0,0.6)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 1000 
+          }}
+          onClick={() => setShowAboutDialog(false)}
+        >
+          <div 
+            style={{ 
+              width: '700px', 
+              maxWidth: '90vw', 
+              maxHeight: '85vh', 
+              background: '#2b2b31', 
+              border: '1px solid #1f1f24', 
+              borderRadius: 8, 
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)', 
+              display: 'flex', 
+              flexDirection: 'column' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              padding: '16px 20px', 
+              borderBottom: '1px solid #444' 
+            }}>
+              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.1)</h2>
+              <button
+                onClick={() => setShowAboutDialog(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#999',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '0 4px',
+                  lineHeight: 1
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#999'; }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div style={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              padding: '20px' 
+            }}>
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>About</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
@@ -1477,13 +1658,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   This tool can assist in troubleshooting by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
-                </p>
-              </div>
-
-              <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Technologies</h3>
-                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  Built with <strong>TypeScript</strong> and <strong>React</strong>, with <strong>AI integration</strong> for intelligent extraction of electronic component information from datasheets. The application runs entirely client-side in the browser, providing a responsive, interactive drawing experience with no backend server requirements.
                 </p>
               </div>
 
@@ -1670,41 +1844,75 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   Use the <strong>File</strong> menu to manage projects, the <strong>Images</strong> menu for image loading and transformation, and the <strong>Tools</strong> menu for selection, locking, and customization options.
                 </p>
               </div>
-
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Future / TODO List</h3>
-                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
-                  <li>A searchable list of common components</li>
-                  <li>Output schematics (perhaps as KiCad files)</li>
-                  <li>Dynamic layers</li>
-                  <li>Create a desktop version of this application using Electron</li>
-                </ul>
-              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Help menu */}
-      <div style={{ position: 'relative' }}>
-        <button 
-          onClick={(e) => { e.stopPropagation(); setOpenMenu(m => m === 'help' ? null : 'help'); }} 
+      {/* Documentation Dialog Modal */}
+      {showDocumentationDialog && (
+        <div 
           style={{ 
-            padding: '6px 10px', 
-            borderRadius: 6, 
-            border: '1px solid #ddd', 
-            background: openMenu === 'help' ? '#eef3ff' : '#fff', 
-            fontWeight: 600, 
-            color: '#222'
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            background: 'rgba(0,0,0,0.6)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 1000 
           }}
+          onClick={() => setShowDocumentationDialog(false)}
         >
-          Help ▾
-        </button>
-        {openMenu === 'help' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 500, maxWidth: 700, maxHeight: '80vh', background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 20, overflowY: 'auto', zIndex: 100 }}>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>Help: Typical Usage Steps</h2>
-              
+          <div 
+            style={{ 
+              width: '700px', 
+              maxWidth: '90vw', 
+              maxHeight: '85vh', 
+              background: '#2b2b31', 
+              border: '1px solid #1f1f24', 
+              borderRadius: 8, 
+              boxShadow: '0 8px 32px rgba(0,0,0,0.4)', 
+              display: 'flex', 
+              flexDirection: 'column' 
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              padding: '16px 20px', 
+              borderBottom: '1px solid #444' 
+            }}>
+              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>Documentation: Typical Usage Steps</h2>
+              <button
+                onClick={() => setShowDocumentationDialog(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#999',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '0 4px',
+                  lineHeight: 1
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#999'; }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div style={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              padding: '20px' 
+            }}>
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 1: Create or Open a Project</h3>
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
@@ -1825,7 +2033,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code></li>
                       <li><strong>Recall View</strong> — <code>0-9</code></li>
                       <li><strong>Default View 0</strong> — <code>0</code> (origin with all images contained)</li>
-                      <li><strong>Default View 0</strong> — <code>0</code> (origin with all images contained)</li>
                       <li><strong>Information</strong> — <code>I</code></li>
                       <li><strong>Notes</strong> — <code>N</code></li>
                       <li><strong>Project Notes</strong> — <code>L</code></li>
@@ -1860,113 +2067,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li>Use <code>+</code> and <code>-</code> keys to resize tool icons (<code>Shift</code> + <code>+</code> / <code>-</code> changes size 5 times faster)</li>
                 </ul>
               </div>
-
-              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid #444' }}>
-                <p style={{ margin: '0 0 8px 0', color: '#bbb', fontSize: '12px', lineHeight: '1.5' }}>
-                  For more detailed feature information, see the <strong>About</strong> menu.
-                </p>
-              </div>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* File path display */}
-      {currentProjectFilePath && (
-        <div style={{ 
-          marginLeft: 'auto',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          paddingLeft: '16px'
-        }}>
-          <div style={{ 
-            fontSize: '12px',
-            color: '#333',
-            fontFamily: 'monospace',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            maxWidth: '40vw'
-          }} title={currentProjectFilePath}>
-            {currentProjectFilePath}
-          </div>
-          {/* Save status indicator - shows project save state */}
-          <div
-            style={{
-              width: '16px',
-              height: '16px',
-              borderRadius: '50%',
-              border: '1px solid #666',
-              backgroundColor: hasUnsavedChangesState 
-                ? (autoSaveEnabled ? '#ffaa00' : '#ff0000') // Yellow if auto-save enabled, Red if disabled
-                : '#00ff00', // Green if saved
-              flexShrink: 0,
-            }}
-            title={
-              hasUnsavedChangesState 
-                ? (autoSaveEnabled 
-                    ? `Changes detected • Auto Save: ON • Will be saved automatically every ${autoSaveInterval || 1} minute${autoSaveInterval === 1 ? '' : 's'}` 
-                    : 'Changes detected • Auto Save: OFF • You need to save manually (File → Save Project)')
-                : 'Project saved • No unsaved changes • Auto Save: ' + (autoSaveEnabled ? 'ON' : 'OFF')
-            }
-          />
         </div>
       )}
-    </div>
-      <SetToolSizeDialog
-        visible={setToolSizeDialogVisible}
-        toolRegistry={toolRegistry}
-        currentTool={currentTool}
-        drawingMode={drawingMode}
-        traceToolLayer={traceToolLayer}
-        padToolLayer={padToolLayer}
-        testPointToolLayer={testPointToolLayer}
-        componentToolLayer={componentToolLayer}
-        updateToolSettings={updateToolSettings}
-        updateToolLayerSettings={updateToolLayerSettings}
-        setBrushSize={setBrushSize}
-        saveToolSettings={saveToolSettings}
-        saveToolLayerSettings={saveToolLayerSettings}
-        setTopTraceSize={setTopTraceSize}
-        setBottomTraceSize={setBottomTraceSize}
-        setTopPadSize={setTopPadSize}
-        setBottomPadSize={setBottomPadSize}
-        setTopTestPointSize={setTopTestPointSize}
-        setBottomTestPointSize={setBottomTestPointSize}
-        setTopComponentSize={setTopComponentSize}
-        setBottomComponentSize={setBottomComponentSize}
-        setComponentConnectionSize={setComponentConnectionSize}
-        saveDefaultSize={saveDefaultSize}
-        onClose={() => setSetToolSizeDialogVisible(false)}
-      />
-      <SetToolColorDialog
-        visible={setToolColorDialogVisible}
-        toolRegistry={toolRegistry}
-        currentTool={currentTool}
-        drawingMode={drawingMode}
-        traceToolLayer={traceToolLayer}
-        padToolLayer={padToolLayer}
-        testPointToolLayer={testPointToolLayer}
-        componentToolLayer={componentToolLayer}
-        updateToolSettings={updateToolSettings}
-        updateToolLayerSettings={updateToolLayerSettings}
-        saveToolSettings={saveToolSettings}
-        saveToolLayerSettings={saveToolLayerSettings}
-        setBrushColor={setBrushColor}
-        setTopTraceColor={setTopTraceColor}
-        setBottomTraceColor={setBottomTraceColor}
-        setTopPadColor={setTopPadColor}
-        setBottomPadColor={setBottomPadColor}
-        setTopTestPointColor={setTopTestPointColor}
-        setBottomTestPointColor={setBottomTestPointColor}
-        setTopComponentColor={setTopComponentColor}
-        setBottomComponentColor={setBottomComponentColor}
-        setComponentConnectionColor={setComponentConnectionColor}
-        saveDefaultColor={saveDefaultColor}
-        colorPalette={colorPalette}
-        onClose={() => setSetToolColorDialogVisible(false)}
-      />
     </>
   );
 };
