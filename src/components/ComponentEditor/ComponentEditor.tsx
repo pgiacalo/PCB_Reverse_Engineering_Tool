@@ -1676,6 +1676,15 @@ Analyze the attached PDF datasheet and extract the information according to the 
           ...(datasheetSummary && { notes: datasheetSummary })
         };
         
+        // Debug logging for AI extraction
+        console.log('[AI Extraction] Saving pin data to component:', {
+          componentId: componentEditor.id,
+          layer: componentEditor.layer,
+          pinData: adjustedPinData,
+          pinNames: adjustedPinNames,
+          pinCount: extractedPinCount
+        });
+        
         if (componentEditor.layer === 'top') {
           setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
         } else {
@@ -2585,18 +2594,31 @@ Analyze the attached PDF datasheet and extract the information according to the 
             const currentComp = currentCompList.find(c => c.id === componentEditor.id);
             const instancePinData = (currentComp as any)?.pinData as Array<{ name: string; type?: string; alternate_functions?: string[] }> | undefined;
             const instancePinNames = (currentComp as any)?.pinNames as string[] | undefined; // Fallback for legacy data
+            
+            // Debug logging for pin data
+            console.log('[ComponentEditor] Pin data debug:', {
+              componentId: componentEditor.id,
+              hasInstancePinData: !!instancePinData,
+              instancePinDataLength: instancePinData?.length,
+              instancePinData: instancePinData,
+              hasInstancePinNames: !!instancePinNames,
+              instancePinNamesLength: instancePinNames?.length,
+              instancePinNames: instancePinNames
+            });
             // Resolve definition if not provided as prop
             const resolvedDef = componentDefinition || resolveComponentDefinition(comp as any);
             const definitionPinNames = resolvedDef?.properties?.pinNames as string[] | undefined;
             
             // Data-driven: Show Name column if pinNames are defined in the definition
+            // OR if pin data exists on the instance (e.g., from AI extraction)
             // If pinNames contains "CHIP_DEPENDENT", use text input (for ICs with custom pin names)
             // Otherwise, use dropdown (for transistors, op amps with predefined names)
             const hasPinNames = definitionPinNames && definitionPinNames.length > 0;
+            const hasInstancePinData = (instancePinData && instancePinData.length > 0) || (instancePinNames && instancePinNames.length > 0);
             const isChipDependent = hasPinNames && definitionPinNames.includes('CHIP_DEPENDENT');
             const useDropdown = hasPinNames && !isChipDependent; // Dropdown for predefined names
-            const useTextInput = isChipDependent; // Text input for CHIP_DEPENDENT
-            const showNameColumn = hasPinNames; // Show if pinNames are defined
+            const useTextInput = isChipDependent || (!hasPinNames && hasInstancePinData); // Text input for CHIP_DEPENDENT or AI-extracted data
+            const showNameColumn = hasPinNames || hasInstancePinData; // Show if definition has pinNames OR instance has pin data
             
             // Check if any pin has type or alternate_functions to determine if we should show those columns
             const hasPinTypes = instancePinData && instancePinData.some(pd => pd && pd.type && pd.type.trim() !== '');
