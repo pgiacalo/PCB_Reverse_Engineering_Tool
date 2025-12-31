@@ -1447,7 +1447,7 @@ function App() {
   // Connections layer
   const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
   // Trace corner dots (circles at each vertex/turn)
-  const [showTraceCornerDots, setShowTraceCornerDots] = useState(true);
+  const [showTraceCornerDots, setShowTraceCornerDots] = useState(false);
   // Trace end dots (circles at start and end of traces)
   const [showTraceEndDots, setShowTraceEndDots] = useState(true);
   const [showCrosshairs, setShowCrosshairs] = useState(false);
@@ -8374,7 +8374,7 @@ function App() {
     setShowPowerLayer(true);
     setShowGroundLayer(true);
     setShowConnectionsLayer(true);
-    setShowTraceCornerDots(true);
+    setShowTraceCornerDots(false);
     setShowTraceEndDots(true);
     setCurrentTool('select');
     setDrawingMode('trace');
@@ -8572,7 +8572,7 @@ function App() {
     setShowPowerLayer(true);
     setShowGroundLayer(true);
     setShowConnectionsLayer(true);
-    setShowTraceCornerDots(true);
+    setShowTraceCornerDots(false);
     setShowTraceEndDots(true);
     
     // === STEP 11: Reset tool state ===

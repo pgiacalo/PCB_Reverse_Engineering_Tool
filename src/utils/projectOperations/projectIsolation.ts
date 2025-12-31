@@ -362,7 +362,7 @@ export function createCloseProject(state: ProjectIsolationState): () => void {
     state.setShowPowerLayer(true);
     state.setShowGroundLayer(true);
     state.setShowConnectionsLayer(true);
-    state.setShowTraceCornerDots(true);
+    state.setShowTraceCornerDots(false);
     state.setShowTraceEndDots(true);
     
     // === STEP 11: Reset tool state ===
