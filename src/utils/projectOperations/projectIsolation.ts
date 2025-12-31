@@ -147,6 +147,7 @@ export interface ProjectIsolationState {
   setShowGroundLayer: (show: boolean) => void;
   setShowConnectionsLayer: (show: boolean) => void;
   setShowTraceCornerDots: (show: boolean) => void;
+  setShowTraceEndDots: (show: boolean) => void;
   
   // Tool setters
   setCurrentTool: (tool: Tool) => void;
@@ -362,6 +363,7 @@ export function createCloseProject(state: ProjectIsolationState): () => void {
     state.setShowGroundLayer(true);
     state.setShowConnectionsLayer(true);
     state.setShowTraceCornerDots(true);
+    state.setShowTraceEndDots(true);
     
     // === STEP 11: Reset tool state ===
     state.setCurrentTool('select');

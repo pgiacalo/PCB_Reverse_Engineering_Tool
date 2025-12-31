@@ -120,6 +120,8 @@ export interface MenuBarProps {
   // Trace display options
   showTraceCornerDots: boolean;
   setShowTraceCornerDots: React.Dispatch<React.SetStateAction<boolean>>;
+  showTraceEndDots: boolean;
+  setShowTraceEndDots: React.Dispatch<React.SetStateAction<boolean>>;
   // Crosshair display options
   showCrosshairs: boolean;
   setShowCrosshairs: React.Dispatch<React.SetStateAction<boolean>>;
@@ -280,6 +282,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   setArePowerNodesLocked,
   showTraceCornerDots,
   setShowTraceCornerDots,
+  showTraceEndDots,
+  setShowTraceEndDots,
   showCrosshairs,
   setShowCrosshairs,
   setSelectedIds: _setSelectedIds,
@@ -1426,6 +1430,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               {showTraceCornerDots ? '✓ ' : '   '}Show Trace Corner Dots
+            </button>
+            <button 
+              onClick={() => { if (isProjectActive) { setShowTraceEndDots(!showTraceEndDots); setOpenMenu(null); } }} 
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
+            >
+              {showTraceEndDots ? '✓ ' : '   '}Show Trace End Dots
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 

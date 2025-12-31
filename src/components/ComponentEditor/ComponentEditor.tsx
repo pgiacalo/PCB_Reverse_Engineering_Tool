@@ -848,16 +848,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
     return null;
   }
   
-  // Determine actual layer
-  let actualLayer: 'top' | 'bottom' = 'top';
-  if (!componentsTop.find(c => c.id === componentEditor.id)) {
-    actualLayer = 'bottom';
-  }
-  
-  // Update componentEditor layer if it doesn't match the actual component's layer
-  if (componentEditor.layer !== actualLayer) {
-    setComponentEditor({ ...componentEditor, layer: actualLayer });
-  }
+  // Note: Layer is set when the dialog opens and can be modified by the user via dropdown.
+  // The actual layer change (moving component between arrays) happens on Save.
 
   // Update component function - handles all component type-specific save logic
   const updateComponent = (comp: PCBComponent): PCBComponent => {

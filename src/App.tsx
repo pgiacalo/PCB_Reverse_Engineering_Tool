@@ -1448,6 +1448,8 @@ function App() {
   const [showConnectionsLayer, setShowConnectionsLayer] = useState(true);
   // Trace corner dots (circles at each vertex/turn)
   const [showTraceCornerDots, setShowTraceCornerDots] = useState(true);
+  // Trace end dots (circles at start and end of traces)
+  const [showTraceEndDots, setShowTraceEndDots] = useState(true);
   const [showCrosshairs, setShowCrosshairs] = useState(false);
   // Detailed Info Dialog position and drag state
   const [detailedInfoDialogPosition, setDetailedInfoDialogPosition] = useState<{ x: number; y: number } | null>(null);
@@ -5878,11 +5880,16 @@ function App() {
         });
         ctx.stroke();
 
-        // Draw points at each vertex (optional)
-        if (showTraceCornerDots) {
-          // Use black for corner dots to make them visible regardless of trace color
-          ctx.fillStyle = '#000000';
-          for (const pt of stroke.points) {
+        // Draw dots at vertices (optional - separate control for corners vs endpoints)
+        ctx.fillStyle = '#000000';
+        const numPoints = stroke.points.length;
+        for (let i = 0; i < numPoints; i++) {
+          const pt = stroke.points[i];
+          const isEndPoint = (i === 0 || i === numPoints - 1);
+          const isCornerPoint = !isEndPoint;
+          
+          // Draw based on settings: end dots for first/last, corner dots for middle points
+          if ((isEndPoint && showTraceEndDots) || (isCornerPoint && showTraceCornerDots)) {
             ctx.beginPath();
             ctx.arc(pt.x, pt.y, stroke.size / 2, 0, TWO_PI);
             ctx.fill();
@@ -6211,7 +6218,7 @@ function App() {
         }
       }
     }
-  }, [drawingStrokes, selectedIds, showTopTracesLayer, showBottomTracesLayer, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, currentStroke, currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, tracePreviewMousePos, showTraceCornerDots]);
+  }, [drawingStrokes, selectedIds, showTopTracesLayer, showBottomTracesLayer, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, currentStroke, currentTool, drawingMode, brushColor, brushSize, selectedDrawingLayer, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, tracePreviewMousePos, showTraceCornerDots, showTraceEndDots]);
 
   // Transformation functions
   const updateImageTransform = useCallback((type: 'top' | 'bottom' | 'both', updates: Partial<PCBImage>) => {
@@ -8368,6 +8375,7 @@ function App() {
     setShowGroundLayer(true);
     setShowConnectionsLayer(true);
     setShowTraceCornerDots(true);
+    setShowTraceEndDots(true);
     setCurrentTool('select');
     setDrawingMode('trace');
     setTraceToolLayer('top');
@@ -8565,6 +8573,7 @@ function App() {
     setShowGroundLayer(true);
     setShowConnectionsLayer(true);
     setShowTraceCornerDots(true);
+    setShowTraceEndDots(true);
     
     // === STEP 11: Reset tool state ===
     setCurrentTool('select');
@@ -10288,6 +10297,7 @@ function App() {
         showGroundLayer,
         showConnectionsLayer,
         showTraceCornerDots,
+        showTraceEndDots,
       },
       autoSave: {
         enabled: autoSaveEnabled,
@@ -10405,6 +10415,7 @@ function App() {
     setShowGroundLayer,
     setShowConnectionsLayer,
     setShowTraceCornerDots,
+    setShowTraceEndDots,
     // Tool setters
     setCurrentTool,
     setDrawingMode,
@@ -10496,7 +10507,7 @@ function App() {
     // Visibility setters
     setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer,
     setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer,
-    setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setShowTraceCornerDots,
+    setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setShowTraceCornerDots, setShowTraceEndDots,
     // Tool setters
     setCurrentTool, setDrawingMode, setTraceToolLayer, setPadToolLayer, setTestPointToolLayer, setComponentToolLayer,
     // Designator setters
@@ -12151,6 +12162,7 @@ function App() {
         if (typeof project.visibility.showGroundLayer === 'boolean') setShowGroundLayer(project.visibility.showGroundLayer);
         if (typeof project.visibility.showConnectionsLayer === 'boolean') setShowConnectionsLayer(project.visibility.showConnectionsLayer);
         if (typeof project.visibility.showTraceCornerDots === 'boolean') setShowTraceCornerDots(project.visibility.showTraceCornerDots);
+        if (typeof project.visibility.showTraceEndDots === 'boolean') setShowTraceEndDots(project.visibility.showTraceEndDots);
       }
 
       // Restore auto save settings if present
@@ -13163,6 +13175,8 @@ function App() {
         setArePowerNodesLocked={setArePowerNodesLocked}
         showTraceCornerDots={showTraceCornerDots}
         setShowTraceCornerDots={setShowTraceCornerDots}
+        showTraceEndDots={showTraceEndDots}
+        setShowTraceEndDots={setShowTraceEndDots}
         showCrosshairs={showCrosshairs}
         setShowCrosshairs={setShowCrosshairs}
         setSelectedIds={setSelectedIds}
@@ -13895,10 +13909,12 @@ function App() {
                 disabled={isReadOnlyMode}
                 title="Color Picker" 
                 style={{ 
-                  width: 32, 
+                  width: '100%', 
                   height: 32, 
-                  display: 'grid', 
-                  placeItems: 'center', 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 6px',
                   borderRadius: 6, 
                   border: '1px solid #ddd', 
                   background: '#fff',
@@ -13907,7 +13923,7 @@ function App() {
                 }}
               >
                 {/* Color palette grid icon - 4x4 grid representing the color picker */}
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" style={{ flexShrink: 0 }}>
                   {/* Row 1 */}
                   <rect x="0" y="0" width="3.5" height="3.5" fill="#9E9E9E" stroke="#ccc" strokeWidth="0.3" />
                   <rect x="4" y="0" width="3.5" height="3.5" fill="#0072B2" stroke="#ccc" strokeWidth="0.3" />
@@ -14106,12 +14122,14 @@ function App() {
             <button 
               onClick={() => { if (!isReadOnlyMode) handleOpenProjectNotes(); }} 
               disabled={isReadOnlyMode}
-              title="Project Notes" 
+              title="Project Notes (L)" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 6px',
                 borderRadius: 6, 
                 border: '1px solid #ddd', 
                 background: '#fff',
@@ -14119,21 +14137,18 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1,
               }}
             >
-              {/* List icon - white background with yellow border, 4 rows of black circles and rectangles */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="2" width="20" height="20" rx="2" fill="#fff" stroke="#FFD700" strokeWidth="1" />
+              {/* List icon - white background with yellow border, 3 rows of black circles and rectangles */}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <rect x="2" y="2" width="20" height="20" rx="2" fill="#fff" stroke="#FFD700" strokeWidth="1.5" />
                 {/* Row 1 */}
                 <circle cx="6" cy="7" r="1.5" fill="#000" />
-                <rect x="9" y="6" width="8" height="2" rx="1" fill="#000" />
+                <rect x="9" y="6" width="10" height="2" rx="1" fill="#000" />
                 {/* Row 2 */}
-                <circle cx="6" cy="11" r="1.5" fill="#000" />
-                <rect x="9" y="10" width="8" height="2" rx="1" fill="#000" />
+                <circle cx="6" cy="12" r="1.5" fill="#000" />
+                <rect x="9" y="11" width="10" height="2" rx="1" fill="#000" />
                 {/* Row 3 */}
-                <circle cx="6" cy="15" r="1.5" fill="#000" />
-                <rect x="9" y="14" width="8" height="2" rx="1" fill="#000" />
-                {/* Row 4 */}
-                <circle cx="6" cy="19" r="1.5" fill="#000" />
-                <rect x="9" y="18" width="8" height="2" rx="1" fill="#000" />
+                <circle cx="6" cy="17" r="1.5" fill="#000" />
+                <rect x="9" y="16" width="10" height="2" rx="1" fill="#000" />
               </svg>
             </button>
             {/* Test Points Icon Button */}
@@ -14142,10 +14157,12 @@ function App() {
               disabled={isReadOnlyMode}
               title="Test Points" 
               style={{ 
-                width: 32, 
+                width: '100%', 
                 height: 32, 
-                display: 'grid', 
-                placeItems: 'center', 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 6px',
                 borderRadius: 6, 
                 border: '1px solid #ddd', 
                 background: '#fff',
@@ -14153,21 +14170,18 @@ function App() {
                 opacity: isReadOnlyMode ? 0.5 : 1,
               }}
             >
-              {/* Checklist icon - bright yellow background, 4 rows of black circles and rectangles */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="24" height="24" fill="#FFD700" />
+              {/* Checklist icon - bright yellow background, 3 rows of black circles and rectangles */}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <rect width="24" height="24" rx="2" fill="#FFD700" />
                 {/* Row 1 */}
                 <circle cx="6" cy="7" r="1.5" fill="#000" />
-                <rect x="9" y="6" width="8" height="2" rx="1" fill="#000" />
+                <rect x="9" y="6" width="12" height="2" rx="1" fill="#000" />
                 {/* Row 2 */}
-                <circle cx="6" cy="11" r="1.5" fill="#000" />
-                <rect x="9" y="10" width="8" height="2" rx="1" fill="#000" />
+                <circle cx="6" cy="12" r="1.5" fill="#000" />
+                <rect x="9" y="11" width="12" height="2" rx="1" fill="#000" />
                 {/* Row 3 */}
-                <circle cx="6" cy="15" r="1.5" fill="#000" />
-                <rect x="9" y="14" width="8" height="2" rx="1" fill="#000" />
-                {/* Row 4 */}
-                <circle cx="6" cy="19" r="1.5" fill="#000" />
-                <rect x="9" y="18" width="8" height="2" rx="1" fill="#000" />
+                <circle cx="6" cy="17" r="1.5" fill="#000" />
+                <rect x="9" y="16" width="12" height="2" rx="1" fill="#000" />
               </svg>
             </button>
           </div>
