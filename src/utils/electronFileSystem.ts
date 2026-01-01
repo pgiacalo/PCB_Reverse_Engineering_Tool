@@ -196,25 +196,70 @@ export class ElectronFileHandle {
 export class ElectronWritableStream {
   private _path: string;
   private _data: string = '';
+  private _isBinary: boolean = false;
 
   constructor(path: string) {
     this._path = path;
+    // Check if this is likely a binary file based on extension
+    const ext = path.toLowerCase().split('.').pop();
+    const binaryExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'pdf', 'zip', 'exe', 'dmg', 'app'];
+    this._isBinary = ext ? binaryExtensions.includes(ext) : false;
   }
 
-  async write(data: string | Blob | ArrayBuffer): Promise<void> {
+  async write(data: string | Blob | ArrayBuffer | File): Promise<void> {
     if (typeof data === 'string') {
+      // If we've already written binary data, we can't mix text
+      if (this._isBinary) {
+        throw new Error('Cannot mix text and binary data in the same stream');
+      }
       this._data += data;
-    } else if (data instanceof Blob) {
-      this._data += await data.text();
+    } else if (data instanceof Blob || data instanceof File) {
+      // Convert binary data to base64
+      this._isBinary = true;
+      const arrayBuffer = await data.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      // Convert to base64 in chunks to avoid stack overflow for large files
+      let binaryString = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        // Convert chunk to string character by character
+        for (let j = 0; j < chunk.length; j++) {
+          binaryString += String.fromCharCode(chunk[j]);
+        }
+      }
+      this._data = btoa(binaryString); // Replace, don't append, for binary data
     } else if (data instanceof ArrayBuffer) {
-      this._data += new TextDecoder().decode(data);
+      // Convert ArrayBuffer to base64
+      this._isBinary = true;
+      const bytes = new Uint8Array(data);
+      // Convert to base64 in chunks to avoid stack overflow for large files
+      let binaryString = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        // Convert chunk to string character by character
+        for (let j = 0; j < chunk.length; j++) {
+          binaryString += String.fromCharCode(chunk[j]);
+        }
+      }
+      this._data = btoa(binaryString); // Replace, don't append, for binary data
     }
   }
 
   async close(): Promise<void> {
-    const result = await window.electronAPI!.writeFile(this._path, this._data);
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to write file');
+    if (this._isBinary) {
+      // Use binary write for images and other binary files
+      const result = await window.electronAPI!.writeFileBinary(this._path, this._data);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to write binary file');
+      }
+    } else {
+      // Use text write for text files
+      const result = await window.electronAPI!.writeFile(this._path, this._data);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to write file');
+      }
     }
   }
 }
