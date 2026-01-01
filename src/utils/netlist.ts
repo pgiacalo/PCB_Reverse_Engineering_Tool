@@ -521,14 +521,17 @@ export function groupNodesIntoNetsCoordinateBased(
     uf.union(intId1, intId2);
   }
   
-  // CRITICAL: Union all ground nodes with the same GroundBus name together
-  // All ground nodes with the same GroundBus name are directly connected by definition
-  // Group ground nodes by groundBusId (or default to single bus if no bus specified)
+  // CRITICAL: Union all nodes with the same GroundBus together
+  // All nodes with the same GroundBus are directly connected by definition
+  // Group nodes by groundBusId (or default to single bus if no bus specified)
+  // NOTE: Check for groundBusId property, NOT just type === 'ground'
+  // When a ground node and via/pad share the same coordinates, they get merged.
+  // The merged node keeps type 'via' or 'pad' but has groundBusId set.
   const groundNodesByBus = new Map<string, string[]>();
   for (const [coordKey, node] of coordinateToNode) {
-    if (node.type === 'ground') {
-      // Use groundBusId if available, otherwise use 'default' for nodes without a bus
-      const busId = node.groundBusId || 'default';
+    // Check for groundBusId property (includes merged via/ground nodes)
+    if (node.groundBusId) {
+      const busId = node.groundBusId;
       if (!groundNodesByBus.has(busId)) {
         groundNodesByBus.set(busId, []);
       }
@@ -555,12 +558,16 @@ export function groupNodesIntoNetsCoordinateBased(
     }
   }
   
-  // CRITICAL: Union all power nodes with the same PowerBus name together
-  // All power nodes with the same PowerBus name are directly connected by definition
-  // Group power nodes by powerBusId (not just voltage, since multiple buses can have same voltage)
+  // CRITICAL: Union all nodes with the same PowerBus together
+  // All nodes with the same PowerBus are directly connected by definition
+  // Group nodes by powerBusId (not just voltage, since multiple buses can have same voltage)
+  // NOTE: Check for powerBusId property, NOT just type === 'power'
+  // When a power node and via/pad share the same coordinates, they get merged.
+  // The merged node keeps type 'via' or 'pad' but has powerBusId set.
   const powerNodesByBus = new Map<string, string[]>();
   for (const [coordKey, node] of coordinateToNode) {
-    if (node.type === 'power' && node.powerBusId) {
+    // Check for powerBusId property (includes merged via/power nodes)
+    if (node.powerBusId) {
       const busId = node.powerBusId;
       if (!powerNodesByBus.has(busId)) {
         powerNodesByBus.set(busId, []);
@@ -620,14 +627,19 @@ export function groupNodesIntoNetsCoordinateBased(
 }
 
 /**
- * Build connectivity graph from PCB elements (ORIGINAL Point ID-based method)
+ * Build connectivity graph from PCB elements (Node ID-based method)
+ * CRITICAL: Uses Node IDs to determine connectivity, NOT coordinates.
+ * When a Via and Power/Ground symbol share the same Node ID, they represent
+ * the same electrical node. The power/ground properties are MERGED into the
+ * existing node, preserving the original type while adding bus information.
  */
 export function buildConnectivityGraph(
   drawingStrokes: DrawingStroke[],
   components: PCBComponent[],
   powerSymbols: PowerSymbol[],
   groundSymbols: GroundSymbol[],
-  powerBuses: PowerBus[]
+  powerBuses: PowerBus[],
+  groundBuses: GroundBus[] = []
 ): Map<number, NetlistNode> {
   const nodes = new Map<number, NetlistNode>();
   
@@ -689,39 +701,74 @@ export function buildConnectivityGraph(
       }
     }
   }
-  console.log(`[Connectivity] Added ${viaCount} vias, ${padCount} pads, ${tracePointCount} trace points to graph`);
+  console.log(`[Connectivity-NodeID] Added ${viaCount} vias, ${padCount} pads, ${tracePointCount} trace points to graph`);
   if (sharedNodeIds > 0) {
-    console.log(`[Connectivity] Found ${sharedNodeIds} nodes where vias/pads share Node IDs with trace points (automatic connection)`);
+    console.log(`[Connectivity-NodeID] Found ${sharedNodeIds} nodes where vias/pads share Node IDs with trace points (automatic connection)`);
   }
   
-  // Add power nodes
+  // Add/merge power nodes - CRITICAL: MERGE with existing nodes, don't overwrite!
+  // When a Power symbol shares the same Node ID with a Via, merge the power bus info
+  let powerNodesMerged = 0;
+  let powerNodesNew = 0;
   for (const power of powerSymbols) {
     if (power.pointId !== undefined) {
       const bus = powerBuses.find(b => b.id === power.powerBusId);
-      nodes.set(power.pointId, {
-        id: power.pointId,
-        type: 'power',
-        x: power.x,
-        y: power.y,
-        voltage: bus?.voltage || power.type || 'UNKNOWN',
-        powerBusId: power.powerBusId,
-      });
+      const voltage = bus?.voltage || power.type || 'UNKNOWN';
+      
+      if (nodes.has(power.pointId)) {
+        // MERGE: Existing node (via/pad/trace_point) - add power bus info
+        const existingNode = nodes.get(power.pointId)!;
+        existingNode.voltage = voltage;
+        existingNode.powerBusId = power.powerBusId;
+        powerNodesMerged++;
+        console.log(`[Connectivity-NodeID] Power node merged: Node ID ${power.pointId} (${existingNode.type}) now has powerBusId=${power.powerBusId}, voltage=${voltage}`);
+      } else {
+        // NEW: Create power node
+        nodes.set(power.pointId, {
+          id: power.pointId,
+          type: 'power',
+          x: power.x,
+          y: power.y,
+          voltage: voltage,
+          powerBusId: power.powerBusId,
+        });
+        powerNodesNew++;
+      }
     }
   }
+  console.log(`[Connectivity-NodeID] Power nodes: ${powerNodesMerged} merged with existing vias/pads, ${powerNodesNew} new`);
   
-  // Add ground nodes
+  // Add/merge ground nodes - CRITICAL: MERGE with existing nodes, don't overwrite!
+  // When a Ground symbol shares the same Node ID with a Via, merge the ground bus info
+  let groundNodesMerged = 0;
+  let groundNodesNew = 0;
   for (const ground of groundSymbols) {
-    // Note: GroundSymbol may have pointId if added dynamically
-    const groundWithPointId = ground as GroundSymbol & { pointId?: number };
-    if (groundWithPointId.pointId !== undefined) {
-      nodes.set(groundWithPointId.pointId, {
-        id: groundWithPointId.pointId,
-        type: 'ground',
-        x: ground.x,
-        y: ground.y,
-      });
+    const groundWithBusId = ground as GroundSymbol & { pointId?: number; groundBusId?: string };
+    if (groundWithBusId.pointId !== undefined) {
+      // Find the ground bus for this ground symbol
+      const bus = groundBuses.find(b => b.id === groundWithBusId.groundBusId);
+      const groundBusId = groundWithBusId.groundBusId || (bus?.id) || 'default';
+      
+      if (nodes.has(groundWithBusId.pointId)) {
+        // MERGE: Existing node (via/pad/trace_point) - add ground bus info
+        const existingNode = nodes.get(groundWithBusId.pointId)!;
+        existingNode.groundBusId = groundBusId;
+        groundNodesMerged++;
+        console.log(`[Connectivity-NodeID] Ground node merged: Node ID ${groundWithBusId.pointId} (${existingNode.type}) now has groundBusId=${groundBusId}`);
+      } else {
+        // NEW: Create ground node
+        nodes.set(groundWithBusId.pointId, {
+          id: groundWithBusId.pointId,
+          type: 'ground',
+          x: ground.x,
+          y: ground.y,
+          groundBusId: groundBusId,
+        });
+        groundNodesNew++;
+      }
     }
   }
+  console.log(`[Connectivity-NodeID] Ground nodes: ${groundNodesMerged} merged with existing vias/pads, ${groundNodesNew} new`)
   
   // Add component pin nodes
   // IMPORTANT: Component pins reference point IDs that may already exist as vias, trace points, etc.
@@ -819,17 +866,20 @@ function buildConnections(
 }
 
 /**
- * Group connected nodes into nets using union-find
+ * Group connected nodes into nets using union-find (Node ID-based)
  * Note: Nodes with the same point ID are already the same node (same key in the map)
  * This function groups nodes that are connected through traces
- * CRITICAL: All ground points are connected by definition (single common ground plane).
- * CRITICAL: All power points with the same voltage are connected by definition (common power bus).
- *           For example, all nodes at +3.3V are connected, and all nodes at -3.3V are connected
- *           (these are separate power buses - positive and negative).
+ * CRITICAL: All nodes with the same groundBusId are connected by definition.
+ * CRITICAL: All nodes with the same powerBusId are connected by definition.
+ * NOTE: Check for groundBusId/powerBusId properties, NOT just type === 'ground'/'power'
+ * When a power/ground node shares the same Node ID with a via/pad, the via/pad
+ * keeps its type but has groundBusId/powerBusId/voltage properties set.
  */
 export function groupNodesIntoNets(
   nodes: Map<number, NetlistNode>,
-  connections: Array<[number, number]>
+  connections: Array<[number, number]>,
+  powerBuses: PowerBus[] = [],
+  groundBuses: GroundBus[] = []
 ): Map<number, NetlistNode[]> {
   const uf = new UnionFind();
   
@@ -847,54 +897,62 @@ export function groupNodesIntoNets(
       if (!nodes.has(nodeId2)) missingNodeCount++;
     }
   }
-  console.log(`[Connectivity] Union-find: Processed ${connections.length} connections, ${connectionCount} valid, ${missingNodeCount} missing nodes`);
+  console.log(`[Connectivity-NodeID] Union-find: Processed ${connections.length} connections, ${connectionCount} valid, ${missingNodeCount} missing nodes`);
   
-  // CRITICAL: Union all ground nodes together (all ground points are connected by definition)
-  // This represents connections to a single, common ground plane
-  const groundNodeIds: number[] = [];
+  // CRITICAL: Union all nodes with the same groundBusId together
+  // Check for groundBusId property (not just type === 'ground') to handle merged via/ground nodes
+  const groundNodesByBus = new Map<string, number[]>();
   for (const [nodeId, node] of nodes) {
-    if (node.type === 'ground') {
-      groundNodeIds.push(nodeId);
-    }
-  }
-  // Union all ground nodes with each other
-  if (groundNodeIds.length > 0) {
-    if (groundNodeIds.length > 1) {
-      const firstGroundId = groundNodeIds[0];
-      for (let i = 1; i < groundNodeIds.length; i++) {
-        uf.union(firstGroundId, groundNodeIds[i]);
+    if (node.groundBusId) {
+      const busId = node.groundBusId;
+      if (!groundNodesByBus.has(busId)) {
+        groundNodesByBus.set(busId, []);
       }
-      console.log(`[Connectivity] Unified ${groundNodeIds.length} ground nodes into a single net (common ground plane)`);
-    } else {
-      console.log(`[Connectivity] Found 1 ground node (common ground plane)`);
+      groundNodesByBus.get(busId)!.push(nodeId);
     }
   }
-  
-  // CRITICAL: Union all power nodes with the same voltage together
-  // This represents connections to a common power bus at that voltage
-  // Group power nodes by normalized voltage (handles variations like "+3.3V", "3.3V", "+3.3 VDC")
-  const powerNodesByVoltage = new Map<string, number[]>();
-  for (const [nodeId, node] of nodes) {
-    if (node.type === 'power' && node.voltage) {
-      // Normalize voltage to handle format variations
-      const normalizedVoltage = normalizeVoltage(node.voltage);
-      if (!powerNodesByVoltage.has(normalizedVoltage)) {
-        powerNodesByVoltage.set(normalizedVoltage, []);
-      }
-      powerNodesByVoltage.get(normalizedVoltage)!.push(nodeId);
-    }
-  }
-  // Union all power nodes with the same normalized voltage
-  for (const [voltage, nodeIds] of powerNodesByVoltage) {
+  // Union all nodes with the same ground bus
+  for (const [busId, nodeIds] of groundNodesByBus) {
     if (nodeIds.length > 0) {
+      const bus = groundBuses.find(b => b.id === busId);
+      const busName = bus?.name || (busId === 'default' ? 'GND' : busId);
+      if (nodeIds.length > 1) {
+        const firstGroundId = nodeIds[0];
+        for (let i = 1; i < nodeIds.length; i++) {
+          uf.union(firstGroundId, nodeIds[i]);
+        }
+        console.log(`[Connectivity-NodeID] Unified ${nodeIds.length} nodes with groundBusId="${busName}" into a single net`);
+      } else {
+        console.log(`[Connectivity-NodeID] Found 1 node with groundBusId="${busName}"`);
+      }
+    }
+  }
+  
+  // CRITICAL: Union all nodes with the same powerBusId together
+  // Check for powerBusId property (not just type === 'power') to handle merged via/power nodes
+  const powerNodesByBus = new Map<string, number[]>();
+  for (const [nodeId, node] of nodes) {
+    if (node.powerBusId) {
+      const busId = node.powerBusId;
+      if (!powerNodesByBus.has(busId)) {
+        powerNodesByBus.set(busId, []);
+      }
+      powerNodesByBus.get(busId)!.push(nodeId);
+    }
+  }
+  // Union all nodes with the same power bus
+  for (const [busId, nodeIds] of powerNodesByBus) {
+    if (nodeIds.length > 0) {
+      const bus = powerBuses.find(b => b.id === busId);
+      const busName = bus?.name || busId;
       if (nodeIds.length > 1) {
         const firstPowerId = nodeIds[0];
         for (let i = 1; i < nodeIds.length; i++) {
           uf.union(firstPowerId, nodeIds[i]);
         }
-        console.log(`[Connectivity] Unified ${nodeIds.length} power nodes with voltage "${voltage}" into a single net (common power bus)`);
+        console.log(`[Connectivity-NodeID] Unified ${nodeIds.length} nodes with powerBusId="${busName}" into a single net`);
       } else {
-        console.log(`[Connectivity] Found 1 power node with voltage "${voltage}" (common power bus)`);
+        console.log(`[Connectivity-NodeID] Found 1 node with powerBusId="${busName}"`);
       }
     }
   }
@@ -931,6 +989,9 @@ export function groupNodesIntoNets(
 
 /**
  * Generate net names based on node types (coordinate-based version)
+ * NOTE: Check for groundBusId/powerBusId properties, NOT just type === 'ground'/'power'
+ * When a power/ground node and via/pad share the same coordinates, they get merged.
+ * The merged node keeps type 'via' or 'pad' but has groundBusId/powerBusId/voltage set.
  */
 export function generateNetNamesCoordinateBased(
   netGroups: Map<string, NetlistNode[]>,
@@ -940,15 +1001,15 @@ export function generateNetNamesCoordinateBased(
   let signalNetCounter = 1;
   
   for (const [rootCoordKey, netNodes] of netGroups) {
-    // Check for ground nodes
-    const hasGround = netNodes.some(n => n.type === 'ground');
+    // Check for ground nodes (includes merged via/ground nodes with groundBusId)
+    const hasGround = netNodes.some(n => n.type === 'ground' || n.groundBusId);
     if (hasGround) {
       netNames.set(rootCoordKey, 'GND');
       continue;
     }
     
-    // Check for power nodes
-    const powerNodes = netNodes.filter(n => n.type === 'power');
+    // Check for power nodes (includes merged via/power nodes with powerBusId/voltage)
+    const powerNodes = netNodes.filter(n => n.type === 'power' || n.powerBusId || n.voltage);
     if (powerNodes.length > 0) {
       // Use the voltage from the first power node
       const voltage = powerNodes[0].voltage || 'UNKNOWN';
@@ -1582,6 +1643,9 @@ export function generateSpiceNetlist(
 
 /**
  * Generate PADS-PCB ASCII Format (JSON)
+ * CRITICAL: Uses Node ID-based connectivity, NOT coordinates.
+ * When a Via and Power/Ground symbol share the same Node ID, they represent
+ * the same electrical node. Component pins are connected via traces (shared Node IDs).
  */
 export function generatePadsNetlist(
   components: PCBComponent[],
@@ -1592,21 +1656,39 @@ export function generatePadsNetlist(
   groundBuses: GroundBus[],
   projectName?: string
 ): string {
-  // Use coordinate-based connectivity
-  const coordinateToNode = buildConnectivityGraphCoordinateBased(
+  console.log(`[Netlist-NodeID] Building connectivity graph using Node IDs...`);
+  
+  // Use Node ID-based connectivity (NOT coordinate-based)
+  const nodes = buildConnectivityGraph(
     drawingStrokes,
     components,
     powerSymbols,
     groundSymbols,
-    powerBuses
+    powerBuses,
+    groundBuses
   );
   
-  const connections = buildConnectionsCoordinateBased(drawingStrokes, coordinateToNode);
-  // CRITICAL: Pass powerBuses and groundBuses to ensure nodes with same bus name are grouped together
-  // All power nodes with the same PowerBus name are directly connected by definition
-  // All ground nodes with the same GroundBus name are directly connected by definition
-  const netGroups = groupNodesIntoNetsCoordinateBased(coordinateToNode, connections, powerBuses, groundBuses);
-  const netNames = generateNetNamesCoordinateBased(netGroups, coordinateToNode);
+  // Build connections from traces (connect consecutive points by Node ID)
+  const connections: Array<[number, number]> = [];
+  for (const stroke of drawingStrokes) {
+    if (stroke.type === 'trace' && stroke.points.length >= 2) {
+      for (let i = 0; i < stroke.points.length - 1; i++) {
+        const point1 = stroke.points[i];
+        const point2 = stroke.points[i + 1];
+        if (point1 && point2 && point1.id !== undefined && point2.id !== undefined) {
+          // Only connect if they have different Node IDs
+          if (point1.id !== point2.id) {
+            connections.push([point1.id, point2.id]);
+          }
+        }
+      }
+    }
+  }
+  console.log(`[Netlist-NodeID] Built ${connections.length} trace connections`);
+  
+  // Group nodes into nets using Node ID-based union-find
+  const netGroups = groupNodesIntoNets(nodes, connections, powerBuses, groundBuses);
+  const netNames = generateNetNames(netGroups, nodes);
   
   // Trace power and ground bus connections through traces and pass-through components
   // Pass-through components: Jumper, Connector, Switch (no resistance, pass power/ground through)
@@ -1619,39 +1701,39 @@ export function generatePadsNetlist(
            comp.componentType === 'Switch';
   };
   
-  // Build a map of component pins to their coordinate keys
-  const componentPinToCoordKey = new Map<string, string>(); // Map: "componentId:pinIndex" -> coordKey
-  for (const [coordKey, node] of coordinateToNode) {
+  // Build a map of component pins to their Node IDs
+  const componentPinToNodeId = new Map<string, number>(); // Map: "componentId:pinIndex" -> NodeId
+  for (const [nodeId, node] of nodes) {
     if (node.componentId && node.pinIndex !== undefined) {
       const pinKey = `${node.componentId}:${node.pinIndex}`;
-      componentPinToCoordKey.set(pinKey, coordKey);
+      componentPinToNodeId.set(pinKey, nodeId);
     }
   }
   
-  // Build adjacency list for coordinate-based graph
-  const coordAdjacencyList = new Map<string, Set<string>>();
-  for (const [coordKey] of coordinateToNode.keys()) {
-    coordAdjacencyList.set(coordKey, new Set());
+  // Build adjacency list for Node ID-based graph
+  const nodeAdjacencyList = new Map<number, Set<number>>();
+  for (const nodeId of nodes.keys()) {
+    nodeAdjacencyList.set(nodeId, new Set());
   }
-  for (const [coordKey1, coordKey2] of connections) {
-    if (coordAdjacencyList.has(coordKey1)) {
-      coordAdjacencyList.get(coordKey1)!.add(coordKey2);
+  for (const [nodeId1, nodeId2] of connections) {
+    if (nodeAdjacencyList.has(nodeId1)) {
+      nodeAdjacencyList.get(nodeId1)!.add(nodeId2);
     }
-    if (coordAdjacencyList.has(coordKey2)) {
-      coordAdjacencyList.get(coordKey2)!.add(coordKey1);
+    if (nodeAdjacencyList.has(nodeId2)) {
+      nodeAdjacencyList.get(nodeId2)!.add(nodeId1);
     }
   }
   
-  // Helper function to trace from a coordinate key and mark all reachable component pins
-  const traceAndMarkPins = (startCoordKey: string, busName: string, visited: Set<string>) => {
-    if (visited.has(startCoordKey)) return;
-    visited.add(startCoordKey);
+  // Helper function to trace from a Node ID and mark all reachable component pins
+  const traceAndMarkPins = (startNodeId: number, busName: string, visited: Set<number>) => {
+    if (visited.has(startNodeId)) return;
+    visited.add(startNodeId);
     
-    const node = coordinateToNode.get(startCoordKey);
+    const node = nodes.get(startNodeId);
     if (!node) return;
     
     // CRITICAL: Check if this node represents a component pin (even if merged with power/ground)
-    // Component pins can be at the same coordinates as power/ground nodes, so the node might
+    // Component pins can have the same Node ID as power/ground nodes, so the node might
     // have both componentId/pinIndex AND powerBusId/groundBusId properties
     if (node.componentId && node.pinIndex !== undefined) {
       const pinKey = `${node.componentId}:${node.pinIndex}`;
@@ -1665,7 +1747,6 @@ export function generatePadsNetlist(
       if (comp && isPassThroughComponent(comp)) {
         // For pass-through components, all pins are connected internally (no resistance)
         // So if one pin has the bus, all pins should have it
-        // Find all pins of this component in the coordinate graph and continue tracing from them
         for (let pinIndex = 0; pinIndex < comp.pinCount; pinIndex++) {
           const otherPinKey = `${comp.id}:${pinIndex}`;
           // Mark all pins of this pass-through component with the bus name
@@ -1674,49 +1755,76 @@ export function generatePadsNetlist(
           }
           componentPinBusNames.get(otherPinKey)!.add(busName);
           
-          // Continue tracing from this pin's coordinate if it exists in the graph
-          const otherPinCoordKey = componentPinToCoordKey.get(otherPinKey);
-          if (otherPinCoordKey && !visited.has(otherPinCoordKey)) {
-            traceAndMarkPins(otherPinCoordKey, busName, visited);
+          // Continue tracing from this pin's Node ID if it exists in the graph
+          const otherPinNodeId = componentPinToNodeId.get(otherPinKey);
+          if (otherPinNodeId !== undefined && !visited.has(otherPinNodeId)) {
+            traceAndMarkPins(otherPinNodeId, busName, visited);
           }
         }
       }
     }
     
     // Continue tracing through connected nodes (traces)
-    const neighbors = coordAdjacencyList.get(startCoordKey);
+    const neighbors = nodeAdjacencyList.get(startNodeId);
     if (neighbors) {
-      for (const neighborCoordKey of neighbors) {
-        traceAndMarkPins(neighborCoordKey, busName, visited);
+      for (const neighborNodeId of neighbors) {
+        traceAndMarkPins(neighborNodeId, busName, visited);
       }
     }
   };
   
   // Trace from each power bus node
+  // CRITICAL: Check for powerBusId property to find all nodes with this power bus
+  // (includes merged via/power nodes that keep type 'via' but have powerBusId set)
+  console.log(`[Netlist-NodeID] Tracing power bus connections through traces...`);
   for (const powerBus of powerBuses) {
     const busName = powerBus.name;
-    const visited = new Set<string>();
+    const visited = new Set<number>();
     
-    // Start DFS from all power nodes with this bus ID
-    for (const [coordKey, node] of coordinateToNode) {
-      if (node.type === 'power' && node.powerBusId === powerBus.id) {
-        traceAndMarkPins(coordKey, busName, visited);
+    // Start DFS from all nodes with this power bus ID
+    let powerNodeCount = 0;
+    for (const [nodeId, node] of nodes) {
+      if (node.powerBusId === powerBus.id) {
+        powerNodeCount++;
+        console.log(`[Netlist-NodeID] Starting trace from power node ID ${nodeId}, type=${node.type}, busId=${node.powerBusId}`);
+        traceAndMarkPins(nodeId, busName, visited);
       }
     }
+    console.log(`[Netlist-NodeID] Power bus "${busName}": Traced from ${powerNodeCount} node(s), visited ${visited.size} Node ID(s)`);
   }
   
   // Trace from each ground bus node
+  // CRITICAL: Check for groundBusId property to find all nodes with this ground bus
+  // (includes merged via/ground nodes that keep type 'via' but have groundBusId set)
+  console.log(`[Netlist-NodeID] Tracing ground bus connections through traces...`);
   for (const groundBus of groundBuses) {
     const busName = groundBus.name;
-    const visited = new Set<string>();
+    const visited = new Set<number>();
     
-    // Start DFS from all ground nodes with this bus ID
-    for (const [coordKey, node] of coordinateToNode) {
-      if (node.type === 'ground' && node.groundBusId === groundBus.id) {
-        traceAndMarkPins(coordKey, busName, visited);
+    // Start DFS from all nodes with this ground bus ID
+    let groundNodeCount = 0;
+    for (const [nodeId, node] of nodes) {
+      if (node.groundBusId === groundBus.id) {
+        groundNodeCount++;
+        console.log(`[Netlist-NodeID] Starting trace from ground node ID ${nodeId}, type=${node.type}, busId=${node.groundBusId}`);
+        traceAndMarkPins(nodeId, busName, visited);
       }
     }
+    console.log(`[Netlist-NodeID] Ground bus "${busName}": Traced from ${groundNodeCount} node(s), visited ${visited.size} Node ID(s)`);
   }
+  
+  // Log summary of component pins with bus connections
+  let pinsWithPower = 0;
+  let pinsWithGround = 0;
+  for (const [_pinKey, busNames] of componentPinBusNames) {
+    for (const busName of busNames) {
+      const isPower = powerBuses.some(b => b.name === busName);
+      const isGround = groundBuses.some(b => b.name === busName);
+      if (isPower) pinsWithPower++;
+      if (isGround) pinsWithGround++;
+    }
+  }
+  console.log(`[Netlist-NodeID] Found ${pinsWithPower} component pin(s) connected to power buses, ${pinsWithGround} connected to ground buses`)
   
   // Build component map
   // CRITICAL: Use full designator (e.g., "R1", "C2", "U3") to uniquely identify components
@@ -1870,18 +1978,17 @@ export function generatePadsNetlist(
     }>;
   }> = [];
   
-    // Process each net group
-  for (const [rootCoordKey, netNodes] of netGroups) {
-    const netName = netNames.get(rootCoordKey);
+    // Process each net group (now using Node IDs as keys)
+  for (const [rootNodeId, netNodes] of netGroups) {
+    const netName = netNames.get(rootNodeId);
     if (!netName) continue;
     
     // Extract component pin connections
     // CRITICAL: Check for componentId and pinIndex properties, not just type === 'component_pin'
-    // This ensures we find component pins even when they're merged with vias/pads/power/ground at the same coordinates
-    // We need to crawl through ALL nodes in the net to find ALL component pins that are connected
-    // through traces, vias, pads, power nodes, ground nodes, or direct connections
+    // This ensures we find component pins even when they're merged with vias/pads/power/ground
+    // (merged nodes share the same Node ID)
     // 
-    // IMPORTANT: Component pins connected to power or ground nodes (either directly at same coordinates
+    // IMPORTANT: Component pins connected to power or ground nodes (either directly with same Node ID
     // or through traces) will be in the same net group and will be included here.
     const connections: Array<{
       component: string;
@@ -1893,15 +2000,18 @@ export function generatePadsNetlist(
     }> = [];
     
     // First pass: Identify power and ground bus names in this net
+    // CRITICAL: Check for powerBusId/groundBusId properties, not just type
+    // (merged via/power and via/ground nodes keep their original type but have bus ID properties)
     let netPowerBusName: string | undefined;
     let netGroundBusName: string | undefined;
     for (const node of netNodes) {
-      if (node.type === 'power' && node.powerBusId) {
+      if (node.powerBusId) {
         const powerBus = powerBuses.find(b => b.id === node.powerBusId);
         if (powerBus) {
           netPowerBusName = powerBus.name;
         }
-      } else if (node.type === 'ground' && node.groundBusId) {
+      }
+      if (node.groundBusId) {
         const groundBus = groundBuses.find(b => b.id === node.groundBusId);
         if (groundBus) {
           netGroundBusName = groundBus.name;
@@ -2022,8 +2132,53 @@ export function generatePadsNetlist(
     }
   }
   
+  // CRITICAL: Merge nets with the same name (standard industry practice)
+  // Multiple net groups might have the same name (e.g., "GND") if they weren't
+  // connected by traces. They should be merged into a single net.
+  const mergedNetsMap = new Map<string, {
+    name: string;
+    connections: Array<{
+      component: string;
+      pin_number: string;
+      pin_name: string;
+      pin_type?: string;
+      power_bus?: string;
+      ground_bus?: string;
+    }>;
+  }>();
+  
+  for (const net of padsNets) {
+    if (mergedNetsMap.has(net.name)) {
+      // Merge connections into existing net
+      const existingNet = mergedNetsMap.get(net.name)!;
+      // Add connections, avoiding duplicates (same component + pin_number)
+      for (const conn of net.connections) {
+        const isDuplicate = existingNet.connections.some(
+          existing => existing.component === conn.component && existing.pin_number === conn.pin_number
+        );
+        if (!isDuplicate) {
+          existingNet.connections.push(conn);
+        }
+      }
+    } else {
+      // Create new net entry
+      mergedNetsMap.set(net.name, {
+        name: net.name,
+        connections: [...net.connections]
+      });
+    }
+  }
+  
+  // Convert back to array
+  const mergedNets = Array.from(mergedNetsMap.values());
+  
+  // Log if any nets were merged
+  if (mergedNets.length < padsNets.length) {
+    console.log(`[Netlist-NodeID] Merged ${padsNets.length - mergedNets.length} duplicate net(s) with same name`);
+  }
+  
   // Sort nets: GND first, then power nets (by voltage), then signal nets
-  padsNets.sort((a, b) => {
+  mergedNets.sort((a, b) => {
     // Sort GND first
     if (a.name === 'GND') return -1;
     if (b.name === 'GND') return 1;
@@ -2052,7 +2207,7 @@ export function generatePadsNetlist(
       date: new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
     },
     components: padsComponents,
-    nets: padsNets
+    nets: mergedNets
   };
   
   // Return formatted JSON string
@@ -2061,6 +2216,9 @@ export function generatePadsNetlist(
 
 /**
  * Generate net names based on node types
+ * NOTE: Check for groundBusId/powerBusId properties, NOT just type === 'ground'/'power'
+ * When a power/ground node and via/pad share the same coordinates, they get merged.
+ * The merged node keeps type 'via' or 'pad' but has groundBusId/powerBusId/voltage set.
  */
 export function generateNetNames(
   netGroups: Map<number, NetlistNode[]>,
@@ -2070,20 +2228,20 @@ export function generateNetNames(
   let signalNetCounter = 1;
   
   for (const [root, netNodes] of netGroups) {
-    // Check for ground nodes
+    // Check for ground nodes (includes merged via/ground nodes with groundBusId)
     // CRITICAL: Vias and pads that share the same Node ID with ground nodes
     // are in the same net, so this net should be labeled as GND
-    const hasGround = netNodes.some(n => n.type === 'ground');
+    const hasGround = netNodes.some(n => n.type === 'ground' || n.groundBusId);
     if (hasGround) {
       netNames.set(root, 'GND');
-      console.log(`[NetNames] Net ${root}: Labeled as GND (contains ${netNodes.filter(n => n.type === 'ground').length} ground node(s), ${netNodes.filter(n => n.type === 'via' || n.type === 'pad').length} via/pad node(s) sharing same Node ID)`);
+      console.log(`[NetNames] Net ${root}: Labeled as GND (contains ${netNodes.filter(n => n.type === 'ground' || n.groundBusId).length} ground node(s), ${netNodes.filter(n => n.type === 'via' || n.type === 'pad').length} via/pad node(s) sharing same Node ID)`);
       continue;
     }
     
-    // Check for power nodes
+    // Check for power nodes (includes merged via/power nodes with powerBusId/voltage)
     // CRITICAL: Vias and pads that share the same Node ID with power nodes
     // are in the same net, so this net should be labeled with the power bus voltage
-    const powerNodes = netNodes.filter(n => n.type === 'power');
+    const powerNodes = netNodes.filter(n => n.type === 'power' || n.powerBusId || n.voltage);
     if (powerNodes.length > 0) {
       // Use the voltage from the first power node
       // All power nodes in the same net should have the same voltage (grouped by voltage)

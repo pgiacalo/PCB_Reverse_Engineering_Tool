@@ -1306,10 +1306,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           Help ▾
         </button>
         {openMenu === 'help' && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 8, zIndex: 100 }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 200, background: '#2b2b31', border: '1px solid #1f1f24', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.25)', padding: 6, zIndex: 100 }}>
             <button
               onClick={() => { setOpenMenu(null); setShowAboutDialog(true); }}
-              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', color: '#f2f2f2', fontSize: '14px', cursor: 'pointer', borderRadius: 4 }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#f2f2f2', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
@@ -1318,7 +1318,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
             <button
               onClick={() => { setOpenMenu(null); setShowDocumentationDialog(true); }}
-              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', border: 'none', background: 'transparent', color: '#f2f2f2', fontSize: '14px', cursor: 'pointer', borderRadius: 4 }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#f2f2f2', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
