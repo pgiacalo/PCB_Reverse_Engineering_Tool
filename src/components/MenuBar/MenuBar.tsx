@@ -85,6 +85,8 @@ export interface MenuBarProps {
   // Tools operations
   increaseSize: (increment?: number) => void;
   decreaseSize: (decrement?: number) => void;
+  onChangeSize: () => void;
+  onChangeColor: () => void;
   brushSize: number;
   drawingStrokes: DrawingStroke[];
   selectedIds: Set<string>;
@@ -249,6 +251,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   openProjectRef: _openProjectRef,
   increaseSize,
   decreaseSize,
+  onChangeSize,
+  onChangeColor,
   brushSize: _brushSize,
   drawingStrokes,
   selectedIds: _selectedIds,
@@ -947,36 +951,36 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               Export BOM…
             </button>
-            <button
+              <button
               onClick={async () => {
-                if (isReadOnlyMode || !isProjectActive) {
-                  if (!isProjectActive) {
-                    alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
-                    setOpenMenu(null);
+                  if (isReadOnlyMode || !isProjectActive) {
+                    if (!isProjectActive) {
+                      alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                      setOpenMenu(null);
+                    }
+                    return;
                   }
-                  return;
-                }
                 setOpenMenu(null);
                 try {
                   await onExportNetlist();
                 } catch (e) {
                   console.error('Error exporting netlist:', e);
                 }
-              }}
-              disabled={isReadOnlyMode || !isProjectActive}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '6px 10px',
-                color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2',
-                background: 'transparent',
-                border: 'none',
-                cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-              }}
-            >
+                }}
+                disabled={isReadOnlyMode || !isProjectActive}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
+                }}
+              >
               Export Netlist (JSON)…
-            </button>
+              </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Printer Settings…</button>
@@ -1111,6 +1115,30 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               Decrease Size (-)
+            </button>
+            <button
+              onClick={() => {
+                if (isProjectActive) {
+                  onChangeSize();
+                  setOpenMenu(null);
+                }
+              }}
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
+            >
+              Change Size…
+            </button>
+            <button
+              onClick={() => {
+                if (isProjectActive) {
+                  onChangeColor();
+                  setOpenMenu(null);
+                }
+              }}
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
+            >
+              Change Color…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <div style={{ position: 'relative' }}>
@@ -1683,10 +1711,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   Use the <strong>File</strong> menu to manage projects, the <strong>Images</strong> menu for image loading and transformation, and the <strong>Tools</strong> menu for selection, locking, and customization options.
                 </p>
               </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Documentation Dialog Modal */}
       {showDocumentationDialog && (
@@ -1728,9 +1756,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               borderBottom: '1px solid #444' 
             }}>
               <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCB Tracer (v3.1) - Documentation</h2>
-              <button
+        <button 
                 onClick={() => setShowDocumentationDialog(false)}
-                style={{
+          style={{ 
                   background: 'none',
                   border: 'none',
                   color: '#999',
@@ -1741,9 +1769,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#999'; }}
-              >
+        >
                 ×
-              </button>
+        </button>
             </div>
 
             {/* Scrollable Content */}
@@ -1853,11 +1881,11 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                       <li><strong>Select</strong> — <code>S</code></li>
                         <li><strong>Select All</strong> — <code>A</code></li>
-                        <li><strong>Via</strong> — <code>V</code></li>
-                        <li><strong>Via Pattern</strong> — <code>Alt/Option+V</code></li>
-                        <li><strong>Pad</strong> — <code>P</code></li>
-                        <li><strong>Pad Pattern</strong> — <code>Alt/Option+P</code></li>
-                        <li><strong>Test Point</strong> — <code>Y</code></li>
+                      <li><strong>Via</strong> — <code>V</code></li>
+                      <li><strong>Via Pattern</strong> — <code>Alt/Option+V</code></li>
+                      <li><strong>Pad</strong> — <code>P</code></li>
+                      <li><strong>Pad Pattern</strong> — <code>Alt/Option+P</code></li>
+                      <li><strong>Test Point</strong> — <code>Y</code></li>
                       <li><strong>Trace</strong> — <code>T</code></li>
                       <li><strong>Component</strong> — <code>C</code></li>
                       <li><strong>Component Properties</strong> — <code>U</code> (or double-click component)</li>
@@ -1908,10 +1936,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li>Double-click any slider to reset it to the default value</li>
                 </ul>
               </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </>
   );
 };

@@ -1387,6 +1387,11 @@ function App() {
   const [showTopImage, setShowTopImage] = useState(true);
   const [showBottomImage, setShowBottomImage] = useState(true);
   const [showAiSettingsDialog, setShowAiSettingsDialog] = useState(false);
+  
+  // Change Size/Color dialog states
+  const [changeSizeDialog, setChangeSizeDialog] = useState<{ visible: boolean; size: number }>({ visible: false, size: 10 });
+  const [changeColorDialog, setChangeColorDialog] = useState<{ visible: boolean; color: string }>({ visible: false, color: '#ff0000' });
+  
   const [showViasLayer, setShowViasLayer] = useState(true);
   const [showTopTracesLayer, setShowTopTracesLayer] = useState(true);
   const [showBottomTracesLayer, setShowBottomTracesLayer] = useState(true);
@@ -5927,7 +5932,7 @@ function App() {
         ctx.stroke();
 
         // Draw dots at vertices (optional - separate control for corners vs endpoints)
-        ctx.fillStyle = '#000000';
+          ctx.fillStyle = '#000000';
         const numPoints = stroke.points.length;
         for (let i = 0; i < numPoints; i++) {
           const pt = stroke.points[i];
@@ -6533,6 +6538,184 @@ function App() {
       }
     }
   }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, selectedDrawingLayer, padToolLayer, testPointToolLayer, traceToolLayer, componentToolLayer, saveDefaultSize]);
+
+  // Open Change Size dialog
+  const handleOpenChangeSize = useCallback(() => {
+    // Get the current size of the first selected object
+    let currentSize = 10; // default
+    
+    if (selectedIds.size > 0) {
+      const firstId = selectedIds.values().next().value;
+      const stroke = drawingStrokes.find(s => s.id === firstId);
+      if (stroke) currentSize = stroke.size;
+    } else if (selectedComponentIds.size > 0) {
+      const firstId = selectedComponentIds.values().next().value;
+      const comp = componentsTop.find(c => c.id === firstId) || componentsBottom.find(c => c.id === firstId);
+      if (comp) currentSize = comp.size || 18;
+    } else if (selectedPowerIds.size > 0) {
+      const firstId = selectedPowerIds.values().next().value;
+      const power = powers.find(p => p.id === firstId);
+      if (power) currentSize = power.size;
+    } else if (selectedGroundIds.size > 0) {
+      const firstId = selectedGroundIds.values().next().value;
+      const ground = grounds.find(g => g.id === firstId);
+      if (ground) currentSize = ground.size;
+    }
+    
+    setChangeSizeDialog({ visible: true, size: currentSize });
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
+
+  // Open Change Color dialog
+  const handleOpenChangeColor = useCallback(() => {
+    // Get the current color of the first selected object
+    let currentColor = '#ff0000'; // default
+    
+    if (selectedIds.size > 0) {
+      const firstId = selectedIds.values().next().value;
+      const stroke = drawingStrokes.find(s => s.id === firstId);
+      if (stroke) currentColor = stroke.color;
+    } else if (selectedComponentIds.size > 0) {
+      const firstId = selectedComponentIds.values().next().value;
+      const comp = componentsTop.find(c => c.id === firstId) || componentsBottom.find(c => c.id === firstId);
+      if (comp) currentColor = comp.color;
+    } else if (selectedPowerIds.size > 0) {
+      const firstId = selectedPowerIds.values().next().value;
+      const power = powers.find(p => p.id === firstId);
+      if (power) currentColor = power.color;
+    } else if (selectedGroundIds.size > 0) {
+      const firstId = selectedGroundIds.values().next().value;
+      const ground = grounds.find(g => g.id === firstId);
+      if (ground) currentColor = ground.color;
+    }
+    
+    setChangeColorDialog({ visible: true, color: currentColor });
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds]);
+
+  // Apply size from Change Size dialog
+  const handleApplyChangeSize = useCallback(() => {
+    const newSize = changeSizeDialog.size;
+    
+    if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
+      alert('No objects selected. Please select objects first.');
+      setChangeSizeDialog({ visible: false, size: 10 });
+      return;
+    }
+    
+    // Check for locked items
+    if (selectedIds.size > 0) {
+      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+      const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+      const hasLockedTestPoints = areTestPointsLocked && selectedStrokes.some(s => s.type === 'testPoint');
+      if (hasLockedVias || hasLockedPads || hasLockedTraces || hasLockedTestPoints) {
+        alert('Cannot change size: selected items are locked.');
+        return;
+      }
+    }
+    if (selectedComponentIds.size > 0 && areComponentsLocked) {
+      alert('Cannot change size: selected components are locked.');
+      return;
+    }
+    if (selectedPowerIds.size > 0 && arePowerNodesLocked) {
+      alert('Cannot change size: selected power nodes are locked.');
+      return;
+    }
+    if (selectedGroundIds.size > 0 && areGroundNodesLocked) {
+      alert('Cannot change size: selected ground nodes are locked.');
+      return;
+    }
+    
+    // Apply the size to all selected objects
+    if (selectedIds.size > 0) {
+      setDrawingStrokes(prev => prev.map(s => 
+        selectedIds.has(s.id) ? { ...s, size: newSize } : s
+      ));
+    }
+    if (selectedComponentIds.size > 0) {
+      setComponentsTop(prev => prev.map(c => 
+        selectedComponentIds.has(c.id) ? { ...c, size: newSize } : c
+      ));
+      setComponentsBottom(prev => prev.map(c => 
+        selectedComponentIds.has(c.id) ? { ...c, size: newSize } : c
+      ));
+    }
+    if (selectedPowerIds.size > 0) {
+      setPowerSymbols(prev => prev.map(p => 
+        selectedPowerIds.has(p.id) ? { ...p, size: newSize } : p
+      ));
+    }
+    if (selectedGroundIds.size > 0) {
+      setGroundSymbols(prev => prev.map(g => 
+        selectedGroundIds.has(g.id) ? { ...g, size: newSize } : g
+      ));
+    }
+    
+    setChangeSizeDialog({ visible: false, size: 10 });
+  }, [changeSizeDialog.size, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, arePadsLocked, areTracesLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked]);
+
+  // Apply color from Change Color dialog
+  const handleApplyChangeColor = useCallback(() => {
+    const newColor = changeColorDialog.color;
+    
+    if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
+      alert('No objects selected. Please select objects first.');
+      setChangeColorDialog({ visible: false, color: '#ff0000' });
+      return;
+    }
+    
+    // Check for locked items
+    if (selectedIds.size > 0) {
+      const selectedStrokes = drawingStrokes.filter(s => selectedIds.has(s.id));
+      const hasLockedVias = areViasLocked && selectedStrokes.some(s => s.type === 'via');
+      const hasLockedPads = arePadsLocked && selectedStrokes.some(s => s.type === 'pad');
+      const hasLockedTraces = areTracesLocked && selectedStrokes.some(s => s.type === 'trace');
+      const hasLockedTestPoints = areTestPointsLocked && selectedStrokes.some(s => s.type === 'testPoint');
+      if (hasLockedVias || hasLockedPads || hasLockedTraces || hasLockedTestPoints) {
+        alert('Cannot change color: selected items are locked.');
+        return;
+      }
+    }
+    if (selectedComponentIds.size > 0 && areComponentsLocked) {
+      alert('Cannot change color: selected components are locked.');
+      return;
+    }
+    if (selectedPowerIds.size > 0 && arePowerNodesLocked) {
+      alert('Cannot change color: selected power nodes are locked.');
+      return;
+    }
+    if (selectedGroundIds.size > 0 && areGroundNodesLocked) {
+      alert('Cannot change color: selected ground nodes are locked.');
+      return;
+    }
+    
+    // Apply the color to all selected objects
+    if (selectedIds.size > 0) {
+      setDrawingStrokes(prev => prev.map(s => 
+        selectedIds.has(s.id) ? { ...s, color: newColor } : s
+      ));
+    }
+    if (selectedComponentIds.size > 0) {
+      setComponentsTop(prev => prev.map(c => 
+        selectedComponentIds.has(c.id) ? { ...c, color: newColor } : c
+      ));
+      setComponentsBottom(prev => prev.map(c => 
+        selectedComponentIds.has(c.id) ? { ...c, color: newColor } : c
+      ));
+    }
+    if (selectedPowerIds.size > 0) {
+      setPowerSymbols(prev => prev.map(p => 
+        selectedPowerIds.has(p.id) ? { ...p, color: newColor } : p
+      ));
+    }
+    if (selectedGroundIds.size > 0) {
+      setGroundSymbols(prev => prev.map(g => 
+        selectedGroundIds.has(g.id) ? { ...g, color: newColor } : g
+      ));
+    }
+    
+    setChangeColorDialog({ visible: false, color: '#ff0000' });
+  }, [changeColorDialog.color, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, arePadsLocked, areTracesLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked]);
 
   // Handle applying size from Set Size dialog
   const handleSetSizeApply = useCallback(() => {
@@ -7663,7 +7846,7 @@ function App() {
         switch (e.key) {
           case 's':
           case 'S':
-            e.preventDefault();
+        e.preventDefault();
             clearAllSelections(); // Clear all selections when tool is selected
             switchToSelectTool();
             return;
@@ -7678,31 +7861,31 @@ function App() {
             // If multiple components are selected, open the most recently selected one
             if (!isReadOnly && selectedComponentIds.size > 0) {
               e.preventDefault();
-              
-              // Get the most recently selected component (last item in Set)
-              // Sets preserve insertion order, so the last item is the most recent
-              const componentIdArray = Array.from(selectedComponentIds);
-              const mostRecentComponentId = componentIdArray[componentIdArray.length - 1];
-              
-              // Find the component in top or bottom layer
-              let foundComponent: PCBComponent | null = null;
-              let foundLayer: 'top' | 'bottom' | null = null;
-              
-              foundComponent = componentsTop.find(c => c.id === mostRecentComponentId) || null;
-              if (foundComponent) {
-                foundLayer = 'top';
-              } else {
-                foundComponent = componentsBottom.find(c => c.id === mostRecentComponentId) || null;
-                if (foundComponent) {
-                  foundLayer = 'bottom';
-                }
-              }
-              
-              // Open the component editor if found
-              if (foundComponent && foundLayer) {
-                openComponentEditor(foundComponent, foundLayer);
-              }
-            }
+        
+        // Get the most recently selected component (last item in Set)
+        // Sets preserve insertion order, so the last item is the most recent
+        const componentIdArray = Array.from(selectedComponentIds);
+        const mostRecentComponentId = componentIdArray[componentIdArray.length - 1];
+        
+        // Find the component in top or bottom layer
+        let foundComponent: PCBComponent | null = null;
+        let foundLayer: 'top' | 'bottom' | null = null;
+        
+        foundComponent = componentsTop.find(c => c.id === mostRecentComponentId) || null;
+        if (foundComponent) {
+          foundLayer = 'top';
+        } else {
+          foundComponent = componentsBottom.find(c => c.id === mostRecentComponentId) || null;
+          if (foundComponent) {
+            foundLayer = 'bottom';
+          }
+        }
+        
+        // Open the component editor if found
+        if (foundComponent && foundLayer) {
+          openComponentEditor(foundComponent, foundLayer);
+        }
+      }
             return;
           case 'b':
           case 'B':
@@ -11058,14 +11241,14 @@ function App() {
       
       // Generate PADS JSON netlist
       const netlistContent = generatePadsNetlist(
-        allComponents,
-        drawingStrokes,
-        powers,
-        grounds,
-        powerBuses,
-        groundBuses,
-        projectName
-      );
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses,
+          groundBuses,
+          projectName
+        );
       
       const filename = `${projectName}_netlist.json`;
       
@@ -13103,6 +13286,8 @@ function App() {
         openProjectRef={openProjectRef}
         increaseSize={increaseSize}
         decreaseSize={decreaseSize}
+        onChangeSize={handleOpenChangeSize}
+        onChangeColor={handleOpenChangeColor}
         brushSize={brushSize}
         drawingStrokes={drawingStrokes}
         selectedIds={selectedIds}
@@ -16038,6 +16223,198 @@ function App() {
           setShowICPlacementDialog(false);
         }}
       />
+
+      {/* Change Size Dialog */}
+      {changeSizeDialog.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setChangeSizeDialog({ visible: false, size: 10 })}
+        >
+          <div
+            style={{
+              background: '#2b2b31',
+              borderRadius: 8,
+              padding: 24,
+              minWidth: 300,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: 16 }}>Change Size</h3>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', color: '#aaa', fontSize: 13, marginBottom: 6 }}>
+                New Size:
+              </label>
+              <input
+                type="number"
+                value={changeSizeDialog.size}
+                onChange={(e) => setChangeSizeDialog({ ...changeSizeDialog, size: parseFloat(e.target.value) || 1 })}
+                min={1}
+                max={100}
+                step={1}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  borderRadius: 4,
+                  border: '1px solid #444',
+                  background: '#1a1a1f',
+                  color: '#e0e0e0',
+                  fontSize: 14,
+                  outline: 'none',
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleApplyChangeSize();
+                  } else if (e.key === 'Escape') {
+                    setChangeSizeDialog({ visible: false, size: 10 });
+                  }
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setChangeSizeDialog({ visible: false, size: 10 })}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 4,
+                  border: '1px solid #555',
+                  background: 'transparent',
+                  color: '#ccc',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyChangeSize}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 4,
+                  border: 'none',
+                  background: '#4a90d9',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Color Dialog */}
+      {changeColorDialog.visible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setChangeColorDialog({ visible: false, color: '#ff0000' })}
+        >
+          <div
+            style={{
+              background: '#2b2b31',
+              borderRadius: 8,
+              padding: 24,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ margin: '0 0 16px 0', color: '#f2f2f2', fontSize: 16 }}>Change Color</h3>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', color: '#aaa', fontSize: 13, marginBottom: 8 }}>
+                Selected Color:
+              </label>
+              <div
+                style={{
+                  width: 48,
+                  height: 32,
+                  backgroundColor: changeColorDialog.color,
+                  border: '1px solid #555',
+                  borderRadius: 4,
+                  marginBottom: 12,
+                }}
+                title={changeColorDialog.color}
+              />
+            </div>
+            {/* Color palette grid - same as toolbar */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 24px)', gap: 4 }}>
+              {palette8x8.map((c) => (
+                <div
+                  key={c}
+                  onClick={() => {
+                    setChangeColorDialog({ ...changeColorDialog, color: c });
+                  }}
+                  title={c}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    backgroundColor: c,
+                    border: c === changeColorDialog.color ? '2px solid #fff' : '1px solid #555',
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+              <button
+                onClick={() => setChangeColorDialog({ visible: false, color: '#ff0000' })}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 4,
+                  border: '1px solid #555',
+                  background: 'transparent',
+                  color: '#ccc',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyChangeColor}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 4,
+                  border: 'none',
+                  background: '#4a90d9',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

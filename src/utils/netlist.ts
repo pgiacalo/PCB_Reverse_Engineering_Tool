@@ -278,7 +278,7 @@ export function buildConnectivityGraphCoordinateBased(
       getOrCreateNode(point.x, point.y, 'via');
       const coordKey = createCoordKey(point.x, point.y);
       if (point.id !== undefined) {
-        pointIdToCoord.set(point.id, coordKey);
+      pointIdToCoord.set(point.id, coordKey);
       }
       viaCount++;
     }
@@ -293,7 +293,7 @@ export function buildConnectivityGraphCoordinateBased(
         getOrCreateNode(point.x, point.y, 'trace_point');
         const coordKey = createCoordKey(point.x, point.y);
         if (point.id !== undefined) {
-          pointIdToCoord.set(point.id, coordKey);
+        pointIdToCoord.set(point.id, coordKey);
         }
         tracePointCount++;
       }
@@ -724,17 +724,17 @@ export function buildConnectivityGraph(
         console.log(`[Connectivity-NodeID] Power node merged: Node ID ${power.pointId} (${existingNode.type}) now has powerBusId=${power.powerBusId}, voltage=${voltage}`);
       } else {
         // NEW: Create power node
-        nodes.set(power.pointId, {
-          id: power.pointId,
-          type: 'power',
-          x: power.x,
-          y: power.y,
+      nodes.set(power.pointId, {
+        id: power.pointId,
+        type: 'power',
+        x: power.x,
+        y: power.y,
           voltage: voltage,
-          powerBusId: power.powerBusId,
-        });
+        powerBusId: power.powerBusId,
+      });
         powerNodesNew++;
-      }
     }
+  }
   }
   console.log(`[Connectivity-NodeID] Power nodes: ${powerNodesMerged} merged with existing vias/pads, ${powerNodesNew} new`);
   
@@ -759,14 +759,14 @@ export function buildConnectivityGraph(
         // NEW: Create ground node
         nodes.set(groundWithBusId.pointId, {
           id: groundWithBusId.pointId,
-          type: 'ground',
-          x: ground.x,
-          y: ground.y,
+        type: 'ground',
+        x: ground.x,
+        y: ground.y,
           groundBusId: groundBusId,
-        });
+      });
         groundNodesNew++;
-      }
     }
+  }
   }
   console.log(`[Connectivity-NodeID] Ground nodes: ${groundNodesMerged} merged with existing vias/pads, ${groundNodesNew} new`)
   
@@ -920,9 +920,9 @@ export function groupNodesIntoNets(
         const firstGroundId = nodeIds[0];
         for (let i = 1; i < nodeIds.length; i++) {
           uf.union(firstGroundId, nodeIds[i]);
-        }
+      }
         console.log(`[Connectivity-NodeID] Unified ${nodeIds.length} nodes with groundBusId="${busName}" into a single net`);
-      } else {
+    } else {
         console.log(`[Connectivity-NodeID] Found 1 node with groundBusId="${busName}"`);
       }
     }
@@ -1822,8 +1822,8 @@ export function generatePadsNetlist(
       const isGround = groundBuses.some(b => b.name === busName);
       if (isPower) pinsWithPower++;
       if (isGround) pinsWithGround++;
+      }
     }
-  }
   console.log(`[Netlist-NodeID] Found ${pinsWithPower} component pin(s) connected to power buses, ${pinsWithGround} connected to ground buses`)
   
   // Build component map

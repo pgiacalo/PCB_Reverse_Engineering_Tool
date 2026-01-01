@@ -52,7 +52,7 @@ import {
 } from '../../utils/aiServices';
 
 // Run migration on module load to preserve any existing Gemini API keys
-if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
   migrateFromLegacyStorage();
 }
 
@@ -256,7 +256,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
 
   // Function to save API key, model, and settings - moved to top level (before early return)
   const handleSaveApiKey = () => {
-    if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined') {
       // Save the provider and storage type preference
       saveAIConfig({
         provider: selectedProvider,
@@ -272,28 +272,28 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       if (apiKeyInput.trim()) {
         service.saveApiKey(apiKeyInput.trim(), storageType);
         service.saveModel(modelInput);
-        setHasStoredApiKey(true);
+      setHasStoredApiKey(true);
         
         const storageNote = storageType === 'sessionStorage' 
           ? 'Note: The API key will be cleared when you close the browser tab.'
           : 'Note: The API key will persist until you remove it.';
         
-        setInfoDialog({
-          visible: true,
+      setInfoDialog({
+        visible: true,
           title: 'Settings Saved',
           message: `${serviceInfo.name} API key and model (${modelInput}) saved! You can now use the "Extract Datasheet Information" feature. ${storageNote}`,
-          type: 'success',
-        });
-      } else {
+        type: 'success',
+      });
+    } else {
         service.removeApiKey();
         service.saveModel(modelInput); // Still save model even if removing key
-        setHasStoredApiKey(false);
-        setInfoDialog({
-          visible: true,
-          title: 'API Key Removed',
-          message: 'API key removed. Model preference saved.',
-          type: 'info',
-        });
+      setHasStoredApiKey(false);
+      setInfoDialog({
+        visible: true,
+        title: 'API Key Removed',
+        message: 'API key removed. Model preference saved.',
+        type: 'info',
+      });
       }
     }
   };
@@ -1418,7 +1418,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       const aiResponse = await aiService.extractFromPDF({
         prompt,
         pdfBase64: base64Data,
-        mimeType: 'application/pdf',
+                  mimeType: 'application/pdf',
       });
 
       if (!aiResponse.success) {
@@ -1427,7 +1427,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       }
 
       let responseText = aiResponse.text || '';
-      
+
       if (!responseText) {
         setAiRawResponse(null);
         throw new Error(`No response text from ${serviceInfo.name} API. The API may have returned an empty response.`);
@@ -1844,17 +1844,17 @@ Analyze the attached PDF datasheet and extract the information according to the 
       <div 
         className="component-editor-content"
         style={{ 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '4px',
-          padding: '6px 20px 6px 6px', // Extra right padding for scrollbar
-          overflowY: 'auto',
+        display: 'flex', 
+        flexDirection: 'column', 
+        gap: '4px',
+        padding: '6px 20px 6px 6px', // Extra right padding for scrollbar
+        overflowY: 'auto',
           overflowX: 'hidden',
-          flex: 1,
-          minHeight: 0,
+        flex: 1,
+        minHeight: 0,
           scrollbarWidth: 'thin',
           scrollbarColor: '#888 #f0f0f0',
-        }}>
+      }}>
         {/* Category and Type (read-only) - at the top for clarity */}
         {(() => {
           // Resolve component definition if not provided as prop
@@ -3330,14 +3330,14 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   fontSize: '14px',
                   fontWeight: 600,
                 }}
-              >
+                >
                 Save Settings
-              </button>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
     
     {/* AI Response Dialog - shows full API response for debugging */}
     {showResponseDialog && aiRawResponse && (
