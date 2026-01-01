@@ -1527,7 +1527,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Test Point</strong> — <code>Y</code></li>
                         <li><strong>Trace</strong> — <code>T</code></li>
                         <li><strong>Component</strong> — <code>C</code></li>
-                        <li><strong>Component Properties</strong> — double-click component</li>
+                        <li><strong>Component Properties</strong> — <code>U</code> (or double-click component)</li>
                         <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code> (<code>Shift</code> + <code>+</code> / <code>-</code> = 5x faster)</li>
                       </ul>
                     </div>
@@ -1860,7 +1860,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         <li><strong>Test Point</strong> — <code>Y</code></li>
                       <li><strong>Trace</strong> — <code>T</code></li>
                       <li><strong>Component</strong> — <code>C</code></li>
-                      <li><strong>Component Properties</strong> — <code>A</code> (opens dialog for selected component)</li>
+                      <li><strong>Component Properties</strong> — <code>U</code> (or double-click component)</li>
                       <li><strong>Power</strong> — <code>B</code></li>
                       <li><strong>Ground</strong> — <code>G</code></li>
                     </ul>

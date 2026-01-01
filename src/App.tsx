@@ -1692,41 +1692,61 @@ function App() {
     console.log(`Selected ${connectionKeys.size} component connection lines`);
   }, [componentsTop, componentsBottom, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
-  // Select all objects on the canvas
+  // Select all visible objects on the canvas (based on layer checkboxes)
   const selectAll = useCallback(() => {
-    // Select all drawing strokes (vias, pads, traces, test points)
-    const allStrokeIds = drawingStrokes.map(s => s.id);
-    setSelectedIds(new Set(allStrokeIds));
+    // Select drawing strokes based on visible layers
+    const visibleStrokeIds = drawingStrokes
+      .filter(s => {
+        if (s.type === 'via') return showViasLayer;
+        if (s.type === 'trace') return s.layer === 'top' ? showTopTracesLayer : showBottomTracesLayer;
+        if (s.type === 'pad') return s.layer === 'top' ? showTopPadsLayer : showBottomPadsLayer;
+        if (s.type === 'testPoint') return s.layer === 'top' ? showTopTestPointsLayer : showBottomTestPointsLayer;
+        return false;
+      })
+      .map(s => s.id);
+    setSelectedIds(new Set(visibleStrokeIds));
     
-    // Select all components
-    const allComponentIds = [...componentsTop, ...componentsBottom].map(c => c.id);
-    setSelectedComponentIds(new Set(allComponentIds));
+    // Select components based on visible layers
+    const visibleComponentIds: string[] = [];
+    if (showTopComponents) {
+      visibleComponentIds.push(...componentsTop.map(c => c.id));
+    }
+    if (showBottomComponents) {
+      visibleComponentIds.push(...componentsBottom.map(c => c.id));
+    }
+    setSelectedComponentIds(new Set(visibleComponentIds));
     
-    // Select all power nodes
-    const allPowerIds = powers.map(p => p.id);
-    setSelectedPowerIds(new Set(allPowerIds));
+    // Select power nodes if power layer is visible
+    const visiblePowerIds = showPowerLayer ? powers.map(p => p.id) : [];
+    setSelectedPowerIds(new Set(visiblePowerIds));
     
-    // Select all ground nodes
-    const allGroundIds = grounds.map(g => g.id);
-    setSelectedGroundIds(new Set(allGroundIds));
+    // Select ground nodes if ground layer is visible
+    const visibleGroundIds = showGroundLayer ? grounds.map(g => g.id) : [];
+    setSelectedGroundIds(new Set(visibleGroundIds));
     
-    // Select all component connections
+    // Select component connections if connections layer is visible
     const connectionKeys = new Set<string>();
-    for (const comp of [...componentsTop, ...componentsBottom]) {
-      const pinConnections = comp.pinConnections || [];
-      for (const conn of pinConnections) {
-        if (conn && conn.trim() !== '') {
-          const pointId = parseInt(conn.trim(), 10);
-          if (!isNaN(pointId) && pointId > 0) {
-            connectionKeys.add(`${comp.id}:${pointId}`);
+    if (showConnectionsLayer) {
+      const visibleComponents = [
+        ...(showTopComponents ? componentsTop : []),
+        ...(showBottomComponents ? componentsBottom : [])
+      ];
+      for (const comp of visibleComponents) {
+        const pinConnections = comp.pinConnections || [];
+        for (const conn of pinConnections) {
+          if (conn && conn.trim() !== '') {
+            const pointId = parseInt(conn.trim(), 10);
+            if (!isNaN(pointId) && pointId > 0) {
+              connectionKeys.add(`${comp.id}:${pointId}`);
+            }
           }
         }
       }
     }
     setSelectedComponentConnections(connectionKeys);
     
-    console.log(`Selected all: ${allStrokeIds.length} strokes, ${allComponentIds.length} components, ${allPowerIds.length} power nodes, ${allGroundIds.length} ground nodes, ${connectionKeys.size} connections`);
-  }, [drawingStrokes, componentsTop, componentsBottom, powers, grounds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+    console.log(`Selected visible: ${visibleStrokeIds.length} strokes, ${visibleComponentIds.length} components, ${visiblePowerIds.length} power nodes, ${visibleGroundIds.length} ground nodes, ${connectionKeys.size} connections`);
+  }, [drawingStrokes, componentsTop, componentsBottom, powers, grounds, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
   // Switch perspective (toggle between top and bottom view)
   // This now modifies the VIEW transform, not object properties
@@ -7620,56 +7640,6 @@ function App() {
       return;
     }
     
-    // 'A' key: Open Component Properties dialog for selected component(s)
-    // If multiple components are selected, open the most recently selected one
-    if ((e.key === 'a' || e.key === 'A') && 
-        !e.ctrlKey && !e.altKey && !e.shiftKey && !isReadOnly) {
-      // Ignore if user is typing in an input field, textarea, or contenteditable
-      const active = document.activeElement as HTMLElement | null;
-      const isEditing =
-        !!active &&
-        ((active.tagName === 'INPUT' && 
-          (active as HTMLInputElement).type !== 'range' &&
-          (active as HTMLInputElement).type !== 'checkbox' &&
-          (active as HTMLInputElement).type !== 'radio') ||
-          active.tagName === 'TEXTAREA' ||
-          active.isContentEditable);
-      if (isEditing) {
-        return; // Let browser handle input in text fields
-      }
-      
-      // Check if any components are selected
-      if (selectedComponentIds.size > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Get the most recently selected component (last item in Set)
-        // Sets preserve insertion order, so the last item is the most recent
-        const componentIdArray = Array.from(selectedComponentIds);
-        const mostRecentComponentId = componentIdArray[componentIdArray.length - 1];
-        
-        // Find the component in top or bottom layer
-        let foundComponent: PCBComponent | null = null;
-        let foundLayer: 'top' | 'bottom' | null = null;
-        
-        foundComponent = componentsTop.find(c => c.id === mostRecentComponentId) || null;
-        if (foundComponent) {
-          foundLayer = 'top';
-        } else {
-          foundComponent = componentsBottom.find(c => c.id === mostRecentComponentId) || null;
-          if (foundComponent) {
-            foundLayer = 'bottom';
-          }
-        }
-        
-        // Open the component editor if found
-        if (foundComponent && foundLayer) {
-          openComponentEditor(foundComponent, foundLayer);
-        }
-      }
-      return;
-    }
-
     // Toolbar tool shortcuts (no modifiers; ignore when typing in inputs/textareas/contenteditable)
     if (!e.ctrlKey && !e.altKey) {
       // Ignore if user is typing in an input field, textarea, or contenteditable
@@ -7694,7 +7664,39 @@ function App() {
           case 'a':
           case 'A':
             e.preventDefault();
-            selectAll(); // Select all objects on the canvas
+            selectAll(); // Select all visible objects on the canvas
+            return;
+          case 'u':
+          case 'U':
+            // Open Component Properties dialog for selected component(s)
+            // If multiple components are selected, open the most recently selected one
+            if (!isReadOnly && selectedComponentIds.size > 0) {
+              e.preventDefault();
+              
+              // Get the most recently selected component (last item in Set)
+              // Sets preserve insertion order, so the last item is the most recent
+              const componentIdArray = Array.from(selectedComponentIds);
+              const mostRecentComponentId = componentIdArray[componentIdArray.length - 1];
+              
+              // Find the component in top or bottom layer
+              let foundComponent: PCBComponent | null = null;
+              let foundLayer: 'top' | 'bottom' | null = null;
+              
+              foundComponent = componentsTop.find(c => c.id === mostRecentComponentId) || null;
+              if (foundComponent) {
+                foundLayer = 'top';
+              } else {
+                foundComponent = componentsBottom.find(c => c.id === mostRecentComponentId) || null;
+                if (foundComponent) {
+                  foundLayer = 'bottom';
+                }
+              }
+              
+              // Open the component editor if found
+              if (foundComponent && foundLayer) {
+                openComponentEditor(foundComponent, foundLayer);
+              }
+            }
             return;
           case 'b':
           case 'B':
