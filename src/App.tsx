@@ -7480,7 +7480,7 @@ function App() {
         
         if (component) {
           setCopiedComponent(component);
-          console.log('Component copied:', component.id, component.designator);
+          console.log('Component copied:', component.id, component.designator, 'orientation:', component.orientation, 'flipX:', component.flipX, 'flipY:', component.flipY);
         }
       }
       return;
@@ -7565,12 +7565,18 @@ function App() {
           // Position offset by 5mm to the right and down
           x: copiedComponent.x + 5,
           y: copiedComponent.y + 5,
+          // Explicitly preserve orientation properties
+          orientation: copiedComponent.orientation,
+          flipX: copiedComponent.flipX,
+          flipY: copiedComponent.flipY,
         };
         
         // Preserve pinNames if they exist
         if ((copiedComponent as any).pinNames) {
           (clonedComponent as any).pinNames = [...(copiedComponent as any).pinNames];
         }
+        
+        console.log('Component pasted with orientation:', clonedComponent.orientation, 'flipX:', clonedComponent.flipX, 'flipY:', clonedComponent.flipY);
         
         // Add to the appropriate layer
         if (clonedComponent.layer === 'top') {
