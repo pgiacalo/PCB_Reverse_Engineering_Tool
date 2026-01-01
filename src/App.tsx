@@ -13249,6 +13249,47 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer</h1>
+        <a
+          href="https://ko-fi.com/onesmallstep"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            position: 'absolute',
+            right: 16,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            background: 'linear-gradient(180deg, #9D5CFF 0%, #7C3AED 50%, #5B21B6 100%)',
+            color: '#fff',
+            border: '1px solid #000',
+            borderRadius: 6,
+            textDecoration: 'none',
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: '0 3px 0 #3b1a70, 0 4px 6px rgba(0,0,0,0.3)',
+            transition: 'all 0.1s',
+          }}
+          onMouseEnter={(e) => { 
+            e.currentTarget.style.background = 'linear-gradient(180deg, #8B4DFF 0%, #6d2ed4 50%, #4c1d95 100%)';
+          }}
+          onMouseLeave={(e) => { 
+            e.currentTarget.style.background = 'linear-gradient(180deg, #9D5CFF 0%, #7C3AED 50%, #5B21B6 100%)';
+          }}
+          onMouseDown={(e) => {
+            e.currentTarget.style.transform = 'translateY(calc(-50% + 2px))';
+            e.currentTarget.style.boxShadow = '0 1px 0 #3b1a70, 0 2px 3px rgba(0,0,0,0.3)';
+          }}
+          onMouseUp={(e) => {
+            e.currentTarget.style.transform = 'translateY(-50%)';
+            e.currentTarget.style.boxShadow = '0 3px 0 #3b1a70, 0 4px 6px rgba(0,0,0,0.3)';
+          }}
+          title="Support this project on Ko-fi"
+        >
+          ☕ Donate
+        </a>
       </header>
 
       {/* Application menu bar */}
