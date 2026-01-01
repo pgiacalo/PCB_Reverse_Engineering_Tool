@@ -1521,6 +1521,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <div>
                       <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                         <li><strong>Select</strong> — <code>S</code></li>
+                        <li><strong>Select All</strong> — <code>A</code></li>
                         <li><strong>Via</strong> — <code>V</code></li>
                         <li><strong>Pad</strong> — <code>P</code></li>
                         <li><strong>Test Point</strong> — <code>Y</code></li>
@@ -1851,11 +1852,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Drawing Tools</p>
                     <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
                       <li><strong>Select</strong> — <code>S</code></li>
-                      <li><strong>Via</strong> — <code>V</code></li>
-                      <li><strong>Via Pattern</strong> — <code>Alt/Option+V</code></li>
-                      <li><strong>Pad</strong> — <code>P</code></li>
-                      <li><strong>Pad Pattern</strong> — <code>Alt/Option+P</code></li>
-                      <li><strong>Test Point</strong> — <code>Y</code></li>
+                        <li><strong>Select All</strong> — <code>A</code></li>
+                        <li><strong>Via</strong> — <code>V</code></li>
+                        <li><strong>Via Pattern</strong> — <code>Alt/Option+V</code></li>
+                        <li><strong>Pad</strong> — <code>P</code></li>
+                        <li><strong>Pad Pattern</strong> — <code>Alt/Option+P</code></li>
+                        <li><strong>Test Point</strong> — <code>Y</code></li>
                       <li><strong>Trace</strong> — <code>T</code></li>
                       <li><strong>Component</strong> — <code>C</code></li>
                       <li><strong>Component Properties</strong> — <code>A</code> (opens dialog for selected component)</li>

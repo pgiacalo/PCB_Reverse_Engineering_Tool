@@ -1692,6 +1692,42 @@ function App() {
     console.log(`Selected ${connectionKeys.size} component connection lines`);
   }, [componentsTop, componentsBottom, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
 
+  // Select all objects on the canvas
+  const selectAll = useCallback(() => {
+    // Select all drawing strokes (vias, pads, traces, test points)
+    const allStrokeIds = drawingStrokes.map(s => s.id);
+    setSelectedIds(new Set(allStrokeIds));
+    
+    // Select all components
+    const allComponentIds = [...componentsTop, ...componentsBottom].map(c => c.id);
+    setSelectedComponentIds(new Set(allComponentIds));
+    
+    // Select all power nodes
+    const allPowerIds = powers.map(p => p.id);
+    setSelectedPowerIds(new Set(allPowerIds));
+    
+    // Select all ground nodes
+    const allGroundIds = grounds.map(g => g.id);
+    setSelectedGroundIds(new Set(allGroundIds));
+    
+    // Select all component connections
+    const connectionKeys = new Set<string>();
+    for (const comp of [...componentsTop, ...componentsBottom]) {
+      const pinConnections = comp.pinConnections || [];
+      for (const conn of pinConnections) {
+        if (conn && conn.trim() !== '') {
+          const pointId = parseInt(conn.trim(), 10);
+          if (!isNaN(pointId) && pointId > 0) {
+            connectionKeys.add(`${comp.id}:${pointId}`);
+          }
+        }
+      }
+    }
+    setSelectedComponentConnections(connectionKeys);
+    
+    console.log(`Selected all: ${allStrokeIds.length} strokes, ${allComponentIds.length} components, ${allPowerIds.length} power nodes, ${allGroundIds.length} ground nodes, ${connectionKeys.size} connections`);
+  }, [drawingStrokes, componentsTop, componentsBottom, powers, grounds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+
   // Switch perspective (toggle between top and bottom view)
   // This now modifies the VIEW transform, not object properties
   // Objects maintain their world coordinates and properties unchanged
@@ -7655,6 +7691,11 @@ function App() {
             clearAllSelections(); // Clear all selections when tool is selected
             switchToSelectTool();
             return;
+          case 'a':
+          case 'A':
+            e.preventDefault();
+            selectAll(); // Select all objects on the canvas
+            return;
           case 'b':
           case 'B':
             e.preventDefault();
@@ -8163,7 +8204,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog, openComponentEditor]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, selectAll, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog, openComponentEditor]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
