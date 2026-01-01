@@ -13307,7 +13307,7 @@ function App() {
           }}
           title="Support this project on Ko-fi"
         >
-          ☕ Donate
+          ☕ Buy me a coffee
         </a>
       </header>
 

@@ -1775,8 +1775,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 1: Create or Open a Project</h3>
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  <li><strong>New Project:</strong> File → New Project. Choose a project name and location.</li>
-                  <li><strong>Open Project:</strong> File → Open Project. Select an existing project file (.json).</li>
+                  <li><strong>New Project:</strong> File → New Project. Choose a project name and location. The application will create a folder with your project name and save a project JSON file (with the same name plus a timestamp) inside that folder. For example, if you name your project "MyPCB", it will create a folder called "MyPCB" containing "MyPCB_2025_01_15_12_30_45.json".</li>
+                  <li><strong>Open Project:</strong> File → Open Project. Select the project folder (not the .json file). The application will automatically find and load the project file.</li>
                   <li><strong>Auto-Save:</strong> File → Auto Save → Enable to automatically save your work at regular intervals.</li>
                 </ul>
               </div>
