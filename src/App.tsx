@@ -55,7 +55,7 @@ import { createCloseProject, ensureProjectIsolation, type ProjectIsolationState 
 import { createNewProject, openProject } from './utils/projectOperations/projectOperations';
 import { performAutoSave as performAutoSaveModule, configureAutoSave } from './utils/projectOperations/autoSave';
 // Project history imports available if needed: restoreFromHistory, listHistoryFiles, HistoryFile
-import { generateKiCadNetlist, generateProtelNetlist, generateSpiceNetlist, generatePadsNetlist } from './utils/netlist';
+import { generatePadsNetlist } from './utils/netlist';
 import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
@@ -186,16 +186,6 @@ function App() {
     localStorage.setItem('bomExportFormat', bomExportFormat);
   }, [bomExportFormat]);
   
-  // Netlist export format state
-  const [netlistExportFormat, setNetlistExportFormat] = useState<'kicad' | 'protel' | 'spice' | 'pads'>(() => {
-    const saved = localStorage.getItem('netlistExportFormat');
-    return (saved === 'kicad' || saved === 'protel' || saved === 'spice' || saved === 'pads') ? saved : 'kicad';
-  });
-  
-  // Persist netlist export format to localStorage when it changes
-  React.useEffect(() => {
-    localStorage.setItem('netlistExportFormat', netlistExportFormat);
-  }, [netlistExportFormat]);
   // Layer settings hook
   const layerSettings = useLayerSettings();
   const {
@@ -11007,77 +10997,31 @@ function App() {
 
   // Export netlist function
   // Accept format as parameter to avoid stale state issues (React state updates are async)
-  const handleExportNetlist = useCallback(async (format?: 'kicad' | 'protel' | 'spice' | 'pads') => {
+  const handleExportNetlist = useCallback(async () => {
     if (!projectDirHandle) {
       alert('Please create or open a project before exporting netlist.');
       return;
     }
 
-    // Use provided format or fall back to current state
-    const exportFormat = format || netlistExportFormat;
-
     try {
       // Collect all components from both layers
       const allComponents = [...componentsTop, ...componentsBottom];
       
-      // Generate netlist based on selected format
-      // Format names and extensions must match the submenu labels exactly:
-      // - "KiCad (.net)" → formatName: "KiCad", extension: ".net"
-      // - "Protel (.net)" → formatName: "Protel", extension: ".net"
-      // - "SPICE (.cir)" → formatName: "SPICE", extension: ".cir"
-      let netlistContent: string;
-      let formatName: string;
-      let extension: string;
+      // Generate PADS JSON netlist
+      const netlistContent = generatePadsNetlist(
+        allComponents,
+        drawingStrokes,
+        powers,
+        grounds,
+        powerBuses,
+        groundBuses,
+        projectName
+      );
       
-      if (exportFormat === 'kicad') {
-        netlistContent = generateKiCadNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses
-        );
-        formatName = 'KiCad';
-        extension = '.net';
-      } else if (exportFormat === 'protel') {
-        netlistContent = generateProtelNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses
-        );
-        formatName = 'Protel';
-        extension = '.net';
-      } else if (exportFormat === 'spice') {
-        netlistContent = generateSpiceNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses
-        );
-        formatName = 'SPICE';
-        extension = '.cir';
-      } else { // pads
-        netlistContent = generatePadsNetlist(
-          allComponents,
-          drawingStrokes,
-          powers,
-          grounds,
-          powerBuses,
-          groundBuses,
-          projectName
-        );
-        formatName = 'PADS';
-        extension = '.json';
-      }
+      const filename = `${projectName}_netlist.json`;
       
-      const filename = `${projectName}_${formatName}${extension}`;
-      
-      // Create blob with appropriate MIME type
-      const mimeType = exportFormat === 'pads' ? 'application/json' : 'text/plain';
-      const blob = new Blob([netlistContent], { type: mimeType });
+      // Create blob with JSON MIME type
+      const blob = new Blob([netlistContent], { type: 'application/json' });
       
       // Try to save using File System Access API in netlists subdirectory
       try {
@@ -11107,7 +11051,7 @@ function App() {
       console.error('Failed to export netlist:', e);
       alert(`Failed to export netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
     }
-  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, projectName, netlistExportFormat]);
+  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName]);
 
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
@@ -13094,8 +13038,6 @@ function App() {
         bomExportFormat={bomExportFormat}
         setBomExportFormat={setBomExportFormat}
         onExportNetlist={handleExportNetlist}
-        netlistExportFormat={netlistExportFormat}
-        setNetlistExportFormat={setNetlistExportFormat}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}

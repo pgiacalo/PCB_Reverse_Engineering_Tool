@@ -57,11 +57,9 @@ export interface MenuBarProps {
   // Settings
   bomExportFormat: 'json' | 'pdf';
   setBomExportFormat: (format: 'json' | 'pdf') => void;
-  netlistExportFormat: 'kicad' | 'protel' | 'spice' | 'pads';
-  setNetlistExportFormat: (format: 'kicad' | 'protel' | 'spice' | 'pads') => void;
   
   // Netlist export
-  onExportNetlist: (format?: 'kicad' | 'protel' | 'spice' | 'pads') => Promise<void>;
+  onExportNetlist: () => Promise<void>;
   
   // Dialogs
   setNewProjectDialog: (dialog: { visible: boolean }) => void;
@@ -235,8 +233,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   hasUnsavedChanges,
   bomExportFormat: _bomExportFormat,
   setBomExportFormat: _setBomExportFormat,
-  netlistExportFormat,
-  setNetlistExportFormat,
   onExportNetlist,
   setNewProjectDialog,
   setAutoSaveDialog,
@@ -358,9 +354,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   const [openToolsSubmenu, setOpenToolsSubmenu] = React.useState<'lock' | 'select' | null>(null);
   const toolsSubmenuTimeoutRef = React.useRef<number | null>(null);
   
-  // Track netlist export submenu
-  const [openNetlistSubmenu, setOpenNetlistSubmenu] = React.useState<boolean>(false);
-  const netlistSubmenuTimeoutRef = React.useRef<number | null>(null);
   
   // Dialog visibility state
   const [setToolSizeDialogVisible, setSetToolSizeDialogVisible] = React.useState(false);
@@ -484,147 +477,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     );
   };
 
-  // Helper function to render Netlist Export submenu
-  const renderNetlistSubmenu = () => {
-    return (
-      <div
-        onMouseEnter={() => {
-          if (netlistSubmenuTimeoutRef.current) {
-            clearTimeout(netlistSubmenuTimeoutRef.current);
-            netlistSubmenuTimeoutRef.current = null;
-          }
-          setOpenNetlistSubmenu(true);
-        }}
-        onMouseLeave={() => {
-          netlistSubmenuTimeoutRef.current = window.setTimeout(() => {
-            setOpenNetlistSubmenu(false);
-          }, 200);
-        }}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: '100%',
-          marginLeft: '4px',
-          minWidth: 180,
-          background: '#2b2b31',
-          border: '1px solid #555',
-          borderRadius: '4px',
-          padding: '4px 0',
-          zIndex: 1001,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-        }}
-      >
-        <button
-          onClick={async () => {
-            if (isReadOnlyMode || !isProjectActive) return;
-            setNetlistExportFormat('kicad');
-            setOpenNetlistSubmenu(false);
-            setOpenMenu(null);
-            try {
-              await onExportNetlist('kicad');
-            } catch (e) {
-              console.error('Error exporting netlist:', e);
-            }
-          }}
-          disabled={isReadOnlyMode || !isProjectActive}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            padding: '6px 16px',
-            color: (isReadOnlyMode || !isProjectActive) ? '#777' : (netlistExportFormat === 'kicad' ? '#4CAF50' : '#f2f2f2'),
-            background: 'transparent',
-            border: 'none',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            fontWeight: netlistExportFormat === 'kicad' ? 'bold' : 'normal',
-          }}
-        >
-          {netlistExportFormat === 'kicad' ? '✓ ' : ''}KiCad (.net)
-        </button>
-        <button
-          onClick={async () => {
-            if (isReadOnlyMode || !isProjectActive) return;
-            setNetlistExportFormat('protel');
-            setOpenNetlistSubmenu(false);
-            setOpenMenu(null);
-            try {
-              await onExportNetlist('protel');
-            } catch (e) {
-              console.error('Error exporting netlist:', e);
-            }
-          }}
-          disabled={isReadOnlyMode || !isProjectActive}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            padding: '6px 16px',
-            color: (isReadOnlyMode || !isProjectActive) ? '#777' : (netlistExportFormat === 'protel' ? '#4CAF50' : '#f2f2f2'),
-            background: 'transparent',
-            border: 'none',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            fontWeight: netlistExportFormat === 'protel' ? 'bold' : 'normal',
-          }}
-        >
-          {netlistExportFormat === 'protel' ? '✓ ' : ''}Protel (.net)
-        </button>
-        <button
-          onClick={async () => {
-            if (isReadOnlyMode || !isProjectActive) return;
-            setNetlistExportFormat('spice');
-            setOpenNetlistSubmenu(false);
-            setOpenMenu(null);
-            try {
-              await onExportNetlist('spice');
-            } catch (e) {
-              console.error('Error exporting netlist:', e);
-            }
-          }}
-          disabled={isReadOnlyMode || !isProjectActive}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            padding: '6px 16px',
-            color: (isReadOnlyMode || !isProjectActive) ? '#777' : (netlistExportFormat === 'spice' ? '#4CAF50' : '#f2f2f2'),
-            background: 'transparent',
-            border: 'none',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            fontWeight: netlistExportFormat === 'spice' ? 'bold' : 'normal',
-          }}
-        >
-          {netlistExportFormat === 'spice' ? '✓ ' : ''}SPICE (.cir)
-        </button>
-        <button
-          onClick={async () => {
-            if (isReadOnlyMode || !isProjectActive) return;
-            setNetlistExportFormat('pads');
-            setOpenNetlistSubmenu(false);
-            setOpenMenu(null);
-            try {
-              await onExportNetlist('pads'); // Pass format directly
-            } catch (e) {
-              console.error('Error exporting netlist:', e);
-            }
-          }}
-          disabled={isReadOnlyMode || !isProjectActive}
-          style={{
-            display: 'block',
-            width: '100%',
-            textAlign: 'left',
-            padding: '6px 16px',
-            color: (isReadOnlyMode || !isProjectActive) ? '#777' : (netlistExportFormat === 'pads' ? '#4CAF50' : '#f2f2f2'),
-            background: 'transparent',
-            border: 'none',
-            cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-            fontWeight: netlistExportFormat === 'pads' ? 'bold' : 'normal',
-          }}
-        >
-          {netlistExportFormat === 'pads' ? '✓ ' : ''}PADS-PCB (.json)
-        </button>
-      </div>
-    );
-  };
 
   // Helper function to render Lock submenu
   const renderLockSubmenu = () => {
@@ -1095,50 +947,36 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               Export BOM…
             </button>
-            <div style={{ position: 'relative' }}>
-              <button
-                onMouseEnter={() => {
-                  if (isProjectActive && netlistSubmenuTimeoutRef.current) {
-                    clearTimeout(netlistSubmenuTimeoutRef.current);
-                    netlistSubmenuTimeoutRef.current = null;
+            <button
+              onClick={async () => {
+                if (isReadOnlyMode || !isProjectActive) {
+                  if (!isProjectActive) {
+                    alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                    setOpenMenu(null);
                   }
-                  if (isProjectActive) {
-                    setOpenNetlistSubmenu(true);
-                  }
-                }}
-                onMouseLeave={() => {
-                  if (isProjectActive) {
-                    netlistSubmenuTimeoutRef.current = window.setTimeout(() => {
-                      setOpenNetlistSubmenu(false);
-                    }, 200);
-                  }
-                }}
-                onClick={() => {
-                  if (isReadOnlyMode || !isProjectActive) {
-                    if (!isProjectActive) {
-                      alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
-                      setOpenMenu(null);
-                    }
-                    return;
-                  }
-                  setOpenNetlistSubmenu(prev => !prev);
-                }}
-                disabled={isReadOnlyMode || !isProjectActive}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '6px 10px',
-                  color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
-                }}
-              >
-                Export Netlist… ▸
-              </button>
-              {openNetlistSubmenu && isProjectActive && renderNetlistSubmenu()}
-            </div>
+                  return;
+                }
+                setOpenMenu(null);
+                try {
+                  await onExportNetlist();
+                } catch (e) {
+                  console.error('Error exporting netlist:', e);
+                }
+              }}
+              disabled={isReadOnlyMode || !isProjectActive}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '6px 10px',
+                color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2',
+                background: 'transparent',
+                border: 'none',
+                cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Export Netlist (JSON)…
+            </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Printer Settings…</button>
@@ -1888,7 +1726,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               padding: '16px 20px', 
               borderBottom: '1px solid #444' 
             }}>
-              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>Documentation: Typical Usage Steps</h2>
+              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCB Tracer (v3.1) - Documentation</h2>
               <button
                 onClick={() => setShowDocumentationDialog(false)}
                 style={{
