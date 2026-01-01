@@ -1,0 +1,87 @@
+{
+  "name": "pcb-tracer",
+  "version": "3.1.0",
+  "description": "PCB Reverse Engineering Tool - Trace and document PCB circuits",
+  "main": "main.js",
+  "author": "Philip L. Giacalone",
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/pgiacalo/PCB_Reverse_Engineering_Tool",
+  "scripts": {
+    "start": "electron .",
+    "build": "npm run build:web && electron-builder",
+    "build:web": "cd .. && npx vite build --base=./ && cp -r dist/* electron/app/",
+    "build:mac": "npm run build:web && electron-builder --mac",
+    "build:win": "npm run build:web && electron-builder --win",
+    "build:linux": "npm run build:web && electron-builder --linux",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.onesmallstep.pcbtracer",
+    "productName": "PCB Tracer",
+    "copyright": "Copyright © 2025 Philip L. Giacalone",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "resources/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "resources/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Development"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "pgiacalo",
+      "repo": "PCB_Reverse_Engineering_Tool"
+    }
+  }
+}

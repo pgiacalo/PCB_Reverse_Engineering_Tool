@@ -1,23 +1,15 @@
 /**
- * Copyright (c) 2025 Philip L. Giacalone
+ * Copyright (c) 2025 Philip L. Giacalone. All Rights Reserved.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This software and associated documentation files (the "Software") are the
+ * proprietary and confidential property of Philip L. Giacalone.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * Unauthorized copying, modification, distribution, or use of this Software,
+ * via any medium, is strictly prohibited and may be subject to civil and
+ * criminal penalties.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * The Software is protected by copyright laws and international copyright
+ * treaties, as well as other intellectual property laws and treaties.
  */
 
 import React, { useState, useRef, useCallback, useMemo } from 'react';
@@ -54,6 +46,7 @@ import { generateBOM, type BOMData } from './utils/bom';
 import { createCloseProject, ensureProjectIsolation, type ProjectIsolationState } from './utils/projectOperations/projectIsolation';
 import { createNewProject, openProject } from './utils/projectOperations/projectOperations';
 import { performAutoSave as performAutoSaveModule, configureAutoSave } from './utils/projectOperations/autoSave';
+import { isElectron, showDirectoryPicker as electronShowDirectoryPicker } from './utils/electronFileSystem';
 // Project history imports available if needed: restoreFromHistory, listHistoryFiles, HistoryFile
 import { generatePadsNetlist } from './utils/netlist';
 import jsPDF from 'jspdf';
@@ -10916,9 +10909,14 @@ function App() {
     // If we have a project name but no directory handle, prompt for directory
     if (projectName && !projectDirHandle) {
       const w = window as any;
-      if (typeof w.showDirectoryPicker === 'function') {
+      if (isElectron() || typeof w.showDirectoryPicker === 'function') {
         try {
-          const dirHandle = await w.showDirectoryPicker();
+          let dirHandle: any;
+          if (isElectron()) {
+            dirHandle = await electronShowDirectoryPicker();
+          } else {
+            dirHandle = await w.showDirectoryPicker();
+          }
           setProjectDirHandle(dirHandle);
           // Now save using the new directory handle
           const filename = `${projectName}.json`;
@@ -11519,21 +11517,29 @@ function App() {
   // Handle browsing for project location (parent directory)
   const handleNewProjectBrowseLocation = useCallback(async () => {
     const w = window as any;
-    if (typeof w.showDirectoryPicker === 'function') {
+    
+    // Check if directory picker is available (Electron or browser)
+    if (isElectron() || typeof w.showDirectoryPicker === 'function') {
       try {
-        // Get the parent directory handle without requesting permissions yet
-        // We'll request permissions for the actual project directory after it's created
-        // This avoids showing a permission dialog for the parent directory
-        const locationHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
-        // Try to get a display name for the path (browser limitation - we can't get full path)
+        // Get the parent directory handle
+        // Use Electron's native dialog if running in Electron
+        let locationHandle: any;
+        if (isElectron()) {
+          locationHandle = await electronShowDirectoryPicker();
+        } else {
+          locationHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+        }
+        
+        // Try to get a display name for the path
+        // In Electron, we can get the full path; in browser, just the folder name
+        const displayPath = locationHandle.path || locationHandle.name || 'Selected folder';
+        
         // Store the handle and update the dialog
         setNewProjectSetupDialog(prev => ({
           ...prev,
           locationHandle,
-          locationPath: locationHandle.name || 'Selected folder',
+          locationPath: displayPath,
         }));
-        // Note: Location path is stored in project file, not localStorage
-        // Note: We don't request permissions here - we'll request them for the project directory after creation
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') {
           console.error('Failed to get directory:', e);
@@ -11616,13 +11622,19 @@ function App() {
   // Handle browsing for Save As location
   const handleSaveAsBrowseLocation = useCallback(async () => {
     const w = window as any;
-    if (typeof w.showDirectoryPicker === 'function') {
+    if (isElectron() || typeof w.showDirectoryPicker === 'function') {
       try {
-        const locationHandle = await w.showDirectoryPicker();
+        let locationHandle: any;
+        if (isElectron()) {
+          locationHandle = await electronShowDirectoryPicker();
+        } else {
+          locationHandle = await w.showDirectoryPicker();
+        }
+        const displayPath = locationHandle.path || locationHandle.name || 'Selected folder';
         setSaveAsDialog(prev => ({
           ...prev,
           locationHandle,
-          locationPath: locationHandle.name || 'Selected folder',
+          locationPath: displayPath,
         }));
       } catch (e) {
         if ((e as any)?.name !== 'AbortError') {
@@ -13174,7 +13186,9 @@ function App() {
   // Shows directory picker first (preserving user gesture), then saves current project, then opens new project
   const handleOpenProject = useCallback(async () => {
     const w = window as any;
-    if (typeof w.showDirectoryPicker !== 'function') {
+    
+    // Check if we can show directory picker (either Electron or browser API)
+    if (!isElectron() && typeof w.showDirectoryPicker !== 'function') {
       alert('Directory picker is not supported in this browser.');
       return;
     }
@@ -13183,7 +13197,12 @@ function App() {
     
     try {
       // Show directory picker FIRST to preserve user gesture
-      selectedDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+      // Use Electron's native dialog if running in Electron
+      if (isElectron()) {
+        selectedDirHandle = await electronShowDirectoryPicker() as any;
+      } else {
+        selectedDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+      }
       
       // Verify we have write access
       try {

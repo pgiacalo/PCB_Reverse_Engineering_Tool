@@ -1,23 +1,15 @@
 /**
- * Copyright (c) 2025 Philip L. Giacalone
+ * Copyright (c) 2025 Philip L. Giacalone. All Rights Reserved.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This software and associated documentation files (the "Software") are the
+ * proprietary and confidential property of Philip L. Giacalone.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
+ * Unauthorized copying, modification, distribution, or use of this Software,
+ * via any medium, is strictly prohibited and may be subject to civil and
+ * criminal penalties.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * The Software is protected by copyright laws and international copyright
+ * treaties, as well as other intellectual property laws and treaties.
  */
 
 // ============================================================================
@@ -29,6 +21,7 @@ import React from 'react';
 import { removeTimestampFromFilename } from '../fileOperations';
 // ensureProjectIsolation available if needed from './projectIsolation'
 import type { ProjectOperationResult, ProjectFileInfo } from './types';
+import { isElectron, showDirectoryPicker as electronShowDirectoryPicker } from '../electronFileSystem';
 
 /**
  * Create a new project with the specified name and parent directory
@@ -165,18 +158,30 @@ export async function openProject(
   if (preSelectedDirHandle) {
     projectDirHandle = preSelectedDirHandle;
   } else {
-    if (typeof w.showDirectoryPicker !== 'function') {
-      return { success: false, error: 'Directory picker is not supported in this browser.' };
-    }
-
-    try {
-      // Request directory access with readwrite permissions
-      projectDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
-    } catch (e) {
-      if ((e as any)?.name === 'AbortError') {
-        return { success: false, error: 'User cancelled directory selection.' };
+    // Use Electron's native dialog if running in Electron, otherwise use browser API
+    if (isElectron()) {
+      try {
+        projectDirHandle = await electronShowDirectoryPicker() as any;
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') {
+          return { success: false, error: 'User cancelled directory selection.' };
+        }
+        throw e;
       }
-      throw e;
+    } else {
+      if (typeof w.showDirectoryPicker !== 'function') {
+        return { success: false, error: 'Directory picker is not supported in this browser.' };
+      }
+
+      try {
+        // Request directory access with readwrite permissions
+        projectDirHandle = await w.showDirectoryPicker({ mode: 'readwrite' });
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') {
+          return { success: false, error: 'User cancelled directory selection.' };
+        }
+        throw e;
+      }
     }
   }
 

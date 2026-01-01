@@ -72,7 +72,10 @@ If you want to build, modify, or contribute to this project, see [DEVELOPMENT.md
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Copyright (c) 2025 Philip L. Giacalone. All Rights Reserved.
+
+This software is proprietary and confidential. Unauthorized copying, modification, 
+distribution, or use is strictly prohibited. See the LICENSE file for details.
 
 ## Support
 

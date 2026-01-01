@@ -112,3 +112,8 @@ Desktop.ini
 # Test files
 test-images/
 sample-pcbs/
+# Electron build outputs
+electron/node_modules/
+electron/app/
+electron/release/
+electron/dist/

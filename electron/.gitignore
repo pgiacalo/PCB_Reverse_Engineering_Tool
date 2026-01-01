@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Built web app (copied from parent dist/)
+app/
+
+# Build output
+release/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
