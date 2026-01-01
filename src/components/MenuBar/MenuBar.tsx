@@ -1895,14 +1895,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Tips & Tricks</h3>
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
-                  <li>Double-click any slider to reset it to the default value</li>
                   <li>Double-click a component to edit its properties</li>
                   <li>Hold <code>Shift</code> while clicking to add to selection</li>
+                  <li>Use the arrow keys to move highlighted Component icons up/down/left/right</li>
                   <li>Use the Information dialog (<code>I</code>) to see details about selected elements</li>
                   <li>Lock layers (Tools → Lock) to prevent accidental modifications</li>
                   <li>Use the Find button in the Information dialog to center elements in view</li>
                   <li>Save views with <code>X</code> + number key for quick navigation</li>
                   <li>Use <code>+</code> and <code>-</code> keys to resize tool icons (<code>Shift</code> + <code>+</code> / <code>-</code> changes size 5 times faster)</li>
+                  <li>Double-click any slider to reset it to the default value</li>
                 </ul>
               </div>
             </div>
