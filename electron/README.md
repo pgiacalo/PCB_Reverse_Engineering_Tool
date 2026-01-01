@@ -124,6 +124,42 @@ The script will:
 
 4. Find your installers in `electron/release/` (organized by platform)
 
+## Distribution Files
+
+### What Users Need
+
+**Windows:**
+- **Installer (.exe)**: NSIS installer - users run this to install the app
+- **Portable (.exe)**: Standalone executable - no installation required
+- **Unpacked directory**: Contains all files including `PCB Tracer.exe` - for advanced users
+
+**Linux:**
+- **AppImage**: Standalone executable - works on most Linux distributions, no installation required
+- **.deb package**: For Debian/Ubuntu-based systems - installs via package manager
+- **Unpacked directory**: Contains all files - for advanced users
+
+**macOS:**
+- **.dmg file**: Disk image - users mount and drag the app to Applications
+- **.zip file**: Compressed archive - alternative distribution method
+
+### Blockmap Files
+
+`.blockmap` files are metadata files used by `electron-updater` for efficient delta updates. They describe the contents of installer files, allowing the updater to download only changed portions of the app instead of the entire installer.
+
+- **Keep them**: If you're using auto-updates, keep `.blockmap` files with their corresponding installer files
+- **Not required**: Users don't need `.blockmap` files to install or run the app
+- **Location**: They're automatically organized into platform-specific directories by the build script
+
+### Cross-Platform Building
+
+**Note**: Building Windows and Linux installers on macOS may only create unpacked directories, not installers. To create proper installers:
+
+- **Windows**: Build on Windows or use a Windows CI/CD environment
+- **Linux**: Build on Linux or use a Linux CI/CD environment
+- **macOS**: Builds work natively on macOS
+
+The unpacked directories contain all necessary files and can be distributed, but installers provide a better user experience.
+
 ## Auto-Updates
 
 The app includes auto-update functionality via `electron-updater`. Updates are fetched from GitHub Releases. To enable:
