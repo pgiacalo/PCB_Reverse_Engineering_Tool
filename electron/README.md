@@ -31,6 +31,11 @@ npm run build
 | `npm run build:win` | Build for Windows (installer + portable) |
 | `npm run build:linux` | Build for Linux (AppImage + deb) |
 | `npm run pack` | Create unpacked build (for testing) |
+| `./build.sh` | Build for all platforms (default) |
+| `./build.sh mac` | Build for macOS only |
+| `./build.sh win` | Build for Windows only |
+| `./build.sh linux` | Build for Linux only |
+| `./build.sh all` | Build for all platforms |
 
 ## Project Structure
 
@@ -39,12 +44,16 @@ electron/
 ├── main.js          # Electron main process
 ├── preload.js       # Secure bridge between main and renderer
 ├── package.json     # Electron app configuration
+├── build.sh         # Build script for all platforms
 ├── app/             # Built web app files (copied from ../dist)
 ├── resources/       # App icons and assets
 │   ├── icon.icns    # macOS icon
 │   ├── icon.ico     # Windows icon
 │   └── icon.png     # Linux icon
 └── release/         # Built installers (generated)
+    ├── macos/       # macOS installers (dmg, zip)
+    ├── windows/     # Windows installers (exe, portable)
+    └── linux/       # Linux installers (AppImage, deb)
 ```
 
 ## Adding App Icons
@@ -73,6 +82,29 @@ You can use tools like [IconGenerator](https://appicon.co/) to create icons from
 
 ## Building for Distribution
 
+### Using the Build Script (Recommended)
+
+The `build.sh` script automates the entire build process:
+
+```bash
+cd electron
+./build.sh          # Builds for all platforms (default)
+./build.sh mac       # Builds for macOS only
+./build.sh win       # Builds for Windows only
+./build.sh linux     # Builds for Linux only
+```
+
+The script will:
+1. Build the web app
+2. Copy files to `electron/app/`
+3. Build Electron apps for the specified platform(s)
+4. Organize outputs into platform-specific directories:
+   - `release/macos/` - macOS installers (dmg, zip)
+   - `release/windows/` - Windows installers (exe, portable)
+   - `release/linux/` - Linux installers (AppImage, deb)
+
+### Manual Build Process
+
 1. Build the web app first:
    ```bash
    cd ..
@@ -90,7 +122,7 @@ You can use tools like [IconGenerator](https://appicon.co/) to create icons from
    npm run build:mac  # or build:win or build:linux
    ```
 
-4. Find your installer in `electron/release/`
+4. Find your installers in `electron/release/` (organized by platform)
 
 ## Auto-Updates
 

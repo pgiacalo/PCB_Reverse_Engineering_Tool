@@ -38,36 +38,122 @@ else
   echo "✓ Step 3: Electron dependencies already installed"
 fi
 
-# Step 4: Build for the specified platform
-PLATFORM=${1:-$(uname -s)}
+# Step 4: Clean up previous builds
+echo ""
+echo "🧹 Step 4: Cleaning up previous builds..."
+rm -rf release/macos release/windows release/linux
+mkdir -p release/macos release/windows release/linux
+
+# Step 5: Build for the specified platform(s)
+PLATFORM=${1:-all}
 
 echo ""
-echo "🏗️  Step 4: Building Electron app for $PLATFORM..."
+echo "🏗️  Step 5: Building Electron app for $PLATFORM..."
+
+build_mac() {
+  echo ""
+  echo "🍎 Building for macOS..."
+  npm run build:mac
+  # Organize macOS outputs
+  if [ -d "release" ]; then
+    mkdir -p release/macos
+    (
+      cd release
+      # Move macOS installer files (dmg, zip) - handle files with spaces
+      shopt -s nullglob
+      for file in *.dmg *.zip; do
+        [ -f "$file" ] && mv "$file" macos/ 2>/dev/null || true
+      done
+      # Move macOS unpacked directories (mac, mac-x64, mac-arm64, etc.)
+      for dir in mac mac-* *mac*; do
+        [ -d "$dir" ] && [ "$dir" != "macos" ] && mv "$dir" macos/ 2>/dev/null || true
+      done
+      shopt -u nullglob
+    )
+  fi
+}
+
+build_windows() {
+  echo ""
+  echo "🪟 Building for Windows..."
+  npm run build:win
+  # Organize Windows outputs
+  if [ -d "release" ]; then
+    mkdir -p release/windows
+    (
+      cd release
+      # Move Windows installer files (exe, portable exe) - handle files with spaces
+      shopt -s nullglob
+      for file in *.exe *.7z; do
+        [ -f "$file" ] && mv "$file" windows/ 2>/dev/null || true
+      done
+      # Move Windows unpacked directories (win-unpacked, win-ia32-unpacked, win-x64-unpacked, etc.)
+      for dir in win* *win*; do
+        [ -d "$dir" ] && [ "$dir" != "windows" ] && mv "$dir" windows/ 2>/dev/null || true
+      done
+      shopt -u nullglob
+    )
+  fi
+}
+
+build_linux() {
+  echo ""
+  echo "🐧 Building for Linux..."
+  npm run build:linux
+  # Organize Linux outputs
+  if [ -d "release" ]; then
+    mkdir -p release/linux
+    (
+      cd release
+      # Move Linux installer files (AppImage, deb) - handle files with spaces
+      shopt -s nullglob
+      for file in *.AppImage *.deb; do
+        [ -f "$file" ] && mv "$file" linux/ 2>/dev/null || true
+      done
+      # Move Linux unpacked directories (linux-unpacked, linux-x64-unpacked, etc.)
+      for dir in linux* *linux*; do
+        [ -d "$dir" ] && [ "$dir" != "linux" ] && mv "$dir" linux/ 2>/dev/null || true
+      done
+      shopt -u nullglob
+    )
+  fi
+}
 
 case "$PLATFORM" in
   Darwin|mac|macos)
-    npm run build:mac
+    build_mac
     ;;
   Linux|linux)
-    npm run build:linux
+    build_linux
     ;;
   MINGW*|MSYS*|win|windows)
-    npm run build:win
+    build_windows
     ;;
   all)
     echo "Building for all platforms..."
-    npm run build:mac
-    npm run build:win
-    npm run build:linux
+    build_mac
+    build_windows
+    build_linux
     ;;
   *)
     echo "Unknown platform: $PLATFORM"
     echo "Usage: ./build.sh [mac|linux|win|all]"
+    echo "Default: all (builds for all platforms)"
     exit 1
     ;;
 esac
 
 echo ""
-echo "✅ Build complete! Check the 'release/' folder for your installer."
+echo "✅ Build complete! Check the platform-specific folders:"
 echo ""
-ls -la release/ 2>/dev/null || echo "(No release files found yet)"
+echo "📁 macOS:   release/macos/"
+echo "📁 Windows: release/windows/"
+echo "📁 Linux:   release/linux/"
+echo ""
+for dir in release/macos release/windows release/linux; do
+  if [ -d "$dir" ] && [ "$(ls -A $dir 2>/dev/null)" ]; then
+    echo "Files in $dir:"
+    ls -lh "$dir" | tail -n +2 | awk '{print "  " $9 " (" $5 ")"}'
+    echo ""
+  fi
+done
