@@ -1,0 +1,8 @@
+# robots.txt for pcbtracer.com
+# Allow all search engines to crawl the site
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://pcbtracer.com/sitemap.xml
