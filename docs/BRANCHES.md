@@ -95,7 +95,7 @@ git push origin auth-payment
 
 ```bash
 git checkout main
-./build_and_deploy_to_github_pages.sh
+./deploy-to-github-pages.sh
 ```
 
 ### Deploying Auth Version to Heroku

@@ -100,7 +100,26 @@ All three services support native PDF processing for datasheet extraction.
 
 ## Deployment to GitHub Pages
 
-See the GitHub Pages guide: [README_FOR_GITHUB_PAGES.md](docs/setup/README_FOR_GITHUB_PAGES.md)
+The application is deployed to GitHub Pages, which is the primary hosting method.
+
+### Quick Deployment
+
+To deploy the application:
+
+```bash
+./deploy-to-github-pages.sh
+```
+
+This script will:
+1. Build the production bundle
+2. Deploy to the `gh-pages` branch
+3. Make the app available at: `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/`
+
+### Detailed Documentation
+
+For more information, see:
+- [Deployment Guide](DEPLOYMENT_GUIDE.md) - Complete deployment instructions
+- [GitHub Pages Setup](docs/setup/README_FOR_GITHUB_PAGES.md) - Detailed GitHub Pages configuration
 
 ## Configuration
 

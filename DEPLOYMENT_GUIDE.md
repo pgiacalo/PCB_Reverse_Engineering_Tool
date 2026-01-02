@@ -1,77 +1,89 @@
 # Deployment Guide
 
-Simple deployment scripts for the PCB Reverse Engineering Tool.
+This guide explains how to deploy the PCB Reverse Engineering Tool to GitHub Pages.
 
-## Scripts
+## Primary Deployment Method: GitHub Pages
 
-### 1. `deploy_main.sh`
-**Deploys `main` branch to GitHub Pages**
+The application is hosted on **GitHub Pages**, which provides:
+- ✅ Free hosting
+- ✅ Automatic HTTPS
+- ✅ Easy updates (just run the deployment script)
+- ✅ No server maintenance
+- ✅ Works on any device with a modern browser
 
-Deploys the free version (no authentication) to GitHub Pages.
+## Deployment Script
+
+### `deploy-to-github-pages.sh`
+**Deploys the application to GitHub Pages**
+
+This is the primary and recommended deployment method.
 
 **Usage:**
 ```bash
-./deploy_main.sh
+./deploy-to-github-pages.sh
 ```
 
 **What it does:**
-- Builds the production bundle from `main` branch
+- Checks for uncommitted changes (prevents deploying incomplete work)
+- Switches to `main` branch
+- Pulls latest changes from remote
+- Installs dependencies
+- Builds the production bundle with correct base path
 - Deploys to `gh-pages` branch
-- Makes the free version available at: `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/`
-
----
-
-### 2. `deploy_auth_payment.sh`
-**Deploys `auth-payment` branch to GitHub Pages AND Heroku**
-
-Deploys the paid version (with authentication) to both platforms.
-
-**Usage:**
-```bash
-./deploy_auth_payment.sh
-# When prompted, enter Heroku app name: pcbtracer-staging
-```
-
-**What it does:**
-- Checks out `auth-payment` branch
-- Merges latest changes from `main`
-- Builds and verifies the build
-- Deploys to GitHub Pages
-- Deploys directly to Heroku
-- Pushes to `origin/auth-payment` for tracking
+- Shows the deployment URL
 
 **Deployed to:**
-- GitHub Pages: `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/`
-- Heroku: `https://pcbtracer-staging-bd8cca44225e.herokuapp.com/`
+- **GitHub Pages**: `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/`
+
+**Prerequisites:**
+- Git repository with remote configured
+- Node.js and npm installed
+- GitHub repository access
+- `gh-pages` package (installed automatically if needed)
 
 ---
 
 ## Quick Reference
 
-### Deploy free version (main):
+### Deploy to GitHub Pages:
 ```bash
-./deploy_main.sh
+./deploy-to-github-pages.sh
 ```
 
-### Deploy paid version (auth-payment):
+That's it! The script handles everything automatically.
+
+---
+
+## Alternative: Manual Deployment
+
+If you prefer to deploy manually:
+
 ```bash
-./deploy_auth_payment.sh
+# Build the production bundle
+npm run build
+
+# Deploy using gh-pages
+npm run deploy
 ```
 
 ---
 
-## Prerequisites
+## Troubleshooting
 
-### For `deploy_main.sh`:
-- Git repository
-- Node.js and npm installed
-- GitHub repository access
+### GitHub Pages not updating:
+- Wait 2-10 minutes for CDN cache to refresh
+- Hard refresh your browser: Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+- Try opening in an incognito/private window
 
-### For `deploy_auth_payment.sh`:
-- Everything from `deploy_main.sh`, plus:
-- Heroku CLI installed: `brew tap heroku/brew && brew install heroku`
-- Logged in to Heroku: `heroku login`
-- Heroku app created (e.g., `pcbtracer-staging`)
+### Build fails:
+- Check TypeScript errors: `npm run build`
+- Verify dependencies are installed: `npm install`
+- Check for uncommitted changes (script will warn you)
+
+### Deployment fails:
+- Verify you have push access to the repository
+- Check that the `gh-pages` branch exists (it will be created automatically)
+- Ensure you're on the `main` branch before deploying
 
 ---
 

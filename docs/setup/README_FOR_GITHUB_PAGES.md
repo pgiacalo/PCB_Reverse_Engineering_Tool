@@ -31,24 +31,22 @@ git push origin main
 
 ### Manual Deployment
 
-If you prefer manual deployment:
+If you prefer manual deployment, use the deployment script:
 
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
+```bash
+./deploy-to-github-pages.sh
+```
 
-2. **Deploy to GitHub Pages**
-   ```bash
-   # Install gh-pages package
-   npm install --save-dev gh-pages
-   
-   # Add deploy script to package.json
-   # "deploy": "gh-pages -d dist"
-   
-   # Deploy
-   npm run deploy
-   ```
+This script will:
+1. Build the production bundle
+2. Deploy to the `gh-pages` branch
+3. Make your app available at: `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/`
+
+**Alternative:** You can also deploy manually:
+```bash
+npm run build
+npm run deploy
+```
 
 ### Custom Domain (Optional)
 

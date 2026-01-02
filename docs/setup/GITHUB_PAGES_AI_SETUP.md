@@ -60,7 +60,7 @@ All three services support native PDF processing for datasheet extraction:
    
    Or use the deployment script:
    ```bash
-   ./build_and_deploy_to_github_pages.sh
+   ./deploy-to-github-pages.sh
    ```
 
 ## User Configuration (After Deployment)

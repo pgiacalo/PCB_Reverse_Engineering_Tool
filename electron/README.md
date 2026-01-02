@@ -88,20 +88,23 @@ The `build.sh` script automates the entire build process:
 
 ```bash
 cd electron
-./build.sh          # Builds for all platforms (default)
+./build.sh          # Auto-detects current platform and builds for it
 ./build.sh mac       # Builds for macOS only
 ./build.sh win       # Builds for Windows only
 ./build.sh linux     # Builds for Linux only
+./build.sh all       # Attempts to build for all platforms (may only create unpacked dirs)
 ```
 
 The script will:
 1. Build the web app
 2. Copy files to `electron/app/`
-3. Build Electron apps for the specified platform(s)
+3. Build Electron apps for the specified platform (defaults to current platform)
 4. Organize outputs into platform-specific directories:
    - `release/macos/` - macOS installers (dmg, zip)
    - `release/windows/` - Windows installers (exe, portable)
    - `release/linux/` - Linux installers (AppImage, deb)
+
+**Note**: By default, the script detects your current platform and builds only for that platform. This is because proper installers can only be built on their target platform. If you use `./build.sh all`, it will attempt to build for all platforms, but may only create unpacked directories (not installers) for platforms other than the one you're running on.
 
 ### Manual Build Process
 

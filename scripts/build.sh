@@ -64,7 +64,7 @@ if [ -d "dist" ]; then
     echo "   npm run preview"
     echo ""
     echo "📝 To deploy to GitHub Pages, run:"
-    echo "   ./deploy_main.sh"
+    echo "   ./deploy-to-github-pages.sh"
 else
     echo "❌ Build failed - dist/ directory not found"
     exit 1

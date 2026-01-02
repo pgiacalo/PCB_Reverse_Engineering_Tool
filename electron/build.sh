@@ -45,7 +45,8 @@ rm -rf release/macos release/windows release/linux
 mkdir -p release/macos release/windows release/linux
 
 # Step 5: Build for the specified platform(s)
-PLATFORM=${1:-all}
+# Default to detecting the current platform (can't build installers cross-platform)
+PLATFORM=${1:-$(uname -s)}
 
 echo ""
 echo "🏗️  Step 5: Building Electron app for $PLATFORM..."
@@ -214,7 +215,11 @@ case "$PLATFORM" in
   *)
     echo "Unknown platform: $PLATFORM"
     echo "Usage: ./build.sh [mac|linux|win|all]"
-    echo "Default: all (builds for all platforms)"
+    echo "Default: auto-detect current platform ($(uname -s))"
+    echo ""
+    echo "Note: To build installers for all platforms, use './build.sh all'"
+    echo "      However, proper installers can only be built on their target platform."
+    echo "      Cross-platform builds will create unpacked directories only."
     exit 1
     ;;
 esac

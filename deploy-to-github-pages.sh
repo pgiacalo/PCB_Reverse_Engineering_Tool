@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-# Build the app and deploy the dist/ folder to the gh-pages branch.
-# Guarantees the working copy ends on the main branch when finished.
+# Deploy PCB Reverse Engineering Tool to GitHub Pages
+# 
+# This script builds the production bundle and deploys it to the gh-pages branch.
+# The application will be available at: https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/
+#
+# The script guarantees the working copy ends on the main branch when finished.
 
 set -euo pipefail
 
@@ -17,7 +21,7 @@ trap cleanup EXIT
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🔧 Deploying main branch to GitHub Pages..."
+echo "🔧 Deploying to GitHub Pages..."
 
 # Ensure a clean working tree to avoid accidentally publishing uncommitted code
 if ! git diff --quiet || ! git diff --cached --quiet; then

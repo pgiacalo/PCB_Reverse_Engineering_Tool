@@ -54,7 +54,7 @@ PCB Tracer uses a decoupled architecture with the frontend and backend deployed 
 | **Technology** | React 18 + TypeScript + Vite |
 | **URL** | `https://pgiacalo.github.io/PCB_Reverse_Engineering_Tool/` |
 | **Cost** | Free |
-| **Deployment** | Manual via `build_and_deploy_to_github_pages.sh` |
+| **Deployment** | Manual via `deploy-to-github-pages.sh` |
 | **SSL** | Automatic (GitHub-managed) |
 
 **What it serves:**
@@ -329,7 +329,7 @@ The frontend uses **manual deployment** via a shell script:
 
 ```bash
 # Build and deploy script
-./build_and_deploy_to_github_pages.sh
+./deploy-to-github-pages.sh
 ```
 
 **What the script does:**
@@ -343,7 +343,7 @@ The frontend uses **manual deployment** via a shell script:
 **To deploy frontend:**
 ```bash
 cd /Users/phil/dev/Electronics/pcb_reverse_engineer
-./build_and_deploy_to_github_pages.sh
+./deploy-to-github-pages.sh
 ```
 
 ### Deployment Comparison
