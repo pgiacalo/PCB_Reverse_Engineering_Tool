@@ -79,10 +79,11 @@ distribution, or use is strictly prohibited. See the LICENSE file for details.
 
 ## Support
 
-For support and questions:
-- Create an issue in the repository
-- Check the Help menu in the application
-- Review the requirements in `docs/REQUIREMENTS.md`
+For support, questions, bug reports, or feature requests:
+- **Send Feedback**: Use Help → Send Feedback... in the application to send an email directly
+- **Donation Channel**: You can also provide feedback via the Ko-fi donation page
+- **Help Menu**: Check the Help menu in the application for documentation and usage tips
+- **Requirements**: Review the requirements in `docs/REQUIREMENTS.md`
 
 ---
 

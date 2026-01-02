@@ -19,6 +19,7 @@ import type { DrawingStroke } from '../../hooks/useDrawing';
 import type { PCBComponent } from '../../types';
 import { SetToolSizeDialog } from '../SetToolSizeDialog';
 import { SetToolColorDialog } from '../SetToolColorDialog';
+import { FeedbackDialog } from '../FeedbackDialog/FeedbackDialog';
 
 export interface MenuBarProps {
   // Menu state
@@ -356,6 +357,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   const [setToolColorDialogVisible, setSetToolColorDialogVisible] = React.useState(false);
   const [showAboutDialog, setShowAboutDialog] = React.useState(false);
   const [showDocumentationDialog, setShowDocumentationDialog] = React.useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = React.useState(false);
 
   // Helper function to check if project is active before allowing menu actions
   // Returns true if action should proceed, false if blocked
@@ -1344,6 +1346,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               Documentation...
             </button>
+            <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
+            <button
+              onClick={() => { setOpenMenu(null); setShowFeedbackDialog(true); }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#f2f2f2', cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              Send Feedback...
+            </button>
           </div>
         )}
       </div>
@@ -1932,6 +1943,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </div>
           </div>
         )}
+
+      {/* Feedback Dialog */}
+      <FeedbackDialog
+        visible={showFeedbackDialog}
+        onClose={() => setShowFeedbackDialog(false)}
+        appVersion="3.1.0"
+      />
     </>
   );
 };
