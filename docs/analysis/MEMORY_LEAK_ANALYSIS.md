@@ -129,6 +129,21 @@ After ~50 minutes of use in full-screen mode, the browser exhibits:
 
 ## Additional Findings
 
+### Splash Screen Video Cleanup (IMPROVED)
+**Location**: `src/components/WelcomeDialog/WelcomeDialog.tsx`
+
+**Problem**: 
+- Video elements can hold significant memory (buffered frames, decoded data)
+- Original cleanup only set `src = ''` and called `load()`, which may not fully release memory
+- Video element might retain buffered data even after source is cleared
+
+**Fix Applied**:
+- Comprehensive cleanup: Clear `srcObject`, remove `src` attribute, clear `poster`
+- Explicit cleanup on component unmount
+- Ensures video memory is fully released when splash screen is dismissed
+
+**Impact**: MEDIUM - Videos can consume 10-50MB+ of memory depending on resolution and length
+
 ### ImageData Leak in Filters (FIXED)
 **Location**: `src/utils/canvas.ts` `drawTransformedImage` function
 

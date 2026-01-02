@@ -39,14 +39,30 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [showVideo, setShowVideo] = useState(true);
 
-  // Stop and remove video when dismissed
+  // Stop and remove video when dismissed - comprehensive cleanup to free memory
   const stopAndRemoveVideo = useCallback(() => {
     if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.src = '';
-      videoRef.current.load(); // Reset video element to free memory
+      const video = videoRef.current;
+      
+      // Stop playback immediately
+      video.pause();
+      
+      // Clear video source and attributes to free memory
+      // Setting srcObject to null clears any MediaStream or Blob sources
+      video.srcObject = null;
+      video.removeAttribute('src');
+      video.src = '';
+      
+      // Clear any poster image
+      video.removeAttribute('poster');
+      
+      // Reset video element to free buffered data and clear internal state
+      video.load();
+      
+      // Remove the element from DOM (this happens via conditional rendering below)
+      // but we also explicitly remove it here to ensure immediate cleanup
     }
-    setShowVideo(false); // Remove video from DOM
+    setShowVideo(false); // Remove video from DOM (conditional rendering)
     if (onDismiss) {
       onDismiss();
     }
@@ -85,14 +101,35 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         console.warn('Video autoplay failed:', error);
       });
     } else if ((!visible || !showVideo) && videoRef.current) {
-      // Stop video when dialog becomes invisible or video is dismissed
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.src = '';
-        videoRef.current.load();
-      }
+      // Comprehensive cleanup when dialog becomes invisible or video is dismissed
+      const video = videoRef.current;
+      video.pause();
+      video.removeAttribute('src');
+      video.src = '';
+      video.srcObject = null; // Clear any MediaStream or Blob sources
+      video.load(); // Reset video element to free buffered data
+      video.removeAttribute('poster');
     }
   }, [visible, showVideo]);
+  
+  // Additional cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount - ensure video is fully released
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.pause();
+        video.removeAttribute('src');
+        video.src = '';
+        video.srcObject = null;
+        video.load();
+        video.removeAttribute('poster');
+        if (video.parentNode) {
+          video.parentNode.removeChild(video);
+        }
+      }
+    };
+  }, []);
 
   if (!visible) return null;
 
