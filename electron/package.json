@@ -1,6 +1,6 @@
 {
   "name": "pcb-tracer",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "PCB Reverse Engineering Tool - Trace and document PCB circuits",
   "main": "main.js",
   "author": "Philip L. Giacalone",

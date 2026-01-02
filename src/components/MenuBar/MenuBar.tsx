@@ -1948,7 +1948,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <FeedbackDialog
         visible={showFeedbackDialog}
         onClose={() => setShowFeedbackDialog(false)}
-        appVersion="3.1.0"
+        appVersion="3.2.0"
       />
     </>
   );

@@ -26,7 +26,7 @@ export interface FeedbackDialogProps {
 export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   visible,
   onClose,
-  appVersion = '3.1.0',
+  appVersion = '3.2.0',
 }) => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
