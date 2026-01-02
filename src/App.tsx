@@ -1273,6 +1273,8 @@ function App() {
       return {
         pcbReferenceX: 0,
         pcbReferenceY: 0,
+        cameraWorldCenterX: 0,
+        cameraWorldCenterY: 0,
         x: 0,
         y: 0,
         zoom: 1,
@@ -1316,6 +1318,8 @@ function App() {
     return {
       pcbReferenceX: 0,
       pcbReferenceY: 0,
+      cameraWorldCenterX: 0,
+      cameraWorldCenterY: 0,
       x: 0,
       y: 0,
       zoom,
@@ -6949,6 +6953,9 @@ function App() {
             [numKey]: {
               pcbReferenceX: pcbRefX,
               pcbReferenceY: pcbRefY,
+              // Save camera position for view panning (e.g., from Magnify tool)
+              cameraWorldCenterX: cameraWorldCenter.x,
+              cameraWorldCenterY: cameraWorldCenter.y,
               // Legacy fields for backward compatibility (always 0,0 since camera is fixed)
               x: 0,
               y: 0,
@@ -7073,8 +7080,11 @@ function App() {
           })));
         }
         
-        // Ensure camera is at (0,0) - it should always be, but enforce it
-        setCameraWorldCenter({ x: 0, y: 0 });
+        // Restore camera position (for view panning from Magnify tool)
+        // Default to (0,0) for backward compatibility with old saved views
+        const savedCameraX = homeView.cameraWorldCenterX ?? 0;
+        const savedCameraY = homeView.cameraWorldCenterY ?? 0;
+        setCameraWorldCenter({ x: savedCameraX, y: savedCameraY });
         
         // Restore all layer visibility settings
         setShowTopImage(homeView.showTopImage);

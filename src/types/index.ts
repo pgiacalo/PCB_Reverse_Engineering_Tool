@@ -545,6 +545,10 @@ export interface HomeView {
   // When restoring, all objects are moved so this reference point is back at this position
   pcbReferenceX?: number;  // World X coordinate of PCB reference point (top image center, or bottom if no top)
   pcbReferenceY?: number;  // World Y coordinate of PCB reference point
+  // Camera position - where the camera/viewport is looking in world coordinates
+  // This is separate from PCB object positions and is used for view panning (e.g., from Magnify tool)
+  cameraWorldCenterX?: number;  // World X coordinate of camera center (for view panning)
+  cameraWorldCenterY?: number;  // World Y coordinate of camera center (for view panning)
   // Legacy fields for backward compatibility (camera center - should always be 0,0 now)
   x?: number;      // Legacy: World X coordinate of view center (deprecated, use pcbReferenceX)
   y?: number;      // Legacy: World Y coordinate of view center (deprecated, use pcbReferenceY)
