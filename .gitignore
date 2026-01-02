@@ -82,6 +82,8 @@ jspm_packages/
 
 # Gatsby files
 .cache/
+# Exception: CNAME file is needed for GitHub Pages custom domain
+!public/CNAME
 public
 
 # Storybook build outputs
