@@ -7234,6 +7234,15 @@ function App() {
             }))
           })));
           
+          // Move current stroke (active drawing in progress) if it has points
+          if (currentStroke.length > 0) {
+            setCurrentStroke(currentStroke.map(point => ({
+              ...point,
+              x: point.x + deltaX,
+              y: point.y + deltaY
+            })));
+          }
+          
           // Move vias
           setVias(vias.map(via => ({
             ...via,
@@ -8567,7 +8576,7 @@ function App() {
         }
       }
     }
-  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, selectAll, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog, openComponentEditor]);
+  }, [currentTool, selectedImageForTransform, transformMode, topImage, bottomImage, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, componentsTop, componentsBottom, powers, grounds, powerBuses, drawingMode, finalizeTraceIfAny, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, switchToSelectTool, selectAll, setComponentsTop, setComponentsBottom, performUndo, setDrawingStrokes, setPowerSymbols, setGroundSymbols, powerSymbols, groundSymbols, switchPerspective, rotatePerspective, homeViews, viewScale, viewRotation, viewFlipX, isBottomView, transparency, setViewScale, setViewRotation, setViewFlipX, setIsBottomView, setTransparency, setTopImage, setBottomImage, setVias, setPads, setCameraWorldCenter, setCurrentView, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setCurrentTool, vias, pads, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, setShowTopImage, setShowBottomImage, setShowViasLayer, setShowTopTracesLayer, setShowBottomTracesLayer, setShowTopPadsLayer, setShowBottomPadsLayer, setShowTopTestPointsLayer, setShowBottomTestPointsLayer, setShowTopComponents, setShowBottomComponents, setShowPowerLayer, setShowGroundLayer, setShowConnectionsLayer, setICPlacementIsPad, setShowICPlacementDialog, openComponentEditor, currentStroke, setCurrentStroke]);
 
   // Clear image selection when switching away from transform tool
   React.useEffect(() => {
