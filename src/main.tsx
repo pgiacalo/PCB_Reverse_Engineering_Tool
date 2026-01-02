@@ -16,6 +16,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { initializeAnalytics } from './utils/analytics.ts'
+
+// Initialize Google Analytics 4 (only in production if configured)
+initializeAnalytics()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

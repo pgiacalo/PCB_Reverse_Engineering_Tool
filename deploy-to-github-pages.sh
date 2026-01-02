@@ -70,7 +70,19 @@ BASE_PATH="/${ORIGIN_REPO}/"
 PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
 fi
 
+# Set Google Analytics 4 ID if provided (for visitor tracking)
+# You can set this as an environment variable or modify this script
+# Format: G-XXXXXXXXXX
+if [ -z "${VITE_GA4_ID:-}" ]; then
+  # Default GA4 ID for pcbtracer.com
+  # To use a different ID, set VITE_GA4_ID environment variable before running this script
+  export VITE_GA4_ID="G-LBN8KSWETD"
+fi
+
 echo "🏗️  Building production bundle with base: ${BASE_PATH}"
+if [ -n "${VITE_GA4_ID:-}" ]; then
+  echo "📊 Google Analytics enabled (ID: ${VITE_GA4_ID})"
+fi
 # Use build.sh script to ensure consistent build process
 # build.sh will skip dependency installation since node_modules already exists
 "${SCRIPT_DIR}/scripts/build.sh" "${BASE_PATH}"
