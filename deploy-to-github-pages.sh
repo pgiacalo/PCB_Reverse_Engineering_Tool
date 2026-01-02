@@ -58,8 +58,17 @@ elif [[ "$ORIGIN_URL" == git@github.com:* ]]; then
   ORIGIN_REPO="$(echo "$ORIGIN_URL" | sed -E 's#^git@github.com:[^/]+/##' | sed -E 's/\.git$//')"
 fi
 
-BASE_PATH="/${ORIGIN_REPO}/"
-PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
+# Check if custom domain is configured (CNAME file exists)
+CUSTOM_DOMAIN=""
+if [ -f "${SCRIPT_DIR}/public/CNAME" ]; then
+  CUSTOM_DOMAIN=$(cat "${SCRIPT_DIR}/public/CNAME" | tr -d '\n' | tr -d '\r')
+  echo "🌐 Custom domain detected: ${CUSTOM_DOMAIN}"
+  BASE_PATH="/"
+  PUBLIC_URL="https://${CUSTOM_DOMAIN}"
+else
+  BASE_PATH="/${ORIGIN_REPO}/"
+  PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
+fi
 
 echo "🏗️  Building production bundle with base: ${BASE_PATH}"
 # Use build.sh script to ensure consistent build process

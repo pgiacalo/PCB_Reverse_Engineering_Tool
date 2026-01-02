@@ -31,16 +31,28 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'question' | 'other'>('other');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitMessage, setSubmitMessage] = useState('');
 
   if (!visible) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+
     if (!message.trim()) {
-      alert('Please enter a message before sending feedback.');
+      setSubmitStatus('error');
+      setSubmitMessage('Please enter a message before sending feedback.');
       return;
     }
 
-    // Build email subject with type prefix
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+    setSubmitMessage('');
+
+    // Build email subject - always include "PCB Tracer" for easy inbox searching
     const typePrefix = {
       bug: '[BUG]',
       feature: '[FEATURE REQUEST]',
@@ -49,23 +61,55 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
     }[feedbackType];
 
     const emailSubject = subject.trim() 
-      ? `${typePrefix} ${subject.trim()}`
-      : `${typePrefix} PCB Tracer Feedback`;
+      ? `[PCB Tracer] ${typePrefix} ${subject.trim()}`
+      : `[PCB Tracer] ${typePrefix} Feedback`;
 
     // Build email body with app info
     const emailBody = `${message.trim()}\n\n---\nApp Version: ${appVersion}\nBrowser: ${navigator.userAgent}\nTimestamp: ${new Date().toISOString()}`;
 
-    // Create mailto link
-    const mailtoLink = `mailto:sciencethink@gmail.com?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    try {
+      // Use Web3Forms API to send email directly
+      const formData = new FormData();
+      formData.append('access_key', '1bbde7fe-a68d-4e70-97fe-2988d8b9c08d');
+      formData.append('subject', emailSubject);
+      formData.append('message', emailBody);
+      formData.append('from_name', 'PCB Tracer User');
+      formData.append('to_email', 'sciencethink@gmail.com');
 
-    // Open email client
-    window.location.href = mailtoLink;
+      const response = await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        body: formData
+      });
 
-    // Reset form and close dialog
-    setSubject('');
-    setMessage('');
-    setFeedbackType('other');
-    onClose();
+      const data = await response.json();
+
+      if (data.success) {
+        setSubmitStatus('success');
+        setSubmitMessage('Thank you! Your feedback has been sent successfully.');
+        
+        // Reset form and close dialog after 2 seconds
+        setTimeout(() => {
+          setSubject('');
+          setMessage('');
+          setFeedbackType('other');
+          setIsSubmitting(false);
+          setSubmitStatus('idle');
+          setSubmitMessage('');
+          onClose();
+        }, 2000);
+      } else {
+        throw new Error(data.message || 'Failed to send feedback');
+      }
+    } catch (error) {
+      console.error('Error sending feedback:', error);
+      setIsSubmitting(false);
+      setSubmitStatus('error');
+      setSubmitMessage(
+        error instanceof Error 
+          ? `Failed to send feedback: ${error.message}. Please try again or email sciencethink@gmail.com directly.`
+          : 'Failed to send feedback. Please try again or email sciencethink@gmail.com directly.'
+      );
+    }
   };
 
   const handleCancel = () => {
@@ -187,6 +231,23 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
           />
         </div>
 
+        {/* Status message display */}
+        {submitStatus !== 'idle' && submitMessage && (
+          <div style={{ 
+            marginBottom: '16px', 
+            padding: '12px', 
+            backgroundColor: submitStatus === 'success' ? '#1f3f1f' : '#3f1f1f',
+            border: `1px solid ${submitStatus === 'success' ? '#4CAF50' : '#ff4444'}`,
+            borderRadius: 6,
+            fontSize: '13px',
+            color: submitStatus === 'success' ? '#4CAF50' : '#ff4444',
+            lineHeight: '1.5',
+          }}>
+            {submitStatus === 'success' ? '✅ ' : '❌ '}
+            {submitMessage}
+          </div>
+        )}
+
         <div style={{ 
           marginBottom: '16px', 
           padding: '12px', 
@@ -196,7 +257,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
           color: '#aaa',
           lineHeight: '1.5',
         }}>
-          <strong style={{ color: '#e0e0e0' }}>Note:</strong> Clicking "Send Feedback" will open your default email client with this information pre-filled. You can review and edit the message before sending.
+          <strong style={{ color: '#e0e0e0' }}>Note:</strong> Your feedback will be sent directly to <strong style={{ color: '#e0e0e0' }}>sciencethink@gmail.com</strong>. No email client needed - just click "Send Feedback" and you're done!
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
@@ -223,24 +284,30 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
           </button>
           <button
             onClick={handleSubmit}
+            disabled={isSubmitting}
             style={{
               padding: '10px 20px',
-              background: '#4CAF50',
+              background: isSubmitting ? '#666' : '#4CAF50',
               color: '#fff',
-              border: '1px solid #45a049',
+              border: isSubmitting ? '1px solid #555' : '1px solid #45a049',
               borderRadius: 6,
-              cursor: 'pointer',
+              cursor: isSubmitting ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               fontWeight: 600,
+              opacity: isSubmitting ? 0.6 : 1,
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#45a049';
+              if (!isSubmitting) {
+                e.currentTarget.style.background = '#45a049';
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#4CAF50';
+              if (!isSubmitting) {
+                e.currentTarget.style.background = '#4CAF50';
+              }
             }}
           >
-            Send Feedback
+            {isSubmitting ? 'Sending...' : 'Send Feedback'}
           </button>
         </div>
       </div>

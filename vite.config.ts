@@ -47,7 +47,11 @@ export default defineConfig({
       apply: 'build',
     }),
   ],
-  base: '/PCB_Reverse_Engineering_Tool/',
+  // Base path: Default is GitHub Pages subdirectory path
+  // The deployment script (deploy-to-github-pages.sh) will override this with --base flag
+  // For custom domain (pcbtracer.com), the script automatically uses '/' when public/CNAME exists
+  // To manually override, use: VITE_BASE_PATH=/ npm run build
+  base: process.env.VITE_BASE_PATH || '/PCB_Reverse_Engineering_Tool/',
   server: {
     port: 5173,
     strictPort: false, // If port is in use, try next available port
