@@ -1348,6 +1348,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
             <button
+              onClick={() => { 
+                setOpenMenu(null); 
+                window.open('https://youtu.be/fBzjK3RsrAw', '_blank', 'noopener,noreferrer'); 
+              }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#f2f2f2', cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              Instructional Video...
+            </button>
+            <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
+            <button
               onClick={() => { setOpenMenu(null); setShowFeedbackDialog(true); }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'transparent', color: '#f2f2f2', cursor: 'pointer' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
