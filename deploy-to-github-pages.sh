@@ -66,8 +66,8 @@ if [ -f "${SCRIPT_DIR}/public/CNAME" ]; then
   BASE_PATH="/"
   PUBLIC_URL="https://${CUSTOM_DOMAIN}"
 else
-  BASE_PATH="/${ORIGIN_REPO}/"
-  PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
+BASE_PATH="/${ORIGIN_REPO}/"
+PUBLIC_URL="https://${ORIGIN_OWNER}.github.io${BASE_PATH}"
 fi
 
 echo "🏗️  Building production bundle with base: ${BASE_PATH}"

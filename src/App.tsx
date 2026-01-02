@@ -142,7 +142,23 @@ interface TraceSegment {
 // Tool registry functions are now imported from utils/toolRegistry.ts
 
 function App() {
-  const CONTENT_BORDER = 5; // fixed border (in canvas pixels) where nothing is drawn
+  const CONTENT_BORDER = 5;
+  
+  // ============================================================================
+  // MEMORY MONITORING (Easy to disable - set to false to turn off)
+  // ============================================================================
+  // To disable memory monitoring, simply change this to false:
+  const ENABLE_MEMORY_MONITOR = true; // Set to false to disable memory monitoring
+  // 
+  // The memory monitor displays below the canvas, to the left of the x,y coordinates.
+  // It shows: "Mem: X.XMB / YYYMB" (used memory / heap limit)
+  // Updates every 1 minute automatically.
+  // Note: Only works in Chrome/Edge (performance.memory API). Other browsers show "N/A".
+  
+  // Cache for keystone-warped images to prevent canvas element leaks
+  // Key: `${imageName}-${keystoneV}-${keystoneH}-${srcW}-${srcH}`
+  // Value: HTMLCanvasElement with the warped image
+  const keystoneCacheRef = React.useRef<Map<string, HTMLCanvasElement>>(new Map()); // fixed border (in canvas pixels) where nothing is drawn
   
   // Tool instances are initialized at module load time (see toolInstances.ts)
   // Re-initialize from project data if needed (handled in loadProject)
@@ -1119,6 +1135,14 @@ function App() {
   const [transformAllDialogVisible, setTransformAllDialogVisible] = useState(false);
   const [isBottomView, setIsBottomView] = useState(false);
   const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
+  
+  // Memory monitoring state (only used if ENABLE_MEMORY_MONITOR is true)
+  const [memoryInfo, setMemoryInfo] = useState<{
+    usedJSHeapSize: number;
+    totalJSHeapSize: number;
+    jsHeapSizeLimit: number;
+    timestamp: number;
+  } | null>(null);
   const [originalTopFlipX, setOriginalTopFlipX] = useState<boolean | null>(null);
   const [originalBottomFlipX, setOriginalBottomFlipX] = useState<boolean | null>(null);
   const [originalTopFlipY, setOriginalTopFlipY] = useState<boolean | null>(null);
@@ -2215,6 +2239,32 @@ function App() {
     selectedComponentTypeRef.current = selectedComponentType;
   }, [selectedComponentType]);
 
+  // Helper function to clean up image resources (ImageBitmap and Object URL)
+  // This prevents memory leaks by properly disposing of GPU memory and blob references
+  const cleanupImageResources = useCallback((image: PCBImage | null) => {
+    if (!image) return;
+    
+    // Close ImageBitmap to free GPU memory
+    if (image.bitmap) {
+      try {
+        image.bitmap.close();
+      } catch (err) {
+        // ImageBitmap may already be closed, ignore errors
+        console.warn('Error closing ImageBitmap:', err);
+      }
+    }
+    
+    // Revoke Object URL to free blob reference
+    if (image.url && image.url.startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(image.url);
+      } catch (err) {
+        // URL may already be revoked, ignore errors
+        console.warn('Error revoking Object URL:', err);
+      }
+    }
+  }, []);
+
   // Helper function to copy image file to images/ subdirectory in project directory
   const copyImageToProjectDirectory = useCallback(async (file: File, projectDirHandle: FileSystemDirectoryHandle | null): Promise<string> => {
     if (!projectDirHandle) {
@@ -2293,6 +2343,32 @@ function App() {
         // Use just the filename for now - will be updated when project is saved
         imageFilePath = file.name;
       }
+
+      // Clean up old image resources before loading new one
+      if (type === 'top' && topImage) {
+        cleanupImageResources(topImage);
+        // Clear keystone cache for top image
+        const keysToDelete: string[] = [];
+        keystoneCacheRef.current.forEach((_, key) => {
+          if (key.startsWith('top-')) {
+            keysToDelete.push(key);
+          }
+        });
+        keysToDelete.forEach(key => keystoneCacheRef.current.delete(key));
+      } else if (type === 'bottom' && bottomImage) {
+        cleanupImageResources(bottomImage);
+        // Clear keystone cache for bottom image
+        const keysToDelete: string[] = [];
+        keystoneCacheRef.current.forEach((_, key) => {
+          if (key.startsWith('bottom-')) {
+            keysToDelete.push(key);
+          }
+        });
+        keysToDelete.forEach(key => keystoneCacheRef.current.delete(key));
+      }
+      
+      // Note: Filter cache is cleared automatically when images change
+      // (handled by clearFilterCache in canvas.ts when needed)
 
       const bitmap = await createImageBitmap(file);
       const url = URL.createObjectURL(file);
@@ -5105,6 +5181,7 @@ function App() {
     ctx.translate(CONTENT_BORDER, CONTENT_BORDER);
 
     // Draw with perspective-like keystone using slice warping via offscreen canvases
+    // Uses caching to prevent memory leaks from creating new canvas elements on every draw
     const drawImageWithKeystone = (
       ctxTarget: CanvasRenderingContext2D,
       source: CanvasImageSource,
@@ -5114,7 +5191,17 @@ function App() {
       keystoneH: number,
       destW: number,
       destH: number,
+      cacheKey?: string, // Optional cache key for this image/keystone combination
     ) => {
+      // Check cache first if we have a key
+      if (cacheKey) {
+        const cached = keystoneCacheRef.current.get(cacheKey);
+        if (cached) {
+          ctxTarget.drawImage(cached, -destW / 2, -destH / 2, destW, destH);
+          return;
+        }
+      }
+
       const base = document.createElement('canvas');
       base.width = srcW;
       base.height = srcH;
@@ -5142,6 +5229,12 @@ function App() {
           const dx = (newW - dw) / 2;
           tctx.drawImage(current, 0, y, srcW, 1, dx, y, dw, 1);
         }
+        // Clean up intermediate canvas if it's not the final result
+        if (Math.abs(keystoneH) <= 1e-6) {
+          // This is the final result, keep it
+        } else {
+          // Will be replaced by temp2, but we'll keep current for now
+        }
         current = temp;
       }
 
@@ -5164,6 +5257,11 @@ function App() {
           tctx2.drawImage(current, x, 0, 1, current.height, x, dy, 1, dh);
         }
         current = temp2;
+      }
+
+      // Cache the result if we have a key
+      if (cacheKey) {
+        keystoneCacheRef.current.set(cacheKey, current);
       }
 
       ctxTarget.drawImage(current, -destW / 2, -destH / 2, destW, destH);
@@ -5218,7 +5316,8 @@ function App() {
       const scaledHeight = bmp.height * 1;
       const sourceToDraw: CanvasImageSource = bmp;
       if ((topImage.keystoneV && Math.abs(topImage.keystoneV) > 1e-6) || (topImage.keystoneH && Math.abs(topImage.keystoneH) > 1e-6)) {
-        drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight);
+        const cacheKey = `top-${topImage.name || 'top'}-${topImage.keystoneV || 0}-${topImage.keystoneH || 0}-${bmp.width}-${bmp.height}`;
+        drawImageWithKeystone(ctx, sourceToDraw, bmp.width, bmp.height, topImage.keystoneV || 0, topImage.keystoneH || 0, scaledWidth, scaledHeight, cacheKey);
       } else {
         ctx.drawImage(sourceToDraw, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
       }
@@ -5259,7 +5358,8 @@ function App() {
       const scaledHeight = bmp.height * 1;
       const sourceToDrawB: CanvasImageSource = bmp;
       if ((bottomImage.keystoneV && Math.abs(bottomImage.keystoneV) > 1e-6) || (bottomImage.keystoneH && Math.abs(bottomImage.keystoneH) > 1e-6)) {
-        drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight);
+        const cacheKey = `bottom-${bottomImage.name || 'bottom'}-${bottomImage.keystoneV || 0}-${bottomImage.keystoneH || 0}-${bmp.width}-${bmp.height}`;
+        drawImageWithKeystone(ctx, sourceToDrawB, bmp.width, bmp.height, bottomImage.keystoneV || 0, bottomImage.keystoneH || 0, scaledWidth, scaledHeight, cacheKey);
       } else {
         ctx.drawImage(sourceToDrawB, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
       }
@@ -8532,6 +8632,13 @@ function App() {
     }
     
     // === STEP 3: Clear all project data ===
+    // Clean up image resources before clearing state
+    if (topImage) {
+      cleanupImageResources(topImage);
+    }
+    if (bottomImage) {
+      cleanupImageResources(bottomImage);
+    }
     setTopImage(null);
     setBottomImage(null);
     clearSnapshot();
@@ -8694,6 +8801,13 @@ function App() {
     }
     
     // === STEP 3: Clear all project data ===
+    // Clean up image resources before clearing state
+    if (topImage) {
+      cleanupImageResources(topImage);
+    }
+    if (bottomImage) {
+      cleanupImageResources(bottomImage);
+    }
     // Clear images
     setTopImage(null);
     setBottomImage(null);
@@ -9663,6 +9777,42 @@ function App() {
     };
   }, [isTransparencyCycling]);
 
+  // Memory monitoring (updates every 1 minute if enabled)
+  // This helps detect memory leaks during development and testing
+  React.useEffect(() => {
+    if (!ENABLE_MEMORY_MONITOR) return;
+    
+    const updateMemoryInfo = () => {
+      // Check if performance.memory is available (Chrome/Edge only)
+      // TypeScript doesn't know about performance.memory, so we use type assertion
+      const perfMemory = (performance as any).memory;
+      if (perfMemory) {
+        setMemoryInfo({
+          usedJSHeapSize: perfMemory.usedJSHeapSize,
+          totalJSHeapSize: perfMemory.totalJSHeapSize,
+          jsHeapSizeLimit: perfMemory.jsHeapSizeLimit,
+          timestamp: Date.now(),
+        });
+      } else {
+        // Fallback for browsers that don't support performance.memory (Firefox, Safari)
+        setMemoryInfo({
+          usedJSHeapSize: 0,
+          totalJSHeapSize: 0,
+          jsHeapSizeLimit: 0,
+          timestamp: Date.now(),
+        });
+      }
+    };
+    
+    // Update immediately on mount
+    updateMemoryInfo();
+    
+    // Update every 1 minute (60000 ms)
+    const interval = setInterval(updateMemoryInfo, 60000);
+    
+    return () => clearInterval(interval);
+  }, [ENABLE_MEMORY_MONITOR]);
+
   // Dynamic custom cursor that reflects tool, mode, color and brush size
   React.useEffect(() => {
     if (currentTool === 'center') {
@@ -10566,6 +10716,8 @@ function App() {
     // Image setters
     setTopImage,
     setBottomImage,
+    // Image cleanup function
+    cleanupImageResources,
     // Drawing setters
     setDrawingStrokes,
     setCurrentStroke,
@@ -12320,6 +12472,17 @@ function App() {
       };
       // Use provided directory handle if available, otherwise fall back to state
       const dirHandleToUse = dirHandleOverride !== undefined ? dirHandleOverride : projectDirHandle;
+      
+      // Clean up old image resources before loading new ones
+      if (topImage) {
+        cleanupImageResources(topImage);
+      }
+      if (bottomImage) {
+        cleanupImageResources(bottomImage);
+      }
+      // Clear keystone cache when loading new project
+      keystoneCacheRef.current.clear();
+      
       const newTop = await buildImage(project.images?.top, dirHandleToUse);
       const newBottom = await buildImage(project.images?.bottom, dirHandleToUse);
       setTopImage(newTop);
@@ -14928,6 +15091,31 @@ function App() {
               border: 'none'
             }}
           />
+          
+          {/* Memory monitor display (to the left of coordinates) */}
+          {ENABLE_MEMORY_MONITOR && memoryInfo && (
+            <div
+              style={{
+                position: 'absolute',
+                left: `${244 + 10}px`, // Left side of canvas area + 10px margin
+                top: `${6 + canvasSize.height + 4}px`, // Below canvas border (same as coordinates)
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: '#333',
+                backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                border: '1px solid #ccc',
+                pointerEvents: 'none',
+                zIndex: 1000,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Mem: {memoryInfo.usedJSHeapSize > 0 
+                ? `${(memoryInfo.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(memoryInfo.jsHeapSizeLimit / 1024 / 1024).toFixed(0)}MB`
+                : 'N/A (Chrome/Edge only)'}
+            </div>
+          )}
           
           {/* Mouse world coordinates display */}
           {mouseWorldPos && (

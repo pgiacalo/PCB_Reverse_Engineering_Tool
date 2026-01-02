@@ -267,6 +267,11 @@ export function drawSelectionRect(
 /**
  * Draw an image with transformations applied
  */
+// Cache for filtered images to prevent ImageData leaks during frequent redraws
+// Key: `${imageName}-${isGrayscale}-${isEdgeDetect}-${width}-${height}`
+// Value: ImageData with filters applied
+const filterCache = new Map<string, ImageData>();
+
 export function drawTransformedImage(
   ctx: CanvasRenderingContext2D,
   image: PCBImage,
@@ -306,25 +311,42 @@ export function drawTransformedImage(
 
   // Apply filters if needed
   if (isGrayscale || isEdgeDetect) {
-    const imageData = ctx.getImageData(
-      -image.width / 2,
-      -image.height / 2,
-      image.width,
-      image.height
-    );
+    // Use cache key to avoid creating new ImageData on every redraw
+    const cacheKey = `${image.name || 'image'}-${isGrayscale}-${isEdgeDetect}-${image.width}-${image.height}`;
+    let imageData = filterCache.get(cacheKey);
     
-    if (isGrayscale) {
-      applyGrayscale(imageData);
-    }
-    
-    if (isEdgeDetect) {
-      applyEdgeDetection(imageData);
+    if (!imageData) {
+      // Create ImageData only if not cached
+      imageData = ctx.getImageData(
+        -image.width / 2,
+        -image.height / 2,
+        image.width,
+        image.height
+      );
+      
+      if (isGrayscale) {
+        applyGrayscale(imageData);
+      }
+      
+      if (isEdgeDetect) {
+        applyEdgeDetection(imageData);
+      }
+      
+      // Cache the filtered result
+      filterCache.set(cacheKey, imageData);
     }
     
     ctx.putImageData(imageData, -image.width / 2, -image.height / 2);
   }
 
   ctx.restore();
+}
+
+/**
+ * Clear the filter cache (call when images change or project closes)
+ */
+export function clearFilterCache(): void {
+  filterCache.clear();
 }
 
 /**

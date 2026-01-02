@@ -56,6 +56,9 @@ export interface ProjectIsolationState {
   setTopImage: (image: PCBImage | null) => void;
   setBottomImage: (image: PCBImage | null) => void;
   
+  // Image cleanup function (to properly dispose of ImageBitmap and Object URL resources)
+  cleanupImageResources?: (image: PCBImage | null) => void;
+  
   // Drawing setters
   setDrawingStrokes: (strokes: DrawingStroke[]) => void;
   setCurrentStroke: (stroke: any[]) => void;
@@ -252,6 +255,11 @@ export function createCloseProject(state: ProjectIsolationState): () => void {
     }
     
     // === STEP 3: Clear all project data ===
+    // Clean up image resources before clearing state
+    // Note: We need to get current images from state, but since we only have setters,
+    // we'll rely on the caller to clean up images before calling this function.
+    // For now, we'll set images to null and let the cleanup happen in App.tsx
+    // If cleanupImageResources is provided, we can use it, but we don't have access to current images here
     state.setTopImage(null);
     state.setBottomImage(null);
     
