@@ -4046,7 +4046,6 @@ function App() {
           
           if (hitComponent) {
             // Only update if component changed
-            const newKey = `component-${hitComponent.comp.id}`;
             if (lastHoverStateRef.current?.componentId !== hitComponent.comp.id) {
               setHoverComponent({ 
                 component: hitComponent.comp, 
@@ -4082,7 +4081,6 @@ function App() {
             })();
             
             if (hitTestPoint) {
-              const newKey = `testPoint-${hitTestPoint.id}`;
               if (lastHoverStateRef.current?.testPointId !== hitTestPoint.id) {
                 setHoverTestPoint({
                   stroke: hitTestPoint,
