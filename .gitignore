@@ -83,7 +83,10 @@ jspm_packages/
 # Gatsby files
 .cache/
 # Exception: CNAME file is needed for GitHub Pages custom domain
+# Exception: robots.txt and sitemap.xml are needed for SEO
 !public/CNAME
+!public/robots.txt
+!public/sitemap.xml
 public
 
 # Storybook build outputs
