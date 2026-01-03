@@ -13518,7 +13518,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer (v3.2)</h1>
+        <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer (v3.3)</h1>
         <a
           href="https://ko-fi.com/onesmallstep"
           target="_blank"
