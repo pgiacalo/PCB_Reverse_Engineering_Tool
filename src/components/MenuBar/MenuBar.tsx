@@ -46,6 +46,8 @@ export interface MenuBarProps {
   onPrint: () => void;
   onExportBOM: () => Promise<void>;
   hasUnsavedChanges: () => boolean;
+  // Splash screen dismissal callback
+  onDismissSplash?: () => void;
   
   // Settings
   bomExportFormat: 'json' | 'pdf';
@@ -226,6 +228,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onPrint,
   onExportBOM,
   hasUnsavedChanges,
+  onDismissSplash,
   bomExportFormat: _bomExportFormat,
   setBomExportFormat: _setBomExportFormat,
   onExportNetlist,
@@ -845,6 +848,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button 
               onClick={() => {
                 if (!isReadOnlyMode) {
+                  onDismissSplash?.();
                   setOpenMenu(null);
                   if (hasUnsavedChanges()) {
                     setNewProjectDialog({ visible: true });
@@ -860,6 +864,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             </button>
             <button 
               onClick={async () => {
+                onDismissSplash?.();
                 await onOpenProject();
                 setOpenMenu(null);
               }} 

@@ -13577,6 +13577,7 @@ function App() {
         onSaveProject={saveProject}
         onCloseProject={handleCloseProject}
         onPrint={handlePrint}
+        onDismissSplash={() => setHasDismissedSplash(true)}
         onExportBOM={handleExportBOM}
         bomExportFormat={bomExportFormat}
         setBomExportFormat={setBomExportFormat}

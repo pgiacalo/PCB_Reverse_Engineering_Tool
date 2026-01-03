@@ -75,24 +75,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
     }
   }, [visible]);
 
-  // Handle clicks anywhere to dismiss
-  useEffect(() => {
-    if (!visible) return;
-
-    const handleClick = () => {
-      // Stop video and dismiss on any click
-      stopAndRemoveVideo();
-    };
-
-    // Add click listener to document
-    document.addEventListener('click', handleClick, { once: true });
-    document.addEventListener('mousedown', handleClick, { once: true });
-
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('mousedown', handleClick);
-    };
-  }, [visible, stopAndRemoveVideo]);
+  // Note: Click-to-dismiss removed - splash screen only dismisses on File->New Project or File->Open Project
 
   useEffect(() => {
     if (visible && showVideo && videoRef.current) {
@@ -136,8 +119,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
   return (
     <div 
       ref={containerRef}
-      onClick={stopAndRemoveVideo}
-      style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#ffffff', pointerEvents: 'auto', zIndex: 10 }}
+      style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0, backgroundColor: '#ffffff', pointerEvents: 'none', zIndex: 10 }}
     >
       {/* Video background - matches canvas area exactly */}
       {showVideo && (
@@ -162,7 +144,6 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
       )}
       {/* Dialog content - centered on top of video */}
     <div 
-      onClick={stopAndRemoveVideo}
       style={{
       position: 'absolute',
       top: '50%',
