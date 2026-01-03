@@ -25,15 +25,12 @@ export interface WelcomeDialogProps {
   /** Canvas size and position to match video background */
   canvasSize?: { width: number; height: number };
   canvasPosition?: { left: number; top: number };
-  /** Callback when user interacts (clicks) - should stop and remove video */
-  onDismiss?: () => void;
 }
 
 export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({ 
   visible, 
   canvasSize = { width: 960, height: 600 },
-  canvasPosition = { left: 244, top: 6 },
-  onDismiss
+  canvasPosition = { left: 244, top: 6 }
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);

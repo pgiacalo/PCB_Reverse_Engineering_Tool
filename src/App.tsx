@@ -15143,7 +15143,6 @@ function App() {
             visible={!topImage && !bottomImage && !hasDismissedSplash} 
             canvasSize={canvasSize}
             canvasPosition={{ left: 244, top: 6 }}
-            onDismiss={() => setHasDismissedSplash(true)}
           />
 
           <canvas
