@@ -17,7 +17,7 @@
  * Displays a welcome message when no project images are loaded
  */
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 export interface WelcomeDialogProps {
   /** Whether to show the dialog (typically when no images are loaded) */
@@ -39,39 +39,13 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [showVideo, setShowVideo] = useState(true);
 
-  // Stop and remove video when dismissed - comprehensive cleanup to free memory
-  const stopAndRemoveVideo = useCallback(() => {
-    if (videoRef.current) {
-      const video = videoRef.current;
-      
-      // Stop playback immediately
-      video.pause();
-      
-      // Clear video source and attributes to free memory
-      // Setting srcObject to null clears any MediaStream or Blob sources
-      video.srcObject = null;
-      video.removeAttribute('src');
-      video.src = '';
-      
-      // Clear any poster image
-      video.removeAttribute('poster');
-      
-      // Reset video element to free buffered data and clear internal state
-      video.load();
-      
-      // Remove the element from DOM (this happens via conditional rendering below)
-      // but we also explicitly remove it here to ensure immediate cleanup
-    }
-    setShowVideo(false); // Remove video from DOM (conditional rendering)
-    if (onDismiss) {
-      onDismiss();
-    }
-  }, [onDismiss]);
-
-  // Reset showVideo when dialog becomes visible again
+  // Reset showVideo when dialog becomes visible again, and set to false when dismissed
   useEffect(() => {
     if (visible) {
       setShowVideo(true);
+    } else {
+      // Explicitly set showVideo to false when dialog becomes invisible to ensure cleanup
+      setShowVideo(false);
     }
   }, [visible]);
 
