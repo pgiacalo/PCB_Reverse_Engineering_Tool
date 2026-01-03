@@ -132,7 +132,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         cursor: 'pointer',
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-        PCB Tracer: An AI-Enhanced Electronics Tool
+        PCB Tracer: An AI-Assisted Electronics Tool
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
         Reverse Engineer, Troubleshoot, Trace Signals,<br />
