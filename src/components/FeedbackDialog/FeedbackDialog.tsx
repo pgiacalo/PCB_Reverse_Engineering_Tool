@@ -81,7 +81,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
     
     // Include reply-to email in the message body if provided
     if (replyToEmail.trim()) {
-      emailBody = `${emailBody}\nReply-to Email: ${replyToEmail.trim()}`;
+      emailBody = `${emailBody}\nReply to email: ${replyToEmail.trim()}`;
     }
 
     try {
@@ -91,12 +91,13 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       formData.append('subject', emailSubject);
       formData.append('message', emailBody);
       formData.append('from_name', 'PCB Tracer User');
-      formData.append('to_email', 'sciencethink@gmail.com');
+      // Use webform_ prefix to hide to_email from email footer (it's still used for routing)
+      formData.append('webform_to_email', 'sciencethink@gmail.com');
       // Add reply-to email if provided
-      // Web3Forms automatically uses 'email' field as reply-to, but we also set 'replyto' explicitly
+      // Use only 'replyto' field to avoid Web3Forms adding "Email:" label in footer
+      // The email address is already in the message body as "Reply to email:"
       if (replyToEmail.trim()) {
-        formData.append('email', replyToEmail.trim()); // Web3Forms uses this for reply-to
-        formData.append('replyto', replyToEmail.trim()); // Explicit reply-to field
+        formData.append('replyto', replyToEmail.trim());
       }
 
       const response = await fetch('https://api.web3forms.com/submit', {
