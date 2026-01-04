@@ -17,6 +17,7 @@ import type { PCBComponent } from '../types';
 import { getDefaultUnit } from '../constants';
 import { COMPONENT_LIST } from '../data/componentDesignators';
 import type { ComponentDefinition } from '../data/componentDefinitions.d';
+import { resolveComponentDefinition } from '../utils/componentDefinitionResolver';
 
 /**
  * Read value and unit from component
@@ -223,12 +224,18 @@ export function useComponents() {
   }, []);
 
   const removeComponent = useCallback((id: string, layer: 'top' | 'bottom') => {
+    // If the component being deleted is currently being edited, close the editor
+    if (componentEditor && componentEditor.id === id) {
+      setComponentEditor(null);
+      setConnectingPin(null);
+    }
+    
     if (layer === 'top') {
       setComponentsTop(prev => prev.filter(c => c.id !== id));
     } else {
       setComponentsBottom(prev => prev.filter(c => c.id !== id));
     }
-  }, []);
+  }, [componentEditor, setComponentEditor, setConnectingPin]);
 
   const openComponentEditor = useCallback((component: PCBComponent, layer: 'top' | 'bottom') => {
     // Validate component has all required properties before proceeding
@@ -540,17 +547,142 @@ export function useComponents() {
     }
     
     // Attach component definition (resolved by stored key) for dynamic rendering
+    // CRITICAL: This is essential for the Component Properties dialog to render custom fields
+    let resolvedDef: ComponentDefinition | undefined = undefined;
     const defKey = (component as any).componentDefinitionKey;
+    
+    console.log('[openComponentEditor] Resolving definition for component:', {
+      id: component.id,
+      componentType: component.componentType,
+      componentDefinitionKey: defKey,
+      hasKey: !!defKey,
+      designator: component.designator,
+      // Log a sample of available keys for debugging
+      sampleKeys: COMPONENT_LIST.slice(0, 5).map(d => `${d.category}:${d.subcategory}`)
+    });
+    
     if (defKey) {
-      const def: ComponentDefinition | undefined = COMPONENT_LIST.find(d => `${d.category}:${d.subcategory}:${d.type}` === defKey);
-      if (def) {
-        editor.componentDefinition = def;
-        editor.componentDefinitionKey = defKey;
+      // Try to find definition by key first (most reliable)
+      // Support both old format (category:subcategory:type) and new format (category:subcategory)
+      resolvedDef = COMPONENT_LIST.find(d => {
+        const newKey = `${d.category}:${d.subcategory}`;
+        const oldKey = `${d.category}:${d.subcategory}:${d.type}`;
+        return defKey === newKey || defKey === oldKey;
+      });
+      console.log('[openComponentEditor] Key-based lookup result:', {
+        key: defKey,
+        found: !!resolvedDef,
+        foundCategory: resolvedDef?.category,
+        foundSubcategory: resolvedDef?.subcategory,
+        foundType: resolvedDef?.type
+      });
+      
+      // If key lookup failed, the key might be outdated (e.g., "BJT" -> "BJT NPN")
+      // We'll fall through to heuristic resolution below
+    }
+    
+    // Fallback: Use resolveComponentDefinition if key-based lookup failed
+    // This handles cases where:
+    // - componentDefinitionKey is missing
+    // - componentDefinitionKey is incorrect/outdated (e.g., subcategory changed)
+    // - Key doesn't match any existing definition
+    if (!resolvedDef) {
+      resolvedDef = resolveComponentDefinition(component as any);
+      console.log('[openComponentEditor] Fallback resolution result:', {
+        found: !!resolvedDef,
+        foundCategory: resolvedDef?.category,
+        foundSubcategory: resolvedDef?.subcategory,
+        foundType: resolvedDef?.type
+      });
+      
+      // If we successfully resolved it, set the key for future use
+      // CRITICAL: Always update the key if we resolved a definition (even if key existed)
+      // This handles cases where the subcategory changed (e.g., "BJT" -> "BJT NPN")
+      if (resolvedDef) {
+        const resolvedKey = `${resolvedDef.category}:${resolvedDef.subcategory}`;
+        const oldKey = (component as any).componentDefinitionKey;
+        
+        // Update key if it's different (handles subcategory changes)
+        if (oldKey !== resolvedKey) {
+          console.log('[openComponentEditor] Updating componentDefinitionKey:', {
+            old: oldKey,
+            new: resolvedKey,
+            reason: 'Key mismatch - subcategory may have changed'
+          });
+        } else {
+          console.log('[openComponentEditor] Setting componentDefinitionKey:', resolvedKey);
+        }
+        
+        (component as any).componentDefinitionKey = resolvedKey;
+        editor.componentDefinitionKey = resolvedKey;
+        
+        // CRITICAL: Update the component in state with the key so it's persisted
+        // This ensures the key is saved when the component is next saved
+        if (layer === 'top') {
+          setComponentsTop(prev => prev.map(c => 
+            c.id === component.id ? { ...c, componentDefinitionKey: resolvedKey } as any : c
+          ));
+        } else {
+          setComponentsBottom(prev => prev.map(c => 
+            c.id === component.id ? { ...c, componentDefinitionKey: resolvedKey } as any : c
+          ));
+        }
       }
+    }
+    
+    if (resolvedDef) {
+      editor.componentDefinition = resolvedDef;
+      // Ensure componentDefinitionKey is set in editor
+      if (!editor.componentDefinitionKey) {
+        const finalKey = `${resolvedDef.category}:${resolvedDef.subcategory}`;
+        editor.componentDefinitionKey = finalKey;
+        console.log('[openComponentEditor] Set componentDefinitionKey in editor:', finalKey);
+      }
+      
+      // Populate all dynamic fields from component data based on definition
+      // This ensures all fields defined in componentDefinitions.json are loaded
+      if (resolvedDef.fields && Array.isArray(resolvedDef.fields)) {
+        console.log('[openComponentEditor] Populating', resolvedDef.fields.length, 'fields from definition');
+        for (const field of resolvedDef.fields) {
+          const valueKey = field.name;
+          const unitKey = `${field.name}Unit`;
+          
+          // Skip special fields that are handled elsewhere
+          if (valueKey === 'datasheet' || valueKey === 'description') {
+            continue;
+          }
+          
+          // Read value from component
+          const value = (component as any)[valueKey];
+          if (value !== undefined && value !== null && value !== '') {
+            editor[valueKey] = value;
+          }
+          
+          // Read unit if field has units
+          if (field.units && field.units.length > 0) {
+            const unit = (component as any)[unitKey];
+            if (unit !== undefined && unit !== null && unit !== '') {
+              editor[unitKey] = unit;
+            } else if (field.defaultUnit) {
+              editor[unitKey] = field.defaultUnit;
+            }
+          }
+        }
+      } else {
+        console.warn('[openComponentEditor] Definition has no fields:', resolvedDef);
+      }
+    } else {
+      console.error('[openComponentEditor] CRITICAL: Could not resolve component definition for component:', {
+        id: component.id,
+        componentType: component.componentType,
+        componentDefinitionKey: defKey,
+        designator: component.designator,
+        allKeys: COMPONENT_LIST.map(d => `${d.category}:${d.subcategory}`).slice(0, 10)
+      });
     }
 
     setComponentEditor(editor);
-  }, []);
+  }, [setComponentsTop, setComponentsBottom]);
 
   const closeComponentEditor = useCallback(() => {
     setComponentEditor(null);

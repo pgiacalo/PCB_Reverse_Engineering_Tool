@@ -47,7 +47,7 @@ function computeBaseType(def: RawComponentDefinition): BaseComponentKind {
 const rawDefinitions = (rawComponentData as any).components as RawComponentDefinition[];
 
 export const ALL_DEFINITIONS: DataDrivenComponentDefinition[] = rawDefinitions.map((def) => {
-  const key = `${def.category}:${def.subcategory}:${def.type}`;
+  const key = `${def.category}:${def.subcategory}`;
   const baseType = computeBaseType(def);
   return {
     ...def,
@@ -57,7 +57,7 @@ export const ALL_DEFINITIONS: DataDrivenComponentDefinition[] = rawDefinitions.m
 });
 
 /**
- * Index by key (category:subcategory:type).
+ * Index by key (category:subcategory).
  */
 const byKey = new Map<string, DataDrivenComponentDefinition>();
 ALL_DEFINITIONS.forEach((def) => {

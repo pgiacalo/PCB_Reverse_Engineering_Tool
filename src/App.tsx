@@ -3345,16 +3345,18 @@ function App() {
 
       let comp: PCBComponent;
       try {
-            comp = createComponentInstance({
+        // componentType is now data-driven from the definition itself
+        // No mapping logic needed - createComponentInstance reads it from definition.componentType
+        comp = createComponentInstance({
           definition: dataDrivenDefinition,
           layer: componentToolLayerRef.current,
-              x: truncatedPos.x,
-              y: truncatedPos.y,
-              color: componentColor,
-              size: componentSize,
-              existingComponents: allExistingComponents,
-              counters: autoAssignDesignators ? counters : {},
-            });
+          x: truncatedPos.x,
+          y: truncatedPos.y,
+          color: componentColor,
+          size: componentSize,
+          existingComponents: allExistingComponents,
+          counters: autoAssignDesignators ? counters : {},
+        });
       } catch (error) {
         console.error('[Component Creation] Error creating component with v2 runtime:', error);
         return;
@@ -12689,26 +12691,50 @@ function App() {
       if (project.drawing?.componentsTop) {
         const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => {
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
-          return {
+          const restoredComp = {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
             layer: comp.layer || 'top',
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
+          
+          // CRITICAL: Ensure componentDefinitionKey is preserved
+          // The spread operator should preserve it, but if missing, try to resolve it
+          // This handles cases where old project files don't have the key
+          if (!(restoredComp as any).componentDefinitionKey) {
+            const def = resolveComponentDefinition(restoredComp as any);
+            if (def) {
+              (restoredComp as any).componentDefinitionKey = `${def.category}:${def.subcategory}`;
+            }
+          }
+          
+          return restoredComp;
         });
         setComponentsTop(compsTop);
       }
       if (project.drawing?.componentsBottom) {
         const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => {
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
-          return {
+          const restoredComp = {
             ...comp,
             x: truncatedPos.x,
             y: truncatedPos.y,
             layer: comp.layer || 'bottom',
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
+          
+          // CRITICAL: Ensure componentDefinitionKey is preserved
+          // The spread operator should preserve it, but if missing, try to resolve it
+          // This handles cases where old project files don't have the key
+          if (!(restoredComp as any).componentDefinitionKey) {
+            const def = resolveComponentDefinition(restoredComp as any);
+            if (def) {
+              (restoredComp as any).componentDefinitionKey = `${def.category}:${def.subcategory}`;
+            }
+          }
+          
+          return restoredComp;
         });
         setComponentsBottom(compsBottom);
       }
@@ -15244,7 +15270,29 @@ function App() {
               // Find the component being edited to resolve its definition
               const comp = componentsTop.find(c => c.id === componentEditor.id) || 
                           componentsBottom.find(c => c.id === componentEditor.id);
-              return comp ? resolveComponentDefinition(comp as any) : undefined;
+              if (!comp) return undefined;
+              
+              // First, try to use the definition from componentEditor state (most reliable)
+              if ((componentEditor as any).componentDefinition) {
+                return (componentEditor as any).componentDefinition;
+              }
+              
+              // Fallback: Try to resolve from component
+              const resolved = resolveComponentDefinition(comp as any);
+              
+              // If we successfully resolved it but component doesn't have the key, set it
+              if (resolved && !(comp as any).componentDefinitionKey) {
+                const defKey = `${resolved.category}:${resolved.subcategory}`;
+                (comp as any).componentDefinitionKey = defKey;
+                // Update the component in state with the key
+                if (componentEditor.layer === 'top') {
+                  setComponentsTop(prev => prev.map(c => c.id === comp.id ? { ...c, componentDefinitionKey: defKey } as any : c));
+                } else {
+                  setComponentsBottom(prev => prev.map(c => c.id === comp.id ? { ...c, componentDefinitionKey: defKey } as any : c));
+                }
+              }
+              
+              return resolved;
             })() : undefined}
             canvasHeight={canvasSize.height}
           />

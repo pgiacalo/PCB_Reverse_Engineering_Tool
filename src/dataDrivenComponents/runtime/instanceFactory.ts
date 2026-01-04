@@ -1,12 +1,15 @@
 import { generateUniqueId } from '../../utils/coordinates';
 import { COMPONENT_ICON } from '../../constants';
-import type { PCBComponentBase, PCBComponent } from '../../types';
+import type { PCBComponentBase, PCBComponent, ComponentType } from '../../types';
 import type { DataDrivenComponentDefinition, ComponentFieldDefinition } from '../definitions/schema';
 import type { DesignatorCounters } from './designators';
 import { assignDesignator } from './designators';
 
 export interface CreateInstanceOptions {
   definition: DataDrivenComponentDefinition;
+  /**
+   * Layer for the component ('top' or 'bottom').
+   */
   layer: 'top' | 'bottom';
   x: number;
   y: number;
@@ -42,9 +45,13 @@ export function createComponentInstance(options: CreateInstanceOptions): PCBComp
   const designator =
     providedDesignator || assignDesignator(definition, existingComponents, counters);
 
+  // Use componentType from definition (data-driven source of truth)
+  // This eliminates the need for hardcoded mapping logic
+  const componentType = (definition.componentType as ComponentType) || (definition.type as ComponentType);
+
   const base: PCBComponentBase & { [key: string]: any } = {
     id: generateUniqueId('comp'),
-    componentType: (definition.type as any),
+    componentType: componentType,  // Use componentType from definition (data-driven)
     designator,
     layer,
     x,

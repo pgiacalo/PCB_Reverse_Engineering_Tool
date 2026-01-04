@@ -121,7 +121,7 @@ export function createComponent(
   // Store definition key for later lookup in dialogs
   if (metadata?.componentDefinition) {
     const def = metadata.componentDefinition;
-    const defKey = `${def.category}:${def.subcategory}:${def.type}`;
+    const defKey = `${def.category}:${def.subcategory}`;
     (baseComponent as any).componentDefinitionKey = defKey;
   }
 

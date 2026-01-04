@@ -44,29 +44,25 @@ export interface ComponentSelectionDialogProps {
 }
 
 // Derive ComponentType and subtype for a given JSON definition.
-// All mapping logic from categories/subcategories to ComponentType lives here.
+// componentType is now data-driven from the definition, eliminating hardcoded mapping logic.
 const buildMetadataForDefinition = (def: ComponentDefinition): ComponentSelectionMetadata => {
-  const { category, subcategory, type, designator } = def;
+  const { category, subcategory, type, designator, componentType: defComponentType } = def;
 
-  let componentType: ComponentType;
-      let subtype: string | undefined;
+  // Use componentType from definition (data-driven source of truth)
+  // Fallback to type for backward compatibility if componentType is missing
+  const componentType: ComponentType = (defComponentType as ComponentType) || (type as ComponentType);
+  
+  // Determine subtype based on subcategory (still needed for some component types)
+  let subtype: string | undefined;
 
   switch (category) {
     case 'Capacitors':
-      if (subcategory === 'Electrolytic') {
-        componentType = 'Electrolytic Capacitor';
-      } else if (subcategory === 'Film') {
-        componentType = 'Film Capacitor';
-      } else {
-        componentType = 'Capacitor';
-        if (subcategory === 'Tantalum') {
-          subtype = 'Tantalum';
-        }
+      if (subcategory === 'Tantalum') {
+        subtype = 'Tantalum';
       }
       break;
 
     case 'Diodes':
-      componentType = 'Diode';
       if (subcategory === 'LED') subtype = 'LED';
       else if (subcategory === 'Infrared') subtype = 'Infrared';
       else if (subcategory === 'Photodiode') subtype = 'Photodiode';
@@ -77,73 +73,26 @@ const buildMetadataForDefinition = (def: ComponentDefinition): ComponentSelectio
 
     case 'Resistors':
       if (subcategory === 'Network') {
-        componentType = 'ResistorNetwork';
         subtype = 'Network';
       } else if (subcategory === 'Thermistor') {
-        componentType = 'Thermistor';
         subtype = 'Thermistor';
       } else if (subcategory === 'Variable') {
-        componentType = 'VariableResistor';
         subtype = 'Potentiometer';
       } else if (subcategory === 'Varistor') {
-        componentType = 'VariableResistor';
         subtype = 'Varistor';
-      } else {
-        componentType = 'Resistor';
       }
       break;
 
-    case 'Semiconductors':
-      if (subcategory === 'BJT' || subcategory === 'MOSFET' || subcategory === 'JFET') {
-        componentType = 'Transistor';
-      } else if (subcategory === 'Single Op Amp' || subcategory === 'Dual Op Amp') {
-        componentType = 'IntegratedCircuit';
-      } else {
-        componentType = 'IntegratedCircuit';
-  }
-      break;
-
-    case 'Passive Components':
-      if (type === 'Inductor') componentType = 'Inductor';
-      else if (type === 'FerriteBead') componentType = 'FerriteBead';
-      else componentType = 'Crystal';
-      break;
-
-    case 'Power & Energy':
-      if (subcategory === 'Battery') componentType = 'Battery';
-      else if (subcategory === 'Power Supply') componentType = 'PowerSupply';
-      else componentType = 'Fuse';
-      break;
-
-    case 'Connectors & Switches':
-      if (subcategory === 'Connector') componentType = 'Connector';
-      else if (subcategory === 'Jumper') componentType = 'Jumper';
-      else if (subcategory === 'Switch') componentType = 'Switch';
-      else componentType = 'Relay';
-      break;
-
     case 'Other':
-      if (subcategory === 'Transformer') componentType = 'Transformer';
-      else if (subcategory === 'Speaker') componentType = 'Speaker';
-      else if (subcategory === 'Motor') componentType = 'Motor';
-      else if (subcategory === 'Test Point') componentType = 'TestPoint';
-      else if (subcategory === 'Vacuum Tube') componentType = 'VacuumTube';
-      else {
-        componentType = 'GenericComponent';
-        if (subcategory === 'Attenuator') subtype = 'Attenuator';
-        else if (subcategory === 'Circuit Breaker') subtype = 'CircuitBreaker';
-        else if (subcategory === 'Thermocouple') subtype = 'Thermocouple';
-        else if (subcategory === 'Tuner') subtype = 'Tuner';
-  }
-      break;
-
-    default:
-      componentType = 'GenericComponent';
+      if (subcategory === 'Attenuator') subtype = 'Attenuator';
+      else if (subcategory === 'Circuit Breaker') subtype = 'CircuitBreaker';
+      else if (subcategory === 'Thermocouple') subtype = 'Thermocouple';
+      else if (subcategory === 'Tuner') subtype = 'Tuner';
       break;
   }
 
   const uniqueKey = `${category}:${subcategory}:${type}:${designator}`;
-  const v2Key = `${category}:${subcategory}:${type}`;
+  const v2Key = `${category}:${subcategory}`;
   const dataDrivenDefinition = getDefinitionByKey(v2Key);
 
   return {

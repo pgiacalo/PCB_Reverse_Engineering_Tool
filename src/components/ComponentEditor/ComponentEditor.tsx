@@ -19,12 +19,13 @@
 
 import React, { useState, useEffect } from 'react';
 import type { PCBComponent } from '../../types';
-import type { ComponentDefinition } from '../../data/componentDefinitions.d';
+import type { ComponentDefinition, ComponentFieldDefinition } from '../../data/componentDefinitions.d';
 import { InfoDialog } from '../InfoDialog/InfoDialog';
 import { COMPONENT_TYPE_INFO, formatComponentTypeName } from '../../constants';
 import { ComponentTypeFields } from './ComponentTypeFields';
 import { resolveComponentDefinition } from '../../utils/componentDefinitionResolver';
 import { isComponentPolarized } from '../../utils/components';
+import { getAIPrompt } from '../../utils/aiPrompts';
 
 // AI Service configuration - supports multiple providers (Gemini, Claude, OpenAI)
 // API keys are stored in user-selected storage (sessionStorage or localStorage)
@@ -150,8 +151,6 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   const [uploadedDatasheetFile, setUploadedDatasheetFile] = useState<File | null>(null);
   const [showApiKeyInstructions, setShowApiKeyInstructions] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
-  const [aiRawResponse, setAiRawResponse] = useState<string | null>(null);
-  const [showResponseDialog, setShowResponseDialog] = useState(false);
   const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string>('');
   
@@ -236,7 +235,7 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       const currentCompList = componentEditor.layer === 'top' ? componentsTop : componentsBottom;
       const currentComp = currentCompList.find(c => c.id === componentEditor.id);
       if (currentComp) {
-        const customPromptValue = (currentComp as any).customGeminiPrompt;
+        const customPromptValue = (currentComp as any).componentPropertiesAIPrompt;
         if (customPromptValue) {
           setCustomPrompt(customPromptValue);
         } else {
@@ -347,7 +346,9 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     setSelectedComponentIds(matchingIds);
   };
 
-  // Function to build the default Gemini prompt dynamically based on component fields
+  // Fallback function to build a generic default prompt dynamically based on component fields
+  // This is used only when no named prompt (aiPromptName) or inline prompt (aiPrompt) is available
+  // In the future, this could be replaced with a generic template prompt in aiPrompts.json
   const buildDefaultPrompt = (fieldsToExtract: Array<{
     name: string;
     label: string;
@@ -376,7 +377,7 @@ ${fieldsToExtract.map(field => {
     return `   - ${field.name}: The ${field.label.toLowerCase()} (as a string or number, depending on the field type)`;
   }
 }).join('\n')}
-5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
+5. For IC Type (icType), determine the type of integrated circuit from the datasheet. Choose from: "BJT NPN", "BJT PNP", "MOSFET N-Channel", "MOSFET P-Channel", "JFET", "Op-Amp", "Microcontroller", "Microprocessor", "Logic", "Memory", "Voltage Regulator", "Timer", "ADC", "DAC", "Comparator", "Transceiver", "Driver", "Amplifier", or "Other". If it's clearly an op amp, use "Op-Amp". If it's clearly a microcontroller, use "Microcontroller", etc.
 6. For Package Type (packageType), determine the package type from the datasheet. Choose from: "DIP", "PDIP", "SOIC", "QFP", "LQFP", "TQFP", "BGA", "SSOP", "TSOP", "Various", or "Other". If multiple package types are mentioned in the datasheet, use "Various". If it's a plastic DIP, use "PDIP". If it's a standard DIP, use "DIP".
 7. For pin count (pinCount), determine the total number of pins/pads on the component from the datasheet. This should be a positive integer. Include this in the properties section.
 8. For datasheet summary (datasheetSummary), provide a concise summary (2-4 sentences) of the introductory information from the datasheet, including what the component is, its main purpose, and key features mentioned in the introduction or overview section.
@@ -431,7 +432,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
     title: string;
     message: string;
     type: 'info' | 'success';
-    onShowResponse?: () => void;
   }>({
     visible: false,
     title: '',
@@ -823,15 +823,37 @@ Analyze the attached PDF datasheet and extract the information according to the 
           onClose={() => {
             setInfoDialog({ visible: false, title: '', message: '', type: 'info' });
           }}
-          onShowResponse={infoDialog.onShowResponse}
         />
       </>
     );
   }
   
   // Validate component exists and has required properties
+  // NOTE: During AI extraction, the component arrays are updated, which can cause a brief moment
+  // where the component isn't found. We should only close the editor if the component truly doesn't exist
+  // (i.e., it's not in either array and componentEditor is still set). This prevents the editor from
+  // closing during state updates.
+  if (!comp && componentEditor) {
+    // Double-check if component exists in either array (might be a timing issue during state updates)
+    const compInTop = componentsTop.find(c => c.id === componentEditor.id);
+    const compInBottom = componentsBottom.find(c => c.id === componentEditor.id);
+    const compExists = compInTop || compInBottom;
+    
+    if (!compExists) {
+      console.error('[ComponentEditor] Component not found:', { componentId: componentEditor.id, componentsTopCount: componentsTop.length, componentsBottomCount: componentsBottom.length });
+      // Component was deleted - close the editor to prevent rendering errors
+      setComponentEditor(null);
+      return null;
+    } else {
+      // Component exists but useMemo didn't find it - likely a timing issue during state update
+      // Don't close the editor, it will be found on next render
+      console.warn('[ComponentEditor] Component exists but useMemo returned null (timing issue), waiting for next render');
+      return null; // Return null to prevent rendering, but don't close editor
+    }
+  }
+  
+  // If componentEditor is null, we already returned early above, so comp should exist here
   if (!comp) {
-    console.error('[ComponentEditor] Component not found:', { componentId: componentEditor.id, componentsTopCount: componentsTop.length, componentsBottomCount: componentsBottom.length });
     return null;
   }
   
@@ -917,16 +939,101 @@ Analyze the attached PDF datasheet and extract the information according to the 
       }
     }
     
-    // Update type-specific fields based on component type
-    // Save separate value and unit fields
-    // Note: Preserve empty strings explicitly (don't convert to undefined) so values are retained
-    if (comp.componentType === 'Resistor') {
-      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
-      // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
-      (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
-      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
-    } else if (comp.componentType === 'Capacitor') {
+    // CRITICAL: Preserve componentDefinitionKey FIRST before doing anything else
+    // This ensures it's never lost, even if definition resolution fails
+    if ((comp as any).componentDefinitionKey) {
+      (updated as any).componentDefinitionKey = (comp as any).componentDefinitionKey;
+      console.log('[ComponentEditor] Preserved componentDefinitionKey:', (comp as any).componentDefinitionKey);
+    }
+    
+    // Get component definition to determine which fields to save
+    const def: ComponentDefinition | undefined = componentDefinition || resolveComponentDefinition(comp as any);
+    const fields: ComponentFieldDefinition[] | undefined = def?.fields;
+    
+    // Set componentDefinitionKey if we have a definition and it's not already set
+    // This ensures components get the key even if they were created before the refactoring
+    if (def && !(updated as any).componentDefinitionKey) {
+      const defKey = `${def.category}:${def.subcategory}`;
+      (updated as any).componentDefinitionKey = defKey;
+      console.log('[ComponentEditor] Set componentDefinitionKey from definition:', defKey);
+    } else if (!(updated as any).componentDefinitionKey) {
+      console.warn('[ComponentEditor] WARNING: componentDefinitionKey not set and definition could not be resolved for component:', comp.id, comp.componentType);
+    }
+    
+    // Update fields based on component definition (data-driven approach)
+    // This replaces all hardcoded type-specific logic
+    if (fields && fields.length > 0) {
+      for (const field of fields) {
+        const valueKey = field.name;
+        const unitKey = `${field.name}Unit`;
+        
+        // Skip special fields that are handled elsewhere
+        if (valueKey === 'datasheet' || valueKey === 'description') {
+          continue;
+        }
+        
+        // Get value from componentEditor
+        const value = (componentEditor as any)[valueKey];
+        
+        // Handle fields with units
+        if (field.units && field.units.length > 0) {
+          // Save the value
+          if (value !== undefined && value !== null && value !== '') {
+            (updated as any)[valueKey] = String(value).trim() || undefined;
+          } else {
+            (updated as any)[valueKey] = undefined;
+          }
+          
+          // Save the unit
+          const unit = (componentEditor as any)[unitKey];
+          if (unit !== undefined && unit !== null && unit !== '') {
+            (updated as any)[unitKey] = String(unit).trim() || undefined;
+          } else if (field.defaultUnit) {
+            (updated as any)[unitKey] = field.defaultUnit;
+          } else {
+            (updated as any)[unitKey] = undefined;
+          }
+        } else {
+          // Handle fields without units
+          if (value !== undefined && value !== null && value !== '') {
+            // For string fields, trim whitespace
+            if (field.type === 'string') {
+              (updated as any)[valueKey] = String(value).trim() || undefined;
+            } else {
+              (updated as any)[valueKey] = value;
+            }
+          } else {
+            (updated as any)[valueKey] = undefined;
+          }
+        }
+      }
+    }
+    
+    // Special handling for description field (available for all components)
+    if (componentEditor.description !== undefined) {
+      (updated as any).description = componentEditor.description?.trim() || undefined;
+    }
+    
+    // Special handling for datasheet file (for IntegratedCircuit/Transistor)
+    // CRITICAL: componentType should NEVER be changed here - it's set correctly at creation time
+    const compType = comp.componentType;
+    const isIntegratedCircuit = compType === 'IntegratedCircuit';
+    const isTransistor = compType === 'Transistor';
+    
+    // Both IntegratedCircuits and Transistors can have datasheet files
+    if (isIntegratedCircuit || isTransistor) {
+      // Save uploaded datasheet file path
+      if (componentEditor.datasheetFileName) {
+        (updated as any).datasheetFileName = componentEditor.datasheetFileName;
+      } else {
+        (updated as any).datasheetFileName = undefined;
+      }
+    }
+    
+    // Legacy hardcoded logic - DISABLED - All component types should now use data-driven approach
+    // This code is kept for reference but should never execute
+    if (false) {
+      if (comp.componentType === 'Resistor') {
       (updated as any).capacitance = componentEditor.capacitance !== undefined ? componentEditor.capacitance : undefined;
       (updated as any).capacitanceUnit = componentEditor.capacitanceUnit !== undefined ? componentEditor.capacitanceUnit : undefined;
       (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
@@ -1050,59 +1157,30 @@ Analyze the attached PDF datasheet and extract the information according to the 
       (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
       (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
       (updated as any).filmType = componentEditor.filmType || undefined;
-    } else if (comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') {
+    } else if (comp.componentType === 'IntegratedCircuit') {
       // For ICs, save description from the Description field
-      // Handle both 'IntegratedCircuit' and legacy 'Semiconductor' componentType
       updated.description = componentEditor.description?.trim() || undefined;
-      
-      // Ensure componentType is set correctly (fix legacy 'Semiconductor' to 'IntegratedCircuit')
-      if ((comp as any).componentType === 'Semiconductor') {
-        updated.componentType = 'IntegratedCircuit';
-      }
       updated.icType = componentEditor.icType || undefined;
-      
-      // Save manufacturer, part number, operating temperature, and package type for Integrated Circuits
-      (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
-      (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
-      (updated as any).operatingTemperature = (componentEditor as any).operatingTemperature?.trim() || undefined;
-      (updated as any).packageType = (componentEditor as any).packageType || undefined;
-      
-      // Save uploaded datasheet file path (relative to project root, e.g., "datasheets/filename.pdf")
-      // The path is stored in componentEditor.datasheetFileName when file is selected
-      if (componentEditor.datasheetFileName) {
-        // Keep the full path (e.g., "datasheets/filename.pdf" or just "filename.pdf" for root)
-        (updated as any).datasheetFileName = componentEditor.datasheetFileName;
-      } else {
-        // Clear file path if explicitly removed
-        (updated as any).datasheetFileName = undefined;
-      }
-    } else {
-      // For non-IC components, save description from the Description field
-      (updated as any).description = componentEditor.description?.trim() || undefined;
+    } else if (comp.componentType === 'Transistor') {
+      // For transistors, save description
+      updated.description = componentEditor.description?.trim() || undefined;
+      // Transistors don't have icType
     }
+    } // End of disabled legacy code block (if (false))
     
-    if (comp.componentType === 'VacuumTube') {
-      (updated as any).tubeType = componentEditor.tubeType || undefined;
-    } else if (comp.componentType === 'VariableResistor') {
-      (updated as any).vrType = componentEditor.vrType !== undefined ? componentEditor.vrType : undefined;
-      (updated as any).resistance = componentEditor.resistance !== undefined ? componentEditor.resistance : undefined;
-      (updated as any).resistanceUnit = componentEditor.resistanceUnit !== undefined ? componentEditor.resistanceUnit : undefined;
-      // Power is stored as combined value+unit (e.g., "1/4W", "1W") since unit is always W
-      (updated as any).power = componentEditor.power ? `${componentEditor.power}W` : undefined;
-      (updated as any).taper = componentEditor.taper || undefined;
-    } else if (comp.componentType === 'Crystal') {
-      (updated as any).frequency = componentEditor.frequency !== undefined ? componentEditor.frequency : undefined;
-      (updated as any).loadCapacitance = componentEditor.loadCapacitance !== undefined ? componentEditor.loadCapacitance : undefined;
-      (updated as any).tolerance = componentEditor.tolerance !== undefined ? componentEditor.tolerance : undefined;
-    } else if (comp.componentType === 'GenericComponent') {
-      (updated as any).genericType = componentEditor.genericType || 'Attenuator';
-      (updated as any).voltage = componentEditor.voltage !== undefined ? componentEditor.voltage : undefined;
-      (updated as any).voltageUnit = componentEditor.voltageUnit !== undefined ? componentEditor.voltageUnit : undefined;
-      (updated as any).current = componentEditor.current !== undefined ? componentEditor.current : undefined;
-      (updated as any).currentUnit = componentEditor.currentUnit !== undefined ? componentEditor.currentUnit : undefined;
-      (updated as any).power = componentEditor.power || undefined;
-      (updated as any).frequency = componentEditor.frequency || undefined;
-      (updated as any).model = componentEditor.model || undefined;
+    // Save manufacturer, part number, operating temperature, and package type for all components that support them
+    // These fields are handled by the data-driven system via componentDefinitions.json
+    if (componentEditor.manufacturer !== undefined) {
+      (updated as any).manufacturer = componentEditor.manufacturer?.trim() || undefined;
+    }
+    if (componentEditor.partNumber !== undefined) {
+      (updated as any).partNumber = componentEditor.partNumber?.trim() || undefined;
+    }
+    if ((componentEditor as any).operatingTemperature !== undefined) {
+      (updated as any).operatingTemperature = (componentEditor as any).operatingTemperature?.trim() || undefined;
+    }
+    if ((componentEditor as any).packageType !== undefined) {
+      (updated as any).packageType = (componentEditor as any).packageType || undefined;
     }
     
     return updated;
@@ -1151,6 +1229,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
         capacitance: (updatedComp as any).capacitance,
         capacitanceUnit: (updatedComp as any).capacitanceUnit,
         componentType: updatedComp.componentType,
+        componentDefinitionKey: (updatedComp as any).componentDefinitionKey,
+        hadKeyBefore: !!(currentComp as any).componentDefinitionKey,
+        hasKeyAfter: !!(updatedComp as any).componentDefinitionKey,
       });
       
       if (currentComp.componentType === 'IntegratedCircuit') {
@@ -1278,6 +1359,228 @@ Analyze the attached PDF datasheet and extract the information according to the 
   };
 
   // Function to fetch and parse pin names from datasheet - moved to top level
+  // Function to normalize pin names to match preset values from component definitions
+  const normalizePinName = (pinName: string, presetPinNames: string[] | undefined): string => {
+    if (!presetPinNames || presetPinNames.length === 0) {
+      return pinName; // No preset names, return as-is
+    }
+    
+    const normalized = pinName.trim();
+    
+    // Create a mapping of common variations to preset names
+    // This handles abbreviations and alternative naming conventions
+    const variationMap: Record<string, string> = {};
+    
+    // Build mapping from preset names and their common variations
+    presetPinNames.forEach(preset => {
+      const presetUpper = preset.toUpperCase();
+      const presetLower = preset.toLowerCase();
+      
+      // Map the preset name to itself
+      variationMap[presetUpper] = preset;
+      variationMap[presetLower] = preset;
+      variationMap[preset] = preset;
+      
+      // Common variations for op amps
+      if (preset === 'Output 1' || preset === '1OUT') {
+        variationMap['OUT1'] = preset;
+        variationMap['OUT 1'] = preset;
+        variationMap['OUTPUT1'] = preset;
+        variationMap['OUTPUT 1'] = preset;
+      }
+      if (preset === 'Output 2' || preset === '2OUT') {
+        variationMap['OUT2'] = preset;
+        variationMap['OUT 2'] = preset;
+        variationMap['OUTPUT2'] = preset;
+        variationMap['OUTPUT 2'] = preset;
+      }
+      if (preset === 'Output 3' || preset === '3OUT') {
+        variationMap['OUT3'] = preset;
+        variationMap['OUT 3'] = preset;
+        variationMap['OUTPUT3'] = preset;
+        variationMap['OUTPUT 3'] = preset;
+      }
+      if (preset === 'Output 4' || preset === '4OUT') {
+        variationMap['OUT4'] = preset;
+        variationMap['OUT 4'] = preset;
+        variationMap['OUTPUT4'] = preset;
+        variationMap['OUTPUT 4'] = preset;
+      }
+      if (preset === 'Input 1-' || preset === '1IN-') {
+        variationMap['IN1-'] = preset;
+        variationMap['IN 1-'] = preset;
+        variationMap['INPUT1-'] = preset;
+        variationMap['INPUT 1-'] = preset;
+        variationMap['IN1N'] = preset;
+        variationMap['IN-1'] = preset;
+      }
+      if (preset === 'Input 1+' || preset === '1IN+') {
+        variationMap['IN1+'] = preset;
+        variationMap['IN 1+'] = preset;
+        variationMap['INPUT1+'] = preset;
+        variationMap['INPUT 1+'] = preset;
+        variationMap['IN1P'] = preset;
+        variationMap['IN+1'] = preset;
+      }
+      if (preset === 'Input 2-' || preset === '2IN-') {
+        variationMap['IN2-'] = preset;
+        variationMap['IN 2-'] = preset;
+        variationMap['INPUT2-'] = preset;
+        variationMap['INPUT 2-'] = preset;
+        variationMap['IN2N'] = preset;
+        variationMap['IN-2'] = preset;
+      }
+      if (preset === 'Input 2+' || preset === '2IN+') {
+        variationMap['IN2+'] = preset;
+        variationMap['IN 2+'] = preset;
+        variationMap['INPUT2+'] = preset;
+        variationMap['INPUT 2+'] = preset;
+        variationMap['IN2P'] = preset;
+        variationMap['IN+2'] = preset;
+      }
+      if (preset === 'Input 3-' || preset === '3IN-') {
+        variationMap['IN3-'] = preset;
+        variationMap['IN 3-'] = preset;
+        variationMap['INPUT3-'] = preset;
+        variationMap['INPUT 3-'] = preset;
+        variationMap['IN3N'] = preset;
+        variationMap['IN-3'] = preset;
+      }
+      if (preset === 'Input 3+' || preset === '3IN+') {
+        variationMap['IN3+'] = preset;
+        variationMap['IN 3+'] = preset;
+        variationMap['INPUT3+'] = preset;
+        variationMap['INPUT 3+'] = preset;
+        variationMap['IN3P'] = preset;
+        variationMap['IN+3'] = preset;
+      }
+      if (preset === 'Input 4-' || preset === '4IN-') {
+        variationMap['IN4-'] = preset;
+        variationMap['IN 4-'] = preset;
+        variationMap['INPUT4-'] = preset;
+        variationMap['INPUT 4-'] = preset;
+        variationMap['IN4N'] = preset;
+        variationMap['IN-4'] = preset;
+      }
+      if (preset === 'Input 4+' || preset === '4IN+') {
+        variationMap['IN4+'] = preset;
+        variationMap['IN 4+'] = preset;
+        variationMap['INPUT4+'] = preset;
+        variationMap['INPUT 4+'] = preset;
+        variationMap['IN4P'] = preset;
+        variationMap['IN+4'] = preset;
+      }
+      if (preset === 'VEE / GND') {
+        variationMap['V-'] = preset;
+        variationMap['VEE'] = preset;
+        variationMap['GND'] = preset;
+        variationMap['VSS'] = preset;
+        variationMap['VEE/GND'] = preset;
+        variationMap['VEE /GND'] = preset;
+        variationMap['VEE/ GND'] = preset;
+        variationMap['VEE/GND'] = preset;
+      }
+      if (preset === 'VCC-') {
+        variationMap['V-'] = preset;
+        variationMap['VEE'] = preset;
+        variationMap['GND'] = preset;
+        variationMap['VSS'] = preset;
+        variationMap['VEE/GND'] = preset;
+        variationMap['VEE /GND'] = preset;
+        variationMap['VEE/ GND'] = preset;
+      }
+      if (preset === 'VCC / V+') {
+        variationMap['V+'] = preset;
+        variationMap['VCC'] = preset;
+        variationMap['VDD'] = preset;
+        variationMap['VCC/V+'] = preset;
+        variationMap['VCC /V+'] = preset;
+        variationMap['VCC/ V+'] = preset;
+      }
+      if (preset === 'VCC+') {
+        variationMap['V+'] = preset;
+        variationMap['VCC'] = preset;
+        variationMap['VDD'] = preset;
+        variationMap['VCC/V+'] = preset;
+        variationMap['VCC /V+'] = preset;
+        variationMap['VCC/ V+'] = preset;
+      }
+      if (preset === 'V-' || preset === 'VEE / GND') {
+        variationMap['VEE'] = preset;
+        variationMap['GND'] = preset;
+        variationMap['VSS'] = preset;
+      }
+      if (preset === 'V+' || preset === 'VCC / V+') {
+        variationMap['VCC'] = preset;
+        variationMap['VDD'] = preset;
+      }
+      if (preset === 'input+' || preset === 'IN+') {
+        variationMap['IN+'] = preset;
+        variationMap['INPUT+'] = preset;
+        variationMap['INPUT +'] = preset;
+        variationMap['INP'] = preset;
+      }
+      if (preset === 'input-' || preset === 'IN-') {
+        variationMap['IN-'] = preset;
+        variationMap['INPUT-'] = preset;
+        variationMap['INPUT -'] = preset;
+        variationMap['INN'] = preset;
+      }
+      if (preset === 'output' || preset === 'OUT') {
+        variationMap['OUT'] = preset;
+        variationMap['OUTPUT'] = preset;
+      }
+      // Common variations for transistors (Source, Drain, Gate)
+      if (preset === 'Source') {
+        variationMap['S'] = preset;
+        variationMap['SRC'] = preset;
+        variationMap['SOURCE'] = preset;
+        variationMap['s'] = preset;
+        variationMap['src'] = preset;
+        variationMap['source'] = preset;
+      }
+      if (preset === 'Drain') {
+        variationMap['D'] = preset;
+        variationMap['DRN'] = preset;
+        variationMap['DRAIN'] = preset;
+        variationMap['d'] = preset;
+        variationMap['drn'] = preset;
+        variationMap['drain'] = preset;
+      }
+      if (preset === 'Gate') {
+        variationMap['G'] = preset;
+        variationMap['GAT'] = preset;
+        variationMap['GATE'] = preset;
+        variationMap['g'] = preset;
+        variationMap['gat'] = preset;
+        variationMap['gate'] = preset;
+      }
+    });
+    
+    // Try exact match first (case-insensitive)
+    const normalizedUpper = normalized.toUpperCase();
+    if (variationMap[normalizedUpper]) {
+      return variationMap[normalizedUpper];
+    }
+    
+    // Try with the original case
+    if (variationMap[normalized]) {
+      return variationMap[normalized];
+    }
+    
+    // Try case-insensitive match against preset names directly
+    const presetMatch = presetPinNames.find(p => 
+      p.toUpperCase() === normalizedUpper || 
+      p.toLowerCase() === normalized.toLowerCase()
+    );
+    if (presetMatch) {
+      return presetMatch;
+    }
+    
+    // No match found, return original
+    return pinName;
+  };
+
   const handleFetchPinNames = async () => {
     // Check if API key is configured for current service
     const service = getCurrentService();
@@ -1392,14 +1695,41 @@ Analyze the attached PDF datasheet and extract the information according to the 
           units: field.units || []
         }));
 
-      // Use custom prompt if available, otherwise build default prompt
-      let prompt: string;
-      const componentCustomPrompt = (currentComp as any).customGeminiPrompt;
+      // Prompt selection priority:
+      // 1. Component-specific custom prompt (user override) - highest priority
+      // 2. Named prompt from aiPrompts.json (aiPromptName) - data-driven default
+      // 3. Inline prompt from definition (aiPrompt) - backward compatibility
+      // 4. Generic default prompt - fallback
+      let prompt: string | undefined;
+      const componentCustomPrompt = (currentComp as any).componentPropertiesAIPrompt;
       if (componentCustomPrompt && componentCustomPrompt.trim()) {
         // Use custom prompt as-is (no text replacement needed with PDF submission)
         prompt = componentCustomPrompt;
       } else {
-        // Build default prompt (references attached PDF instead of embedded text)
+        const componentDef = resolveComponentDefinition(currentComp as any);
+        
+        // Try named prompt first (preferred method)
+        if (componentDef?.aiPromptName) {
+          prompt = getAIPrompt(componentDef.aiPromptName);
+          if (!prompt) {
+            console.warn(`[AI Prompt] Prompt name "${componentDef.aiPromptName}" not found in aiPrompts.json, falling back to inline or default`);
+          }
+        }
+        
+        // Fall back to inline prompt if named prompt not found or not specified
+        if (!prompt && componentDef?.aiPrompt && componentDef.aiPrompt.trim()) {
+          prompt = componentDef.aiPrompt;
+        }
+        
+        // Final fallback: generic default prompt
+        if (!prompt) {
+          prompt = buildDefaultPrompt(fieldsToExtract);
+        }
+      }
+      
+      // Ensure prompt is always defined (should never happen, but TypeScript needs this)
+      if (!prompt) {
+        console.error('[AI Prompt] No prompt available, using generic default');
         prompt = buildDefaultPrompt(fieldsToExtract);
       }
 
@@ -1414,20 +1744,14 @@ Analyze the attached PDF datasheet and extract the information according to the 
       });
 
       if (!aiResponse.success) {
-        setAiRawResponse(null);
         throw new Error(aiResponse.error || `${serviceInfo.name} API error`);
       }
 
       let responseText = aiResponse.text || '';
 
       if (!responseText) {
-        setAiRawResponse(null);
         throw new Error(`No response text from ${serviceInfo.name} API. The API may have returned an empty response.`);
       }
-
-      // Store raw response for error display
-      const rawResponseText = responseText;
-      setAiRawResponse(rawResponseText);
 
       // Parse JSON response
       // Remove markdown code blocks if present (Gemini sometimes wraps in ```json or ```)
@@ -1473,14 +1797,22 @@ Analyze the attached PDF datasheet and extract the information according to the 
       const pinData: Array<{ name: string; type?: string; alternate_functions?: string[] }> = new Array(extractedPinCount).fill(null).map(() => ({ name: '' }));
       let parsedPinCount = 0;
       
+      // Get preset pin names from component definition for normalization
+      const componentDef = resolveComponentDefinition(currentComp as any);
+      const presetPinNames = componentDef?.properties?.pinNames as string[] | undefined;
+      
       if (extractedData.pins && Array.isArray(extractedData.pins)) {
         for (const pin of extractedData.pins) {
           if (pin && typeof pin === 'object' && pin.pinNumber && pin.pinName) {
             const pinNum = parseInt(String(pin.pinNumber), 10);
             if (!isNaN(pinNum) && pinNum >= 1 && pinNum <= extractedPinCount) {
               const pinIndex = pinNum - 1;
+              const rawPinName = String(pin.pinName).trim();
+              // Normalize pin name to match preset values
+              const normalizedPinName = normalizePinName(rawPinName, presetPinNames);
+              
               pinData[pinIndex] = {
-                name: String(pin.pinName).trim(),
+                name: normalizedPinName,
                 type: pin.pinType && String(pin.pinType).trim() ? String(pin.pinType).trim() : undefined,
                 alternate_functions: pin.alternateFunctions && Array.isArray(pin.alternateFunctions) && pin.alternateFunctions.length > 0
                   ? pin.alternateFunctions.map((af: any) => String(af).trim()).filter((af: string) => af !== '')
@@ -1557,7 +1889,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         // Handle IC Type if present
         if (props.hasOwnProperty('icType') && props.icType) {
           const icType = String(props.icType).trim();
-          const validIcTypes = ['Op-Amp', 'Microcontroller', 'Microprocessor', 'Logic', 'Memory', 'Voltage Regulator', 'Timer', 'ADC', 'DAC', 'Comparator', 'Transceiver', 'Driver', 'Amplifier', 'Other'];
+          const validIcTypes = ['BJT NPN', 'BJT PNP', 'MOSFET N-Channel', 'MOSFET P-Channel', 'JFET', 'Op-Amp', 'Microcontroller', 'Microprocessor', 'Logic', 'Memory', 'Voltage Regulator', 'Timer', 'ADC', 'DAC', 'Comparator', 'Transceiver', 'Driver', 'Amplifier', 'Other'];
           if (validIcTypes.includes(icType)) {
             updatedEditor.icType = icType;
             extractedPropertiesList.push({ label: 'IC Type', value: icType });
@@ -1623,11 +1955,17 @@ Analyze the attached PDF datasheet and extract the information according to the 
         }
       }
 
-      // Update componentEditor state with extracted properties
-      setComponentEditor(updatedEditor);
+      // Ensure pinData array matches pin count
+      const adjustedPinData = [...pinData];
+      while (adjustedPinData.length < extractedPinCount) {
+        adjustedPinData.push({ name: '' });
+      }
       
-      // Update component with fetched pin names and pin count
-      if (currentComp) {
+      // Also maintain pinNames array for backward compatibility
+      const adjustedPinNames = adjustedPinData.map(pd => pd.name);
+      
+        // Update component with fetched pin names and pin count
+        if (currentComp) {
         // Update pin connections array to match new pin count if it changed
         const existingPinConnections = currentComp.pinConnections || [];
         const newPinConnections = new Array(extractedPinCount).fill('').map((_, i) => 
@@ -1640,14 +1978,28 @@ Analyze the attached PDF datasheet and extract the information according to the 
           i < existingPinPolarities.length ? existingPinPolarities[i] : ''
         );
         
-        // Ensure pinData array matches pin count
-        const adjustedPinData = [...pinData];
-        while (adjustedPinData.length < extractedPinCount) {
-          adjustedPinData.push({ name: '' });
+        // Include all extracted properties in the component update
+        // CRITICAL: Preserve or set componentDefinitionKey to maintain component definition resolution
+        // The key MUST be preserved - it's essential for rendering the correct fields on reopen
+        let componentDefKey = (currentComp as any)?.componentDefinitionKey;
+        if (!componentDefKey && componentDefinition) {
+          // Set the key from the resolved definition if missing
+          componentDefKey = `${componentDefinition.category}:${componentDefinition.subcategory}`;
+          console.log('[AI Extraction] Setting componentDefinitionKey from componentDefinition:', componentDefKey);
+        } else if (!componentDefKey && (componentEditor as any)?.componentDefinition) {
+          // Fallback: Use key from componentEditor state
+          const def = (componentEditor as any).componentDefinition;
+          componentDefKey = `${def.category}:${def.subcategory}`;
+          console.log('[AI Extraction] Setting componentDefinitionKey from componentEditor:', componentDefKey);
+        } else if (componentDefKey) {
+          console.log('[AI Extraction] Preserving existing componentDefinitionKey:', componentDefKey);
+        } else {
+          console.error('[AI Extraction] WARNING: No componentDefinitionKey available!', {
+            hasComponentDefinition: !!componentDefinition,
+            hasEditorDefinition: !!(componentEditor as any)?.componentDefinition,
+            currentComp: currentComp
+          });
         }
-        
-        // Also maintain pinNames array for backward compatibility
-        const adjustedPinNames = adjustedPinData.map(pd => pd.name);
         
         const updatedComp = { 
           ...currentComp, 
@@ -1657,25 +2009,76 @@ Analyze the attached PDF datasheet and extract the information according to the 
           pinConnections: newPinConnections,
           pinPolarities: newPinPolarities,
           // Include datasheet summary in notes if available
-          ...(datasheetSummary && { notes: datasheetSummary })
+          ...(datasheetSummary && { notes: datasheetSummary }),
+          // CRITICAL: Always set componentDefinitionKey (never conditionally)
+          // This ensures it's preserved even if it was missing before
+          componentDefinitionKey: componentDefKey || (currentComp as any)?.componentDefinitionKey || undefined,
+          // Include all extracted properties from updatedEditor
+          ...Object.fromEntries(
+            Object.entries(updatedEditor).filter(([key]) => 
+              key !== 'visible' && 
+              key !== 'layer' && 
+              key !== 'id' && 
+              key !== 'x' && 
+              key !== 'y' && 
+              key !== 'orientation' &&
+              key !== 'designator' &&
+              key !== 'abbreviation' &&
+              key !== 'pinCount' && // Already handled above
+              key !== 'pinData' && // Already handled above
+              key !== 'pinNames' && // Already handled above
+              key !== 'componentDefinition' && // Don't copy componentDefinition to component
+              key !== 'componentDefinitionKey' // Already handled above
+            )
+          )
         };
         
         // Debug logging for AI extraction
-        console.log('[AI Extraction] Saving pin data to component:', {
+        console.log('[AI Extraction] Automatically saving extracted data to component:', {
           componentId: componentEditor.id,
           layer: componentEditor.layer,
           pinData: adjustedPinData,
           pinNames: adjustedPinNames,
-          pinCount: extractedPinCount
+          pinCount: extractedPinCount,
+          componentDefinitionKey: componentDefKey,
+          hadKeyBefore: !!(currentComp as any)?.componentDefinitionKey,
+          hasKeyAfter: !!componentDefKey,
+          extractedProperties: Object.keys(updatedEditor).filter(key => 
+            !['visible', 'layer', 'id', 'x', 'y', 'orientation', 'designator', 'abbreviation', 'pinCount', 'pinData', 'pinNames', 'componentDefinition', 'componentDefinitionKey'].includes(key)
+          )
         });
         
+        // Automatically save the extracted data to component state
         if (componentEditor.layer === 'top') {
           setComponentsTop(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
         } else {
           setComponentsBottom(prev => prev.map(c => c.id === componentEditor.id ? updatedComp : c));
         }
         
-        const foundCount = pinNames.filter(name => name.length > 0).length;
+        // Update componentEditor state with extracted properties AND pin data
+        // This ensures the UI reflects the changes immediately
+        // CRITICAL: Preserve all required fields (id, visible, layer, x, y, orientation, designator, abbreviation)
+        // to prevent the editor from closing
+        setComponentEditor({
+          ...updatedEditor,
+          // Explicitly preserve required fields to ensure they're never lost
+          id: componentEditor.id,
+          visible: componentEditor.visible,
+          layer: componentEditor.layer,
+          x: componentEditor.x,
+          y: componentEditor.y,
+          orientation: componentEditor.orientation,
+          designator: componentEditor.designator,
+          abbreviation: componentEditor.abbreviation,
+          pinData: adjustedPinData,
+          pinNames: adjustedPinNames,
+          pinCount: extractedPinCount,
+          // Preserve componentDefinition and componentDefinitionKey to maintain custom field rendering
+          componentDefinition: componentEditor.componentDefinition || componentDefinition,
+          componentDefinitionKey: (componentEditor as any).componentDefinitionKey || (currentComp as any)?.componentDefinitionKey
+        });
+        
+        const foundCount = adjustedPinNames.filter(name => name.length > 0).length;
         let message = `Extracted ${foundCount} pin name${foundCount !== 1 ? 's' : ''}`;
         if (extractedPinCount !== componentEditor.pinCount) {
           message += ` and pin count`;
@@ -1684,6 +2087,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
           message += ` and ${propertiesExtracted} propert${propertiesExtracted === 1 ? 'y' : 'ies'}`;
         }
         message += ' from datasheet.';
+        message += '\n\nData has been automatically saved to the component.';
         
         // Add formatted list of extracted properties if any
         if (extractedPropertiesList.length > 0) {
@@ -1695,7 +2099,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         
         // Add pin names list below all other properties
         const pinNamesList: string[] = [];
-        pinNames.forEach((name, index) => {
+        adjustedPinNames.forEach((name, index) => {
           if (name && name.trim()) {
             pinNamesList.push(`Pin ${index + 1}: ${name.trim()}`);
           }
@@ -1712,8 +2116,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
           message: message,
           type: 'success',
         });
-        // Clear raw response on success
-        setAiRawResponse(null);
+        // Keep raw response available for viewing (don't clear it)
+        // User can view it using the "View AI Response" button
       }
     } catch (error) {
       console.error('Error fetching pin names:', error);
@@ -1722,7 +2126,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
         title: 'Extraction Failed',
         message: `Failed to extract information: ${error instanceof Error ? error.message : 'Unknown error'}. Please enter pin names manually.`,
         type: 'info',
-        onShowResponse: aiRawResponse ? () => setShowResponseDialog(true) : undefined,
       });
     } finally {
       setIsFetchingPinNames(false);
@@ -2008,8 +2411,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
           </select>
         </div>
         
-        {/* Datasheet section - moved to top for semiconductors/ICs */}
-        {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
+        {/* Datasheet section - shown when enableAI is true in component definition */}
+        {componentDefinition?.enableAI === true && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
               <label htmlFor={`component-datasheet-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
@@ -2100,7 +2503,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   </label>
                   {(() => {
                     // Extract just the filename from the path
-                    const datasheetPath = (comp as any)?.datasheetFileName;
+                    // Check componentEditor first (for newly selected files), then component (for saved files)
+                    const datasheetPath = componentEditor.datasheetFileName || (comp as any)?.datasheetFileName;
                     const fileName = uploadedDatasheetFile?.name || (datasheetPath ? datasheetPath.split('/').pop() : null);
                     const hasFileObject = !!uploadedDatasheetFile;
                     
@@ -2200,14 +2604,42 @@ Analyze the attached PDF datasheet and extract the information according to the 
                               units: field.units || []
                             }));
                           
-                          // If there's a custom prompt, use it; otherwise build default (with placeholder for datasheet text)
-                          const componentCustomPrompt = (currentComp as any).customGeminiPrompt;
+                          // Prompt selection priority:
+                          // 1. Component-specific custom prompt (user override) - highest priority
+                          // 2. Named prompt from aiPrompts.json (aiPromptName) - data-driven default
+                          // 3. Inline prompt from definition (aiPrompt) - backward compatibility
+                          // 4. Generic default prompt - fallback
+                          const componentCustomPrompt = (currentComp as any).componentPropertiesAIPrompt;
                           if (componentCustomPrompt && componentCustomPrompt.trim()) {
                             setCustomPrompt(componentCustomPrompt);
                           } else {
-                            // Build default prompt (references attached PDF)
-                            const defaultPrompt = buildDefaultPrompt(fieldsToExtract);
-                            setCustomPrompt(defaultPrompt);
+                            const componentDef = resolveComponentDefinition(currentComp as any);
+                            let promptToUse: string;
+                            
+                            // Try named prompt first (preferred method)
+                            if (componentDef?.aiPromptName) {
+                              const namedPrompt = getAIPrompt(componentDef.aiPromptName);
+                              if (namedPrompt) {
+                                promptToUse = namedPrompt;
+                              } else {
+                                console.warn(`[AI Prompt] Prompt name "${componentDef.aiPromptName}" not found in aiPrompts.json, falling back to inline or default`);
+                                promptToUse = ''; // Will be set below
+                              }
+                            } else {
+                              promptToUse = ''; // Will be set below
+                            }
+                            
+                            // Fall back to inline prompt if named prompt not found or not specified
+                            if (!promptToUse && componentDef?.aiPrompt && componentDef.aiPrompt.trim()) {
+                              promptToUse = componentDef.aiPrompt;
+                            }
+                            
+                            // Final fallback: generic default prompt
+                            if (!promptToUse) {
+                              promptToUse = buildDefaultPrompt(fieldsToExtract);
+                            }
+                            
+                            setCustomPrompt(promptToUse);
                           }
                         }
                       }
@@ -2258,42 +2690,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
               </div>
             </div>
             
-            {/* IC Properties section - Pin Count, Manufacturer, Part Number for Integrated Circuits */}
-            {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
-              <>
-                <div style={{ marginTop: '4px', paddingTop: '4px', borderTop: '1px solid #e0e0e0', fontSize: '11px', fontWeight: 600, color: '#000', marginBottom: '4px' }}>IC Properties:</div>
-                
-                {/* Manufacturer */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <label htmlFor={`component-manufacturer-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                    Manufacturer:
-                  </label>
-                  <input
-                    id={`component-manufacturer-ic-${comp.id}`}
-                    type="text"
-                    value={componentEditor.manufacturer || ''}
-                    onChange={(e) => setComponentEditor({ ...componentEditor, manufacturer: e.target.value })}
-                    disabled={areComponentsLocked}
-                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                  />
-                </div>
-                
-                {/* Part Number */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <label htmlFor={`component-partnumber-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                    Part Number:
-                  </label>
-                  <input
-                    id={`component-partnumber-ic-${comp.id}`}
-                    type="text"
-                    value={componentEditor.partNumber || ''}
-                    onChange={(e) => setComponentEditor({ ...componentEditor, partNumber: e.target.value })}
-                    disabled={areComponentsLocked}
-                    style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                  />
-                </div>
-                
-                {/* Pin Count */}
+            {/* Pin Count - Special handling for all components (not a field definition) */}
+            {(
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
                   <label htmlFor={`component-pincount-ic-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
                     Pin Count:
@@ -2343,7 +2741,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     style={{ width: '80px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
                   />
                 </div>
-              </>
             )}
           </>
         )}
@@ -2908,48 +3305,53 @@ Analyze the attached PDF datasheet and extract the information according to the 
       {/* Fixed footer with buttons */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'flex-end', 
+        justifyContent: 'space-between',
+        alignItems: 'center',
         gap: '6px',
         padding: '6px',
+        paddingLeft: '24px',
         paddingRight: '24px',
         borderTop: '1px solid #e0e0e0',
         flexShrink: 0,
       }}>
-        <button
-          onClick={() => {
-            setComponentEditor(null);
-            setConnectingPin(null); // Clear pin connection mode
-          }}
-          disabled={areComponentsLocked}
-          style={{
-            padding: '2px 5px',
-            background: areComponentsLocked ? '#f5f5f5' : '#fff',
-            color: areComponentsLocked ? '#999' : '#333',
-            border: '1px solid #ddd',
-            borderRadius: 2,
-            cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-            fontSize: '11px',
-            opacity: areComponentsLocked ? 0.6 : 1,
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={areComponentsLocked}
-          style={{
-            padding: '2px 5px',
-            background: areComponentsLocked ? '#f5f5f5' : '#0b5fff',
-            color: areComponentsLocked ? '#999' : '#fff',
-            border: '1px solid #ddd',
-            borderRadius: 2,
-            cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-            fontSize: '11px',
-            opacity: areComponentsLocked ? 0.6 : 1,
-          }}
-        >
-          Save
-        </button>
+        {/* Right side - Cancel and Save buttons */}
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button
+            onClick={() => {
+              setComponentEditor(null);
+              setConnectingPin(null); // Clear pin connection mode
+            }}
+            disabled={areComponentsLocked}
+            style={{
+              padding: '2px 5px',
+              background: areComponentsLocked ? '#f5f5f5' : '#fff',
+              color: areComponentsLocked ? '#999' : '#333',
+              border: '1px solid #ddd',
+              borderRadius: 2,
+              cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+              fontSize: '11px',
+              opacity: areComponentsLocked ? 0.6 : 1,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={areComponentsLocked}
+            style={{
+              padding: '2px 5px',
+              background: areComponentsLocked ? '#f5f5f5' : '#0b5fff',
+              color: areComponentsLocked ? '#999' : '#fff',
+              border: '1px solid #ddd',
+              borderRadius: 2,
+              cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+              fontSize: '11px',
+              opacity: areComponentsLocked ? 0.6 : 1,
+            }}
+          >
+            Save
+          </button>
+        </div>
       </div>
       
       {/* API Key Instructions Dialog */}
@@ -3331,129 +3733,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
         </div>
       )}
     
-    {/* AI Response Dialog - shows full API response for debugging */}
-    {showResponseDialog && aiRawResponse && (
-      <div
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10006,
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setShowResponseDialog(false);
-          }
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: '#2b2b31',
-            borderRadius: 8,
-            padding: '24px',
-            minWidth: '600px',
-            maxWidth: '90vw',
-            maxHeight: '90vh',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-            border: '2px solid #2196F3',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h3 style={{ margin: 0, color: '#fff', fontSize: '18px', fontWeight: 600 }}>
-              AI Service Response
-            </h3>
-            <button
-              onClick={() => {
-                setShowResponseDialog(false);
-                setAiRawResponse(null);
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#fff',
-                fontSize: '24px',
-                cursor: 'pointer',
-                padding: 0,
-                width: '30px',
-                height: '30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              title="Close"
-            >
-              ×
-            </button>
-          </div>
-          
-          <div style={{ 
-            marginBottom: '20px', 
-            color: '#ddd', 
-            fontSize: '13px', 
-            lineHeight: '1.6',
-            overflow: 'auto',
-            flex: 1,
-            padding: '12px',
-            background: '#1f1f24',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            maxHeight: '60vh',
-          }}>
-            {aiRawResponse}
-          </div>
-          
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(aiRawResponse || '');
-                alert('Response copied to clipboard');
-              }}
-              style={{
-                padding: '8px 16px',
-                background: '#555',
-                color: '#fff',
-                border: '1px solid #666',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              Copy to Clipboard
-            </button>
-            <button
-              onClick={() => {
-                setShowResponseDialog(false);
-                setAiRawResponse(null);
-              }}
-              style={{
-                padding: '8px 16px',
-                background: '#4CAF50',
-                color: '#fff',
-                border: '1px solid #45a049',
-                borderRadius: 6,
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
     
     {/* Prompt Dialog - shows and allows editing of the Gemini prompt */}
     {showPromptDialog && (
@@ -3550,7 +3829,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                   if (currentComp) {
                     const updatedComp = {
                       ...currentComp,
-                      customGeminiPrompt: customPrompt.trim() || undefined, // Remove if empty
+                      componentPropertiesAIPrompt: customPrompt.trim() || undefined, // Remove if empty
                     };
                     
                     if (componentEditor.layer === 'top') {
@@ -3562,7 +3841,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
                     // Also update componentEditor to reflect the change
                     setComponentEditor({
                       ...componentEditor,
-                      customGeminiPrompt: customPrompt.trim() || undefined,
+                      componentPropertiesAIPrompt: customPrompt.trim() || undefined,
                     });
                   }
                 }
@@ -3593,12 +3872,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       type={infoDialog.type}
       onClose={() => {
         setInfoDialog({ visible: false, title: '', message: '', type: 'info' });
-        // Clear raw response when dialog is closed (unless showing response)
-        if (!showResponseDialog) {
-          setAiRawResponse(null);
-        }
       }}
-      onShowResponse={infoDialog.onShowResponse}
     />
     </>
   );

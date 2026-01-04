@@ -32,7 +32,7 @@ export type ComponentFieldDefinition = LegacyFieldDefinition;
  */
 export interface DataDrivenComponentDefinition extends LegacyComponentDefinition {
   /**
-   * Stable unique key for this definition (category:subcategory:type).
+   * Stable unique key for this definition (category:subcategory).
    */
   key: string;
 

@@ -62,19 +62,66 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     (componentEditor as any)?.componentDefinition ||
     resolveComponentDefinition(comp as any);
   const fields: ComponentFieldDefinition[] | undefined = def?.fields;
+  
+  // Debug logging to trace definition resolution
+  if (!def) {
+    console.error('[ComponentTypeFields] No definition found!', {
+      componentId: comp.id,
+      componentType: comp.componentType,
+      componentDefinitionKey: (comp as any).componentDefinitionKey,
+      hasComponentDefinitionProp: !!componentDefinition,
+      hasEditorComponentDefinition: !!(componentEditor as any)?.componentDefinition,
+      componentDefinitionProp: componentDefinition ? `${componentDefinition.category}:${componentDefinition.subcategory}` : 'none',
+      editorComponentDefinition: (componentEditor as any)?.componentDefinition ? `${(componentEditor as any).componentDefinition.category}:${(componentEditor as any).componentDefinition.subcategory}` : 'none'
+    });
+  } else {
+    console.log('[ComponentTypeFields] Definition found:', {
+      componentId: comp.id,
+      componentType: comp.componentType,
+      definitionKey: `${def.category}:${def.subcategory}`,
+      fieldsCount: fields?.length || 0,
+      source: componentDefinition ? 'prop' : (componentEditor as any)?.componentDefinition ? 'editor' : 'resolved'
+    });
+  }
 
-  // Check if this is an IntegratedCircuit component (used throughout)
-  const compType = (comp as any).componentType;
-  const isIntegratedCircuit = compType === 'IntegratedCircuit' || compType === 'Semiconductor';
-  const isSemiconductor = compType === 'Semiconductor';
-  const isIntegratedCircuitOnly = compType === 'IntegratedCircuit';
+  // Auto-set IC Type based on semiconductor subcategory if not already set (optional helper)
+  // This is a convenience feature - icType should be set from componentDefinitions.json fields
+  React.useEffect(() => {
+    if (def && def.category === 'Semiconductors' && (comp as any).componentType === 'Semiconductor') {
+      // Check both componentEditor and the component itself for existing icType
+      const existingIcType = componentEditor.icType || (comp as any).icType;
+      
+      // Only auto-set if icType is not already set
+      if (!existingIcType) {
+        const subcategory = def.subcategory;
+        let icType: string | undefined;
+        
+        // Map subcategory to IC Type (only for legacy components that might not have icType in fields)
+        if (subcategory === 'BJT NPN') {
+          icType = 'BJT NPN';
+        } else if (subcategory === 'BJT PNP') {
+          icType = 'BJT PNP';
+        } else if (subcategory === 'MOSFET N-Channel') {
+          icType = 'MOSFET N-Channel';
+        } else if (subcategory === 'MOSFET P-Channel') {
+          icType = 'MOSFET P-Channel';
+        } else if (subcategory === 'JFET') {
+          icType = 'JFET';
+        } else if (subcategory === 'Single Op Amp' || subcategory === 'Dual Op Amp' || subcategory === 'Quad Op Amp') {
+          icType = 'Op-Amp';
+        }
+        
+        // Set the icType if we found a mapping
+        if (icType) {
+          setComponentEditor({ ...componentEditor, icType });
+        }
+      }
+    }
+  }, [def?.subcategory, def?.category, componentEditor.icType, (comp as any)?.icType, componentEditor, setComponentEditor]);
 
   // Dynamic rendering from component definition fields (if available)
-  // For IntegratedCircuit (not Semiconductor), we skip dynamic rendering to use hardcoded section with file upload
-  // For Semiconductor, we use dynamic rendering but skip the datasheet field (handled in hardcoded section)
-  
-  // Use dynamic rendering for components with fields, except for IntegratedCircuit (which uses hardcoded section)
-  if (fields && fields.length > 0 && !isIntegratedCircuitOnly) {
+  // All components use the same data-driven rendering path
+  if (fields && fields.length > 0) {
     // Helper function to determine optimal field width based on field name and type
     const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
       if (hasUnits) {
@@ -108,18 +155,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
     };
 
     const renderField = (field: ComponentFieldDefinition) => {
-      // Skip datasheet field for IntegratedCircuit - it's handled specially with file upload
-      const compType = (comp as any).componentType;
-      const isIntegratedCircuit = compType === 'IntegratedCircuit' || compType === 'Semiconductor';
-      if (isIntegratedCircuit && field.name === 'datasheet') {
-        return null; // Skip - will be rendered in the hardcoded section below
-      }
-      // Skip Manufacturer and Part Number for ICs - they're rendered in IC Properties section
-      if (isIntegratedCircuit && (field.name === 'manufacturer' || field.name === 'partNumber')) {
-        return null;
-      }
       // Skip Description - it's rendered above Notes in ComponentEditor (for all component types)
       if (field.name === 'description') {
+        return null;
+      }
+      // Skip datasheet field - it's handled with file upload UI in ComponentEditor
+      // The datasheet URL field in the JSON is just for storing the URL, not for rendering
+      if (field.name === 'datasheet') {
         return null;
       }
       
@@ -194,37 +236,29 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       );
     };
 
-    // For semiconductors, we need to render dynamic fields AND the datasheet section
-    // So we don't return early - instead, we'll render dynamic fields and continue to hardcoded section
-    // For other components, just return the dynamic fields
-    if (!isSemiconductor) {
-    return (
-      <>
-        {fields.map(renderField).filter(Boolean)}
-      </>
-    );
+    // All components now use data-driven rendering
+    // Render all fields from the definition
+    if (fields && fields.length > 0) {
+      return (
+        <>
+          {fields.map(renderField).filter(Boolean)}
+        </>
+      );
     }
-    
-    // For semiconductors, don't return early - continue to hardcoded section below
-    // The dynamic fields will be rendered in the hardcoded section along with datasheet
   }
   
-  // For IntegratedCircuit, always render the hardcoded section (even without definition)
-  // This ensures the file upload field is always available
-  // For Semiconductor without fields, also use hardcoded section
-  // Fallback: definition missing (only for non-IntegratedCircuit components)
-  if (!isIntegratedCircuit) {
+  // Fallback: If no definition found, show error message
   return (
-      <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '11px' }}>
-      Component definition missing for this instance. Using legacy fields. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
+    <div style={{ padding: '8px', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: 4, color: '#856404', marginBottom: '8px', fontSize: '11px' }}>
+      Component definition missing for this instance. Please ensure the component has a definition in componentDefinitions.json and a valid componentDefinitionKey.
     </div>
   );
-  }
-
-  // Legacy rendering - IntegratedCircuit always uses this path to ensure file upload is available
-  // For Semiconductor, this section provides the datasheet upload (dynamic fields are rendered above if available)
-  return (
-    <>
+  
+  // Legacy hardcoded rendering - REMOVED - All components should use data-driven approach
+  // This code is kept for reference but should never execute
+  if (false) {
+    return (
+      <>
       {/* Resistor */}
       {comp.componentType === 'Resistor' && (
         <>
@@ -941,203 +975,6 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
         </>
       )}
 
-      {/* IntegratedCircuit - special handling, IC Type and Datasheet are shown after main fields */}
-      {/* For Semiconductor with dynamic fields, render them first, then datasheet */}
-      {(comp.componentType === 'IntegratedCircuit' || (comp as any).componentType === 'Semiconductor') && (
-        <>
-          {/* For semiconductors with fields, render dynamic fields first */}
-          {isSemiconductor && fields && fields.length > 0 && (() => {
-            // Re-render dynamic fields for semiconductor (they weren't returned above)
-            const getFieldWidth = (fieldName: string, fieldType: string, hasUnits: boolean): string => {
-              if (hasUnits) return '80px';
-              if (fieldName === 'partNumber' || fieldName === 'manufacturer') return '150px';
-              if (fieldName === 'description' || fieldName === 'operatingTemperature') return '180px';
-              if (fieldType === 'string' && !fieldName.includes('Unit')) return '150px';
-              return '120px';
-            };
-            const renderField = (field: ComponentFieldDefinition) => {
-              if (field.name === 'datasheet') {
-                return null; // Skip - will be rendered in the datasheet section below
-              }
-              // Skip Description - it's rendered above Notes in ComponentEditor
-              if (field.name === 'description') {
-                return null;
-              }
-              // Skip Operating Temperature - it's rendered after Notes in ComponentEditor
-              if (field.name === 'operatingTemperature') {
-                return null;
-              }
-              // Skip Manufacturer and Part Number for ICs - they're rendered in IC Properties section
-              if (isSemiconductor && (field.name === 'manufacturer' || field.name === 'partNumber')) {
-                return null;
-              }
-              // Special handling for IC Type - render as dropdown
-              if (field.name === 'icType' || (isSemiconductor && !field.name)) {
-                // IC Type is handled separately below
-                return null;
-              }
-              const valueKey = field.name;
-              const unitKey = `${field.name}Unit`;
-              const value = (componentEditor as any)[valueKey] ?? (comp as any)[valueKey] ?? field.defaultValue ?? '';
-              const unit = (componentEditor as any)[unitKey] ?? (comp as any)[unitKey] ?? (field.units && field.defaultUnit ? field.defaultUnit : '');
-              const onValueChange = (val: string) => {
-                setComponentEditor({ ...componentEditor, [valueKey]: val });
-              };
-              const onUnitChange = (val: string) => {
-                setComponentEditor({ ...componentEditor, [unitKey]: val });
-              };
-              const hasUnits = Boolean(field.units && field.units.length > 0);
-              const fieldWidth = getFieldWidth(field.name, field.type, hasUnits);
-              return (
-                <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                    {field.label}:
-                  </label>
-                  {field.type === 'enum' ? (
-                    <select
-                      value={value}
-                      onChange={(e) => onValueChange(e.target.value)}
-                      disabled={areComponentsLocked}
-                      style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
-                    >
-                      {(field.enumValues || []).map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(e) => onValueChange(e.target.value)}
-                      disabled={areComponentsLocked}
-                      style={{ width: fieldWidth, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: hasUnits ? '8px' : '0' }}
-                      placeholder={field.defaultValue !== undefined ? String(field.defaultValue) : ''}
-                    />
-                  )}
-                  {hasUnits && field.units && (
-                    <select
-                      value={unit || field.defaultUnit || field.units[0]}
-                      onChange={(e) => onUnitChange(e.target.value)}
-                      disabled={areComponentsLocked}
-                      style={{ width: '70px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, flexShrink: 0 }}
-                    >
-                      {field.units.map(u => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              );
-            };
-            const renderedFields = fields.map(renderField).filter(Boolean);
-            
-            // Add IC Type field after manufacturer if it's a semiconductor
-            const icTypeField = isSemiconductor ? (
-              <div key="icType" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                  IC Type:
-                </label>
-                <select
-                  id={`component-ictype-${comp.id}`}
-                  value={componentEditor.icType || 'Other'}
-                  onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })}
-                  disabled={areComponentsLocked}
-                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}
-                >
-              <option value="Op-Amp">Op-Amp</option>
-              <option value="Microcontroller">Microcontroller</option>
-              <option value="Microprocessor">Microprocessor</option>
-              <option value="Logic">Logic</option>
-              <option value="Memory">Memory</option>
-              <option value="Voltage Regulator">Voltage Regulator</option>
-              <option value="Timer">Timer</option>
-              <option value="ADC">ADC (Analog-to-Digital)</option>
-              <option value="DAC">DAC (Digital-to-Analog)</option>
-              <option value="Comparator">Comparator</option>
-              <option value="Transceiver">Transceiver</option>
-              <option value="Driver">Driver</option>
-              <option value="Amplifier">Amplifier</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-            ) : null;
-            
-            // Insert IC Type after manufacturer field
-            const manufacturerIndex = renderedFields.findIndex((field: any) => field?.key === 'manufacturer');
-            if (manufacturerIndex >= 0 && icTypeField) {
-              renderedFields.splice(manufacturerIndex + 1, 0, icTypeField);
-            } else if (icTypeField) {
-              // If no manufacturer field, add IC Type at the end
-              renderedFields.push(icTypeField);
-            }
-            
-            return renderedFields;
-          })()}
-          
-          {/* IC Type and Package Type for IntegratedCircuit (not Semiconductor) */}
-          {isIntegratedCircuitOnly && (
-            <>
-              {/* IC Type */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <label htmlFor={`component-ictype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                  IC Type:
-                </label>
-                <select
-                  id={`component-ictype-${comp.id}`}
-                  value={componentEditor.icType || 'Other'}
-                  onChange={(e) => setComponentEditor({ ...componentEditor, icType: e.target.value })}
-                  disabled={areComponentsLocked}
-                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                >
-                  <option value="Op-Amp">Op-Amp</option>
-                  <option value="Microcontroller">Microcontroller</option>
-                  <option value="Microprocessor">Microprocessor</option>
-                  <option value="Logic">Logic</option>
-                  <option value="Memory">Memory</option>
-                  <option value="Voltage Regulator">Voltage Regulator</option>
-                  <option value="Timer">Timer</option>
-                  <option value="ADC">ADC (Analog-to-Digital)</option>
-                  <option value="DAC">DAC (Digital-to-Analog)</option>
-                  <option value="Comparator">Comparator</option>
-                  <option value="Transceiver">Transceiver</option>
-                  <option value="Driver">Driver</option>
-                  <option value="Amplifier">Amplifier</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-              
-              {/* Package Type */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                <label htmlFor={`component-packagetype-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '110px', flexShrink: 0 }}>
-                  Package Type:
-            </label>
-                <select
-                  id={`component-packagetype-${comp.id}`}
-                  value={(componentEditor as any).packageType || ''}
-                  onChange={(e) => setComponentEditor({ ...componentEditor, packageType: e.target.value })}
-              disabled={areComponentsLocked}
-                  style={{ width: '150px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}
-                >
-                  <option value="">-- Select --</option>
-                  <option value="DIP">DIP</option>
-                  <option value="PDIP">PDIP</option>
-                  <option value="SOIC">SOIC</option>
-                  <option value="QFP">QFP</option>
-                  <option value="LQFP">LQFP</option>
-                  <option value="TQFP">TQFP</option>
-                  <option value="BGA">BGA</option>
-                  <option value="SSOP">SSOP</option>
-                  <option value="TSOP">TSOP</option>
-                  <option value="Various">Various</option>
-                  <option value="Other">Other</option>
-                </select>
-          </div>
-            </>
-          )}
-          
-          {/* Datasheet section removed - now rendered at top of ComponentEditor */}
-        </>
-      )}
 
       {/* VacuumTube */}
       {comp.componentType === 'VacuumTube' && (
@@ -1272,6 +1109,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       )}
 
     </>
-  );
+    );
+  } // End of disabled legacy code
 };
 
