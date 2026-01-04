@@ -132,11 +132,10 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         cursor: 'pointer',
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-        PCB Tracer: An Electronics Tool
+        PCB Tracer: Virtual Circuit X-Ray
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-        Trace Signals, Troubleshoot, Aid Repairs and<br />
-        Reverse Engineer with a Virtual X-Ray
+        Trace Connections, Find Faults, Decode Designs
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1) Use the File menu to start a new project.
