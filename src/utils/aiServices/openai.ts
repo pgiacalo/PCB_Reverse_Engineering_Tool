@@ -16,8 +16,10 @@ import { STORAGE_KEYS } from './types';
 
 const SERVICE_ID = 'openai';
 
+// NOTE: This service is currently disabled (not imported in index.ts)
+// The type assertion below bypasses the AIServiceProvider check since 'openai' was removed
 export const OPENAI_SERVICE_INFO: AIServiceInfo = {
-  id: 'openai',
+  id: 'openai' as any, // Type assertion - re-add 'openai' to AIServiceProvider when enabling
   name: 'OpenAI ChatGPT',
   description: 'OpenAI\'s GPT models with PDF support',
   models: [
