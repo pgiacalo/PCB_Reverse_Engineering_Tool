@@ -27,7 +27,7 @@ import aiPromptsData from '../data/aiPrompts.json';
  * @returns The prompt text, or undefined if not found
  */
 export function getAIPrompt(promptName: string): string | undefined {
-  return aiPromptsData.prompts[promptName];
+  return (aiPromptsData.prompts as Record<string, string>)[promptName];
 }
 
 /**

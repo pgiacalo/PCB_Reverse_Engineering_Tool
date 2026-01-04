@@ -1,0 +1,212 @@
+🔧 Deploying to GitHub Pages...
+⬇️  Pulling latest changes...
+Already up to date.
+📦 Installing dependencies...
+
+added 344 packages, and audited 345 packages in 6s
+
+87 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+🔗 Inspecting git remote to compute dynamic public URL...
+🌐 Custom domain detected: pcbtracer.com
+🏗️  Building production bundle with base: /
+📊 Google Analytics enabled (ID: G-LBN8KSWETD)
+🔧 Building PCB Reverse Engineering Tool...
+📁 Project directory: /Users/phil/dev/Electronics/PCB_reverse_engineer
+
+🔍 Running TypeScript type check...
+src/components/ComponentEditor/ComponentEditor.tsx(1037,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1037,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1038,42): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1038,90): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1039,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1039,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1040,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1040,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1041,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1041,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1042,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1042,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1044,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1044,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1045,42): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1045,90): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1046,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1046,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1047,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1047,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1048,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1048,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1050,30): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1050,66): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1051,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1051,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1052,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1052,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1054,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1054,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1055,42): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1055,90): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1056,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1056,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1057,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1057,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1058,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1058,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1059,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1062,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1063,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1063,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1064,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1064,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1065,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1065,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1066,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1066,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1067,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1067,76): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1069,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1069,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1070,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1070,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1071,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1071,76): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1072,39): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1072,84): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1073,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1073,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1075,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1075,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1076,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1076,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1077,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1077,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1078,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1078,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1079,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1079,76): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1081,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1081,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1082,40): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1082,86): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1083,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1083,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1084,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1084,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1086,40): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1087,33): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1089,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1091,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1091,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1092,42): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1092,90): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1093,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1093,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1094,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1094,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1095,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1095,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1097,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1097,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1098,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1098,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1099,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1099,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1100,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1100,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1101,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1101,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1102,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1102,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1104,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1104,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1105,40): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1105,86): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1107,32): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1107,59): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1109,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1109,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1110,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1110,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1111,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1111,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1112,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1112,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1113,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1113,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1115,39): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1115,84): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1116,43): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1116,92): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1117,40): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1117,86): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1118,44): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1118,94): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1119,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1119,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1120,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1120,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1122,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1122,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1123,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1123,76): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1124,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1124,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1125,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1125,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1126,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1126,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1127,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1127,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1129,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1129,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1130,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1130,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1131,40): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1133,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1133,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1134,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1134,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1135,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1136,31): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1138,37): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1138,80): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1139,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1139,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1140,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1140,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1141,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1141,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1142,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1142,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1144,41): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1144,88): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1145,45): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1145,96): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1146,43): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1146,92): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1147,47): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1147,100): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1149,32): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1149,59): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1150,32): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1152,33): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1154,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1154,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1155,42): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1155,90): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1156,34): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1156,74): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1157,38): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1157,82): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1158,36): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1158,78): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1159,35): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1162,29): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1163,24): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1166,29): error TS18047: 'componentEditor' is possibly 'null'.
+src/components/ComponentEditor/ComponentEditor.tsx(1832,13): error TS6133: 'pinNames' is declared but its value is never read.
+src/utils/aiPrompts.ts(30,10): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ bjt_npn: string; bjt_pnp: string; mosfet_n_channel: string; mosfet_p_channel: string; jfet: string; single_op_amp: string; dual_op_amp: string; quad_op_amp: string; integrated_circuit: string; connector: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ bjt_npn: string; bjt_pnp: string; mosfet_n_channel: string; mosfet_p_channel: string; jfet: string; single_op_amp: string; dual_op_amp: string; quad_op_amp: string; integrated_circuit: string; connector: string; }'.
