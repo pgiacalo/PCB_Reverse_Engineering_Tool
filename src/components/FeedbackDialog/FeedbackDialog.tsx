@@ -30,6 +30,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
 }) => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [replyToEmail, setReplyToEmail] = useState('');
   const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'question' | 'other'>('other');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -75,6 +76,10 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       formData.append('message', emailBody);
       formData.append('from_name', 'PCB Tracer User');
       formData.append('to_email', 'sciencethink@gmail.com');
+      // Add reply-to email if provided
+      if (replyToEmail.trim()) {
+        formData.append('replyto', replyToEmail.trim());
+      }
 
       const response = await fetch('https://api.web3forms.com/submit', {
         method: 'POST',
@@ -115,6 +120,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
   const handleCancel = () => {
     setSubject('');
     setMessage('');
+    setReplyToEmail('');
     setFeedbackType('other');
     onClose();
   };
@@ -205,6 +211,31 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
           />
         </div>
 
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', color: '#e0e0e0', fontSize: '14px', fontWeight: 500 }}>
+            Your Email (optional):
+          </label>
+          <input
+            type="email"
+            value={replyToEmail}
+            onChange={(e) => setReplyToEmail(e.target.value)}
+            placeholder="your.email@example.com"
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              backgroundColor: '#1f1f24',
+              border: '1px solid #444',
+              borderRadius: 6,
+              color: '#f2f2f2',
+              fontSize: '14px',
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ marginTop: '4px', fontSize: '12px', color: '#aaa' }}>
+            If provided, we can reply to your feedback via email.
+          </div>
+        </div>
+
         <div style={{ marginBottom: '20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           <label style={{ display: 'block', marginBottom: '8px', color: '#e0e0e0', fontSize: '14px', fontWeight: 500 }}>
             Message: <span style={{ color: '#ff4444' }}>*</span>
@@ -247,18 +278,6 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
             {submitMessage}
           </div>
         )}
-
-        <div style={{ 
-          marginBottom: '16px', 
-          padding: '12px', 
-          backgroundColor: '#1f1f24', 
-          borderRadius: 6,
-          fontSize: '12px',
-          color: '#aaa',
-          lineHeight: '1.5',
-        }}>
-          <strong style={{ color: '#e0e0e0' }}>Note:</strong> Your feedback will be sent directly to <strong style={{ color: '#e0e0e0' }}>sciencethink@gmail.com</strong>. No email client needed - just click "Send Feedback" and you're done!
-        </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <button
