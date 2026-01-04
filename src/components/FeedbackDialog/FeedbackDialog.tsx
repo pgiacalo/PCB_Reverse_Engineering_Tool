@@ -251,7 +251,7 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
             }}
           />
           <div style={{ marginTop: '4px', fontSize: '12px', color: '#aaa' }}>
-            If provided, we can reply to your feedback via email.
+            If provided, we can reply to your feedback via email. Your email address will never be used for anything else.
           </div>
         </div>
 
