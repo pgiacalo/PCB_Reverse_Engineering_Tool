@@ -498,9 +498,35 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
 
                           const componentCount = allSelectedComponents.length;
 
+                          // Get pointIds from selected ground/power symbols
+                          const selectedGroundPointIds = new Set<number>();
+                          const selectedPowerPointIds = new Set<number>();
+                          
+                          for (const ground of grounds) {
+                            if (selectedGroundIds.has(ground.id) && ground.pointId !== undefined) {
+                              selectedGroundPointIds.add(ground.pointId);
+                            }
+                          }
+                          
+                          for (const power of powers) {
+                            if (selectedPowerIds.has(power.id) && power.pointId !== undefined) {
+                              selectedPowerPointIds.add(power.pointId);
+                            }
+                          }
+                          
                           // Get all selected pads with their Node IDs (prioritize pads over vias)
+                          // Also include pads that share NodeId with selected ground/power symbols
                           const selectedPads = drawingStrokes
-                            .filter(s => selectedIds.has(s.id) && s.type === 'pad' && s.points.length > 0 && s.points[0].id !== undefined)
+                            .filter(s => {
+                              if (s.type !== 'pad' || s.points.length === 0 || s.points[0].id === undefined) {
+                                return false;
+                              }
+                              const pointId = s.points[0].id;
+                              // Include if directly selected OR if it shares NodeId with selected ground/power
+                              return selectedIds.has(s.id) || 
+                                     selectedGroundPointIds.has(pointId) || 
+                                     selectedPowerPointIds.has(pointId);
+                            })
                             .map(s => {
                               const id = s.points[0].id;
                               if (id === undefined) throw new Error('Unexpected undefined id');
@@ -512,10 +538,20 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                             .sort((a, b) => a.nodeId - b.nodeId); // Sort by Node ID ascending
 
                           // If no pads, get vias instead
+                          // Also include vias that share NodeId with selected ground/power symbols
                           const selectedItems = selectedPads.length > 0
                             ? selectedPads
                             : drawingStrokes
-                                .filter(s => selectedIds.has(s.id) && s.type === 'via' && s.points.length > 0 && s.points[0].id !== undefined)
+                                .filter(s => {
+                                  if (s.type !== 'via' || s.points.length === 0 || s.points[0].id === undefined) {
+                                    return false;
+                                  }
+                                  const pointId = s.points[0].id;
+                                  // Include if directly selected OR if it shares NodeId with selected ground/power
+                                  return selectedIds.has(s.id) || 
+                                         selectedGroundPointIds.has(pointId) || 
+                                         selectedPowerPointIds.has(pointId);
+                                })
                                 .map(s => {
                                   const id = s.points[0].id;
                                   if (id === undefined) throw new Error('Unexpected undefined id');
@@ -579,9 +615,20 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
 
                           // Create a filtered list of only selected drawing strokes for polarity assignment
                           // This ensures we only consider selected vias/pads when determining polarity
-                          const selectedDrawingStrokes = drawingStrokes.filter(s => 
-                            selectedIds.has(s.id) && (s.type === 'via' || s.type === 'pad')
-                          );
+                          // Also include vias/pads that share NodeId with selected ground/power symbols
+                          const selectedDrawingStrokes = drawingStrokes.filter(s => {
+                            if (s.type !== 'via' && s.type !== 'pad') {
+                              return false;
+                            }
+                            if (s.points.length === 0 || s.points[0].id === undefined) {
+                              return false;
+                            }
+                            const pointId = s.points[0].id;
+                            // Include if directly selected OR if it shares NodeId with selected ground/power
+                            return selectedIds.has(s.id) || 
+                                   selectedGroundPointIds.has(pointId) || 
+                                   selectedPowerPointIds.has(pointId);
+                          });
 
                           // Assign pins to each component sequentially
                           sortedComponents.forEach((component, compIndex) => {
