@@ -15,7 +15,8 @@ import type {
 import { STORAGE_KEYS, DEFAULT_CONFIG } from './types';
 import { geminiService, GEMINI_SERVICE_INFO } from './gemini';
 import { claudeService, CLAUDE_SERVICE_INFO } from './claude';
-import { openaiService, OPENAI_SERVICE_INFO } from './openai';
+// Note: OpenAI/ChatGPT removed - no native PDF support in Chat Completions API
+// import { openaiService, OPENAI_SERVICE_INFO } from './openai';
 
 // Export types
 export type { 
@@ -34,18 +35,16 @@ export { STORAGE_KEYS, DEFAULT_CONFIG } from './types';
 const services: Record<AIServiceProvider, AIService> = {
   gemini: geminiService,
   claude: claudeService,
-  openai: openaiService,
 };
 
 // Service info registry (for UI display)
 export const SERVICE_INFO: Record<AIServiceProvider, AIServiceInfo> = {
   gemini: GEMINI_SERVICE_INFO,
   claude: CLAUDE_SERVICE_INFO,
-  openai: OPENAI_SERVICE_INFO,
 };
 
 // List of all available providers (for UI dropdown)
-export const AVAILABLE_PROVIDERS: AIServiceProvider[] = ['gemini', 'claude', 'openai'];
+export const AVAILABLE_PROVIDERS: AIServiceProvider[] = ['gemini', 'claude'];
 
 /**
  * Get the current AI service configuration from localStorage

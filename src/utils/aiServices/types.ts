@@ -2,11 +2,12 @@
  * AI Services Types and Interfaces
  * 
  * This module defines the common types used across all AI service implementations.
- * Each AI service (Gemini, Claude, OpenAI) implements these interfaces.
+ * Each AI service (Gemini, Claude) implements these interfaces.
  */
 
 // Supported AI service providers
-export type AIServiceProvider = 'gemini' | 'claude' | 'openai';
+// Note: OpenAI/ChatGPT removed - no native PDF support in Chat Completions API
+export type AIServiceProvider = 'gemini' | 'claude';
 
 // Storage options for API keys
 export type APIKeyStorageType = 'sessionStorage' | 'localStorage';

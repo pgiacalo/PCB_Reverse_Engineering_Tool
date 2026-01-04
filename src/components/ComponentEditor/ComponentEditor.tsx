@@ -27,7 +27,7 @@ import { resolveComponentDefinition } from '../../utils/componentDefinitionResol
 import { isComponentPolarized } from '../../utils/components';
 import { getAIPrompt } from '../../utils/aiPrompts';
 
-// AI Service configuration - supports multiple providers (Gemini, Claude, OpenAI)
+// AI Service configuration - supports multiple providers (Gemini, Claude)
 // API keys are stored in user-selected storage (sessionStorage or localStorage)
 // This ensures no API key is exposed in production builds
 import {
