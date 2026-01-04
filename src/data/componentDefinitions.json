@@ -1445,7 +1445,7 @@
           "required": false
         },
         {
-          "name": "id",
+          "name": "drainCurrent",
           "label": "ID (Drain Current)",
           "type": "number",
           "units": [
@@ -1583,7 +1583,7 @@
           "required": false
         },
         {
-          "name": "id",
+          "name": "drainCurrent",
           "label": "ID (Drain Current)",
           "type": "number",
           "units": [
