@@ -610,10 +610,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
               </div>
               
               <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-                <p style={{ margin: '0 0 16px 0' }}>
-                  Extract datasheet information for components — avoiding manual data entry. Choose your preferred AI service below.
-                </p>
-                
                 {/* AI Service Provider Selection */}
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
@@ -3531,10 +3527,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
           </div>
           
           <div style={{ marginBottom: '20px', color: '#ddd', fontSize: '14px', lineHeight: '1.6' }}>
-            <p style={{ margin: '0 0 16px 0' }}>
-              Extract datasheet information for components — avoiding manual data entry. Choose your preferred AI service below.
-            </p>
-            
             {/* AI Service Provider Selection */}
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '6px', color: '#fff', fontSize: '13px', fontWeight: 600 }}>
