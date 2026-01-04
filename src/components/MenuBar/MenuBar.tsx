@@ -1512,7 +1512,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               padding: '16px 20px', 
               borderBottom: '1px solid #444' 
             }}>
-              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.1)</h2>
+              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.3.1)</h2>
               <button
                 onClick={() => setShowAboutDialog(false)}
                 style={{
