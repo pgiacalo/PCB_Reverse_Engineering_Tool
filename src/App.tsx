@@ -12712,6 +12712,20 @@ function App() {
           return restoredComp;
         });
         setComponentsTop(compsTop);
+        
+        // Register component pinConnection IDs to prevent duplicate allocation
+        for (const comp of compsTop) {
+          if (comp.pinConnections && Array.isArray(comp.pinConnections)) {
+            for (const conn of comp.pinConnections) {
+              if (conn && typeof conn === 'string' && conn.trim() !== '') {
+                const nodeId = parseInt(conn.trim(), 10);
+                if (!isNaN(nodeId) && nodeId > 0) {
+                  registerAllocatedId(nodeId);
+                }
+              }
+            }
+          }
+        }
       }
       if (project.drawing?.componentsBottom) {
         const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => {
@@ -12737,6 +12751,20 @@ function App() {
           return restoredComp;
         });
         setComponentsBottom(compsBottom);
+        
+        // Register component pinConnection IDs to prevent duplicate allocation
+        for (const comp of compsBottom) {
+          if (comp.pinConnections && Array.isArray(comp.pinConnections)) {
+            for (const conn of comp.pinConnections) {
+              if (conn && typeof conn === 'string' && conn.trim() !== '') {
+                const nodeId = parseInt(conn.trim(), 10);
+                if (!isNaN(nodeId) && nodeId > 0) {
+                  registerAllocatedId(nodeId);
+                }
+              }
+            }
+          }
+        }
       }
       
       // Restore designator counters from project file
@@ -15220,6 +15248,27 @@ function App() {
                 : 'N/A (Chrome/Edge only)'}
             </div>
           )}
+          
+          {/* NextNodeId debug display (center) */}
+          <div
+            style={{
+              position: 'absolute',
+              left: `${244 + canvasSize.width / 2 - 50}px`, // Center of canvas
+              top: `${6 + canvasSize.height + 4}px`, // Below canvas border
+              fontSize: '11px',
+              fontFamily: 'monospace',
+              color: '#333',
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              border: '1px solid #ccc',
+              pointerEvents: 'none',
+              zIndex: 1000,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            NextNodeId: {getPointIdCounter()}
+          </div>
           
           {/* Mouse world coordinates display */}
           {mouseWorldPos && (

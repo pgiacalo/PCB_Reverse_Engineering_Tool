@@ -395,6 +395,12 @@ export function isIdAllocated(id: number): boolean {
  * Unregister an allocated ID (used when undoing object creation)
  * This allows the ID to be reused and helps maintain the counter correctly.
  * 
+ * IMPORTANT: This function NEVER resets the counter to 1, even if allocatedIds
+ * becomes empty. This is a safety measure because some IDs may be in use
+ * (e.g., component pinConnections) that aren't tracked in the allocatedIds set.
+ * The counter can only be reset to 1 via resetPointIdCounter() when creating
+ * a new project.
+ * 
  * @param id The ID to unregister
  */
 export function unregisterAllocatedId(id: number): void {
@@ -406,7 +412,8 @@ export function unregisterAllocatedId(id: number): void {
     }
     
     // After unregistering, adjust the counter so freed IDs can be reused
-    // Find the maximum allocated ID
+    // Only decrement if there are still IDs in the set
+    // NEVER reset to 1 - that could cause conflicts with IDs still in use elsewhere
     if (allocatedIds.size > 0) {
       const maxAllocatedId = Math.max(...Array.from(allocatedIds));
       // If the max allocated ID is less than the current counter,
@@ -418,13 +425,10 @@ export function unregisterAllocatedId(id: number): void {
           console.log(`[NodeID] Decremented counter to ${nextPointId} after unregistering ID ${id} (max allocated: ${maxAllocatedId})`);
         }
       }
-    } else {
-      // No allocated IDs left, reset counter to 1
-      nextPointId = 1;
-      if (DEBUG_ID_ALLOCATION) {
-        console.log(`[NodeID] Reset counter to 1 (no allocated IDs remaining)`);
-      }
     }
+    // When allocatedIds is empty, we intentionally do NOT reset the counter.
+    // This prevents potential conflicts with IDs that may still be in use
+    // (e.g., in component pinConnections or other data structures).
   }
 }
 
