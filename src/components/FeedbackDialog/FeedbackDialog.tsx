@@ -65,8 +65,24 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       ? `[PCB Tracer] ${typePrefix} ${subject.trim()}`
       : `[PCB Tracer] ${typePrefix} Feedback`;
 
-    // Build email body with app info
-    const emailBody = `${message.trim()}\n\n---\nApp Version: ${appVersion}\nBrowser: ${navigator.userAgent}\nTimestamp: ${new Date().toISOString()}`;
+    // Build email body with feedback type, subject, message, and app info
+    const feedbackTypeLabel = {
+      bug: 'Bug Report',
+      feature: 'Feature Request',
+      question: 'Question',
+      other: 'General Feedback',
+    }[feedbackType];
+    
+    let emailBody = `Type: ${feedbackTypeLabel}`;
+    if (subject.trim()) {
+      emailBody = `${emailBody}\nSubject: ${subject.trim()}`;
+    }
+    emailBody = `${emailBody}\n\n${message.trim()}\n\n---\nApp Version: ${appVersion}\nBrowser: ${navigator.userAgent}\nTimestamp: ${new Date().toISOString()}`;
+    
+    // Include reply-to email in the message body if provided
+    if (replyToEmail.trim()) {
+      emailBody = `${emailBody}\nReply-to Email: ${replyToEmail.trim()}`;
+    }
 
     try {
       // Use Web3Forms API to send email directly
@@ -77,8 +93,10 @@ export const FeedbackDialog: React.FC<FeedbackDialogProps> = ({
       formData.append('from_name', 'PCB Tracer User');
       formData.append('to_email', 'sciencethink@gmail.com');
       // Add reply-to email if provided
+      // Web3Forms automatically uses 'email' field as reply-to, but we also set 'replyto' explicitly
       if (replyToEmail.trim()) {
-        formData.append('replyto', replyToEmail.trim());
+        formData.append('email', replyToEmail.trim()); // Web3Forms uses this for reply-to
+        formData.append('replyto', replyToEmail.trim()); // Explicit reply-to field
       }
 
       const response = await fetch('https://api.web3forms.com/submit', {
