@@ -361,31 +361,15 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
           {isPad ? 'Pad Pattern' : 'Via Pattern'} Placement
         </h2>
 
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '10px', color: '#222', fontWeight: 500 }}>
-            Arrangement:
-          </label>
-          
-          {/* Group 1: Linear and 4-Sided */}
-          <div style={{ display: 'flex', gap: '20px', marginBottom: '15px' }}>
-            <label className="radio-label">
-              <input
-                type="radio"
-                name="arrangement"
-                value="linear"
-                checked={type === 'linear'}
-                onChange={() => {
-                  setType('linear');
-                  const validation = validateNumPins(numPinsText, 'linear');
-                  setError(validation.error || '');
-                }}
-                style={{ display: 'none' }}
-              />
-              <div className={`custom-radio ${type === 'linear' ? 'selected' : ''}`} style={{ marginRight: '10px' }}></div>
-              <span style={{ color: '#222', fontSize: '15px' }}>Linear (1 side)</span>
-              <LinearIconSVG />
-            </label>
-            <label className="radio-label">
+        <div style={{ marginBottom: '12px' }}>
+          {/* Section 1: Integrated Circuits */}
+          <div style={{ marginBottom: '15px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#444', marginBottom: '8px', borderBottom: '2px solid #ddd', paddingBottom: '4px' }}>
+              Integrated Circuits
+            </div>
+            
+            {/* 4-Sided IC */}
+            <label className="radio-label" style={{ marginBottom: '8px' }}>
               <input
                 type="radio"
                 name="arrangement"
@@ -402,84 +386,116 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
               <span style={{ color: '#222', fontSize: '15px' }}>4-Sided IC</span>
               <FourSidedIconSVG />
             </label>
+
+            {/* 2-Sided IC with Vertical/Horizontal columns */}
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '10px 30px', alignItems: 'center' }}>
+                <div style={{ gridColumn: '2 / 3', color: '#555', fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>Vertical {isPad ? 'Pads' : 'Vias'}</div>
+                <div style={{ gridColumn: '3 / 4', color: '#555', fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>Horizontal {isPad ? 'Pads' : 'Vias'}</div>
+                
+                <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>2-Sided IC:</div>
+                <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+                  <input
+                    type="radio"
+                    name="arrangement"
+                    checked={type === 'twoSided' && twoSidedOrientation === 'vertical-edges'}
+                    onChange={() => {
+                      setType('twoSided');
+                      setTwoSidedOrientation('vertical-edges');
+                      const validation = validateNumPins(numPinsText, 'twoSided');
+                      setError(validation.error || '');
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'vertical-edges' ? 'selected' : ''}`}></div>
+                  <TwoSidedIconSVG />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+                  <input
+                    type="radio"
+                    name="arrangement"
+                    checked={type === 'twoSided' && twoSidedOrientation === 'horizontal-edges'}
+                    onChange={() => {
+                      setType('twoSided');
+                      setTwoSidedOrientation('horizontal-edges');
+                      const validation = validateNumPins(numPinsText, 'twoSided');
+                      setError(validation.error || '');
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'horizontal-edges' ? 'selected' : ''}`}></div>
+                  <TwoSidedIconSVG rotate={90} />
+                </label>
+              </div>
+            </div>
           </div>
 
-          <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '15px 0' }} />
-
-          {/* Group 2: 2-Sided IC and Zig-Zag */}
-          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '20px 30px', alignItems: 'center' }}>
-            <div style={{ gridColumn: '2 / 3', color: '#555', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>Vertical {isPad ? 'Pads' : 'Vias'}</div>
-            <div style={{ gridColumn: '3 / 4', color: '#555', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>Horizontal {isPad ? 'Pads' : 'Vias'}</div>
+          {/* Section 2: Individual Components */}
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#444', marginBottom: '8px', borderBottom: '2px solid #ddd', paddingBottom: '4px' }}>
+              Individual Components
+            </div>
             
-            {/* 2-Sided IC Row */}
-            <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>2-Sided IC:</div>
-            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+            {/* Linear (1 side) */}
+            <label className="radio-label" style={{ marginBottom: '8px' }}>
               <input
                 type="radio"
                 name="arrangement"
-                checked={type === 'twoSided' && twoSidedOrientation === 'vertical-edges'}
+                value="linear"
+                checked={type === 'linear'}
                 onChange={() => {
-                  setType('twoSided');
-                  setTwoSidedOrientation('vertical-edges');
-                  const validation = validateNumPins(numPinsText, 'twoSided');
+                  setType('linear');
+                  const validation = validateNumPins(numPinsText, 'linear');
                   setError(validation.error || '');
                 }}
                 style={{ display: 'none' }}
               />
-              <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'vertical-edges' ? 'selected' : ''}`}></div>
-              <TwoSidedIconSVG />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
-              <input
-                type="radio"
-                name="arrangement"
-                checked={type === 'twoSided' && twoSidedOrientation === 'horizontal-edges'}
-                onChange={() => {
-                  setType('twoSided');
-                  setTwoSidedOrientation('horizontal-edges');
-                  const validation = validateNumPins(numPinsText, 'twoSided');
-                  setError(validation.error || '');
-                }}
-                style={{ display: 'none' }}
-              />
-              <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'horizontal-edges' ? 'selected' : ''}`}></div>
-              <TwoSidedIconSVG rotate={90} />
+              <div className={`custom-radio ${type === 'linear' ? 'selected' : ''}`} style={{ marginRight: '10px' }}></div>
+              <span style={{ color: '#222', fontSize: '15px' }}>Linear (1 side)</span>
+              <LinearIconSVG />
             </label>
 
-            {/* Zig-Zag Row */}
-            <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>Zig-Zag:</div>
-            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
-              <input
-                type="radio"
-                name="arrangement"
-                checked={type === 'zigzag' && zigzagOrientation === 'vertical'}
-                onChange={() => {
-                  setType('zigzag');
-                  setZigZagOrientation('vertical');
-                  const validation = validateNumPins(numPinsText, 'zigzag');
-                  setError(validation.error || '');
-                }}
-                style={{ display: 'none' }}
-              />
-              <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'vertical' ? 'selected' : ''}`}></div>
-              <ZigZagIconSVG />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
-              <input
-                type="radio"
-                name="arrangement"
-                checked={type === 'zigzag' && zigzagOrientation === 'horizontal'}
-                onChange={() => {
-                  setType('zigzag');
-                  setZigZagOrientation('horizontal');
-                  const validation = validateNumPins(numPinsText, 'zigzag');
-                  setError(validation.error || '');
-                }}
-                style={{ display: 'none' }}
-              />
-              <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'horizontal' ? 'selected' : ''}`}></div>
-              <ZigZagIconSVG rotate={90} />
-            </label>
+            {/* Zig-Zag with Vertical/Horizontal columns */}
+            <div style={{ marginTop: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '10px 30px', alignItems: 'center' }}>
+                <div style={{ gridColumn: '2 / 3', color: '#555', fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>Vertical {isPad ? 'Pads' : 'Vias'}</div>
+                <div style={{ gridColumn: '3 / 4', color: '#555', fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>Horizontal {isPad ? 'Pads' : 'Vias'}</div>
+                
+                <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>Zig-Zag:</div>
+                <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+                  <input
+                    type="radio"
+                    name="arrangement"
+                    checked={type === 'zigzag' && zigzagOrientation === 'vertical'}
+                    onChange={() => {
+                      setType('zigzag');
+                      setZigZagOrientation('vertical');
+                      const validation = validateNumPins(numPinsText, 'zigzag');
+                      setError(validation.error || '');
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'vertical' ? 'selected' : ''}`}></div>
+                  <ZigZagIconSVG />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+                  <input
+                    type="radio"
+                    name="arrangement"
+                    checked={type === 'zigzag' && zigzagOrientation === 'horizontal'}
+                    onChange={() => {
+                      setType('zigzag');
+                      setZigZagOrientation('horizontal');
+                      const validation = validateNumPins(numPinsText, 'zigzag');
+                      setError(validation.error || '');
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'horizontal' ? 'selected' : ''}`}></div>
+                  <ZigZagIconSVG rotate={90} />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 
