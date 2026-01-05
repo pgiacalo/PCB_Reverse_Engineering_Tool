@@ -112,44 +112,54 @@ return tooltipContent;
 - Connection lines are always visible when "Connections" layer is enabled
 - This is controlled by the user via the Connections checkbox
 
-### Fix 4: Radius-Based Connection Hover Detection (RE-ENABLED)
-**Location**: `src/App.tsx` lines 4114-4230
+### Fix 4: Pad/Via-Based Connection Hover (FINAL SOLUTION)
+**Location**: `src/App.tsx` lines 4114-4190
 
-**Problem Analysis**:
-The original connection hover detection had O(components × pins × strokes) complexity because it checked ALL components on every mouse move.
+**Problem with Previous Approaches**:
+- Line hover detection was expensive (O(components × pins × strokes))
+- Line hit detection was inaccurate (lines are thin, easy to miss)
+- Radius-based culling still caused crashes
 
 **Solution**:
-Implemented **radius-based culling** - only check components within ~50 screen pixels of the mouse position. This dramatically reduces the number of components checked at any zoom level.
+Completely redesigned the approach - instead of detecting hover over connection LINES, we now detect hover over PADS/VIAS and do a reverse lookup to find connected IC pins.
 
-**Code**:
+**How It Works**:
 ```typescript
-// Radius check: only check components within ~50 screen pixels of mouse
-// This dramatically reduces calculations at any zoom level
-const maxCheckRadius = Math.max(50 / viewScale, 30);
+// Step 1: Simple circle hit test on pad/via (cheap!)
+for (const stroke of drawingStrokes) {
+  if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
+    const d = Math.hypot(point.x - mouseX, point.y - mouseY);
+    if (d <= radius + tolerance) {
+      hitPadVia = { stroke, pointId: point.id };
+      break;
+    }
+  }
+}
 
-for (const { comp, layer } of allComponents) {
-  // RADIUS CHECK: Skip components far from mouse position
-  const distToComp = Math.hypot(x - comp.x, y - comp.y);
-  if (distToComp > maxCheckRadius) continue;
-  
-  // ... only process nearby components ...
+// Step 2: Reverse lookup - which IC pins connect to this pad?
+// Only runs if we actually hit a pad (not continuously)
+for (const { comp } of allComponents) {
+  for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
+    if (pinConnections[pinIndex] === nodeIdStr) {
+      // Found connection!
+    }
+  }
 }
 ```
 
-**Performance at Different Zoom Levels**:
-| Zoom | Radius (world units) | Components Checked |
-|------|---------------------|-------------------|
-| 1x   | ~50                 | Only nearby       |
-| 2x   | ~30                 | Only nearby       |
-| 4x   | ~30                 | Only nearby       |
-| 8x   | ~30                 | Only nearby       |
+**Why This Is Better**:
+| Aspect | Line Hover | Pad/Via Hover |
+|--------|-----------|---------------|
+| Hit detection | Distance to line (complex) | Distance to circle (simple) |
+| Accuracy | Poor (lines are thin) | **Excellent** (pads are circular) |
+| When search runs | Every mouse move | **Only when pad is hit** |
+| Performance | O(components × pins × strokes) always | **O(strokes) then O(components × pins) once** |
 
 **Benefits**:
-- ✅ Connection hover feature is fully functional again
-- ✅ Only checks components near the mouse (not ALL components)
-- ✅ Works efficiently at any zoom level
-- ✅ Simple implementation (distance check)
-- ✅ No complex viewport/bounds calculations needed
+- ✅ **Much more accurate** - you hover over the actual pad, not a thin line
+- ✅ **Much faster** - expensive search only runs when you hit a pad
+- ✅ **No crashes** - no continuous expensive calculations
+- ✅ **Intuitive** - users naturally hover over pads to see info
 
 ## Performance Impact
 
