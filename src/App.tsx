@@ -1386,7 +1386,7 @@ function App() {
   const [hoverComponent, setHoverComponent] = useState<{ component: PCBComponent; layer: 'top' | 'bottom'; x: number; y: number } | null>(null);
   const [hoverTestPoint, setHoverTestPoint] = useState<{ stroke: DrawingStroke; x: number; y: number } | null>(null);
   
-  // Throttle hover detection to prevent flickering with many connections (48+ pins)
+  // Debounce hover detection to prevent crashes with many connections (48+ pins) at high zoom
   // Store last hover state to avoid unnecessary updates
   const lastHoverStateRef = React.useRef<{
     type: 'component' | 'testPoint' | 'connection' | null;
@@ -1394,7 +1394,13 @@ function App() {
     testPointId?: string;
     connectionKey?: string; // componentId + nodeId
   } | null>(null);
-  const hoverThrottleRef = React.useRef<number | null>(null);
+  const hoverDebounceTimeoutRef = React.useRef<number | null>(null);
+  
+  // Memoized tooltip content cache to prevent expensive re-renders
+  const tooltipCacheRef = React.useRef<{
+    componentId: string;
+    content: JSX.Element;
+  } | null>(null);
   
   // Connection hover state for displaying pin info on rollover (when Option key is held)
   const [hoverConnection, setHoverConnection] = useState<{
@@ -4019,84 +4025,91 @@ function App() {
     }
 
     // Component hover detection (only when Option key is held)
-    // Throttled to prevent flickering with many connections (48+ pins)
+    // Debounced to prevent crashes with many connections (48+ pins) at high zoom
     if (isOptionPressed) {
-      // Capture mouse position before throttling (e is not accessible in callback)
+      // Capture mouse position before debouncing (e is not accessible in callback)
       const mouseClientX = e.clientX;
       const mouseClientY = e.clientY;
       
-      // Throttle hover detection using requestAnimationFrame to reduce flickering
-      // This limits updates to ~60fps max, but typically much less due to batching
-      if (hoverThrottleRef.current === null) {
-        hoverThrottleRef.current = requestAnimationFrame(() => {
-          hoverThrottleRef.current = null;
-          
-          const hitSize = 10; // half box for hit test
-          const hitComponent = (() => {
-            for (const c of componentsTop) {
-              if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
-                return { layer: 'top' as const, comp: c };
-              }
+      // Clear any existing debounce timeout
+      if (hoverDebounceTimeoutRef.current !== null) {
+        clearTimeout(hoverDebounceTimeoutRef.current);
+      }
+      
+      // Debounce hover detection with 150ms delay to reduce expensive tooltip renders
+      // This prevents rapid re-renders when moving mouse quickly over components
+      hoverDebounceTimeoutRef.current = window.setTimeout(() => {
+        hoverDebounceTimeoutRef.current = null;
+        
+        const hitSize = 10; // half box for hit test
+        const hitComponent = (() => {
+          for (const c of componentsTop) {
+            if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+              return { layer: 'top' as const, comp: c };
             }
-            for (const c of componentsBottom) {
-              if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
-                return { layer: 'bottom' as const, comp: c };
+          }
+          for (const c of componentsBottom) {
+            if (x >= c.x - hitSize && x <= c.x + hitSize && y >= c.y - hitSize && y <= c.y + hitSize) {
+              return { layer: 'bottom' as const, comp: c };
+            }
+          }
+          return null;
+        })();
+        
+        if (hitComponent) {
+          // Only update if component changed
+          if (lastHoverStateRef.current?.componentId !== hitComponent.comp.id) {
+            setHoverComponent({ 
+              component: hitComponent.comp, 
+              layer: hitComponent.layer,
+              x: mouseClientX,
+              y: mouseClientY
+            });
+            setHoverTestPoint(null);
+            setHoverConnection(null);
+            lastHoverStateRef.current = { type: 'component', componentId: hitComponent.comp.id };
+            // Clear tooltip cache when component changes
+            tooltipCacheRef.current = null;
+          }
+        } else {
+          // Only clear if we had a component hovered
+          if (lastHoverStateRef.current?.type === 'component') {
+            setHoverComponent(null);
+            lastHoverStateRef.current = null;
+            tooltipCacheRef.current = null;
+          }
+          
+          // Test Point hover detection (only when Option key is held and no component is hovered)
+          const hitTolerance = Math.max(8 / viewScale, 4);
+          const hitTestPoint = (() => {
+            for (const stroke of drawingStrokes) {
+              if (stroke.type === 'testPoint' && stroke.points.length > 0) {
+                const point = stroke.points[0];
+                const d = Math.hypot(point.x - x, point.y - y);
+                const testPointRadius = (stroke.size || 18) / 2;
+                if (d <= testPointRadius + hitTolerance) {
+                  return stroke;
+                }
               }
             }
             return null;
           })();
           
-          if (hitComponent) {
-            // Only update if component changed
-            if (lastHoverStateRef.current?.componentId !== hitComponent.comp.id) {
-              setHoverComponent({ 
-                component: hitComponent.comp, 
-                layer: hitComponent.layer,
+          if (hitTestPoint) {
+            if (lastHoverStateRef.current?.testPointId !== hitTestPoint.id) {
+              setHoverTestPoint({
+                stroke: hitTestPoint,
                 x: mouseClientX,
                 y: mouseClientY
               });
-              setHoverTestPoint(null);
               setHoverConnection(null);
-              lastHoverStateRef.current = { type: 'component', componentId: hitComponent.comp.id };
+              lastHoverStateRef.current = { type: 'testPoint', testPointId: hitTestPoint.id };
             }
           } else {
-            // Only clear if we had a component hovered
-            if (lastHoverStateRef.current?.type === 'component') {
-              setHoverComponent(null);
+            if (lastHoverStateRef.current?.type === 'testPoint') {
+              setHoverTestPoint(null);
               lastHoverStateRef.current = null;
             }
-            
-            // Test Point hover detection (only when Option key is held and no component is hovered)
-            const hitTolerance = Math.max(8 / viewScale, 4);
-            const hitTestPoint = (() => {
-              for (const stroke of drawingStrokes) {
-                if (stroke.type === 'testPoint' && stroke.points.length > 0) {
-                  const point = stroke.points[0];
-                  const d = Math.hypot(point.x - x, point.y - y);
-                  const testPointRadius = (stroke.size || 18) / 2;
-                  if (d <= testPointRadius + hitTolerance) {
-                    return stroke;
-                  }
-                }
-              }
-              return null;
-            })();
-            
-            if (hitTestPoint) {
-              if (lastHoverStateRef.current?.testPointId !== hitTestPoint.id) {
-                setHoverTestPoint({
-                  stroke: hitTestPoint,
-                  x: mouseClientX,
-                  y: mouseClientY
-                });
-                setHoverConnection(null);
-                lastHoverStateRef.current = { type: 'testPoint', testPointId: hitTestPoint.id };
-              }
-            } else {
-              if (lastHoverStateRef.current?.type === 'testPoint') {
-                setHoverTestPoint(null);
-                lastHoverStateRef.current = null;
-              }
               
               // Connection line hover detection (throttled and optimized)
               // Only for semiconductor connections
@@ -4239,17 +4252,20 @@ function App() {
                   lastHoverStateRef.current = null;
                 }
               }
-            }
-          }
-        });
-      }
+        }
+      }, 150); // 150ms debounce delay
     } else {
       // Clear all hover states when Option key is released
+      if (hoverDebounceTimeoutRef.current !== null) {
+        clearTimeout(hoverDebounceTimeoutRef.current);
+        hoverDebounceTimeoutRef.current = null;
+      }
       if (lastHoverStateRef.current) {
         setHoverComponent(null);
         setHoverTestPoint(null);
         setHoverConnection(null);
         lastHoverStateRef.current = null;
+        tooltipCacheRef.current = null;
       }
     }
 
@@ -5700,7 +5716,8 @@ function App() {
       ctx.restore();
     };
     // Draw connection lines from components to their connected nodes (behind components)
-    if (showConnectionsLayer) {
+    // Disable at high zoom (> 6x) to prevent performance issues and crashes
+    if (showConnectionsLayer && viewScale <= 6) {
       // Helper function to find node coordinates from Point ID
       const findNodeCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
         const pointId = parseInt(pointIdStr, 10);
@@ -15352,6 +15369,13 @@ function App() {
             const comp = hoverComponent.component;
             const layer = hoverComponent.layer;
             if (!comp) return null;
+            
+            // Use cached tooltip content if available for this component
+            if (tooltipCacheRef.current && tooltipCacheRef.current.componentId === comp.id) {
+              return tooltipCacheRef.current.content;
+            }
+            
+            // Generate tooltip content (expensive operation for components with many pins)
             // Always show component type (required field)
             const componentType = comp.componentType || 'Component';
             // Get IC type for IntegratedCircuit components
@@ -15392,7 +15416,8 @@ function App() {
             tooltipX = Math.max(margin, Math.min(tooltipX, window.innerWidth - tooltipWidth - margin));
             tooltipY = Math.max(margin, Math.min(tooltipY, window.innerHeight - tooltipHeight - margin));
             
-            return (
+            // Build the tooltip JSX
+            const tooltipContent = (
               <div
                 style={{
                   position: 'fixed',
@@ -15486,6 +15511,14 @@ function App() {
                 })()}
               </div>
             );
+            
+            // Cache the tooltip content to avoid expensive re-renders
+            tooltipCacheRef.current = {
+              componentId: comp.id,
+              content: tooltipContent
+            };
+            
+            return tooltipContent;
           })()}
 
           {/* Test Point Hover Tooltip (only shown when Option key is held) */}

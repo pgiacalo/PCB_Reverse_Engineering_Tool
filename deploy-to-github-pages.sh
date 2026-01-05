@@ -83,6 +83,9 @@ echo "🏗️  Building production bundle with base: ${BASE_PATH}"
 if [ -n "${VITE_GA4_ID:-}" ]; then
   echo "📊 Google Analytics enabled (ID: ${VITE_GA4_ID})"
 fi
+# Suppress obfuscator promotional messages
+export DISABLE_OPENCOLLECTIVE=1
+export ADBLOCK=1
 # Use build.sh script to ensure consistent build process
 # build.sh will skip dependency installation since node_modules already exists
 "${SCRIPT_DIR}/scripts/build.sh" "${BASE_PATH}"

@@ -13,6 +13,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# Suppress obfuscator promotional messages
+export DISABLE_OPENCOLLECTIVE=1
+export ADBLOCK=1
+
 BASE_PATH="${1:-}"
 
 echo "🔧 Building PCB Reverse Engineering Tool..."
