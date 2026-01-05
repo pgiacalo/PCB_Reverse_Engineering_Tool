@@ -146,8 +146,11 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         3) Use the Images menu to load your PCB photos.
       </div>
+      <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
+        4) Use the tools to draw and connect components, traces, etc.
+      </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
-        4) Use the tools to draw and connect components, traces, etc
+        5) See the Help menu for a tutorial video.
       </div>
       <div style={{ fontSize: '12px', color: '#666', marginTop: '16px', textAlign: 'center', fontStyle: 'italic', fontWeight: 'bold' }}>
         Best viewed in browser's full screen mode.

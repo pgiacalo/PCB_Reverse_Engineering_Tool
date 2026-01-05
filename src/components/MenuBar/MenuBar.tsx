@@ -1361,7 +1361,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               onMouseEnter={(e) => { e.currentTarget.style.background = '#3b3b42'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
-              Instructional Video...
+              Tutorial Video...
             </button>
             <div style={{ height: 1, background: '#444', margin: '4px 0' }} />
             <button
