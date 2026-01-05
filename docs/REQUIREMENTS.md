@@ -316,20 +316,22 @@ Ensure your web server is configured for Single Page Applications:
 
 ## Project Goals
 
-### Primary Goal: Netlist Export
-The PCB Reverse Engineering Tool shall output **netlist format data** once the vias, traces, components, power, and ground connections are fully established. The purpose of this output data is to enable connectivity analysis and documentation of PCB reverse engineering efforts.
+### Primary Goal: KiCad Netlist Export
+The PCB Reverse Engineering Tool shall output **KiCad netlist format data** once the vias, traces, components, power, and ground connections are fully established. The purpose of this KiCad output data is to enable the creation of a schematic based on PCB reverse engineering efforts.
 
 **Workflow Integration:**
 1. User reverse-engineers PCB using this tool (identifying vias, traces, components, ground/power connections)
-2. Tool exports netlist in standard format
-3. User can analyze connectivity and document the PCB layout
+2. Tool exports netlist in KiCad-compatible format
+3. User imports netlist into third-party schematic generation tools such as:
+   - [nl2sch](https://github.com/tpecar/nl2sch) - Netlist to KiCad schematic conversion tool
+   - Other KiCad-compatible netlist importers
 
 **Netlist Export Requirements:**
 - **REQ-GOAL-001**: Export complete netlist including all identified components
 - **REQ-GOAL-002**: Include all via connections between top and bottom layers
 - **REQ-GOAL-003**: Include all traced connections (nets) with proper naming
 - **REQ-GOAL-004**: Include power and ground net designations
-- **REQ-GOAL-005**: Generate netlist format for connectivity analysis
+- **REQ-GOAL-005**: Generate KiCad-compatible Protel netlist format
 - **REQ-GOAL-006**: Preserve component designators, footprints, and values
 - **REQ-GOAL-007**: Maintain pin-to-net associations for all components
 
@@ -454,65 +456,9 @@ The tool shall implement the following drawing layer hierarchy:
 
 ### Overview
 
-The tool implements a comprehensive component type system based on standard PCB designator prefixes. Each component type has specific properties relevant to PCB reverse engineering and documentation.
+The tool implements a comprehensive component type system based on standard PCB designator prefixes. Each component type has specific properties relevant to PCB reverse engineering and schematic generation.
 
 ### Component Placement Workflow
-
-**REQ-COMP-WORKFLOW-001: Component Tool Selection and Placement Sequence**
-
-When the user selects the Draw Component tool from the toolbar, the following sequence of operations shall occur:
-
-1. **REQ-COMP-WORKFLOW-001.1**: The user selects the Draw Component tool from the toolbar.
-2. **REQ-COMP-WORKFLOW-001.2**: The "Select Component Type" dialog shall immediately appear.
-3. **REQ-COMP-WORKFLOW-001.3**: The user chooses a specific component type from the dialog.
-4. **REQ-COMP-WORKFLOW-001.4**: The mouse icon changes to a component icon and reflects the chosen type (displays the component abbreviation, e.g., 'R' for Resistor, 'C' for Capacitor, 'U' for Integrated Circuit).
-5. **REQ-COMP-WORKFLOW-001.5**: The user moves the mouse/icon over the image.
-6. **REQ-COMP-WORKFLOW-001.6**: The user clicks on the image to place the icon at a specific location on the image.
-7. **REQ-COMP-WORKFLOW-001.7**: The component icon is placed at the location on the drawing.
-8. **REQ-COMP-WORKFLOW-001.8**: The Component Properties dialog immediately appears showing the properties for the chosen component type.
-9. **REQ-COMP-WORKFLOW-001.9**: The user sets the properties for the component instance.
-10. **REQ-COMP-WORKFLOW-001.10**: The program keeps track of the instance property data for subsequent persistence and use.
-
-**REQ-COMP-WORKFLOW-002: Component Type Selection**
-
-- **REQ-COMP-WORKFLOW-002.1**: The Component Type dialog shall display all available component types with their standard prefixes and default pin counts.
-- **REQ-COMP-WORKFLOW-002.2**: Selecting a component type shall immediately close the dialog and change the cursor to the component icon.
-- **REQ-COMP-WORKFLOW-002.3**: The component icon cursor shall display the default abbreviation for the selected component type (e.g., 'R' for Resistor, 'C' for Capacitor).
-
-**REQ-COMP-WORKFLOW-003: Component Placement**
-
-- **REQ-COMP-WORKFLOW-003.1**: After a component type is selected, clicking on the canvas shall place the component at the clicked location.
-- **REQ-COMP-WORKFLOW-003.2**: The component shall be placed on the default layer (Top) initially, with the ability to change the layer in the properties dialog.
-- **REQ-COMP-WORKFLOW-003.3**: The component icon shall be visible immediately after placement.
-
-**REQ-COMP-WORKFLOW-004: Component Properties Dialog**
-
-- **REQ-COMP-WORKFLOW-004.1**: The Component Properties dialog shall appear immediately after component placement.
-- **REQ-COMP-WORKFLOW-004.2**: The dialog shall be pre-populated with default values based on the component type:
-  - Default abbreviation (single letter based on component type prefix)
-  - Default pin count for the component type
-  - Default layer (Top)
-  - Component type (read-only)
-- **REQ-COMP-WORKFLOW-004.3**: The dialog shall allow the user to edit all component properties.
-- **REQ-COMP-WORKFLOW-004.4**: The dialog shall support changing the component layer (Top/Bottom) with automatic movement between layer arrays.
-
-**REQ-COMP-WORKFLOW-005: Component Property Persistence**
-
-- **REQ-COMP-WORKFLOW-005.1**: All component property values shall be persisted when the project is saved.
-- **REQ-COMP-WORKFLOW-005.2**: Component properties shall be restored when the project is loaded.
-- **REQ-COMP-WORKFLOW-005.3**: The following properties shall be persisted:
-  - Component type
-  - Designator (name)
-  - Abbreviation
-  - Manufacturer
-  - Part number
-  - Pin count
-  - Pin connections (node IDs)
-  - X, Y position
-  - Layer (Top/Bottom)
-  - Color
-  - Size
-  - All type-specific properties
 
 **REQ-COMP-001**: When the Component tool is selected, the user shall be presented with:
 1. **Layer Selection**: Choice of Top Layer or Bottom Layer
@@ -554,6 +500,20 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 | X, XTAL, Y | Crystal | 2 | Frequency, Load Capacitance, Tolerance |
 | Z | Zener Diode | 2 | Zener Voltage, Power Rating, Tolerance |
 
+### Pattern Placement Tools (Vias and Pads)
+
+**REQ-PATT-001**: The tool shall support automated placement of multiple vias or pads in predefined arrangements:
+1. **Linear (1-side)**: Pins arranged in a single row or column.
+2. **2-Sided**: Pins arranged on two parallel edges (typical for SOIC, TSSOP).
+3. **4-Sided**: Pins arranged on all four edges (typical for QFP, QFN).
+4. **Zig-Zag**: Pins arranged in two rows or columns with a zig-zag numbering pattern.
+
+**REQ-PATT-002**: For all patterns, Pin 1 location shall be established by the initial click, and the diagonally opposite corner by the release point.
+
+**REQ-PATT-003**: The tool shall support orientation choices for 2-Sided and Zig-Zag arrangements (Vertical or Horizontal).
+
+**REQ-PATT-004**: Pattern placement shall automatically generate unique Node IDs for each via or pad.
+
 ### Common Component Properties
 
 **REQ-COMP-004**: All components shall include:
@@ -568,7 +528,8 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - **partMarkings**: Physical markings on the component
 - **pinCount**: Number of pins/connections
 - **pinConnections**: Array of node IDs (one per pin)
-- **notes**: Additional notes
+- **notes**: Additional notes (up to 1000 characters)
+- **REQ-COMP-004.1**: The notes text area shall automatically resize to display all entered text without scrollbars.
 
 ### Pin Connection Management
 
@@ -654,6 +615,8 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 
 ### 3. View Management
 - **REQ-009**: Toggle between top view and bottom view of PCB
+- **REQ-009A**: Change Perspective feature - Switch between top and bottom view perspectives, flipping all elements (images, components, traces) horizontally around center point
+- **REQ-009B**: Rotate all elements (images, components, traces, vias, pads) together by 45°, 90°, 180°, or 270° around a fixed center point
 - **REQ-010**: Smooth transitions between views
 - **REQ-011**: Preserve drawing annotations when switching views
 
@@ -708,62 +671,49 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - **REQ-043**: Export final images with annotations
 - **REQ-044**: Auto-save functionality
 - **REQ-045**: Project file format (JSON-based)
-- **REQ-046**: Project state isolation - When creating a new project or opening an existing project, all previous project state shall be completely cleared to prevent state leakage between projects. This includes:
-  - Release of all browser file system permissions (directory handles)
-  - Clearing of project file paths, names, and directory references
-  - Clearing of all drawing data (strokes, components, power/ground symbols)
-  - Clearing of project notes
-  - Resetting all view, transform, and tool states to defaults
-  - Closing all open dialogs
-  - Resetting all lock and visibility states
-- **REQ-047**: Unsaved changes prompt - When the user attempts to create a new project (File -> New Project) or open an existing project (File -> Open Project) while there are unsaved changes, the application shall display a confirmation dialog asking the user whether to save the current project before proceeding. The dialog shall provide three options:
-  - "Yes" - Save the current project first, then proceed with the new/open operation
-  - "No" - Discard unsaved changes and proceed with the new/open operation
-  - "Cancel" - Abort the operation and return to the current project
 
 ## Non-Functional Requirements
 
 ### 12. Usability
-- **REQ-048**: Learning curve under 15 minutes for basic operations
-- **REQ-049**: Consistent UI behavior across all tools
-- **REQ-050**: Clear visual feedback for all user actions
+- **REQ-046**: Learning curve under 15 minutes for basic operations
+- **REQ-047**: Consistent UI behavior across all tools
+- **REQ-048**: Clear visual feedback for all user actions
 
 ### 13. Reliability
-- **REQ-051**: Graceful handling of corrupted or invalid image files
-- **REQ-052**: Error recovery for failed operations
-- **REQ-053**: Data integrity protection
+- **REQ-049**: Graceful handling of corrupted or invalid image files
+- **REQ-050**: Error recovery for failed operations
+- **REQ-051**: Data integrity protection
 
 ### 14. Security
-- **REQ-054**: Client-side processing (no server uploads required)
-- **REQ-055**: Secure file handling
-- **REQ-056**: No data transmission to external servers
+- **REQ-052**: Client-side processing (no server uploads required)
+- **REQ-053**: Secure file handling
+- **REQ-054**: No data transmission to external servers
 
 ## Future Enhancement Requirements
 
 ### 15. Advanced Features (Future Versions)
-- **REQ-057**: Component identification and labeling
-- **REQ-058**: Trace routing visualization
-- **REQ-059**: Measurement tools
-- **REQ-060**: Layer comparison tools
-- **REQ-061**: Export to CAD formats
+- **REQ-055**: Component identification and labeling
+- **REQ-056**: Trace routing visualization
+- **REQ-057**: Measurement tools
+- **REQ-058**: Layer comparison tools
+- **REQ-059**: Export to CAD formats
 
 ## Dependencies and Technologies
 
 ### 16. Core Technologies
-- **REQ-062**: React 18+ with TypeScript
-- **REQ-063**: Canvas API for image manipulation
-- **REQ-064**: Fabric.js or Konva.js for advanced graphics
-- **REQ-065**: Modern CSS for responsive design
-- **REQ-066**: Vite for build tooling
+- **REQ-060**: React 18+ with TypeScript
+- **REQ-061**: Canvas API for image manipulation
+- **REQ-062**: Fabric.js or Konva.js for advanced graphics
+- **REQ-063**: Modern CSS for responsive design
+- **REQ-064**: Vite for build tooling
 
 ### 17. External Libraries
-- **REQ-066**: React Colorful for color picker
-- **REQ-067**: Lucide React for icons
-- **REQ-068**: File API for image loading
-- **REQ-069**: Canvas 2D context for drawing operations
+- **REQ-065**: React Colorful for color picker
+- **REQ-066**: Lucide React for icons
+- **REQ-067**: File API for image loading
+- **REQ-068**: Canvas 2D context for drawing operations
 
 ---
 
-*Last Updated: [Current Date]*
-*Version: 1.0*
-
+*Last Updated: January 5, 2026*
+*Version: 1.2*

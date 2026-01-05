@@ -528,7 +528,8 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - **partMarkings**: Physical markings on the component
 - **pinCount**: Number of pins/connections
 - **pinConnections**: Array of node IDs (one per pin)
-- **notes**: Additional notes
+- **notes**: Additional notes (up to 1000 characters)
+- **REQ-COMP-004.1**: The notes text area shall automatically resize to display all entered text without scrollbars.
 
 ### Pin Connection Management
 
@@ -714,6 +715,6 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 
 ---
 
-*Last Updated: January 4, 2026*
-*Version: 1.1*
+*Last Updated: January 5, 2026*
+*Version: 1.2*
 
