@@ -138,13 +138,16 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         Trace Connections, Find Faults, Decode Designs
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        1) Use the File menu to start a new project.
+        1) PCB Tracer is now running in your browser.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        2) Use the Images menu to load images.
+        2) Use the File menu to start a new project.
+      </div>
+      <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
+        3) Use the Images menu to load your PCB photos.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
-        3) Use the tools to draw vias, traces, components, etc.
+        4) Use the tools to draw and connect components, traces, etc
       </div>
       <div style={{ fontSize: '12px', color: '#666', marginTop: '16px', textAlign: 'center', fontStyle: 'italic', fontWeight: 'bold' }}>
         Best viewed in browser's full screen mode.
