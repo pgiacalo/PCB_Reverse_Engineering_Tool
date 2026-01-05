@@ -1546,7 +1546,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   PCB Tracer is a specialized tool useful for both reverse engineering and troubleshooting printed circuit boards (PCBs) by tracing and documenting circuit connections from photographs. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  This tool can assist in troubleshooting by tracing circuits, holding contextual notes, comparing test results, and documenting findings during the debugging process.
+                  This tool can assist in troubleshooting by simplifying circuit tracing, visualizing key datasheet information and storing test results, notes and findings. Visualization, ease of use and centralization of data is a primary design goal.
                 </p>
               </div>
 
@@ -1554,66 +1554,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Features</h3>
                 
                 <div style={{ marginBottom: 20 }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Via/Pad Placement</p>
-                  <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
-                    <li>Alt/Option+click the Via or Pad tool, or press <code>Alt/Option+V</code> or <code>Alt/Option+P</code> to open the placement dialog</li>
-                    <li>Place multiple vias or pads in Linear, 2-Sided, or 4-Sided arrangements</li>
-                    <li>Automatic counter-clockwise numbering starting from Pin 1</li>
-                    <li>Supports chip orientations of 0°, 90°, 180°, or 270°</li>
-                    <li>Click and drag to define the placement area</li>
-                    <li>Tool automatically returns to Select tool after placement</li>
-                  </ul>
-                </div>
-                
-                {/* Tools & Shortcuts - Full Width */}
-                <div style={{ marginBottom: 20 }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#f2f2f2' }}>
-                    <div>
-                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                        <li><strong>Select</strong> — <code>S</code></li>
-                        <li><strong>Select All</strong> — <code>A</code></li>
-                        <li><strong>Via</strong> — <code>V</code></li>
-                        <li><strong>Pad</strong> — <code>P</code></li>
-                        <li><strong>Test Point</strong> — <code>Y</code></li>
-                        <li><strong>Trace</strong> — <code>T</code></li>
-                        <li><strong>Component</strong> — <code>C</code></li>
-                        <li><strong>Component Properties</strong> — <code>U</code> (or double-click component)</li>
-                        <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code> (<code>Shift</code> + <code>+</code> / <code>-</code> = 5x faster)</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                        <li><strong>Power</strong> — <code>B</code></li>
-                        <li><strong>Ground</strong> — <code>G</code></li>
-                        <li><strong>Move (Pan)</strong> — <code>H</code></li>
-                        <li><strong>Magnify</strong> — <code>M</code></li>
-                        <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
-                        <li><strong>Recall View</strong> — <code>0-9</code> to recall saved view</li>
-                        <li><strong>Default View 0</strong> — <code>0</code> to recall default view (origin with all images contained)</li>
-                        <li><strong>Information Dialog</strong> — <code>I</code></li>
-                        <li><strong>Notes Dialog</strong> — <code>N</code></li>
-                        <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
-                        <li><strong>Undo</strong> — <code>Ctrl</code> + <code>Z</code></li>
-                        <li><strong>Copy Component</strong> — <code>Ctrl</code> + <code>C</code> / <code>Cmd</code> + <code>C</code></li>
-                        <li><strong>Paste Component</strong> — <code>Ctrl</code> + <code>V</code> / <code>Cmd</code> + <code>V</code></li>
-                      </ul>
-                    </div>
-                  </div>
-                <div style={{ marginTop: '12px', fontSize: '13px', color: '#f2f2f2' }}>
-                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Arrow Keys</p>
-                  <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
-                    <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components (1 unit per press, <code>Shift</code> = 10 units)</li>
-                    <li><strong>Switch Perspective</strong> — <code>Shift</code> + <code>←</code> / <code>→</code> or <code>Caps Lock</code> + <code>←</code> / <code>→</code> to switch between top/bottom view</li>
-                    <li><strong>Rotate Perspective</strong> — <code>Shift</code> + <code>↑</code> / <code>↓</code> or <code>Caps Lock</code> + <code>↑</code> / <code>↓</code> to rotate in 90° increments (<code>↑</code> = counter-clockwise, <code>↓</code> = clockwise)</li>
-                    <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
-                    <li>Click a slider first, then use arrow keys for precise adjustment</li>
-                  </ul>
-                </div>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Nodelist</p>
+                  <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
+                    PCB Tracer connects and maintains detailed information about components, traces, vias, and other circuit elements, including node-to-node persistence of all connections across the project. Future releases will utilize this nodelist to export to 3rd party PCB schematic formats.
+                  </p>
                 </div>
 
-                {/* Other Features - 2 Column Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>AI Features</p>
+                  <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
+                    Current AI Features simplify the loading of integrated circuit details by parsing PDF datasheets to extract, present and persist essential component properties. Future AI enhancements are planned to streamline workflow and provide circuit analyses, using component properties, netlists, and testing/measurement data.
+                  </p>
+                </div>
+
+                {/* Core Features Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', marginBottom: 20 }}>
                   <div>
                     <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Image Management</p>
                     <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
@@ -1711,7 +1666,69 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <li>Export to KiCad schematic format (future feature, not yet implemented)</li>
                     </ul>
                   </div>
+                </div>
 
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Via/Pad Placement</p>
+                  <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
+                    <li>Alt/Option+click the Via or Pad tool, or press <code>Alt/Option+V</code> or <code>Alt/Option+P</code> to open the placement dialog</li>
+                    <li>Place multiple vias or pads in Linear, 2-Sided, or 4-Sided arrangements</li>
+                    <li>Automatic counter-clockwise numbering starting from Pin 1</li>
+                    <li>Supports chip orientations of 0°, 90°, 180°, or 270°</li>
+                    <li>Click and drag to define the placement area</li>
+                    <li>Tool automatically returns to Select tool after placement</li>
+                  </ul>
+                </div>
+                
+                {/* Tools & Shortcuts - Full Width */}
+                <div style={{ marginBottom: 20 }}>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Tools &amp; Shortcuts</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: '13px', color: '#f2f2f2' }}>
+                    <div>
+                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                        <li><strong>Select</strong> — <code>S</code></li>
+                        <li><strong>Select All</strong> — <code>A</code></li>
+                        <li><strong>Via</strong> — <code>V</code></li>
+                        <li><strong>Pad</strong> — <code>P</code></li>
+                        <li><strong>Test Point</strong> — <code>Y</code></li>
+                        <li><strong>Trace</strong> — <code>T</code></li>
+                        <li><strong>Component</strong> — <code>C</code></li>
+                        <li><strong>Component Properties</strong> — <code>U</code> (or double-click component)</li>
+                        <li><strong>Resize Icons</strong> — <code>+</code> / <code>-</code> (<code>Shift</code> + <code>+</code> / <code>-</code> = 5x faster)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                        <li><strong>Power</strong> — <code>B</code></li>
+                        <li><strong>Ground</strong> — <code>G</code></li>
+                        <li><strong>Move (Pan)</strong> — <code>H</code></li>
+                        <li><strong>Magnify</strong> — <code>M</code></li>
+                        <li><strong>Set View</strong> — <code>X</code> then <code>0-9</code> to save view</li>
+                        <li><strong>Recall View</strong> — <code>0-9</code> to recall saved view</li>
+                        <li><strong>Default View 0</strong> — <code>0</code> to recall default view (origin with all images contained)</li>
+                        <li><strong>Information Dialog</strong> — <code>I</code></li>
+                        <li><strong>Notes Dialog</strong> — <code>N</code></li>
+                        <li><strong>Project Notes / TODO</strong> — <code>L</code></li>
+                        <li><strong>Undo</strong> — <code>Ctrl</code> + <code>Z</code></li>
+                        <li><strong>Copy Component</strong> — <code>Ctrl</code> + <code>C</code> / <code>Cmd</code> + <code>C</code></li>
+                        <li><strong>Paste Component</strong> — <code>Ctrl</code> + <code>V</code> / <code>Cmd</code> + <code>V</code></li>
+                      </ul>
+                    </div>
+                  </div>
+                <div style={{ marginTop: '12px', fontSize: '13px', color: '#f2f2f2' }}>
+                  <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#f2f2f2' }}>Arrow Keys</p>
+                  <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: '1.6' }}>
+                    <li><strong>Move Selected Components</strong> — Arrow keys to nudge selected components (1 unit per press, <code>Shift</code> = 10 units)</li>
+                    <li><strong>Switch Perspective</strong> — <code>Shift</code> + <code>←</code> / <code>→</code> or <code>Caps Lock</code> + <code>←</code> / <code>→</code> to switch between top/bottom view</li>
+                    <li><strong>Rotate Perspective</strong> — <code>Shift</code> + <code>↑</code> / <code>↓</code> or <code>Caps Lock</code> + <code>↑</code> / <code>↓</code> to rotate in 90° increments (<code>↑</code> = counter-clockwise, <code>↓</code> = clockwise)</li>
+                    <li><strong>Image Transformations</strong> — Arrow keys for scaling, rotating, and adjusting image transformations (when image is selected for transform)</li>
+                    <li>Click a slider first, then use arrow keys for precise adjustment</li>
+                  </ul>
+                </div>
+                </div>
+
+                {/* View Controls Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
                   <div>
                     <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>View Controls</p>
                     <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
