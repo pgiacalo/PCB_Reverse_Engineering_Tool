@@ -244,8 +244,12 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
   // Rotate by specified angle (clockwise)
   // This now modifies the VIEW transform, not object properties
   const handleRotate = useCallback((angle: number) => {
-    setViewRotation(prev => addAngles(prev, angle));
-  }, [setViewRotation, addAngles]);
+    // When viewing from the bottom, the view is flipped horizontally (viewFlipX=true).
+    // To keep rotation intuitive (clockwise = clockwise on screen), we must 
+    // negate the world-space rotation angle when the view is flipped.
+    const effectiveAngle = isBottomView ? -angle : angle;
+    setViewRotation(prev => addAngles(prev, effectiveAngle));
+  }, [setViewRotation, isBottomView]);
 
   if (!visible) return null;
 

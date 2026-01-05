@@ -1815,8 +1815,12 @@ function App() {
   // This now modifies the VIEW transform, not object properties
   // Objects maintain their world coordinates and properties unchanged
   const rotatePerspective = useCallback((angle: number) => {
-    setViewRotation(prev => addAngles(prev, angle));
-  }, [setViewRotation]);
+    // When viewing from the bottom, the view is flipped horizontally (viewFlipX=true).
+    // To keep rotation intuitive (clockwise = clockwise on screen), we must 
+    // negate the world-space rotation angle when the view is flipped.
+    const effectiveAngle = isBottomView ? -angle : angle;
+    setViewRotation(prev => addAngles(prev, effectiveAngle));
+  }, [setViewRotation, isBottomView]);
 
   // Generic function to center any object at given world coordinates
   const findAndCenterObject = useCallback((worldX: number, worldY: number) => {
