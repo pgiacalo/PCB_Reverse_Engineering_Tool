@@ -1318,15 +1318,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               {showCrosshairs ? '✓ ' : '   '}Show X-Y Axis Crosshairs
             </button>
-            {/* 
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button 
               onClick={() => { setShowMemoryMonitor(!showMemoryMonitor); setOpenMenu(null); }}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: '#f2f2f2', background: 'transparent', border: 'none', cursor: 'pointer' }}
             >
               {showMemoryMonitor ? '✓ ' : '   '}Show Memory Usage
-            </button> 
-            */}
+            </button>
           </div>
         )}
       </div>
