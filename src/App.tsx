@@ -1514,6 +1514,8 @@ function App() {
   // IC Placement Dialog
   const [showICPlacementDialog, setShowICPlacementDialog] = useState(false);
   const [icPlacementIsPad, setICPlacementIsPad] = useState(false);
+  const [flashObjectId, setFlashObjectId] = useState<string | null>(null);
+  const flashTimeoutRef = useRef<number | null>(null);
   const [icPlacementOptions, setICPlacementOptions] = useState<ICComponentInput | null>(null);
   const [isICPlacementMode, setIsICPlacementMode] = useState(false);
   const [icPlacementArea, setICPlacementArea] = useState<{ start: { x: number; y: number }; end: { x: number; y: number } } | null>(null);
@@ -1836,59 +1838,39 @@ function App() {
     setViewPan({ x: newPanX, y: newPanY });
   }, [viewScale, setViewPan]);
 
-  const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
+  const findAndCenterObjectWithFlash = useCallback((id: string, worldX: number, worldY: number) => {
     findAndCenterObject(worldX, worldY);
+    
+    // Set flash object ID and clear after a delay
+    setFlashObjectId(id);
+    if (flashTimeoutRef.current) {
+      clearTimeout(flashTimeoutRef.current);
+    }
+    flashTimeoutRef.current = setTimeout(() => {
+      setFlashObjectId(null);
+      flashTimeoutRef.current = null;
+    }, 2000); // Flash for 2 seconds
+  }, [findAndCenterObject]);
 
-    // Select the component and clear other selections
-    setSelectedComponentIds(new Set([componentId]));
-    setSelectedIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedGroundIds(new Set());
-    setSelectedComponentConnections(new Set());
-  }, [findAndCenterObject, setSelectedComponentIds, setSelectedIds, setSelectedPowerIds, setSelectedGroundIds]);
+  const findAndCenterComponent = useCallback((componentId: string, worldX: number, worldY: number) => {
+    findAndCenterObjectWithFlash(componentId, worldX, worldY);
+  }, [findAndCenterObjectWithFlash]);
 
   const findAndCenterStroke = useCallback((strokeId: string, worldX: number, worldY: number) => {
-    findAndCenterObject(worldX, worldY);
-
-    // Select the stroke and clear other selections
-    setSelectedIds(new Set([strokeId]));
-    setSelectedComponentIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedGroundIds(new Set());
-    setSelectedComponentConnections(new Set());
-  }, [findAndCenterObject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+    findAndCenterObjectWithFlash(strokeId, worldX, worldY);
+  }, [findAndCenterObjectWithFlash]);
 
   const findAndCenterPower = useCallback((powerId: string, worldX: number, worldY: number) => {
-    findAndCenterObject(worldX, worldY);
-
-    // Select the power symbol and clear other selections
-    setSelectedPowerIds(new Set([powerId]));
-    setSelectedIds(new Set());
-    setSelectedComponentIds(new Set());
-    setSelectedGroundIds(new Set());
-    setSelectedComponentConnections(new Set());
-  }, [findAndCenterObject, setSelectedPowerIds, setSelectedIds, setSelectedComponentIds, setSelectedGroundIds]);
+    findAndCenterObjectWithFlash(powerId, worldX, worldY);
+  }, [findAndCenterObjectWithFlash]);
 
   const findAndCenterGround = useCallback((groundId: string, worldX: number, worldY: number) => {
-    findAndCenterObject(worldX, worldY);
-
-    // Select the ground symbol and clear other selections
-    setSelectedGroundIds(new Set([groundId]));
-    setSelectedIds(new Set());
-    setSelectedComponentIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedComponentConnections(new Set());
-  }, [findAndCenterObject, setSelectedGroundIds, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds]);
+    findAndCenterObjectWithFlash(groundId, worldX, worldY);
+  }, [findAndCenterObjectWithFlash]);
 
   const findAndCenterTestPoint = useCallback((strokeId: string, worldX: number, worldY: number) => {
-    findAndCenterObject(worldX, worldY);
-    // Select the test point and clear other selections
-    setSelectedIds(new Set([strokeId]));
-    setSelectedComponentIds(new Set());
-    setSelectedPowerIds(new Set());
-    setSelectedGroundIds(new Set());
-    setSelectedComponentConnections(new Set());
-  }, [findAndCenterObject, setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds]);
+    findAndCenterObjectWithFlash(strokeId, worldX, worldY);
+  }, [findAndCenterObjectWithFlash]);
 
   const powerNodeNames = React.useMemo(() => {
     // Collect bus IDs that have at least one power symbol
@@ -5418,6 +5400,18 @@ function App() {
           false // Power symbols don't have flipY
         );
         
+        // Draw flash highlight
+        if (flashObjectId === p.id) {
+          ctx.save();
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 4 / viewScale;
+          const r = (p.size / 2) + (8 / viewScale);
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, TWO_PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+
         // Find the power bus to get its voltage and color
         const bus = powerBuses.find(b => b.id === p.powerBusId);
         const isSelected = selectedPowerIds.has(p.id);
@@ -5483,6 +5477,18 @@ function App() {
           false // Ground symbols don't have flipY
         );
         
+        // Draw flash highlight
+        if (flashObjectId === g.id) {
+          ctx.save();
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 4 / viewScale;
+          const r = (g.size / 2) + (8 / viewScale);
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, TWO_PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+
         const isSelected = selectedGroundIds.has(g.id);
         
         // Find the ground bus to get its name and color
@@ -5611,6 +5617,16 @@ function App() {
         ctx.scale(1, -1);
       }
       
+      // Draw flash highlight
+      if (flashObjectId === c.id) {
+        ctx.save();
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 4 / viewScale;
+        const r = (size / 2) + (6 / viewScale);
+        ctx.strokeRect(-r, -r, r * 2, r * 2);
+        ctx.restore();
+      }
+
       ctx.strokeStyle = c.color || '#111';
       ctx.lineWidth = Math.max(1, 2 / Math.max(viewScale, 0.001));
       
@@ -5913,7 +5929,7 @@ function App() {
     
     // Restore after view scaling
     ctx.restore();
-  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, showCrosshairs, cameraWorldCenter, isICPlacementMode, icPlacementArea]);
+  }, [topImage, bottomImage, transparency, drawingStrokes, currentStroke, isDrawing, currentTool, brushColor, brushSize, isGrayscale, selectedImageForTransform, selectedDrawingLayer, viewScale, viewPan.x, viewPan.y, viewRotation, viewFlipX, showTopImage, showBottomImage, showViasLayer, showTopTracesLayer, showBottomTracesLayer, showTopPadsLayer, showBottomPadsLayer, showTopTestPointsLayer, showBottomTestPointsLayer, showTopComponents, showBottomComponents, componentsTop, componentsBottom, showPowerLayer, powers, showGroundLayer, grounds, showConnectionsLayer, selectRect, selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, flashObjectId, selectedComponentConnections, traceToolLayer, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, drawingMode, tracePreviewMousePos, areImagesLocked, componentConnectionColor, componentConnectionSize, showTraceCornerDots, showCrosshairs, cameraWorldCenter, isICPlacementMode, icPlacementArea]);
 
 
   // Responsive canvas sizing: fill available space while keeping 1.6:1 aspect ratio
@@ -6003,6 +6019,38 @@ function App() {
   }, [areImagesLocked, isTransforming, setIsTransforming, setTransformStartPos, setSelectedImageForTransform]);
 
   const drawStrokes = useCallback((ctx: CanvasRenderingContext2D) => {
+    // Helper to draw a pronounced highlight for the last "found" object
+    const drawFlashHighlight = (id: string, x: number, y: number, size: number, shape: 'circle' | 'square' | 'diamond' = 'circle') => {
+      if (flashObjectId === id) {
+        ctx.save();
+        ctx.strokeStyle = '#ffff00'; // Bright yellow
+        ctx.lineWidth = 4 / viewScale;
+        ctx.setLineDash([]);
+        const r = (size / 2) + (6 / viewScale);
+        
+        ctx.beginPath();
+        if (shape === 'circle') {
+          ctx.arc(x, y, r, 0, TWO_PI);
+        } else if (shape === 'square') {
+          ctx.rect(x - r, y - r, r * 2, r * 2);
+        } else if (shape === 'diamond') {
+          ctx.moveTo(x, y - r);
+          ctx.lineTo(x + r, y);
+          ctx.lineTo(x, y + r);
+          ctx.lineTo(x - r, y);
+          ctx.closePath();
+        }
+        ctx.stroke();
+        
+        // Outer glow
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+        ctx.lineWidth = 8 / viewScale;
+        ctx.stroke();
+        
+        ctx.restore();
+      }
+    };
+
     // Pass 1: draw traces first (so vias, pads, and test points appear on top)
     // IMPORTANT: Skip vias, pads, and test points here - they are drawn in Pass 2 with their own visibility controls
     drawingStrokes.forEach(stroke => {
@@ -6019,6 +6067,10 @@ function App() {
       if (stroke.points.length === 1) {
         const p = stroke.points[0];
         const r = Math.max(0.5, stroke.size / 2);
+        
+        // Draw flash highlight if this is the "found" object
+        drawFlashHighlight(stroke.id, p.x, p.y, stroke.size);
+
         if (selectedIds.has(stroke.id)) {
           ctx.strokeStyle = '#00bfff';
           ctx.lineWidth = 2;
@@ -6033,6 +6085,11 @@ function App() {
         ctx.arc(p.x, p.y, r, 0, TWO_PI);
         ctx.fill();
       } else {
+        // Draw flash highlight for traces (use first point as anchor)
+        if (stroke.points.length > 0) {
+          drawFlashHighlight(stroke.id, stroke.points[0].x, stroke.points[0].y, stroke.size);
+        }
+
         if (selectedIds.has(stroke.id)) {
           ctx.strokeStyle = '#00bfff';
           ctx.lineWidth = stroke.size + 4;
@@ -6103,6 +6160,15 @@ function App() {
       }
       const c = stroke.points[0];
       
+      // Draw flash highlight
+      drawFlashHighlight(
+        stroke.id, 
+        c.x, 
+        c.y, 
+        stroke.size, 
+        stroke.type === 'pad' ? 'square' : stroke.type === 'testPoint' ? 'diamond' : 'circle'
+      );
+
       // Selection highlight
       if (selectedIds.has(stroke.id)) {
         if (stroke.type === 'via') {
