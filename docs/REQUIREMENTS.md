@@ -664,6 +664,8 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - **REQ-038**: Intuitive and clean user interface
 - **REQ-039**: Keyboard shortcuts for common operations
 - **REQ-040**: Tooltips and help text for all controls
+- **REQ-040.1**: The Information Dialog "Find" button shall center the object on the canvas without clearing other selections.
+- **REQ-040.2**: When an object is "found" via the Information Dialog, it shall be highlighted with a temporary (2-second) bright yellow flash that follows its shape.
 - **REQ-041**: Accessible design following WCAG guidelines
 
 ### 11. Data Management
@@ -716,4 +718,4 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 ---
 
 *Last Updated: January 5, 2026*
-*Version: 1.2*
+*Version: 1.3*
