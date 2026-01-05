@@ -4110,41 +4110,53 @@ function App() {
               setHoverTestPoint(null);
               lastHoverStateRef.current = null;
             }
+            
+            // Connection line hover detection (throttled and optimized)
+            // Only for semiconductor connections
+            const connectionHitTolerance = Math.max(6 / viewScale, 3);
+            
+            // Helper function to calculate distance from point to line segment
+            const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const lengthSquared = dx * dx + dy * dy;
+              if (lengthSquared === 0) return Math.hypot(px - x1, py - y1);
+              let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+              t = Math.max(0, Math.min(1, t));
+              const closestX = x1 + t * dx;
+              const closestY = y1 + t * dy;
+              return Math.hypot(px - closestX, py - closestY);
+            };
+            
+            // Cache node coordinates to avoid repeated searches
+            const nodeCoordCache = new Map<string, { x: number; y: number } | null>();
+            const findNodeCoordinatesForHover = (pointIdStr: string): { x: number; y: number } | null => {
+              if (nodeCoordCache.has(pointIdStr)) {
+                return nodeCoordCache.get(pointIdStr)!;
+              }
               
-              // Connection line hover detection (throttled and optimized)
-              // Only for semiconductor connections
-              const connectionHitTolerance = Math.max(6 / viewScale, 3);
+              const pointId = parseInt(pointIdStr, 10);
+              if (isNaN(pointId)) {
+                nodeCoordCache.set(pointIdStr, null);
+                return null;
+              }
               
-              // Helper function to calculate distance from point to line segment
-              const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
-                const dx = x2 - x1;
-                const dy = y2 - y1;
-                const lengthSquared = dx * dx + dy * dy;
-                if (lengthSquared === 0) return Math.hypot(px - x1, py - y1);
-                let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
-                t = Math.max(0, Math.min(1, t));
-                const closestX = x1 + t * dx;
-                const closestY = y1 + t * dy;
-                return Math.hypot(px - closestX, py - closestY);
-              };
-              
-              // Cache node coordinates to avoid repeated searches
-              const nodeCoordCache = new Map<string, { x: number; y: number } | null>();
-              const findNodeCoordinatesForHover = (pointIdStr: string): { x: number; y: number } | null => {
-                if (nodeCoordCache.has(pointIdStr)) {
-                  return nodeCoordCache.get(pointIdStr)!;
+              // Check vias, pads, and test points
+              for (const stroke of drawingStrokes) {
+                if ((stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') && stroke.points.length > 0) {
+                  const point = stroke.points[0];
+                  if (point.id === pointId) {
+                    const result = { x: point.x, y: point.y };
+                    nodeCoordCache.set(pointIdStr, result);
+                    return result;
+                  }
                 }
-                
-                const pointId = parseInt(pointIdStr, 10);
-                if (isNaN(pointId)) {
-                  nodeCoordCache.set(pointIdStr, null);
-                  return null;
-                }
-                
-                // Check vias, pads, and test points
-                for (const stroke of drawingStrokes) {
-                  if ((stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') && stroke.points.length > 0) {
-                    const point = stroke.points[0];
+              }
+              
+              // Check trace points
+              for (const stroke of drawingStrokes) {
+                if (stroke.type === 'trace') {
+                  for (const point of stroke.points) {
                     if (point.id === pointId) {
                       const result = { x: point.x, y: point.y };
                       nodeCoordCache.set(pointIdStr, result);
@@ -4152,106 +4164,95 @@ function App() {
                     }
                   }
                 }
-                
-                // Check trace points
-                for (const stroke of drawingStrokes) {
-                  if (stroke.type === 'trace') {
-                    for (const point of stroke.points) {
-                      if (point.id === pointId) {
-                        const result = { x: point.x, y: point.y };
-                        nodeCoordCache.set(pointIdStr, result);
-                        return result;
-                      }
-                    }
-                  }
-                }
-                
-                // Check power symbols
-                for (const power of powers) {
-                  if (power.pointId === pointId) {
-                    const result = { x: power.x, y: power.y };
-                    nodeCoordCache.set(pointIdStr, result);
-                    return result;
-                  }
-                }
-                
-                // Check ground symbols
-                for (const ground of grounds) {
-                  if (ground.pointId === pointId) {
-                    const result = { x: ground.x, y: ground.y };
-                    nodeCoordCache.set(pointIdStr, result);
-                    return result;
-                  }
-                }
-                
-                nodeCoordCache.set(pointIdStr, null);
-                return null;
-              };
+              }
               
-              // Find connection line near mouse position
-              const hitConnection = (() => {
-                const allComponents = [
-                  ...componentsTop.map(c => ({ comp: c, layer: 'top' as const })),
-                  ...componentsBottom.map(c => ({ comp: c, layer: 'bottom' as const }))
-                ];
-                
-                for (const { comp, layer } of allComponents) {
-                  const compDef = resolveComponentDefinition(comp as any);
-                  if (compDef?.category !== 'Semiconductors') continue;
-                  
-                  const pinConnections = comp.pinConnections || [];
-                  
-                  // Build map of node ID to pin indices (multiple pins can connect to same node)
-                  const nodeToPin = new Map<string, number[]>();
-                  for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
-                    const connection = pinConnections[pinIndex];
-                    if (connection && connection.trim() !== '') {
-                      const nodeIdStr = connection.trim();
-                      const existing = nodeToPin.get(nodeIdStr) || [];
-                      existing.push(pinIndex);
-                      nodeToPin.set(nodeIdStr, existing);
-                    }
-                  }
-                  
-                  // Check each connection line (optimized: early exit if mouse is far from component)
-                  const compCenter = { x: comp.x, y: comp.y };
-                  const distToComp = Math.hypot(x - compCenter.x, y - compCenter.y);
-                  // Skip if mouse is very far from component (connection lines won't be close)
-                  if (distToComp > 200) continue;
-                  
-                  for (const [nodeIdStr, pinIndices] of nodeToPin) {
-                    const nodePos = findNodeCoordinatesForHover(nodeIdStr);
-                    if (!nodePos) continue;
-                    
-                    const distance = pointToLineDistance(x, y, compCenter.x, compCenter.y, nodePos.x, nodePos.y);
-                    
-                    if (distance <= connectionHitTolerance) {
-                      return { comp, layer, pinIndices, nodeIdStr };
-                    }
-                  }
-                }
-                return null;
-              })();
-              
-              if (hitConnection) {
-                const newKey = `${hitConnection.comp.id}-${hitConnection.nodeIdStr}`;
-                if (lastHoverStateRef.current?.connectionKey !== newKey) {
-                  setHoverConnection({
-                    component: hitConnection.comp,
-                    layer: hitConnection.layer,
-                    pinIndices: hitConnection.pinIndices,
-                    nodeId: hitConnection.nodeIdStr,
-                    x: mouseClientX,
-                    y: mouseClientY
-                  });
-                  lastHoverStateRef.current = { type: 'connection', connectionKey: newKey };
-                }
-              } else {
-                if (lastHoverStateRef.current?.type === 'connection') {
-                  setHoverConnection(null);
-                  lastHoverStateRef.current = null;
+              // Check power symbols
+              for (const power of powers) {
+                if (power.pointId === pointId) {
+                  const result = { x: power.x, y: power.y };
+                  nodeCoordCache.set(pointIdStr, result);
+                  return result;
                 }
               }
+              
+              // Check ground symbols
+              for (const ground of grounds) {
+                if (ground.pointId === pointId) {
+                  const result = { x: ground.x, y: ground.y };
+                  nodeCoordCache.set(pointIdStr, result);
+                  return result;
+                }
+              }
+              
+              nodeCoordCache.set(pointIdStr, null);
+              return null;
+            };
+            
+            // Find connection line near mouse position
+            const hitConnection = (() => {
+              const allComponents = [
+                ...componentsTop.map(c => ({ comp: c, layer: 'top' as const })),
+                ...componentsBottom.map(c => ({ comp: c, layer: 'bottom' as const }))
+              ];
+              
+              for (const { comp, layer } of allComponents) {
+                const compDef = resolveComponentDefinition(comp as any);
+                if (compDef?.category !== 'Semiconductors') continue;
+                
+                const pinConnections = comp.pinConnections || [];
+                
+                // Build map of node ID to pin indices (multiple pins can connect to same node)
+                const nodeToPin = new Map<string, number[]>();
+                for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
+                  const connection = pinConnections[pinIndex];
+                  if (connection && connection.trim() !== '') {
+                    const nodeIdStr = connection.trim();
+                    const existing = nodeToPin.get(nodeIdStr) || [];
+                    existing.push(pinIndex);
+                    nodeToPin.set(nodeIdStr, existing);
+                  }
+                }
+                
+                // Check each connection line (optimized: early exit if mouse is far from component)
+                const compCenter = { x: comp.x, y: comp.y };
+                const distToComp = Math.hypot(x - compCenter.x, y - compCenter.y);
+                // Skip if mouse is very far from component (connection lines won't be close)
+                if (distToComp > 200) continue;
+                
+                for (const [nodeIdStr, pinIndices] of nodeToPin) {
+                  const nodePos = findNodeCoordinatesForHover(nodeIdStr);
+                  if (!nodePos) continue;
+                  
+                  const distance = pointToLineDistance(x, y, compCenter.x, compCenter.y, nodePos.x, nodePos.y);
+                  
+                  if (distance <= connectionHitTolerance) {
+                    return { comp, layer, pinIndices, nodeIdStr };
+                  }
+                }
+              }
+              return null;
+            })();
+            
+            if (hitConnection) {
+              const newKey = `${hitConnection.comp.id}-${hitConnection.nodeIdStr}`;
+              if (lastHoverStateRef.current?.connectionKey !== newKey) {
+                setHoverConnection({
+                  component: hitConnection.comp,
+                  layer: hitConnection.layer,
+                  pinIndices: hitConnection.pinIndices,
+                  nodeId: hitConnection.nodeIdStr,
+                  x: mouseClientX,
+                  y: mouseClientY
+                });
+                lastHoverStateRef.current = { type: 'connection', connectionKey: newKey };
+              }
+            } else {
+              if (lastHoverStateRef.current?.type === 'connection') {
+                setHoverConnection(null);
+                lastHoverStateRef.current = null;
+              }
+            }
+          }
         }
       }, 150); // 150ms debounce delay
     } else {
