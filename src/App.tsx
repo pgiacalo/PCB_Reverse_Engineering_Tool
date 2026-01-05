@@ -1399,7 +1399,7 @@ function App() {
   // Memoized tooltip content cache to prevent expensive re-renders
   const tooltipCacheRef = React.useRef<{
     componentId: string;
-    content: JSX.Element;
+    content: React.ReactNode;
   } | null>(null);
   
   // Connection hover state for displaying pin info on rollover (when Option key is held)
