@@ -4111,20 +4111,129 @@ function App() {
               lastHoverStateRef.current = null;
             }
             
-            // Connection line hover detection - DISABLED
-            // This feature was causing browser crashes when hovering over pads
-            // connected to ICs with 48+ pins. The O(components × pins × strokes)
-            // complexity made it too expensive even at moderate zoom levels.
-            // 
-            // The visual connection lines are still displayed (when zoom <= 6x),
-            // but hovering over them no longer shows pin info tooltips.
-            // 
-            // To re-enable this feature in the future, the algorithm would need
-            // to be redesigned using spatial indexing (e.g., R-tree) to avoid
-            // the expensive per-frame iteration over all connections.
-            if (lastHoverStateRef.current?.type === 'connection') {
-              setHoverConnection(null);
-              lastHoverStateRef.current = null;
+            // Connection line hover detection
+            // Optimized with radius-based culling: only check components near the mouse
+            // This prevents O(n²) iteration by limiting checks to nearby components
+            const connectionHitTolerance = Math.max(6 / viewScale, 3);
+            
+            // Radius check: only check components within ~50 screen pixels of mouse
+            // This dramatically reduces calculations at any zoom level
+            const maxCheckRadius = Math.max(50 / viewScale, 30);
+            
+            // Helper function to calculate distance from point to line segment
+            const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
+              const dx = x2 - x1;
+              const dy = y2 - y1;
+              const lengthSquared = dx * dx + dy * dy;
+              if (lengthSquared === 0) return Math.hypot(px - x1, py - y1);
+              let t = ((px - x1) * dx + (py - y1) * dy) / lengthSquared;
+              t = Math.max(0, Math.min(1, t));
+              const closestX = x1 + t * dx;
+              const closestY = y1 + t * dy;
+              return Math.hypot(px - closestX, py - closestY);
+            };
+            
+            // Find connection line near mouse position
+            // Only checks components within maxCheckRadius of mouse
+            const hitConnection = (() => {
+              const allComponents = [
+                ...componentsTop.map(c => ({ comp: c, layer: 'top' as const })),
+                ...componentsBottom.map(c => ({ comp: c, layer: 'bottom' as const }))
+              ];
+              
+              for (const { comp, layer } of allComponents) {
+                // RADIUS CHECK: Skip components far from mouse position
+                const distToComp = Math.hypot(x - comp.x, y - comp.y);
+                if (distToComp > maxCheckRadius) continue;
+                
+                const compDef = resolveComponentDefinition(comp as any);
+                if (compDef?.category !== 'Semiconductors') continue;
+                
+                const pinConnections = comp.pinConnections || [];
+                
+                // Build map of node ID to pin indices (multiple pins can connect to same node)
+                const nodeToPin = new Map<string, number[]>();
+                for (let pinIndex = 0; pinIndex < pinConnections.length; pinIndex++) {
+                  const connection = pinConnections[pinIndex];
+                  if (connection && connection.trim() !== '') {
+                    const nodeIdStr = connection.trim();
+                    const existing = nodeToPin.get(nodeIdStr) || [];
+                    existing.push(pinIndex);
+                    nodeToPin.set(nodeIdStr, existing);
+                  }
+                }
+                
+                // Check each connection line
+                const compCenter = { x: comp.x, y: comp.y };
+                
+                for (const [nodeIdStr, pinIndices] of nodeToPin) {
+                  // Find node coordinates inline (simplified search)
+                  const pointId = parseInt(nodeIdStr, 10);
+                  if (isNaN(pointId)) continue;
+                  
+                  let nodePos: { x: number; y: number } | null = null;
+                  
+                  // Check vias, pads, and test points
+                  for (const stroke of drawingStrokes) {
+                    if ((stroke.type === 'via' || stroke.type === 'pad' || stroke.type === 'testPoint') && stroke.points.length > 0) {
+                      const point = stroke.points[0];
+                      if (point.id === pointId) {
+                        nodePos = { x: point.x, y: point.y };
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (!nodePos) {
+                    // Check power symbols
+                    for (const power of powers) {
+                      if (power.pointId === pointId) {
+                        nodePos = { x: power.x, y: power.y };
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (!nodePos) {
+                    // Check ground symbols
+                    for (const ground of grounds) {
+                      if (ground.pointId === pointId) {
+                        nodePos = { x: ground.x, y: ground.y };
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (!nodePos) continue;
+                  
+                  const distance = pointToLineDistance(x, y, compCenter.x, compCenter.y, nodePos.x, nodePos.y);
+                  
+                  if (distance <= connectionHitTolerance) {
+                    return { comp, layer, pinIndices, nodeIdStr };
+                  }
+                }
+              }
+              return null;
+            })();
+            
+            if (hitConnection) {
+              const newKey = `${hitConnection.comp.id}-${hitConnection.nodeIdStr}`;
+              if (lastHoverStateRef.current?.connectionKey !== newKey) {
+                setHoverConnection({
+                  component: hitConnection.comp,
+                  layer: hitConnection.layer,
+                  pinIndices: hitConnection.pinIndices,
+                  nodeId: hitConnection.nodeIdStr,
+                  x: mouseClientX,
+                  y: mouseClientY
+                });
+                lastHoverStateRef.current = { type: 'connection', connectionKey: newKey };
+              }
+            } else {
+              if (lastHoverStateRef.current?.type === 'connection') {
+                setHoverConnection(null);
+                lastHoverStateRef.current = null;
+              }
             }
           }
         }
