@@ -104,39 +104,6 @@ const ZigZagIconSVG = ({ rotate = 0 }: { rotate?: number }) => (
   </svg>
 );
 
-// Microchip icon for orientation visual aids
-// Based on the provided icon: dark grey microchip with pins on left/right, inner white rectangle with orientation dot
-const MicrochipIconSVG = ({ rotate = 0 }: { rotate?: number }) => {
-  const centerX = 20;
-  const centerY = 20;
-  const transform = rotate !== 0 ? `rotate(${rotate} ${centerX} ${centerY})` : '';
-  
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" style={{ marginLeft: '8px', flexShrink: 0 }}>
-      <g transform={transform}>
-        {/* Main body - dark grey rectangle with rounded corners */}
-        <rect x="8" y="10" width="24" height="20" rx="2" ry="2" fill="#555" />
-        
-        {/* Left side pins (3 pins) */}
-        <rect x="2" y="12" width="6" height="3" rx="1" ry="1" fill="#555" />
-        <rect x="2" y="18" width="6" height="3" rx="1" ry="1" fill="#555" />
-        <rect x="2" y="24" width="6" height="3" rx="1" ry="1" fill="#555" />
-        
-        {/* Right side pins (3 pins) */}
-        <rect x="32" y="12" width="6" height="3" rx="1" ry="1" fill="#555" />
-        <rect x="32" y="18" width="6" height="3" rx="1" ry="1" fill="#555" />
-        <rect x="32" y="24" width="6" height="3" rx="1" ry="1" fill="#555" />
-        
-        {/* Inner white rectangle with rounded corners */}
-        <rect x="12" y="14" width="16" height="12" rx="1.5" ry="1.5" fill="#fff" />
-        
-        {/* Orientation dot - small dark grey circle in top-left of inner rectangle */}
-        <circle cx="14" cy="16" r="1.5" fill="#555" />
-      </g>
-    </svg>
-  );
-};
-
 export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
   visible,
   isPad,
