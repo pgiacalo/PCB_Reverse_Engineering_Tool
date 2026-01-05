@@ -500,6 +500,20 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 | X, XTAL, Y | Crystal | 2 | Frequency, Load Capacitance, Tolerance |
 | Z | Zener Diode | 2 | Zener Voltage, Power Rating, Tolerance |
 
+### Pattern Placement Tools (Vias and Pads)
+
+**REQ-PATT-001**: The tool shall support automated placement of multiple vias or pads in predefined arrangements:
+1. **Linear (1-side)**: Pins arranged in a single row or column.
+2. **2-Sided**: Pins arranged on two parallel edges (typical for SOIC, TSSOP).
+3. **4-Sided**: Pins arranged on all four edges (typical for QFP, QFN).
+4. **Zig-Zag**: Pins arranged in two rows or columns with a zig-zag numbering pattern.
+
+**REQ-PATT-002**: For all patterns, Pin 1 location shall be established by the initial click, and the diagonally opposite corner by the release point.
+
+**REQ-PATT-003**: The tool shall support orientation choices for 2-Sided and Zig-Zag arrangements (Vertical or Horizontal).
+
+**REQ-PATT-004**: Pattern placement shall automatically generate unique Node IDs for each via or pad.
+
 ### Common Component Properties
 
 **REQ-COMP-004**: All components shall include:
@@ -601,7 +615,7 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 ### 3. View Management
 - **REQ-009**: Toggle between top view and bottom view of PCB
 - **REQ-009A**: Change Perspective feature - Switch between top and bottom view perspectives, flipping all elements (images, components, traces) horizontally around center point
-- **REQ-009B**: Rotate all elements (images, components, traces, vias, pads) together by 90°, 180°, or 270° around a fixed center point
+- **REQ-009B**: Rotate all elements (images, components, traces, vias, pads) together by 45°, 90°, 180°, or 270° around a fixed center point
 - **REQ-010**: Smooth transitions between views
 - **REQ-011**: Preserve drawing annotations when switching views
 
@@ -700,6 +714,6 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 
 ---
 
-*Last Updated: [Current Date]*
-*Version: 1.0*
+*Last Updated: January 4, 2026*
+*Version: 1.1*
 

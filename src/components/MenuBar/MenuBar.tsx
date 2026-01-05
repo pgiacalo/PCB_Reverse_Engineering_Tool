@@ -1830,7 +1830,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Flip Images:</strong> Use horizontal or vertical flip if your images are mirrored.</li>
                   <li><strong>Arrow Keys:</strong> When transform tool is active, use arrow keys for precise image adjustments.</li>
                   <li><strong>Move Components:</strong> Select components, then use arrow keys to move them (1 unit per press, <code>Shift</code> = 10 units for larger steps).</li>
-                  <li><strong>Change Perspective:</strong> Tools → Change Perspective (or press <code>E</code>) to switch between top/bottom view or rotate all elements (images, components, traces) together by 90°, 180°, or 270°.</li>
+                  <li><strong>Change Perspective:</strong> Tools → Change Perspective (or press <code>E</code>) to switch between top/bottom view or rotate all elements (images, components, traces) together by 45°, 90°, 180°, or 270°.</li>
                   <li><strong>Quick Perspective Switch:</strong> Press <code>Shift</code> + <code>←</code> / <code>→</code> or <code>Caps Lock</code> + <code>←</code> / <code>→</code> to quickly switch between top/bottom view.</li>
                   <li><strong>Quick Perspective Rotation:</strong> Press <code>Shift</code> + <code>↑</code> / <code>↓</code> or <code>Caps Lock</code> + <code>↑</code> / <code>↓</code> to rotate perspective in 90° increments (<code>↑</code> = counter-clockwise, <code>↓</code> = clockwise).</li>
                 </ul>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { ComponentType, TwoSidedOrientation } from '../../types/icPlacement';
+import type { ComponentType, TwoSidedOrientation, ZigZagOrientation } from '../../types/icPlacement';
 
 export interface ICPlacementDialogProps {
   visible: boolean;
@@ -8,13 +8,14 @@ export interface ICPlacementDialogProps {
     numPins: number;
     type: ComponentType;
     twoSidedOrientation?: TwoSidedOrientation;
+    zigzagOrientation?: ZigZagOrientation;
   }) => void;
   onClose: () => void;
 }
 
 // Linear (1-side) icon - component with 6 pins on bottom only
 const LinearIconSVG = () => (
-  <svg width="45" height="30" viewBox="0 0 45 30" style={{ marginLeft: '8px', flexShrink: 0 }}>
+  <svg width="90" height="60" viewBox="0 0 45 30" style={{ marginLeft: '12px', flexShrink: 0 }}>
     {/* Main body - black rectangle with rounded corners */}
     <rect x="8" y="4" width="29" height="14" rx="2" ry="2" fill="#000" />
     {/* Bottom pins - 6 pins extending downward, evenly spaced */}
@@ -27,29 +28,31 @@ const LinearIconSVG = () => (
   </svg>
 );
 
-// 2-Sided icon - component with 3 pins on left and 3 pins on right, inner white rectangle with orientation dot
-const TwoSidedIconSVG = () => (
-  <svg width="40" height="30" viewBox="0 0 40 30" style={{ marginLeft: '8px', flexShrink: 0 }}>
-    {/* Left side pins - 3 pins extending horizontally from middle */}
-    <rect x="2" y="11" width="5" height="2.5" rx="0.5" fill="#000" />
-    <rect x="2" y="14.5" width="5" height="2.5" rx="0.5" fill="#000" />
-    <rect x="2" y="18" width="5" height="2.5" rx="0.5" fill="#000" />
-    {/* Main body - black rectangle with rounded corners */}
-    <rect x="7" y="6" width="26" height="18" rx="2" ry="2" fill="#000" />
-    {/* Inner white rectangle with rounded corners */}
-    <rect x="13" y="10" width="14" height="10" rx="1.5" ry="1.5" fill="#fff" />
-    {/* Orientation dot - small black circle in top-left of inner rectangle */}
-    <circle cx="14.5" cy="11.5" r="1" fill="#000" />
-    {/* Right side pins - 3 pins extending horizontally from middle */}
-    <rect x="33" y="11" width="5" height="2.5" rx="0.5" fill="#000" />
-    <rect x="33" y="14.5" width="5" height="2.5" rx="0.5" fill="#000" />
-    <rect x="33" y="18" width="5" height="2.5" rx="0.5" fill="#000" />
+// 2-Sided IC icon - component with 3 pins on left and 3 pins on right, inner white rectangle with orientation dot
+const TwoSidedIconSVG = ({ rotate = 0 }: { rotate?: number }) => (
+  <svg width="80" height="60" viewBox="0 0 40 30" style={{ marginLeft: '12px', flexShrink: 0 }}>
+    <g transform={rotate ? `rotate(${rotate} 20 15)` : ''}>
+      {/* Left side pins - 3 pins extending horizontally from middle */}
+      <rect x="2" y="11" width="5" height="2.5" rx="0.5" fill="#000" />
+      <rect x="2" y="14.5" width="5" height="2.5" rx="0.5" fill="#000" />
+      <rect x="2" y="18" width="5" height="2.5" rx="0.5" fill="#000" />
+      {/* Main body - black rectangle with rounded corners */}
+      <rect x="7" y="6" width="26" height="18" rx="2" ry="2" fill="#000" />
+      {/* Inner white rectangle with rounded corners */}
+      <rect x="13" y="10" width="14" height="10" rx="1.5" ry="1.5" fill="#fff" />
+      {/* Orientation dot - small black circle in top-left of inner rectangle */}
+      <circle cx="14.5" cy="11.5" r="1" fill="#000" />
+      {/* Right side pins - 3 pins extending horizontally from middle */}
+      <rect x="33" y="11" width="5" height="2.5" rx="0.5" fill="#000" />
+      <rect x="33" y="14.5" width="5" height="2.5" rx="0.5" fill="#000" />
+      <rect x="33" y="18" width="5" height="2.5" rx="0.5" fill="#000" />
+    </g>
   </svg>
 );
 
-// 4-Sided icon - component with 3 pins on each of the 4 sides
+// 4-Sided IC icon - component with 3 pins on each of the 4 sides
 const FourSidedIconSVG = () => (
-  <svg width="35" height="35" viewBox="0 0 35 35" style={{ marginLeft: '8px', flexShrink: 0 }}>
+  <svg width="70" height="70" viewBox="0 0 35 35" style={{ marginLeft: '12px', flexShrink: 0 }}>
     {/* Top pins - 3 pins */}
     <rect x="12" y="2" width="2.5" height="4" rx="0.5" fill="#000" />
     <rect x="16.25" y="2" width="2.5" height="4" rx="0.5" fill="#000" />
@@ -68,6 +71,36 @@ const FourSidedIconSVG = () => (
     <rect x="12" y="29" width="2.5" height="4" rx="0.5" fill="#000" />
     <rect x="16.25" y="29" width="2.5" height="4" rx="0.5" fill="#000" />
     <rect x="20.5" y="29" width="2.5" height="4" rx="0.5" fill="#000" />
+  </svg>
+);
+
+// Zig-Zag icon - recreation of provided image with 6 pins and thin red lines
+const ZigZagIconSVG = ({ rotate = 0 }: { rotate?: number }) => (
+  <svg width="80" height="100" viewBox="0 0 40 50" style={{ marginLeft: '12px', flexShrink: 0 }}>
+    <g transform={rotate ? `rotate(${rotate} 20 25)` : ''}>
+      {/* Path lines - thin red lines matching provided image */}
+      <line x1="12" y1="10" x2="28" y2="10" stroke="#f44336" strokeWidth="1.2" />
+      <line x1="28" y1="10" x2="12" y2="25" stroke="#f44336" strokeWidth="1.2" />
+      <line x1="12" y1="25" x2="28" y2="25" stroke="#f44336" strokeWidth="1.2" />
+      <line x1="28" y1="25" x2="12" y2="40" stroke="#f44336" strokeWidth="1.2" />
+      <line x1="12" y1="40" x2="28" y2="40" stroke="#f44336" strokeWidth="1.2" />
+      
+      {/* Pins/Dots - large dark grey circles */}
+      <circle cx="12" cy="10" r="3.5" fill="#333" />
+      <circle cx="28" cy="10" r="3.5" fill="#333" />
+      <circle cx="12" cy="25" r="3.5" fill="#333" />
+      <circle cx="28" cy="25" r="3.5" fill="#333" />
+      <circle cx="12" cy="40" r="3.5" fill="#333" />
+      <circle cx="28" cy="40" r="3.5" fill="#333" />
+      
+      {/* Number Labels - simplified font and placement */}
+      <text x="4" y="12.5" fontSize="10" fontFamily="Arial" fill="#333">1</text>
+      <text x="33" y="12.5" fontSize="10" fontFamily="Arial" fill="#333">2</text>
+      <text x="4" y="27.5" fontSize="10" fontFamily="Arial" fill="#333">3</text>
+      <text x="33" y="27.5" fontSize="10" fontFamily="Arial" fill="#333">4</text>
+      <text x="4" y="42.5" fontSize="10" fontFamily="Arial" fill="#333">5</text>
+      <text x="33" y="42.5" fontSize="10" fontFamily="Arial" fill="#333">6</text>
+    </g>
   </svg>
 );
 
@@ -113,16 +146,18 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
   onConfirm,
   onClose,
 }) => {
-  const [type, setType] = useState<ComponentType>('linear');
+  const [type, setType] = useState<ComponentType>('twoSided');
   const [twoSidedOrientation, setTwoSidedOrientation] = useState<TwoSidedOrientation>('vertical-edges');
+  const [zigzagOrientation, setZigZagOrientation] = useState<ZigZagOrientation>('vertical');
   const [numPinsText, setNumPinsText] = useState<string>('8');
   const [error, setError] = useState<string>('');
 
   // Reset form when dialog opens
   useEffect(() => {
     if (visible) {
-      setType('linear');
+      setType('twoSided');
       setTwoSidedOrientation('vertical-edges');
+      setZigZagOrientation('vertical');
       setNumPinsText('8');
       setError('');
     }
@@ -165,7 +200,16 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
       }
       if (num % 4 !== 0) {
         return { valid: false, error: '4-sided components must have a number of pins divisible by 4.' };
-    }
+      }
+      return { valid: true, error: '', numPins: num };
+    } else if (arrangementType === 'zigzag') {
+      // Zig-Zag allows only positive even integers
+      if (num !== Math.floor(num) || num <= 0) {
+        return { valid: false, error: 'Zig-Zag arrangement requires a positive integer.' };
+      }
+      if (num % 2 !== 0) {
+        return { valid: false, error: 'Zig-Zag arrangement requires an even number of pins.' };
+      }
       return { valid: true, error: '', numPins: num };
     }
 
@@ -198,8 +242,9 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
       numPins: validation.numPins,
       type,
       ...(type === 'twoSided' ? { twoSidedOrientation } : {}),
+      ...(type === 'zigzag' ? { zigzagOrientation } : {}),
     });
-  }, [numPinsText, type, twoSidedOrientation, onConfirm]);
+  }, [numPinsText, type, twoSidedOrientation, zigzagOrientation, onConfirm]);
 
   // Handle Enter key to trigger OK button
   useEffect(() => {
@@ -233,6 +278,54 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
         .number-input-large-spinners::-webkit-inner-spin-button {
           margin-right: 4px;
         }
+
+        .custom-radio {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 2px solid #ccc;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #fff;
+          transition: all 0.2s ease;
+          position: relative;
+          box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .custom-radio.selected {
+          border-color: #4CAF50;
+          background: #fff;
+        }
+
+        .custom-radio.selected::after {
+          content: '';
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: #4CAF50;
+        }
+
+        .radio-label {
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          transition: background 0.2s;
+        }
+
+        .radio-label:hover {
+          background: #f5f5f5;
+        }
+
+        .radio-label:hover .custom-radio {
+          border-color: #999;
+        }
+
+        .radio-label:hover .custom-radio.selected {
+          border-color: #45a049;
+        }
       `}</style>
     <div
       style={{
@@ -256,11 +349,11 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
       <div
         style={{
           backgroundColor: '#fff',
-          padding: '20px',
-          borderRadius: '8px',
-            minWidth: '320px',
-            maxWidth: '380px',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          padding: '24px',
+          borderRadius: '12px',
+          minWidth: '500px',
+          maxWidth: '650px',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -269,117 +362,136 @@ export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
         </h2>
 
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#222', fontWeight: 500 }}>
+          <label style={{ display: 'block', marginBottom: '10px', color: '#222', fontWeight: 500 }}>
             Arrangement:
           </label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          
+          {/* Group 1: Linear and 4-Sided */}
+          <div style={{ display: 'flex', gap: '20px', marginBottom: '15px' }}>
+            <label className="radio-label">
               <input
                 type="radio"
+                name="arrangement"
                 value="linear"
                 checked={type === 'linear'}
-                onChange={(e) => {
-                  const newType = e.target.value as ComponentType;
-                  setType(newType);
-                  // Re-validate when arrangement type changes
-                  const validation = validateNumPins(numPinsText, newType);
-                  if (validation.error) {
-                    setError(validation.error);
-                  } else {
-                    setError('');
-                  }
+                onChange={() => {
+                  setType('linear');
+                  const validation = validateNumPins(numPinsText, 'linear');
+                  setError(validation.error || '');
                 }}
-                style={{ marginRight: '8px' }}
+                style={{ display: 'none' }}
               />
-              <span style={{ color: '#222' }}>Linear (1 side)</span>
+              <div className={`custom-radio ${type === 'linear' ? 'selected' : ''}`} style={{ marginRight: '10px' }}></div>
+              <span style={{ color: '#222', fontSize: '15px' }}>Linear (1 side)</span>
               <LinearIconSVG />
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+            <label className="radio-label">
               <input
                 type="radio"
-                value="twoSided"
-                checked={type === 'twoSided'}
-                onChange={(e) => {
-                  const newType = e.target.value as ComponentType;
-                  setType(newType);
-                  // Re-validate when arrangement type changes
-                  const validation = validateNumPins(numPinsText, newType);
-                  if (validation.error) {
-                    setError(validation.error);
-                  } else {
-                    setError('');
-                  }
-                }}
-                style={{ marginRight: '8px' }}
-              />
-              <span style={{ color: '#222' }}>2-Sided</span>
-              <TwoSidedIconSVG />
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-              <input
-                type="radio"
+                name="arrangement"
                 value="fourSided"
                 checked={type === 'fourSided'}
-                onChange={(e) => {
-                  const newType = e.target.value as ComponentType;
-                  setType(newType);
-                  // Re-validate when arrangement type changes
-                  const validation = validateNumPins(numPinsText, newType);
-                  if (validation.error) {
-                    setError(validation.error);
-                  } else {
-                    setError('');
-                  }
+                onChange={() => {
+                  setType('fourSided');
+                  const validation = validateNumPins(numPinsText, 'fourSided');
+                  setError(validation.error || '');
                 }}
-                style={{ marginRight: '8px' }}
+                style={{ display: 'none' }}
               />
-              <span style={{ color: '#222' }}>4-Sided</span>
+              <div className={`custom-radio ${type === 'fourSided' ? 'selected' : ''}`} style={{ marginRight: '10px' }}></div>
+              <span style={{ color: '#222', fontSize: '15px' }}>4-Sided IC</span>
               <FourSidedIconSVG />
+            </label>
+          </div>
+
+          <hr style={{ border: 'none', borderTop: '1px solid #ddd', margin: '15px 0' }} />
+
+          {/* Group 2: 2-Sided IC and Zig-Zag */}
+          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '20px 30px', alignItems: 'center' }}>
+            <div style={{ gridColumn: '2 / 3', color: '#555', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>Vertical {isPad ? 'Pads' : 'Vias'}</div>
+            <div style={{ gridColumn: '3 / 4', color: '#555', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>Horizontal {isPad ? 'Pads' : 'Vias'}</div>
+            
+            {/* 2-Sided IC Row */}
+            <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>2-Sided IC:</div>
+            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+              <input
+                type="radio"
+                name="arrangement"
+                checked={type === 'twoSided' && twoSidedOrientation === 'vertical-edges'}
+                onChange={() => {
+                  setType('twoSided');
+                  setTwoSidedOrientation('vertical-edges');
+                  const validation = validateNumPins(numPinsText, 'twoSided');
+                  setError(validation.error || '');
+                }}
+                style={{ display: 'none' }}
+              />
+              <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'vertical-edges' ? 'selected' : ''}`}></div>
+              <TwoSidedIconSVG />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+              <input
+                type="radio"
+                name="arrangement"
+                checked={type === 'twoSided' && twoSidedOrientation === 'horizontal-edges'}
+                onChange={() => {
+                  setType('twoSided');
+                  setTwoSidedOrientation('horizontal-edges');
+                  const validation = validateNumPins(numPinsText, 'twoSided');
+                  setError(validation.error || '');
+                }}
+                style={{ display: 'none' }}
+              />
+              <div className={`custom-radio ${type === 'twoSided' && twoSidedOrientation === 'horizontal-edges' ? 'selected' : ''}`}></div>
+              <TwoSidedIconSVG rotate={90} />
+            </label>
+
+            {/* Zig-Zag Row */}
+            <div style={{ color: '#222', fontSize: '15px', fontWeight: 500 }}>Zig-Zag:</div>
+            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+              <input
+                type="radio"
+                name="arrangement"
+                checked={type === 'zigzag' && zigzagOrientation === 'vertical'}
+                onChange={() => {
+                  setType('zigzag');
+                  setZigZagOrientation('vertical');
+                  const validation = validateNumPins(numPinsText, 'zigzag');
+                  setError(validation.error || '');
+                }}
+                style={{ display: 'none' }}
+              />
+              <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'vertical' ? 'selected' : ''}`}></div>
+              <ZigZagIconSVG />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', cursor: 'pointer', gap: '12px', justifyContent: 'center' }} className="radio-label">
+              <input
+                type="radio"
+                name="arrangement"
+                checked={type === 'zigzag' && zigzagOrientation === 'horizontal'}
+                onChange={() => {
+                  setType('zigzag');
+                  setZigZagOrientation('horizontal');
+                  const validation = validateNumPins(numPinsText, 'zigzag');
+                  setError(validation.error || '');
+                }}
+                style={{ display: 'none' }}
+              />
+              <div className={`custom-radio ${type === 'zigzag' && zigzagOrientation === 'horizontal' ? 'selected' : ''}`}></div>
+              <ZigZagIconSVG rotate={90} />
             </label>
           </div>
         </div>
 
-        {type === 'twoSided' && (
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', color: '#222', fontWeight: 500 }}>
-              Orientation:
-            </label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  value="vertical-edges"
-                  checked={twoSidedOrientation === 'vertical-edges'}
-                  onChange={(e) => setTwoSidedOrientation(e.target.value as TwoSidedOrientation)}
-                  style={{ marginRight: '8px' }}
-                />
-                <span style={{ color: '#222' }}>Vertical {isPad ? 'Pads' : 'Vias'} (left & right)</span>
-                <VerticalOrientationSVG />
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                <input
-                  type="radio"
-                  value="horizontal-edges"
-                  checked={twoSidedOrientation === 'horizontal-edges'}
-                  onChange={(e) => setTwoSidedOrientation(e.target.value as TwoSidedOrientation)}
-                  style={{ marginRight: '8px' }}
-                />
-                <span style={{ color: '#222' }}>Horizontal {isPad ? 'Pads' : 'Vias'} (top & bottom)</span>
-                <HorizontalOrientationSVG />
-              </label>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block', marginBottom: '5px', color: '#222', fontWeight: 500 }}>
-            Number of Pins:
-          </label>
-          <input
-            type="number"
-            min={type === 'linear' ? 1 : type === 'twoSided' ? 2 : 4}
-            step={type === 'linear' ? 1 : type === 'twoSided' ? 2 : 4}
-            value={numPinsText}
+    <div style={{ marginBottom: '15px' }}>
+      <label style={{ display: 'block', marginBottom: '5px', color: '#222', fontWeight: 500 }}>
+        Number of Pins:
+      </label>
+      <input
+        type="number"
+        min={type === 'linear' ? 1 : (type === 'twoSided' || type === 'zigzag') ? 2 : 4}
+        step={type === 'linear' ? 1 : (type === 'twoSided' || type === 'zigzag') ? 2 : 4}
+        value={numPinsText}
             onChange={(e) => handleNumPinsChange(e.target.value)}
             onBlur={() => {
               const validation = validateNumPins(numPinsText, type);

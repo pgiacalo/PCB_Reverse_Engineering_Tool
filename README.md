@@ -1,4 +1,4 @@
-# PCB Reverse Engineering Tool v3.1
+# PCB Reverse Engineering Tool v3.4.0
 
 ![PCB Tracer Screenshot](images/PCB_Tracer_Image.png)
 
@@ -8,6 +8,7 @@ A powerful, browser-based tool designed for reverse engineering, troubleshooting
 
 - **Load PCB images** from multiple layers and overlay them with precise alignment
 - **Annotate components, traces, vias, pads, power nodes, and ground connections** directly on your PCB photos
+- **Automated pin/pad arrangements**: Rapidly place multiple pins or pads in Linear, 2-Sided, 4-Sided, or Zig-Zag patterns
 - **Transform and align images** with pixel-perfect precision using move, rotate, scale, and perspective correction tools
 - **Trace signal paths through multi-layer PCBs** - The tool provides a **virtual PCB x-ray**, enabling you to easily visualize and follow signal paths across multiple layers by overlaying top and bottom images with adjustable transparency
 - **Document your analysis** with comprehensive annotations and notes
@@ -87,4 +88,4 @@ For support, questions, bug reports, or feature requests:
 
 ---
 
-*Version: 3.1*
+*Version: 3.4.0*

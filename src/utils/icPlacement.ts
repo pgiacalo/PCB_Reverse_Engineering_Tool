@@ -72,6 +72,15 @@ function validateInput(input: ComponentInput): void {
     }
   }
   
+  if (input.type === 'zigzag') {
+    if (input.numPins % 2 !== 0) {
+      throw new Error("Zig-Zag arrangement requires an even number of pins.");
+    }
+    if (!input.zigzagOrientation) {
+      throw new Error("Orientation required for Zig-Zag arrangement.");
+    }
+  }
+
   if (Math.abs(input.point1.x - input.point2.x) < 0.001 || Math.abs(input.point1.y - input.point2.y) < 0.001) {
     throw new Error("Area must have non-zero width and height.");
   }
@@ -395,6 +404,143 @@ function generateRectangularPads(input: ComponentInput, corners: RectangleCorner
 }
 
 /**
+ * Generate zig-zag arrangement
+ */
+function generateZigZagPads(input: ComponentInput): PadLocation[] {
+  const { point1, point2, numPins, zigzagOrientation: orientation } = input;
+  const x1 = point1.x;
+  const y1 = point1.y;
+  const x2 = point2.x;
+  const y2 = point2.y;
+  const totalDots = numPins;
+
+  // Calculate bounding rectangle
+  const minX = Math.min(x1, x2);
+  const maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  
+  // Determine quadrant of Point 2 relative to Point 1
+  const isPoint2ToRight = x2 > x1;
+  const isPoint2Below = y2 > y1;
+  
+  const pads: PadLocation[] = [];
+  
+  if (orientation === "vertical") {
+    // Vertical orientation: 2 columns, totalDots/2 rows
+    const numRows = totalDots / 2;
+    const numColumns = 2;
+    
+    // Calculate spacing
+    const columnSpacing = maxX - minX;
+    const rowSpacing = numRows > 1 ? (maxY - minY) / (numRows - 1) : 0;
+    
+    // Determine pattern based on click positions
+    let startColumn: number, startRow: number, rowDirection: number;
+    
+    if (isPoint2ToRight && isPoint2Below) {
+      // Pattern 1: Start top-left, move right then diagonal down-left
+      startColumn = 0;
+      startRow = 0;
+      rowDirection = 1;
+    } else if (!isPoint2ToRight && isPoint2Below) {
+      // Pattern 2: Start top-right, move left then diagonal down-right
+      startColumn = 1;
+      startRow = 0;
+      rowDirection = 1;
+    } else if (isPoint2ToRight && !isPoint2Below) {
+      // Pattern 3: Start bottom-left, move right then diagonal up-left
+      startColumn = 0;
+      startRow = numRows - 1;
+      rowDirection = -1;
+    } else {
+      // Pattern 4: Start bottom-right, move left then diagonal up-right
+      startColumn = 1;
+      startRow = numRows - 1;
+      rowDirection = -1;
+    }
+    
+    let currentRow = startRow;
+    let dotId = 1;
+    
+    for (let row = 0; row < numRows; row++) {
+      // First dot: starting column
+      let dotX = minX + startColumn * columnSpacing;
+      let dotY = minY + currentRow * rowSpacing;
+      pads.push({ pinNumber: dotId, x: dotX, y: dotY });
+      dotId++;
+      
+      // Second dot: opposite column
+      const oppositeColumn = 1 - startColumn;
+      dotX = minX + oppositeColumn * columnSpacing;
+      dotY = minY + currentRow * rowSpacing;
+      pads.push({ pinNumber: dotId, x: dotX, y: dotY });
+      dotId++;
+      
+      // Move to next row
+      currentRow += rowDirection;
+    }
+    
+  } else { // horizontal
+    // Horizontal orientation: 2 rows, totalDots/2 columns
+    const numRows = 2;
+    const numColumns = totalDots / 2;
+    
+    // Calculate spacing
+    const columnSpacing = numColumns > 1 ? (maxX - minX) / (numColumns - 1) : 0;
+    const rowSpacing = maxY - minY;
+    
+    // Determine pattern based on click positions
+    let startRow: number, startColumn: number, columnDirection: number;
+    
+    if (isPoint2ToRight && isPoint2Below) {
+      // Pattern 5: Start top-left, move down then diagonal right-up
+      startRow = 0;
+      startColumn = 0;
+      columnDirection = 1;
+    } else if (!isPoint2ToRight && isPoint2Below) {
+      // Pattern 6: Start top-right, move down then diagonal left-up
+      startRow = 0;
+      startColumn = numColumns - 1;
+      columnDirection = -1;
+    } else if (isPoint2ToRight && !isPoint2Below) {
+      // Pattern 7: Start bottom-left, move up then diagonal right-down
+      startRow = 1;
+      startColumn = 0;
+      columnDirection = 1;
+    } else {
+      // Pattern 8: Start bottom-right, move up then diagonal left-down
+      startRow = 1;
+      startColumn = numColumns - 1;
+      columnDirection = -1;
+    }
+    
+    let currentColumn = startColumn;
+    let dotId = 1;
+    
+    for (let col = 0; col < numColumns; col++) {
+      // First dot: starting row
+      let dotX = minX + currentColumn * columnSpacing;
+      let dotY = minY + startRow * rowSpacing;
+      pads.push({ pinNumber: dotId, x: dotX, y: dotY });
+      dotId++;
+      
+      // Second dot: opposite row
+      const oppositeRow = 1 - startRow;
+      dotX = minX + currentColumn * columnSpacing;
+      dotY = minY + oppositeRow * rowSpacing;
+      pads.push({ pinNumber: dotId, x: dotX, y: dotY });
+      dotId++;
+      
+      // Move to next column
+      currentColumn += columnDirection;
+    }
+  }
+  
+  return pads;
+}
+
+/**
  * Main entry point to generate pads
  */
 export function generateICPlacementPads(input: ComponentInput): PadLocation[] {
@@ -404,6 +550,8 @@ export function generateICPlacementPads(input: ComponentInput): PadLocation[] {
   
   if (input.type === 'linear') {
     return generateLinearPads(input, corners);
+  } else if (input.type === 'zigzag') {
+    return generateZigZagPads(input);
   } else {
     return generateRectangularPads(input, corners);
   }

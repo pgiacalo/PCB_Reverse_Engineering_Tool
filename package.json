@@ -1,7 +1,7 @@
 {
   "name": "pcb-reverse-engineer",
   "private": true,
-  "version": "3.3.1",
+  "version": "3.4.0",
   "type": "module",
   "author": "Philip L. Giacalone",
   "homepage": "https://pcbtracer.com",

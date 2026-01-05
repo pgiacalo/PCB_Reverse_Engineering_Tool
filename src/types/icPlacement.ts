@@ -13,15 +13,17 @@ export interface PadLocation {
   y: number;
 }
 
-export type ComponentType = 'linear' | 'twoSided' | 'fourSided';
+export type ComponentType = 'linear' | 'twoSided' | 'fourSided' | 'zigzag';
 
-// For 2-sided, specifies which edges have pins
+// For 2-sided and zig-zag, specifies which edges/directions have pins
 export type TwoSidedOrientation = 'vertical-edges' | 'horizontal-edges';
+export type ZigZagOrientation = 'vertical' | 'horizontal';
 
 export interface ComponentInput {
   numPins: number;
   type: ComponentType;
   twoSidedOrientation?: TwoSidedOrientation; // Required if type is 'twoSided'
+  zigzagOrientation?: ZigZagOrientation; // Required if type is 'zigzag'
   point1: Point; // User click (Pin 1 location)
   point2: Point; // User release (Diagonally opposite)
 }

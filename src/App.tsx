@@ -4590,6 +4590,7 @@ function App() {
             numPins: options.numPins,
             type: options.type,
             twoSidedOrientation: options.twoSidedOrientation,
+            zigzagOrientation: options.zigzagOrientation,
             point1: area.start,
             point2: area.end,
           });
@@ -16645,6 +16646,7 @@ function App() {
             numPins: options.numPins,
             type: options.type,
             twoSidedOrientation: options.twoSidedOrientation,
+            zigzagOrientation: options.zigzagOrientation,
             point1: { x: 0, y: 0 }, // Will be set on click
             point2: { x: 0, y: 0 }, // Will be set on release
           } as ICComponentInput);

@@ -350,6 +350,14 @@ export const TransformAllDialog: React.FC<TransformAllDialogProps> = ({
             Rotate (clockwise):
           </div>
           <button
+            onClick={() => handleRotate(45)}
+            style={buttonStyle()}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f0f0')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          >
+            Rotate 45°
+          </button>
+          <button
             onClick={() => handleRotate(90)}
             style={buttonStyle()}
             onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f0f0')}
