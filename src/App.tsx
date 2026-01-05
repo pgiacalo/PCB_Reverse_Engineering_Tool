@@ -4036,8 +4036,8 @@ function App() {
         clearTimeout(hoverDebounceTimeoutRef.current);
       }
       
-      // Debounce hover detection with 150ms delay to reduce expensive tooltip renders
-      // This prevents rapid re-renders when moving mouse quickly over components
+      // Debounce hover detection with 50ms delay to reduce excessive renders
+      // while keeping the UI feeling responsive
       hoverDebounceTimeoutRef.current = window.setTimeout(() => {
         hoverDebounceTimeoutRef.current = null;
         
@@ -4116,18 +4116,23 @@ function App() {
             // 1. Check if mouse is over a pad/via (simple circle hit test)
             // 2. If yes, look up which IC pins connect to it (reverse lookup)
             // 3. Display the connection info
-            const padHitTolerance = Math.max(8 / viewScale, 4);
+            // Use a small tolerance - we want precise hits on the actual pad
+            const padHitTolerance = Math.max(4 / viewScale, 2);
             
-            // Step 1: Find pad/via under mouse
+            // Step 1: Find the CLOSEST pad/via under mouse (not just the first one)
             let hitPadVia: { stroke: DrawingStroke; pointId: number } | null = null;
+            let closestDistance = Infinity;
+            
             for (const stroke of drawingStrokes) {
               if ((stroke.type === 'via' || stroke.type === 'pad') && stroke.points.length > 0) {
                 const point = stroke.points[0];
                 const radius = Math.max(stroke.size / 2, 4);
                 const d = Math.hypot(point.x - x, point.y - y);
-                if (d <= radius + padHitTolerance && point.id !== undefined) {
+                // Check if within hit range AND closer than any previous hit
+                if (d <= radius + padHitTolerance && point.id !== undefined && d < closestDistance) {
                   hitPadVia = { stroke, pointId: point.id };
-                  break;
+                  closestDistance = d;
+                  // Don't break - keep looking for closer pads
                 }
               }
             }
@@ -4194,7 +4199,7 @@ function App() {
             }
           }
         }
-      }, 150); // 150ms debounce delay
+      }, 50); // 50ms debounce delay - responsive but prevents excessive renders
     } else {
       // Clear all hover states when Option key is released
       if (hoverDebounceTimeoutRef.current !== null) {
