@@ -429,7 +429,6 @@ function generateZigZagPads(input: ComponentInput): PadLocation[] {
   if (orientation === "vertical") {
     // Vertical orientation: 2 columns, totalDots/2 rows
     const numRows = totalDots / 2;
-    const numColumns = 2;
     
     // Calculate spacing
     const columnSpacing = maxX - minX;
@@ -483,7 +482,6 @@ function generateZigZagPads(input: ComponentInput): PadLocation[] {
     
   } else { // horizontal
     // Horizontal orientation: 2 rows, totalDots/2 columns
-    const numRows = 2;
     const numColumns = totalDots / 2;
     
     // Calculate spacing

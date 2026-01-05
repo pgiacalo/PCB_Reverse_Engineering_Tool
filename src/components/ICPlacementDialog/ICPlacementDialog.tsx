@@ -137,9 +137,6 @@ const MicrochipIconSVG = ({ rotate = 0 }: { rotate?: number }) => {
   );
 };
 
-const VerticalOrientationSVG = () => <MicrochipIconSVG rotate={0} />;
-const HorizontalOrientationSVG = () => <MicrochipIconSVG rotate={90} />;
-
 export const ICPlacementDialog: React.FC<ICPlacementDialogProps> = ({
   visible,
   isPad,
