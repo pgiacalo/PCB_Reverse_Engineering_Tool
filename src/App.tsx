@@ -4113,7 +4113,16 @@ function App() {
             
             // Connection line hover detection (throttled and optimized)
             // Only for semiconductor connections
+            // Disabled at high zoom (> 6x) to prevent performance issues and crashes
             const connectionHitTolerance = Math.max(6 / viewScale, 3);
+            
+            // Skip connection hover detection at high zoom levels
+            if (viewScale > 6) {
+              if (lastHoverStateRef.current?.type === 'connection') {
+                setHoverConnection(null);
+                lastHoverStateRef.current = null;
+              }
+            } else {
             
             // Helper function to calculate distance from point to line segment
             const pointToLineDistance = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
@@ -4252,6 +4261,7 @@ function App() {
                 lastHoverStateRef.current = null;
               }
             }
+            } // End of viewScale <= 6 check
           }
         }
       }, 150); // 150ms debounce delay

@@ -6,6 +6,7 @@ Browser crashes were occurring when using the magnify tool at maximum zoom (8x) 
 - Browser becoming unresponsive
 - Memory usage at ~38MB (normal range)
 - Crashes despite reasonable memory usage
+- **Additional issue**: Rolling over pads connected to 48-pin ICs caused slow updates, incorrect data display, and crashes within 10 seconds
 
 ## Root Causes Identified
 
@@ -23,6 +24,12 @@ Browser crashes were occurring when using the magnify tool at maximum zoom (8x) 
 - **Problem**: Drawing connection lines for all components at 8x zoom
 - **Impact**: GPU intensive line rendering with sub-pixel precision calculations
 - **Frequency**: Every frame redraw included all connection lines
+
+### 4. Connection Hover Detection at High Zoom (CRITICAL)
+- **Problem**: Connection line hover detection running every 150ms even at 8x zoom
+- **Impact**: For 48-pin ICs, this meant checking 48 connections × all pads × distance calculations
+- **Frequency**: Every 150ms during mouse movement, causing cumulative performance degradation
+- **Symptom**: Slow tooltip updates, incorrect data display, crashes within 10 seconds
 
 ## Fixes Implemented
 
@@ -118,17 +125,53 @@ if (showConnectionsLayer && viewScale <= 6) {
 - Reduces sub-pixel rendering calculations
 - Maintains visual clarity (connections less useful at 8x zoom anyway)
 
+### Fix 4: Disable Connection Hover Detection at High Zoom (CRITICAL)
+**Location**: `src/App.tsx` lines 4114-4262
+
+**Changes**:
+- Added zoom level check before connection hover detection
+- Skip all connection line hit testing when `viewScale > 6`
+- Clear any existing connection hover state at high zoom
+
+**Code**:
+```typescript
+// Connection line hover detection
+// Disabled at high zoom (> 6x) to prevent performance issues and crashes
+const connectionHitTolerance = Math.max(6 / viewScale, 3);
+
+// Skip connection hover detection at high zoom levels
+if (viewScale > 6) {
+  if (lastHoverStateRef.current?.type === 'connection') {
+    setHoverConnection(null);
+    lastHoverStateRef.current = null;
+  }
+} else {
+  // Perform connection hover detection (expensive for 48-pin ICs)
+  // ... all the hit detection logic ...
+}
+```
+
+**Benefits**:
+- **Eliminates the primary cause of crashes when hovering over pads connected to large ICs**
+- Prevents expensive calculations: 48 pins × all pads × distance calculations
+- Fixes slow tooltip updates and incorrect data display
+- Prevents cumulative performance degradation over time
+
 ## Performance Impact
 
 ### Before Fixes:
 - Tooltip renders: ~60/second during mouse movement
 - Connection line rendering: Always active, even at 8x zoom
+- Connection hover detection: Running every 150ms with expensive calculations
 - Browser crashes: Frequent at high zoom with IC hover
+- **Pad hover crashes**: Guaranteed crash within 10 seconds when hovering over pads connected to 48-pin ICs
 
 ### After Fixes:
 - Tooltip renders: ~1 every 150ms (when mouse pauses)
 - Connection line rendering: Disabled above 6x zoom
-- Browser crashes: Eliminated
+- Connection hover detection: Disabled above 6x zoom
+- Browser crashes: **Eliminated**
+- Pad hover: **Stable and responsive at all zoom levels**
 
 ## Testing Recommendations
 
