@@ -125,53 +125,71 @@ if (showConnectionsLayer && viewScale <= 6) {
 - Reduces sub-pixel rendering calculations
 - Maintains visual clarity (connections less useful at 8x zoom anyway)
 
-### Fix 4: Disable Connection Hover Detection at High Zoom (CRITICAL)
-**Location**: `src/App.tsx` lines 4114-4262
+### Fix 4: COMPLETELY DISABLE Connection Hover Detection (CRITICAL - FINAL FIX)
+**Location**: `src/App.tsx` lines 4114-4130
 
-**Changes**:
-- Added zoom level check before connection hover detection
-- Skip all connection line hit testing when `viewScale > 6`
-- Clear any existing connection hover state at high zoom
+**Problem Analysis**:
+The connection hover detection had O(components × pins × strokes) complexity:
+- Every 150ms when hovering over pads
+- For each IC: calls `resolveComponentDefinition()` 
+- For 48-pin ICs: builds map of 48 connections
+- Searches ALL `drawingStrokes` up to 48 times per IC
+- Calculates distance to all 48 connection lines
+
+Even with debouncing and zoom limits, this was causing crashes at moderate zoom levels (1x-6x) when hovering over pads connected to 48-pin ICs.
+
+**Solution**:
+Completely disabled the connection hover detection feature. The entire algorithm has been removed and replaced with a simple cleanup of any existing hover state.
 
 **Code**:
 ```typescript
-// Connection line hover detection
-// Disabled at high zoom (> 6x) to prevent performance issues and crashes
-const connectionHitTolerance = Math.max(6 / viewScale, 3);
-
-// Skip connection hover detection at high zoom levels
-if (viewScale > 6) {
-  if (lastHoverStateRef.current?.type === 'connection') {
-    setHoverConnection(null);
-    lastHoverStateRef.current = null;
-  }
-} else {
-  // Perform connection hover detection (expensive for 48-pin ICs)
-  // ... all the hit detection logic ...
+// Connection line hover detection - DISABLED
+// This feature was causing browser crashes when hovering over pads
+// connected to ICs with 48+ pins. The O(components × pins × strokes)
+// complexity made it too expensive even at moderate zoom levels.
+// 
+// The visual connection lines are still displayed (when zoom <= 6x),
+// but hovering over them no longer shows pin info tooltips.
+if (lastHoverStateRef.current?.type === 'connection') {
+  setHoverConnection(null);
+  lastHoverStateRef.current = null;
 }
 ```
 
-**Benefits**:
-- **Eliminates the primary cause of crashes when hovering over pads connected to large ICs**
-- Prevents expensive calculations: 48 pins × all pads × distance calculations
-- Fixes slow tooltip updates and incorrect data display
-- Prevents cumulative performance degradation over time
+**What Users Lose**:
+- Hovering over connection lines no longer shows pin info tooltips
+- This was a minor convenience feature
+
+**What Users Keep**:
+- Visual connection lines (at zoom ≤ 6x)
+- Component hover tooltips (with full pin tables)
+- Test point hover tooltips
+- All other functionality
+
+**Future Improvement**:
+To re-enable this feature, the algorithm would need spatial indexing (e.g., R-tree or quadtree) to avoid O(n²) iteration on every mouse move.
 
 ## Performance Impact
 
 ### Before Fixes:
 - Tooltip renders: ~60/second during mouse movement
 - Connection line rendering: Always active, even at 8x zoom
-- Connection hover detection: Running every 150ms with expensive calculations
+- Connection hover detection: Running every 150ms with O(n²) calculations
 - Browser crashes: Frequent at high zoom with IC hover
 - **Pad hover crashes**: Guaranteed crash within 10 seconds when hovering over pads connected to 48-pin ICs
 
 ### After Fixes:
 - Tooltip renders: ~1 every 150ms (when mouse pauses)
 - Connection line rendering: Disabled above 6x zoom
-- Connection hover detection: Disabled above 6x zoom
-- Browser crashes: **Eliminated**
+- Connection hover detection: **COMPLETELY DISABLED** (feature removed)
+- Browser crashes: **ELIMINATED**
 - Pad hover: **Stable and responsive at all zoom levels**
+
+### Trade-off:
+The connection hover tooltip feature (showing pin info when hovering over connection lines) has been removed. This was a minor convenience feature that caused major stability issues with large ICs. Users can still:
+- See visual connection lines (at zoom ≤ 6x)
+- See full pin tables in component hover tooltips
+- See test point notes on hover
 
 ## Testing Recommendations
 
