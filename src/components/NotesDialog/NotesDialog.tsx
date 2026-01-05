@@ -85,7 +85,62 @@ export interface NotesDialogProps {
   onDragStart: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
-const MAX_NOTES_LENGTH = 500;
+const MAX_NOTES_LENGTH = 1000;
+
+interface AutoSizingTextareaProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+}
+
+const AutoSizingTextarea: React.FC<AutoSizingTextareaProps> = ({
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const adjustHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    // Small delay to ensure the DOM has updated and styles are applied
+    const timeoutId = setTimeout(adjustHeight, 0);
+    return () => clearTimeout(timeoutId);
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      style={{
+        width: '100%',
+        minHeight: '50px',
+        padding: '8px',
+        fontSize: '11px',
+        fontFamily: 'sans-serif',
+        backgroundColor: '#fff',
+        color: '#000',
+        border: '1px solid #ccc',
+        borderRadius: 4,
+        resize: 'none',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        display: 'block',
+      }}
+    />
+  );
+};
 
 export const NotesDialog: React.FC<NotesDialogProps> = ({
   visible,
@@ -458,24 +513,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         </div>
                       </div>
                       <div style={{ padding: '8px' }}>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(comp.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(comp.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -510,24 +552,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
                           {point.id && <div>Node ID: {point.id}</div>}
                         </div>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(stroke.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -562,24 +591,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
                           {point.id && <div>Node ID: {point.id}</div>}
                         </div>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(stroke.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -617,24 +633,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
                           {point.id && <div>Node ID: {point.id}</div>}
                         </div>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(stroke.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -664,24 +667,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         </div>
                       </div>
                       <div style={{ padding: '8px' }}>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(stroke.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(stroke.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -716,24 +706,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
                           <div>Node ID: {power.pointId || '(not assigned)'}</div>
                         </div>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(power.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(power.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}
@@ -767,24 +744,11 @@ export const NotesDialog: React.FC<NotesDialogProps> = ({
                         <div style={{ fontSize: '11px', color: '#666', marginBottom: '4px' }}>
                           <div>Node ID: {ground.pointId || '(not assigned)'}</div>
                         </div>
-                        <textarea
+                        <AutoSizingTextarea
                           value={notes}
-                          onChange={(e) => handleNotesChange(ground.id, e.target.value)}
-                          placeholder="Enter notes (max 200 characters)..."
+                          onChange={(val) => handleNotesChange(ground.id, val)}
+                          placeholder={`Enter notes (max ${MAX_NOTES_LENGTH} characters)...`}
                           maxLength={MAX_NOTES_LENGTH}
-                          style={{
-                            width: '100%',
-                            minHeight: '50px',
-                            padding: '8px',
-                            fontSize: '11px',
-                            fontFamily: 'sans-serif',
-                            backgroundColor: '#fff',
-                            color: '#000',
-                            border: '1px solid #ccc',
-                            borderRadius: 4,
-                            resize: 'vertical',
-                            boxSizing: 'border-box',
-                          }}
                         />
                         <div style={{ marginTop: '4px', fontSize: '10px', color: charCount >= MAX_NOTES_LENGTH ? '#d32f2f' : '#666', textAlign: 'right' }}>
                           {charCount} / {MAX_NOTES_LENGTH}

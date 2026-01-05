@@ -148,7 +148,8 @@ function App() {
   // MEMORY MONITORING (Easy to disable - set to false to turn off)
   // ============================================================================
   // To disable memory monitoring, simply change this to false:
-  const ENABLE_MEMORY_MONITOR = true; // Set to false to disable memory monitoring
+  const [showMemoryMonitor, setShowMemoryMonitor] = useState(false); // Hide by default
+  const ENABLE_MEMORY_MONITOR = true; // Still keep monitoring logic available if needed
   // 
   // The memory monitor displays below the canvas, to the left of the x,y coordinates.
   // It shows: "Mem: X.XMB / YYYMB" (used memory / heap limit)
@@ -13669,6 +13670,8 @@ function App() {
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
         setShowPastMachine={setShowPastMachine}
+        showMemoryMonitor={showMemoryMonitor}
+        setShowMemoryMonitor={setShowMemoryMonitor}
         toolRegistry={toolRegistry}
         updateToolSettings={updateToolSettings}
         updateToolLayerSettings={updateToolLayerSettings}
@@ -15190,7 +15193,7 @@ function App() {
           />
           
           {/* Memory monitor display (to the left of coordinates) */}
-          {ENABLE_MEMORY_MONITOR && memoryInfo && (
+          {showMemoryMonitor && ENABLE_MEMORY_MONITOR && memoryInfo && (
             <div
               style={{
                 position: 'absolute',
