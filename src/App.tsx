@@ -13535,7 +13535,9 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>🔧 PCB Tracer</h1>
+        <h1 style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap' }}>
+          🔧 PCB Tracer: <span style={{ fontStyle: 'italic', fontWeight: 400, fontSize: '0.75em' }}>AI Assisted Electronics Tool</span>
+        </h1>
         <a
           href="https://ko-fi.com/onesmallstep"
           target="_blank"
