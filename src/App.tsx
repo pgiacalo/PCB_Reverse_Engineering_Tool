@@ -5591,8 +5591,7 @@ function App() {
       ctx.restore();
     };
     // Draw connection lines from components to their connected nodes (behind components)
-    // Disable at high zoom (> 6x) to prevent performance issues and crashes
-    if (showConnectionsLayer && viewScale <= 6) {
+    if (showConnectionsLayer) {
       // Helper function to find node coordinates from Point ID
       const findNodeCoordinates = (pointIdStr: string): { x: number; y: number } | null => {
         const pointId = parseInt(pointIdStr, 10);

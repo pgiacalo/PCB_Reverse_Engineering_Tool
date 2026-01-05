@@ -100,30 +100,17 @@ return tooltipContent;
 - Particularly effective for ICs with 48+ pins
 - Reduces React reconciliation overhead
 
-### Fix 3: Disable Connection Lines at High Zoom
-**Location**: `src/App.tsx` line 5719
+### Fix 3: Connection Line Rendering (REVERTED)
+**Status**: REVERTED - Connection lines now display at ALL zoom levels
 
-**Changes**:
-- Added zoom level check: only draw connections when `viewScale <= 6`
-- Connections automatically hidden when zooming beyond 6x
+**Reason for reverting**:
+- Drawing connection lines is a GPU operation (cheap)
+- Hiding lines at high zoom was confusing to users
+- The performance issue was in the JavaScript hover detection, not the rendering
 
-**Code**:
-```typescript
-// Before
-if (showConnectionsLayer) {
-  // Draw all connection lines
-}
-
-// After
-if (showConnectionsLayer && viewScale <= 6) {
-  // Draw connection lines only at reasonable zoom levels
-}
-```
-
-**Benefits**:
-- Prevents GPU overload from drawing many thin lines at extreme zoom
-- Reduces sub-pixel rendering calculations
-- Maintains visual clarity (connections less useful at 8x zoom anyway)
+**Current behavior**:
+- Connection lines are always visible when "Connections" layer is enabled
+- This is controlled by the user via the Connections checkbox
 
 ### Fix 4: COMPLETELY DISABLE Connection Hover Detection (CRITICAL - FINAL FIX)
 **Location**: `src/App.tsx` lines 4114-4130
@@ -180,14 +167,14 @@ To re-enable this feature, the algorithm would need spatial indexing (e.g., R-tr
 
 ### After Fixes:
 - Tooltip renders: ~1 every 150ms (when mouse pauses)
-- Connection line rendering: Disabled above 6x zoom
+- Connection line rendering: **Always visible** (GPU operation, cheap)
 - Connection hover detection: **COMPLETELY DISABLED** (feature removed)
 - Browser crashes: **ELIMINATED**
 - Pad hover: **Stable and responsive at all zoom levels**
 
 ### Trade-off:
 The connection hover tooltip feature (showing pin info when hovering over connection lines) has been removed. This was a minor convenience feature that caused major stability issues with large ICs. Users can still:
-- See visual connection lines (at zoom ≤ 6x)
+- See visual connection lines at ALL zoom levels
 - See full pin tables in component hover tooltips
 - See test point notes on hover
 
