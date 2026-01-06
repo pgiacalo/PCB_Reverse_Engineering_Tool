@@ -138,22 +138,22 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         Trace Connections, Find Faults, Decode Designs
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        1) PCB Tracer is now running in your browser.
+        1. PCB Tracer is a free, browser-based application.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        2) Use the File menu to start a new project.
+        2. Use the <strong>File</strong> menu to start a new project.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        3) Use the Images menu to load your PCB photos.
+        3. Use the <strong>Images</strong> menu to load your PCB photos.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
-        4) Use the tools to draw and connect components, traces, etc.
+        4. Use the tools to draw and connect components, traces, and other elements.
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '12px', lineHeight: '1.5', textAlign: 'left' }}>
-        5) See the Help menu for documentation and a tutorial video.
+        5. See the <strong>Help</strong> menu for documentation and a tutorial video.
       </div>
       <div style={{ fontSize: '12px', color: '#666', marginTop: '16px', textAlign: 'center', fontStyle: 'italic', fontWeight: 'bold' }}>
-        Best viewed in browser's full screen mode.
+        Best viewed in browser’s full-screen mode.
       </div>
       </div>
     </div>
