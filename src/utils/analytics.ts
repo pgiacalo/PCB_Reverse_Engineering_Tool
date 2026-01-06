@@ -49,20 +49,16 @@ export function initializeAnalytics(): void {
     return;
   }
 
-  // Initialize dataLayer
+  // Initialize dataLayer and gtag function (Standard Google snippet pattern)
   window.dataLayer = window.dataLayer || [];
-  function gtag(...args: unknown[]): void {
-    window.dataLayer.push(args);
-  }
-  window.gtag = gtag;
+  window.gtag = function gtag() {
+    // eslint-disable-next-line prefer-rest-params
+    window.dataLayer.push(arguments);
+  };
 
   // Configure GA4
-  gtag('js', new Date());
-  gtag('config', ga4Id, {
-    // Additional configuration options can be added here
-    // page_title: document.title,
-    // page_location: window.location.href,
-  });
+  window.gtag('js', new Date());
+  window.gtag('config', ga4Id);
 
   // Load the GA4 script asynchronously
   const script = document.createElement('script');
