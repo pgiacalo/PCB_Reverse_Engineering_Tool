@@ -1143,7 +1143,8 @@ function App() {
   const landmarkAlignment = useLandmarkAlignment({
     topImage,
     bottomImage,
-    setBottomImage
+    setBottomImage,
+    onSetCurrentTool: (tool) => setCurrentTool(tool as Tool)
   });
   
   // Memory monitoring state (only used if ENABLE_MEMORY_MONITOR is true)

@@ -28,6 +28,7 @@ export interface UseLandmarkAlignmentProps {
   topImage: PCBImage | null;
   bottomImage: PCBImage | null;
   setBottomImage: React.Dispatch<React.SetStateAction<PCBImage | null>>;
+  onSetCurrentTool?: (tool: string) => void;
 }
 
 export interface UseLandmarkAlignmentReturn {
@@ -51,7 +52,8 @@ export interface UseLandmarkAlignmentReturn {
 export function useLandmarkAlignment({
   topImage,
   bottomImage,
-  setBottomImage
+  setBottomImage,
+  onSetCurrentTool
 }: UseLandmarkAlignmentProps): UseLandmarkAlignmentReturn {
   const [showDialog, setShowDialog] = useState(false);
   const [step, setStep] = useState<LandmarkStep>('idle');
@@ -73,7 +75,9 @@ export function useLandmarkAlignment({
     setTopLandmarks([]);
     setBottomLandmarks([]);
     setFlipApplied(null);
-  }, []);
+    // Return to select tool when exiting landmark mode
+    onSetCurrentTool?.('select');
+  }, [onSetCurrentTool]);
 
   // Apply flip to bottom image BEFORE landmark selection
   const applyFlip = useCallback((direction: FlipDirection) => {
