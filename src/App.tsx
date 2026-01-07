@@ -8466,10 +8466,10 @@ function App() {
             skewYDeltaDeg = 0.5;
             break;
           case 'ArrowLeft':
-            skewXDeltaDeg = -0.5;
+            skewXDeltaDeg = 0.5;
             break;
           case 'ArrowRight':
-            skewXDeltaDeg = 0.5;
+            skewXDeltaDeg = -0.5;
             break;
           default:
             break;
