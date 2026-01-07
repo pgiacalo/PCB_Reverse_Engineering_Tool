@@ -6651,12 +6651,15 @@ function App() {
       if (toolInstanceId) {
         // Read current size directly from tool instance (source of truth) to avoid stale closure values
         const currentInstance = toolInstanceManager.get(toolInstanceId);
-        const newSize = Math.min(40, currentInstance.size + increment);
+        // Allow larger pad sizes (up to 200) when in landmark mode
+        const isLandmarkMode = landmarkAlignment.step === 'select-top' || landmarkAlignment.step === 'select-bottom';
+        const maxSize = (isLandmarkMode && drawingMode === 'pad') ? 200 : 40;
+        const newSize = Math.min(maxSize, currentInstance.size + increment);
         toolInstanceManager.setSize(toolInstanceId, newSize);
         // brushSize will be synced automatically via useEffect
       }
     }
-  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, saveDefaultSize]);
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, drawingStrokes, areViasLocked, areTracesLocked, arePadsLocked, areTestPointsLocked, areComponentsLocked, arePowerNodesLocked, areGroundNodesLocked, currentTool, drawingMode, saveDefaultSize, landmarkAlignment.step]);
 
   const decreaseSize = useCallback((decrement: number = 1) => {
     if (selectedIds.size > 0 || selectedComponentIds.size > 0 || selectedPowerIds.size > 0 || selectedGroundIds.size > 0) {
