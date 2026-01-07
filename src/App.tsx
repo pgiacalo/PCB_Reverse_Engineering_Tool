@@ -8531,16 +8531,16 @@ function App() {
 
         switch (e.key) {
           case 'ArrowUp':
-            kVDeltaDeg = -0.5;
-            break;
-          case 'ArrowDown':
             kVDeltaDeg = 0.5;
             break;
+          case 'ArrowDown':
+            kVDeltaDeg = -0.5;
+            break;
           case 'ArrowLeft':
-            kHDeltaDeg = -0.5;
+            kHDeltaDeg = 0.5;
             break;
           case 'ArrowRight':
-            kHDeltaDeg = 0.5;
+            kHDeltaDeg = -0.5;
             break;
           default:
             break;
