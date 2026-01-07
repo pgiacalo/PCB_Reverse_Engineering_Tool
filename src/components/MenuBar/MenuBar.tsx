@@ -213,6 +213,8 @@ export interface MenuBarProps {
   onOpenTransformImages: () => void;
   // Transform All Dialog
   onOpenTransformAll: () => void;
+  // Landmark Alignment
+  onLandmarkAlign?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -350,6 +352,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onOpenProjectNotes,
   onOpenTransformImages,
   onOpenTransformAll,
+  onLandmarkAlign,
 }) => {
   // Track which node selection submenu is open (power or ground)
   const [openSelectNodesSubmenu, setOpenSelectNodesSubmenu] = React.useState<'power' | 'ground' | null>(null);
@@ -1058,6 +1061,19 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (areImagesLocked || (!topImage && !bottomImage) || !isProjectActive) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (areImagesLocked || (!topImage && !bottomImage) || !isProjectActive) ? 'not-allowed' : 'pointer' }}
             >
               Reset Transform
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button 
+              onClick={() => { 
+                if (onLandmarkAlign && topImage && bottomImage && !areImagesLocked && isProjectActive) { 
+                  onLandmarkAlign(); 
+                  setOpenMenu(null); 
+                } 
+              }} 
+              disabled={!topImage || !bottomImage || areImagesLocked || !isProjectActive || !onLandmarkAlign}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: (!topImage || !bottomImage || areImagesLocked || !isProjectActive || !onLandmarkAlign) ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: (!topImage || !bottomImage || areImagesLocked || !isProjectActive || !onLandmarkAlign) ? 'not-allowed' : 'pointer' }}
+            >
+              Manual Landmark Alignment…
             </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { if (isProjectActive) { setAreImagesLocked(prev => !prev); setOpenMenu(null); } }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>

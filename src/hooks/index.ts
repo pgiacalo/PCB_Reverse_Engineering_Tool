@@ -50,3 +50,6 @@ export { usePCBConnectivity } from './usePCBConnectivity';
 
 export { useUndo } from './useUndo';
 export type { UndoSnapshot } from './useUndo';
+
+export { useLandmarkAlignment } from './useLandmarkAlignment';
+export type { LandmarkPoint, LandmarkStep, UseLandmarkAlignmentProps, UseLandmarkAlignmentReturn } from './useLandmarkAlignment';

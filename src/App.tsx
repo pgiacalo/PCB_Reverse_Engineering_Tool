@@ -63,6 +63,8 @@ import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
 import { TransformAllDialog } from './components/TransformAllDialog';
+import { LandmarkAlignmentDialog } from './components/LandmarkAlignmentDialog';
+import { useLandmarkAlignment } from './hooks';
 import { ComponentEditor } from './components/ComponentEditor';
 import { ComponentSelectionDialog, type ComponentSelectionMetadata } from './components/ComponentSelectionDialog';
 import { PowerBusManagerDialog } from './components/PowerBusManagerDialog';
@@ -1136,6 +1138,13 @@ function App() {
   const [transformAllDialogVisible, setTransformAllDialogVisible] = useState(false);
   const [isBottomView, setIsBottomView] = useState(false);
   const [mouseWorldPos, setMouseWorldPos] = useState<{ x: number; y: number } | null>(null);
+  
+  // Landmark alignment hook
+  const landmarkAlignment = useLandmarkAlignment({
+    topImage,
+    bottomImage,
+    setBottomImage
+  });
   
   // Memory monitoring state (only used if ENABLE_MEMORY_MONITOR is true)
   const [memoryInfo, setMemoryInfo] = useState<{
@@ -3156,6 +3165,16 @@ function App() {
           padType: padType, // Auto-detected type
         };
         setDrawingStrokes(prev => [...prev, padStroke]);
+        
+        // Check if we're in landmark selection mode and add the point as a landmark
+        if (landmarkAlignment.step === 'select-top' && landmarkAlignment.topLandmarks.length < 4) {
+          console.log('[PAD] Adding top landmark at:', snapped.x, snapped.y);
+          landmarkAlignment.addLandmark({ x: snapped.x, y: snapped.y });
+        } else if (landmarkAlignment.step === 'select-bottom' && landmarkAlignment.bottomLandmarks.length < 4) {
+          console.log('[PAD] Adding bottom landmark at:', snapped.x, snapped.y);
+          landmarkAlignment.addLandmark({ x: snapped.x, y: snapped.y });
+        }
+        
         return;
       }
 
@@ -13799,6 +13818,7 @@ function App() {
         onOpenTestPoints={handleOpenTestPoints}
         onOpenTransformImages={() => setTransformImagesDialogVisible(true)}
         onOpenTransformAll={() => setTransformAllDialogVisible(true)}
+        onLandmarkAlign={landmarkAlignment.openDialog}
       />
 
       <div style={{ display: 'block', padding: 0, margin: 0, width: '100vw', height: 'calc(100vh - 70px)', boxSizing: 'border-box', position: 'relative' }}>
@@ -16635,6 +16655,20 @@ function App() {
         setViewFlipX={setViewFlipX}
         contentBorder={CONTENT_BORDER}
         setTransparency={setTransparency}
+      />
+
+      {/* Landmark Alignment Dialog */}
+      <LandmarkAlignmentDialog
+        visible={landmarkAlignment.showDialog}
+        onClose={landmarkAlignment.closeDialog}
+        onApplyFlip={landmarkAlignment.applyFlip}
+        onStartLandmarkSelection={landmarkAlignment.startSelection}
+        topLandmarks={landmarkAlignment.topLandmarks}
+        bottomLandmarks={landmarkAlignment.bottomLandmarks}
+        onCalculateAlignment={landmarkAlignment.calculateAndApply}
+        onClearLandmarks={landmarkAlignment.clearLandmarks}
+        currentStep={landmarkAlignment.step}
+        flipApplied={landmarkAlignment.flipApplied}
       />
 
       {/* Component Selection Dialog */}
