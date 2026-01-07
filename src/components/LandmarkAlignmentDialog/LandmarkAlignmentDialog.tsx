@@ -193,8 +193,11 @@ export const LandmarkAlignmentDialog: React.FC<LandmarkAlignmentDialogProps> = (
   const bottomCount = bottomLandmarks.length;
   const isReady = topCount === 4 && bottomCount === 4;
 
-  // Auto-configure UI based on current step
+  // Auto-configure UI based on current step (only when dialog is visible)
   useEffect(() => {
+    // Only configure UI when dialog is visible and actively placing landmarks
+    if (!visible) return;
+    
     if (currentStep === 'select-top') {
       // Configure for TOP image landmark placement
       onSetTopImageVisible?.(true);
@@ -211,12 +214,14 @@ export const LandmarkAlignmentDialog: React.FC<LandmarkAlignmentDialogProps> = (
       onSetPadLayer?.('bottom');
       onSetCurrentTool?.('draw');
       onSetDrawingMode?.('pad');
-    } else if (currentStep === 'ready' || currentStep === 'idle') {
-      // Show both images when done or idle
+    } else if (currentStep === 'ready') {
+      // Show both images when alignment is ready to calculate
       onSetTopImageVisible?.(true);
       onSetBottomImageVisible?.(true);
     }
-  }, [currentStep, onSetTopImageVisible, onSetBottomImageVisible, onSetPadColor, onSetPadLayer, onSetCurrentTool, onSetDrawingMode]);
+    // Note: Don't set visibility on 'idle' - let user control checkboxes after dialog closes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, currentStep]);
 
   if (!visible) return null;
 
