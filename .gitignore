@@ -82,12 +82,16 @@ jspm_packages/
 
 # Gatsby files
 .cache/
+
+# Public directory (ignored except for specific files below)
+public
 # Exception: CNAME file is needed for GitHub Pages custom domain
 # Exception: robots.txt and sitemap.xml are needed for SEO
+# Exception: Video files are needed for splash screen
 !public/CNAME
 !public/robots.txt
 !public/sitemap.xml
-public
+!public/*.mp4
 
 # Storybook build outputs
 .out
