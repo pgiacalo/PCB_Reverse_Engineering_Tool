@@ -8,7 +8,7 @@
  * 4. Calculating alignment (translation, scale, rotation)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export interface LandmarkPoint {
   x: number;
@@ -28,6 +28,13 @@ export interface LandmarkAlignmentDialogProps {
   onClearLandmarks: () => void;
   currentStep: 'select-flip' | 'select-top' | 'select-bottom' | 'ready' | 'idle';
   flipApplied: FlipDirection | null;
+  // Callbacks to control app state during landmark placement
+  onSetTopImageVisible?: (visible: boolean) => void;
+  onSetBottomImageVisible?: (visible: boolean) => void;
+  onSetPadColor?: (color: string) => void;
+  onSetPadLayer?: (layer: 'top' | 'bottom') => void;
+  onSetCurrentTool?: (tool: string) => void;
+  onSetDrawingMode?: (mode: string) => void;
 }
 
 // Colors for landmarks
@@ -174,11 +181,42 @@ export const LandmarkAlignmentDialog: React.FC<LandmarkAlignmentDialogProps> = (
   onClearLandmarks,
   currentStep,
   flipApplied,
+  onSetTopImageVisible,
+  onSetBottomImageVisible,
+  onSetPadColor,
+  onSetPadLayer,
+  onSetCurrentTool,
+  onSetDrawingMode,
 }) => {
   const [selectedFlip, setSelectedFlip] = useState<FlipDirection>('horizontal');
   const topCount = topLandmarks.length;
   const bottomCount = bottomLandmarks.length;
   const isReady = topCount === 4 && bottomCount === 4;
+
+  // Auto-configure UI based on current step
+  useEffect(() => {
+    if (currentStep === 'select-top') {
+      // Configure for TOP image landmark placement
+      onSetTopImageVisible?.(true);
+      onSetBottomImageVisible?.(false);
+      onSetPadColor?.(TOP_LANDMARK_COLOR);
+      onSetPadLayer?.('top');
+      onSetCurrentTool?.('draw');
+      onSetDrawingMode?.('pad');
+    } else if (currentStep === 'select-bottom') {
+      // Configure for BOTTOM image landmark placement
+      onSetTopImageVisible?.(false);
+      onSetBottomImageVisible?.(true);
+      onSetPadColor?.(BOTTOM_LANDMARK_COLOR);
+      onSetPadLayer?.('bottom');
+      onSetCurrentTool?.('draw');
+      onSetDrawingMode?.('pad');
+    } else if (currentStep === 'ready' || currentStep === 'idle') {
+      // Show both images when done or idle
+      onSetTopImageVisible?.(true);
+      onSetBottomImageVisible?.(true);
+    }
+  }, [currentStep, onSetTopImageVisible, onSetBottomImageVisible, onSetPadColor, onSetPadLayer, onSetCurrentTool, onSetDrawingMode]);
 
   if (!visible) return null;
 
@@ -455,14 +493,24 @@ export const LandmarkAlignmentDialog: React.FC<LandmarkAlignmentDialogProps> = (
                   textAlign: 'center'
                 }}>
                   {currentStep === 'select-top' && (
-                    <span style={{ color: TOP_LANDMARK_COLOR, fontSize: '13px' }}>
-                      👆 Click 4 landmarks on the <strong>TOP</strong> image (clockwise)
-                    </span>
+                    <div>
+                      <span style={{ color: TOP_LANDMARK_COLOR, fontSize: '13px' }}>
+                        👆 Click 4 landmarks on the <strong>TOP</strong> image
+                      </span>
+                      <div style={{ color: '#888', fontSize: '11px', marginTop: '4px' }}>
+                        Use <strong>+</strong>/<strong>-</strong> keys to adjust pad size
+                      </div>
+                    </div>
                   )}
                   {currentStep === 'select-bottom' && (
-                    <span style={{ color: BOTTOM_LANDMARK_COLOR, fontSize: '13px' }}>
-                      👆 Click the <strong>same 4 features</strong> on the <strong>BOTTOM</strong> image
-                    </span>
+                    <div>
+                      <span style={{ color: BOTTOM_LANDMARK_COLOR, fontSize: '13px' }}>
+                        👆 Click the <strong>same 4 features</strong> on the <strong>BOTTOM</strong> image
+                      </span>
+                      <div style={{ color: '#888', fontSize: '11px', marginTop: '4px' }}>
+                        Use <strong>+</strong>/<strong>-</strong> keys to adjust pad size
+                      </div>
+                    </div>
                   )}
                   {currentStep === 'ready' && (
                     <span style={{ color: '#4CAF50', fontSize: '13px' }}>

@@ -16669,6 +16669,12 @@ function App() {
         onClearLandmarks={landmarkAlignment.clearLandmarks}
         currentStep={landmarkAlignment.step}
         flipApplied={landmarkAlignment.flipApplied}
+        onSetTopImageVisible={setShowTopImage}
+        onSetBottomImageVisible={setShowBottomImage}
+        onSetPadColor={setBrushColor}
+        onSetPadLayer={setPadToolLayer}
+        onSetCurrentTool={(tool) => setCurrentTool(tool as Tool)}
+        onSetDrawingMode={(mode) => setDrawingMode(mode as 'trace' | 'via' | 'pad' | 'testPoint')}
       />
 
       {/* Component Selection Dialog */}
