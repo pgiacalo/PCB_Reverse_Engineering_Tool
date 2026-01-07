@@ -6497,9 +6497,8 @@ function App() {
 
 
   const resetImageTransform = useCallback(() => {
-    // Reset only the selected image to its original transform
-    if (!selectedImageForTransform) return;
-    updateImageTransform(selectedImageForTransform, {
+    // Reset BOTH images to their original transform (when loaded)
+    const defaultTransform = {
       x: 0,
       y: 0,
       scale: 1,
@@ -6512,10 +6511,21 @@ function App() {
       keystoneH: 0,
       brightness: 100,
       contrast: 100,
-    });
+    };
+    
+    // Reset top image if it exists
+    if (topImage) {
+      setTopImage(prev => prev ? { ...prev, ...defaultTransform } : null);
+    }
+    
+    // Reset bottom image if it exists
+    if (bottomImage) {
+      setBottomImage(prev => prev ? { ...prev, ...defaultTransform } : null);
+    }
+    
     // Also restore color mode (global)
     setIsGrayscale(false);
-  }, [updateImageTransform, selectedImageForTransform]);
+  }, [topImage, bottomImage, setTopImage, setBottomImage]);
 
   // Enhanced keyboard functionality for sliders, drawing undo, and image transformation
   // Helper functions for size changes
