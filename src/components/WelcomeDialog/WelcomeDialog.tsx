@@ -96,7 +96,7 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
       {showVideo && (
         <video
           ref={videoRef}
-          src={`${import.meta.env.BASE_URL}SplashLoop.mp4`}
+          src={`${import.meta.env.BASE_URL}TrimmedPCBTracer.mp4`}
           autoPlay
           loop
           muted
