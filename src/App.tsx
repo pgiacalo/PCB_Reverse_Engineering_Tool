@@ -9779,6 +9779,24 @@ function App() {
     setTestPointsDialogVisible(true);
   }, []);
 
+  // Function to open information dialog
+  const handleOpenInformation = useCallback(() => {
+    // Trigger the same logic as pressing 'I' key
+    const debugInfo: string[] = [];
+    
+    // Check selected drawing strokes (vias, traces)
+    if (selectedIds.size > 0) {
+      // Drawing strokes are now displayed in formatted UI sections
+    }
+    
+    if (selectedIds.size === 0 && selectedComponentIds.size === 0 && selectedPowerIds.size === 0 && selectedGroundIds.size === 0) {
+      debugInfo.push('\nNo objects selected.');
+    }
+    
+    const debugText = debugInfo.join('\n');
+    setDebugDialog({ visible: true, text: debugText });
+  }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, setDebugDialog]);
+
   // Initialize dialog position when it opens (load from localStorage or center of screen)
   React.useEffect(() => {
     if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
@@ -14674,6 +14692,32 @@ function App() {
             </div>
             {/* Empty space separator after Color Picker (height = 1 toolbar tool height) */}
             <div style={{ height: 32 }} />
+            {/* Information Icon Button */}
+            <button 
+              onClick={() => { if (!isReadOnlyMode) handleOpenInformation(); }} 
+              disabled={isReadOnlyMode}
+              title="Information (I)" 
+              style={{ 
+                width: '100%', 
+                height: 32, 
+                display: 'flex', 
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '4px 6px',
+                borderRadius: 6, 
+                border: '1px solid #ddd', 
+                background: '#fff',
+                cursor: isReadOnlyMode ? 'not-allowed' : 'pointer',
+                opacity: isReadOnlyMode ? 0.5 : 1,
+              }}
+            >
+              {/* Info icon - blue circle with white 'i' */}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="10" fill="#4A90E2" />
+                <rect x="10.5" y="6" width="3" height="3" rx="1.5" fill="white" />
+                <rect x="10.5" y="11" width="3" height="7" rx="1.5" fill="white" />
+              </svg>
+            </button>
             {/* Project Notes Icon Button */}
             <button 
               onClick={() => { if (!isReadOnlyMode) handleOpenProjectNotes(); }} 

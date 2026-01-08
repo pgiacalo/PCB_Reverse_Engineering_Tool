@@ -31,6 +31,7 @@ interface ToolbarProps {
   onDrawingModeChange?: (mode: 'trace' | 'via' | 'pad' | 'testPoint') => void;
   onProjectNotesClick?: () => void;
   onTestPointsClick?: () => void;
+  onInformationClick?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -45,6 +46,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onDrawingModeChange,
   onProjectNotesClick,
   onTestPointsClick,
+  onInformationClick,
 }) => {
   // Tool definitions with icons (using Unicode symbols for now)
   const tools = [
@@ -201,6 +203,42 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <div className="color-picker-value">{brushColor}</div>
         </div>
       </button>
+
+      {/* Information Icon Button */}
+      {onInformationClick && (
+        <button
+          className="toolbar-icon-button"
+          onClick={onInformationClick}
+          title="Information (I)"
+          aria-label="Open information dialog"
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '2px solid #ccc',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+            e.currentTarget.style.borderColor = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+            e.currentTarget.style.borderColor = '#ccc';
+          }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" fill="#4A90E2" />
+            <rect x="10.5" y="6" width="3" height="3" rx="1.5" fill="white" />
+            <rect x="10.5" y="11" width="3" height="7" rx="1.5" fill="white" />
+          </svg>
+        </button>
+      )}
 
       {/* Project Notes Icon Button */}
       {onProjectNotesClick && (
