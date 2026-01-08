@@ -9962,11 +9962,13 @@ function App() {
       return;
     }
     
-    // When Option key is pressed with via or pad tool, show via/pad cursor (pattern placement mode)
-    const isPatternPlacementMode = isOptionPressed && currentTool === 'draw' && (drawingMode === 'via' || drawingMode === 'pad');
+    // When in IC/Pattern Placement mode, show via or pad cursor
+    const isPatternPlacementActive = isICPlacementMode && (icPlacementIsPad || !icPlacementIsPad);
     
     const kind: 'trace' | 'via' | 'pad' | 'testPoint' | 'erase' | 'magnify' | 'ground' | 'component' | 'power' | 'default' =
-      currentTool === 'erase'
+      isPatternPlacementActive
+        ? (icPlacementIsPad ? 'pad' : 'via')
+        : currentTool === 'erase'
         ? 'erase'
         : currentTool === 'magnify'
         ? 'magnify'
@@ -9978,8 +9980,6 @@ function App() {
         ? 'component'
         : currentTool === 'draw'
         ? (drawingMode === 'via' ? 'via' : drawingMode === 'pad' ? 'pad' : drawingMode === 'testPoint' ? 'testPoint' : 'trace')
-        : isPatternPlacementMode
-        ? (drawingMode === 'via' ? 'via' : 'pad')
         : 'default';
     if (kind === 'default') { setCanvasCursor(undefined); return; }
 
@@ -10311,7 +10311,7 @@ function App() {
     }
     const url = `url(${canvas.toDataURL()}) ${Math.round(cx)} ${Math.round(cy)}, crosshair`;
     setCanvasCursor(url);
-  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, isOptionPressed, selectedComponentType, selectedComponentMetadata, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId]);
+  }, [currentTool, drawingMode, brushColor, brushSize, viewScale, isShiftPressed, isOptionPressed, isICPlacementMode, icPlacementIsPad, selectedComponentType, selectedComponentMetadata, selectedPowerBusId, selectedGroundBusId, powerBuses, groundBuses, toolRegistry, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, toolState.toolInstanceId]);
 
   // Redraw canvas when dependencies change
   React.useEffect(() => {
