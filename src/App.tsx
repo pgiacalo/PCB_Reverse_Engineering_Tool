@@ -1411,6 +1411,7 @@ function App() {
     nodeId: string;
     x: number; // Mouse X for tooltip positioning
     y: number; // Mouse Y for tooltip positioning
+    stroke?: DrawingStroke; // The via/pad stroke for accessing notes
   } | null>(null);
   const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 960, height: 600 });
   // Dialog and file operation states are now managed by useDialogs and useFileOperations hooks (see above)
@@ -4166,7 +4167,8 @@ function App() {
                     pinIndices: hitConnection.pinIndices,
                     nodeId: hitConnection.nodeIdStr,
                     x: mouseClientX,
-                    y: mouseClientY
+                    y: mouseClientY,
+                    stroke: hitPadVia.stroke
                   });
                   lastHoverStateRef.current = { type: 'connection', connectionKey: newKey };
                 }
@@ -15740,6 +15742,26 @@ function App() {
                     )}
                   </div>
                 ))}
+                {hoverConnection.stroke?.notes && hoverConnection.stroke.notes.trim() && (
+                  <div style={{ 
+                    marginTop: '8px',
+                    paddingTop: '8px',
+                    borderTop: '1px solid rgba(255,255,255,0.15)'
+                  }}>
+                    <div style={{ fontSize: '10px', fontWeight: 500, color: '#90caf9', marginBottom: '4px' }}>
+                      Notes:
+                    </div>
+                    <div style={{ 
+                      fontSize: '10px', 
+                      color: '#e0e0e0',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      maxWidth: '280px'
+                    }}>
+                      {hoverConnection.stroke.notes}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
