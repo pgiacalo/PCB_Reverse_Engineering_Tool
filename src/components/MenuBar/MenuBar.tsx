@@ -1545,13 +1545,17 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>About</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  PCB Tracer is a web application that requires no installation. Just point your browser to PCBTracer.com to get started. Use the File menu to start a new project. See the Help menu for both Documentation and a link to a YouTube video, for detailed instructions.
-                </p>
-                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  PCB Tracer is a specialized tool useful for both reverse engineering and troubleshooting printed circuit boards (PCBs) by tracing and documenting circuit connections from photographs. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
+                  PCB Tracer is a specialized tool useful for both troubleshooting and reverse engineering electronics by tracing and documenting printed circuit boards. This application supports typical 2 to 4 layer PCBs and enables comprehensive PCB analysis and documentation.
                 </p>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   This tool can assist in troubleshooting by simplifying circuit tracing, visualizing key datasheet information and storing test results, notes and findings. Visualization, ease of use and centralization of data is a primary design goal.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Zero Installation</h3>
+                <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
+                  PCB Tracer is a web application that requires no installation. Just point your browser to PCBTracer.com to get started. Use the File menu to start a new project. See the Help menu for both Documentation and a link to a YouTube video, for detailed instructions.
                 </p>
               </div>
 
