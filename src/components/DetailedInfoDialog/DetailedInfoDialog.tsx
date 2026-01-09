@@ -981,14 +981,13 @@ export const DetailedInfoDialog: React.FC<DetailedInfoDialogProps> = ({
                       })()}
                       {(comp as any).datasheetFileName && (() => {
                         const datasheetPath = (comp as any).datasheetFileName;
-                        const fileName = datasheetPath.split('/').pop(); // Extract just the filename
                         
-                        // Show static text with note to re-choose the file
+                        // Show the file path (informational only - click component to open in editor)
                         return (
                           <div>
                             Datasheet File:{' '}
-                            <span style={{ color: '#666', fontStyle: 'italic' }} title="Re-choose the datasheet file in Component Properties to open it">
-                              {fileName} (re-choose file to open)
+                            <span style={{ color: '#333' }} title={`Stored in project: ${datasheetPath}`}>
+                              {datasheetPath}
                             </span>
                           </div>
                         );

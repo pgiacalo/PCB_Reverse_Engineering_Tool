@@ -2559,8 +2559,67 @@ Analyze the attached PDF datasheet and extract the information according to the 
                             {fileName}
                           </a>
                         );
+                      } else if (datasheetPath && projectDirHandle) {
+                        // File path exists and project directory is available - lazy load on click
+                        return (
+                          <a
+                            href="#"
+                            onClick={async (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              try {
+                                // Lazy load: Read file from project directory only when clicked
+                                const pathParts = datasheetPath.split('/');
+                                let currentDir = projectDirHandle;
+                                
+                                // Navigate to subdirectory if path includes one (e.g., "datasheets/file.pdf")
+                                for (let i = 0; i < pathParts.length - 1; i++) {
+                                  currentDir = await currentDir.getDirectoryHandle(pathParts[i]);
+                                }
+                                
+                                // Get the file
+                                const fileHandle = await currentDir.getFileHandle(pathParts[pathParts.length - 1]);
+                                const file = await fileHandle.getFile();
+                                
+                                // Create blob URL and open
+                                const blobUrl = URL.createObjectURL(file);
+                                const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                                
+                                if (!newWindow || newWindow.closed) {
+                                  // Fallback: create temporary anchor
+                                  URL.revokeObjectURL(blobUrl);
+                                  const link = document.createElement('a');
+                                  const fallbackBlobUrl = URL.createObjectURL(file);
+                                  link.href = fallbackBlobUrl;
+                                  link.target = '_blank';
+                                  link.rel = 'noopener noreferrer';
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  // Blob URL will be cleaned up by browser when window closes
+                                }
+                                // Note: We don't revoke the blob URL immediately to allow the PDF to load
+                                // The browser will clean it up when the window/tab is closed
+                              } catch (error) {
+                                console.error('Error opening datasheet from project directory:', error);
+                                alert('Failed to open datasheet file. The file may have been moved or deleted from the project directory.');
+                              }
+                            }}
+                            style={{
+                              fontSize: '11px', 
+                              color: '#0066cc', 
+                              whiteSpace: 'nowrap',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              flex: '0 0 auto'
+                            }}
+                            title="Click to open PDF from project directory"
+                          >
+                            {fileName}
+                          </a>
+                        );
                       } else {
-                        // Only filename/path is stored - show static text with note to re-choose
+                        // No file object and no project directory - can't open file
                         return (
                           <span 
                             style={{ 
@@ -2569,9 +2628,9 @@ Analyze the attached PDF datasheet and extract the information according to the 
                               flex: '0 0 auto',
                               fontStyle: 'italic'
                             }}
-                            title="Re-choose the datasheet file to open it"
+                            title="File path stored but project directory not available"
                           >
-                            {fileName} (re-choose file to open)
+                            {fileName} (project directory required)
                           </span>
                         );
                       }
