@@ -45,8 +45,13 @@ import {
 } from '../../utils/aiServices';
 
 // Run migration on module load to preserve any existing Gemini API keys
-  if (typeof window !== 'undefined') {
-  migrateFromLegacyStorage();
+// Wrap in try-catch to prevent crashes if storage is corrupted
+if (typeof window !== 'undefined') {
+  try {
+    migrateFromLegacyStorage();
+  } catch (error) {
+    console.warn('Failed to run storage migration:', error);
+  }
 }
 
 // Helper function to get default abbreviation from component type
@@ -157,7 +162,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // AI Service state - supports multiple providers
   const [selectedProvider, setSelectedProvider] = useState<AIServiceProvider>(() => {
     if (typeof window !== 'undefined') {
-      return getAIConfig().provider;
+      try {
+        return getAIConfig().provider;
+      } catch (error) {
+        console.warn('Failed to load provider from config:', error);
+        return 'gemini';
+      }
     }
     return 'gemini';
   });
@@ -165,8 +175,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // API key input state - must be at top level (React Rules of Hooks)
   const [apiKeyInput, setApiKeyInput] = useState(() => {
     if (typeof window !== 'undefined') {
-      const service = getCurrentService();
-      return service.getApiKey() || '';
+      try {
+        const service = getCurrentService();
+        return service.getApiKey() || '';
+      } catch (error) {
+        console.warn('Failed to load API key:', error);
+        return '';
+      }
     }
     return '';
   });
@@ -174,8 +189,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Model selection state
   const [modelInput, setModelInput] = useState(() => {
     if (typeof window !== 'undefined') {
-      const service = getCurrentService();
-      return service.getModel();
+      try {
+        const service = getCurrentService();
+        return service.getModel();
+      } catch (error) {
+        console.warn('Failed to load model:', error);
+        return 'gemini-2.0-flash';
+      }
     }
     return 'gemini-2.0-flash';
   });
@@ -183,15 +203,25 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // API key storage type (sessionStorage or localStorage)
   const [storageType, setStorageType] = useState<APIKeyStorageType>(() => {
     if (typeof window !== 'undefined') {
-      return getApiKeyStorageType();
+      try {
+        return getApiKeyStorageType();
+      } catch (error) {
+        console.warn('Failed to load storage type:', error);
+        return 'localStorage';
+      }
     }
-    return 'sessionStorage';
+    return 'localStorage';
   });
   
   // Check if API key exists for current provider (for Remove button state)
   const [hasStoredApiKey, setHasStoredApiKey] = useState(() => {
     if (typeof window !== 'undefined') {
-      return getCurrentService().hasApiKey();
+      try {
+        return getCurrentService().hasApiKey();
+      } catch (error) {
+        console.warn('Failed to check for stored API key:', error);
+        return false;
+      }
     }
     return false;
   });
@@ -201,17 +231,27 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
     if (showAiSettingsDialog) {
       // Reload all settings when dialog opens
       if (typeof window !== 'undefined') {
-        const config = getAIConfig();
-        setSelectedProvider(config.provider);
-        setStorageType(config.apiKeyStorageType);
-        
-        const service = getCurrentService();
-        const savedKey = service.getApiKey();
-        const savedModel = service.getModel();
-        
-        setApiKeyInput(savedKey || '');
-        setModelInput(savedModel);
-        setHasStoredApiKey(!!savedKey);
+        try {
+          const config = getAIConfig();
+          setSelectedProvider(config.provider);
+          setStorageType(config.apiKeyStorageType);
+          
+          const service = getCurrentService();
+          const savedKey = service.getApiKey();
+          const savedModel = service.getModel();
+          
+          setApiKeyInput(savedKey || '');
+          setModelInput(savedModel);
+          setHasStoredApiKey(!!savedKey);
+        } catch (error) {
+          // If loading settings fails, use defaults and show dialog anyway
+          console.warn('Failed to load AI settings:', error);
+          setSelectedProvider('gemini');
+          setStorageType('localStorage');
+          setApiKeyInput('');
+          setModelInput('gemini-2.0-flash');
+          setHasStoredApiKey(false);
+        }
       }
       // Use a small timeout to ensure state updates properly
       const timer = setTimeout(() => {
@@ -224,8 +264,13 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Update hasStoredApiKey when provider changes
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const service = getCurrentService();
-      setHasStoredApiKey(service.hasApiKey() || !!apiKeyInput.trim());
+      try {
+        const service = getCurrentService();
+        setHasStoredApiKey(service.hasApiKey() || !!apiKeyInput.trim());
+      } catch (error) {
+        console.warn('Failed to check API key status:', error);
+        setHasStoredApiKey(!!apiKeyInput.trim());
+      }
     }
   }, [apiKeyInput, selectedProvider]);
 

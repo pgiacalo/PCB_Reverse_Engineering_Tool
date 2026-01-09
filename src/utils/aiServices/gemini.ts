@@ -35,17 +35,21 @@ class GeminiService implements AIService {
   readonly info = GEMINI_SERVICE_INFO;
   
   private getStorageType(): APIKeyStorageType {
-    if (typeof window === 'undefined') return 'sessionStorage';
-    const config = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    if (config) {
-      try {
-        const parsed = JSON.parse(config);
-        return parsed.apiKeyStorageType || 'sessionStorage';
-      } catch {
-        return 'sessionStorage';
+    if (typeof window === 'undefined') return 'localStorage';
+    try {
+      const config = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      if (config) {
+        try {
+          const parsed = JSON.parse(config);
+          return parsed.apiKeyStorageType || 'localStorage';
+        } catch {
+          return 'localStorage';
+        }
       }
+    } catch (error) {
+      console.warn('Failed to read storage type from localStorage:', error);
     }
-    return 'sessionStorage';
+    return 'localStorage';
   }
   
   private getStorage(): Storage {
@@ -55,42 +59,81 @@ class GeminiService implements AIService {
   
   getApiKey(): string | null {
     if (typeof window === 'undefined') return null;
-    const storage = this.getStorage();
-    const key = storage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
-    return key?.trim() || null;
+    try {
+      const storage = this.getStorage();
+      const key = storage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+      return key?.trim() || null;
+    } catch (error) {
+      console.warn('Failed to read API key from storage:', error);
+      return null;
+    }
   }
   
   saveApiKey(key: string, storageType: APIKeyStorageType): void {
     if (typeof window === 'undefined') return;
     
-    // Clear from both storages first
-    sessionStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
-    localStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
-    
-    // Save to the selected storage
-    const storage = storageType === 'localStorage' ? localStorage : sessionStorage;
-    storage.setItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`, key.trim());
+    try {
+      // Clear from both storages first (ignore errors)
+      try {
+        sessionStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+      } catch (error) {
+        // Ignore
+      }
+      try {
+        localStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+      } catch (error) {
+        // Ignore
+      }
+      
+      // Save to the selected storage
+      const storage = storageType === 'localStorage' ? localStorage : sessionStorage;
+      storage.setItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`, key.trim());
+    } catch (error) {
+      console.warn('Failed to save API key to storage:', error);
+    }
   }
   
   removeApiKey(): void {
     if (typeof window === 'undefined') return;
-    sessionStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
-    localStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+    try {
+      sessionStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+    } catch (error) {
+      // Ignore
+    }
+    try {
+      localStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+    } catch (error) {
+      // Ignore
+    }
   }
   
   hasApiKey(): boolean {
-    return !!this.getApiKey();
+    try {
+      return !!this.getApiKey();
+    } catch (error) {
+      console.warn('Failed to check for API key:', error);
+      return false;
+    }
   }
   
   getModel(): string {
     if (typeof window === 'undefined') return this.info.defaultModel;
-    const model = localStorage.getItem(`${STORAGE_KEYS.MODEL_PREFIX}${SERVICE_ID}`);
-    return model || this.info.defaultModel;
+    try {
+      const model = localStorage.getItem(`${STORAGE_KEYS.MODEL_PREFIX}${SERVICE_ID}`);
+      return model || this.info.defaultModel;
+    } catch (error) {
+      console.warn('Failed to read model from localStorage:', error);
+      return this.info.defaultModel;
+    }
   }
   
   saveModel(model: string): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(`${STORAGE_KEYS.MODEL_PREFIX}${SERVICE_ID}`, model);
+    try {
+      localStorage.setItem(`${STORAGE_KEYS.MODEL_PREFIX}${SERVICE_ID}`, model);
+    } catch (error) {
+      console.warn('Failed to save model to localStorage:', error);
+    }
   }
   
   getApiUrl(): string | null {
