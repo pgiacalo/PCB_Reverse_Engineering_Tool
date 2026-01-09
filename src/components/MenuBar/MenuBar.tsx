@@ -1555,7 +1555,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               <div style={{ marginBottom: 20 }}>
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Zero Installation</h3>
                 <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                  PCB Tracer is a web application that requires no installation. Just point your browser to PCBTracer.com to get started. Use the File menu to start a new project. See the Help menu for both Documentation and a link to a YouTube video, for detailed instructions.
+                  PCB Tracer is a web application that requires no installation. Just point your browser to PCBTracer.com to get started. Use the File menu to start a new project. See the Help menu for both Documentation and a link to instructional YouTube videos.
                 </p>
               </div>
 
