@@ -1540,7 +1540,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               padding: '16px 20px', 
               borderBottom: '1px solid #444' 
             }}>
-              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.4.1)</h2>
+              <h2 style={{ margin: 0, color: '#f2f2f2', fontSize: '20px', fontWeight: 700 }}>PCBTracer (v3.5.0)</h2>
               <button
                 onClick={() => setShowAboutDialog(false)}
                 style={{
@@ -1595,7 +1595,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>AI Features</p>
                   <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                    Current AI Features simplify the loading of integrated circuit details by parsing PDF datasheets to extract, present and persist essential component properties. Future AI enhancements are planned to streamline workflow and provide circuit analyses, using component properties, netlists, and testing/measurement data.
+                    PCBTracer uses AI to enhance your workflow in two key areas:
+                  </p>
+                  <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
+                    <li><strong>Datasheet Extraction</strong> — Upload PDF datasheets to automatically extract and persist component properties (pin names, types, descriptions)</li>
+                    <li><strong>Intelligent Net Naming</strong> — When exporting netlists, AI analyzes your circuit connectivity and suggests descriptive names for signal nets (e.g., "N$5" → "CLOCK_SIGNAL" or "SPI_MOSI") with confidence scores. Review and approve suggestions before export.</li>
+                  </ul>
+                  <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
+                    Configure your AI provider (Gemini or Claude) and API key in <strong>File → AI Settings</strong>. Future enhancements will include circuit analysis using component properties, netlists, and measurement data.
                   </p>
                 </div>
 
