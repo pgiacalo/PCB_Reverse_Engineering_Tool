@@ -15777,7 +15777,7 @@ function App() {
                   borderRadius: '8px',
                   padding: '30px 40px',
                   boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
-                  maxWidth: '500px',
+                  maxWidth: '550px',
                   textAlign: 'center',
                 }}
               >
@@ -15792,48 +15792,35 @@ function App() {
                   Browser Not Supported
                 </h2>
                 <p style={{ color: '#ccc', margin: '0 0 16px 0', fontSize: '15px', lineHeight: '1.6' }}>
-                  PCB Tracer requires a browser that supports the <strong>File System Access API</strong> for saving and loading projects.
+                  PCB Tracer requires a browser that supports the<br />
+                  <strong>File System Access API</strong> for saving and loading projects.
                 </p>
                 <p style={{ color: '#ccc', margin: '0 0 20px 0', fontSize: '15px', lineHeight: '1.6' }}>
-                  Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>, or another Chromium-based browser for the best experience.
+                  Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>,<br />
+                  or another Chromium-based browser for the best experience.
                 </p>
-                <div style={{ 
-                  background: '#1f1f1f', 
-                  borderRadius: '6px', 
-                  padding: '12px 16px', 
-                  marginBottom: '20px',
-                  fontSize: '13px',
-                  color: '#999',
-                  lineHeight: '1.5'
-                }}>
-                  <strong style={{ color: '#f2f2f2' }}>Detected Browser:</strong> {
-                    (() => {
-                      const ua = navigator.userAgent;
-                      if (/firefox/i.test(ua)) return 'Firefox';
-                      if (/^((?!chrome|android).)*safari/i.test(ua)) return 'Safari';
-                      if (/edg/i.test(ua)) return 'Microsoft Edge';
-                      if (/chrome/i.test(ua)) return 'Chrome-based (but unsupported)';
-                      return 'Unknown';
-                    })()
-                  }
-                  <br />
-                  <strong style={{ color: '#f2f2f2' }}>Required Feature:</strong> showDirectoryPicker API
+                <p style={{ color: '#aaa', margin: '0 0 24px 0', fontSize: '14px', lineHeight: '1.5' }}>
+                  You can <strong>Continue Anyway</strong> to explore PCB Tracer's features.<br />
+                  Use the <strong>Help</strong> menu to learn how PCB Tracer can assist with<br />
+                  troubleshooting and reverse engineering electronics.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <button
+                    onClick={() => setShowBrowserCompatibilityDialog(false)}
+                    style={{
+                      padding: '10px 24px',
+                      background: '#555',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Continue Anyway
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowBrowserCompatibilityDialog(false)}
-                  style={{
-                    padding: '10px 24px',
-                    background: '#555',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                  }}
-                >
-                  I Understand (Continue Anyway)
-                </button>
               </div>
             </div>
           )}
