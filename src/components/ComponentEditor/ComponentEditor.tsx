@@ -1073,7 +1073,13 @@ Analyze the attached PDF datasheet and extract the information according to the 
           if (value !== undefined && value !== null && value !== '') {
             // For string fields, trim whitespace
             if (field.type === 'string') {
-              (updated as any)[valueKey] = String(value).trim() || undefined;
+              let stringValue = String(value).trim() || undefined;
+              // Special handling for tolerance field: normalize UTF-8 encoding
+              if (valueKey === 'tolerance' && stringValue) {
+                // Fix double-encoded UTF-8 (Â± → ±)
+                stringValue = stringValue.replace(/Â±/g, '±');
+              }
+              (updated as any)[valueKey] = stringValue;
             } else {
               (updated as any)[valueKey] = value;
             }

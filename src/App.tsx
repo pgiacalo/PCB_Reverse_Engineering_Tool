@@ -13201,6 +13201,11 @@ function App() {
             }
           }
           
+          // Normalize tolerance field to fix UTF-8 encoding issues (Â± → ±)
+          if ((restoredComp as any).tolerance) {
+            (restoredComp as any).tolerance = (restoredComp as any).tolerance.replace(/Â±/g, '±');
+          }
+          
           return restoredComp;
         });
         setComponentsTop(compsTop);
@@ -13229,6 +13234,11 @@ function App() {
             layer: comp.layer || 'bottom',
             pinConnections: comp.pinConnections || new Array(comp.pinCount || 0).fill(''),
           };
+          
+          // Normalize tolerance field to fix UTF-8 encoding issues (Â± → ±)
+          if ((restoredComp as any).tolerance) {
+            (restoredComp as any).tolerance = (restoredComp as any).tolerance.replace(/Â±/g, '±');
+          }
           
           // CRITICAL: Ensure componentDefinitionKey is preserved
           // The spread operator should preserve it, but if missing, try to resolve it
