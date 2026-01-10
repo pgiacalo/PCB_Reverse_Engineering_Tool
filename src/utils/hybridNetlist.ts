@@ -477,8 +477,66 @@ export function generateHybridNetlist(
     });
   }
   
+  // CRITICAL: Merge nets with the same name
+  // Multiple net groups might have the same name (e.g., "GND") if they have the same groundBusId
+  // They should be merged into a single net with multiple nodes (or combined connections)
+  const netsByName = new Map<string, HybridNet>();
+  
+  for (const net of hybridNets) {
+    if (netsByName.has(net.name)) {
+      // Merge into existing net
+      const existingNet = netsByName.get(net.name)!;
+      
+      // Combine all connections from all nodes
+      const allConnections: HybridConnection[] = [];
+      for (const node of existingNet.nodes) {
+        allConnections.push(...node.connections);
+      }
+      for (const node of net.nodes) {
+        allConnections.push(...node.connections);
+      }
+      
+      // Remove duplicate connections (same component + pin)
+      const uniqueConnections: HybridConnection[] = [];
+      const seen = new Set<string>();
+      for (const conn of allConnections) {
+        const key = conn.type === 'component_pin' 
+          ? `${conn.component}:${conn.pin}`
+          : conn.type === 'via'
+          ? `via:${conn.ref}`
+          : conn.type === 'pad'
+          ? `pad:${conn.ref}`
+          : `${conn.type}:${conn.ref || ''}`;
+        
+        if (!seen.has(key)) {
+          seen.add(key);
+          uniqueConnections.push(conn);
+        }
+      }
+      
+      // Update the existing net's first node with combined connections
+      existingNet.nodes[0].connections = uniqueConnections;
+      
+      // Merge test points (take the first one found)
+      if (!existingNet.nodes[0].test_point_id && net.nodes[0].test_point_id) {
+        existingNet.nodes[0].test_point_id = net.nodes[0].test_point_id;
+      }
+    } else {
+      // Add new net
+      netsByName.set(net.name, net);
+    }
+  }
+  
+  // Convert back to array
+  const mergedNets = Array.from(netsByName.values());
+  
+  // Log if any nets were merged
+  if (mergedNets.length < hybridNets.length) {
+    console.log(`[HybridNetlist] Merged ${hybridNets.length - mergedNets.length} duplicate net(s) with same name`);
+  }
+  
   // Sort nets: GND first, then power nets, then signal nets
-  hybridNets.sort((a, b) => {
+  mergedNets.sort((a, b) => {
     if (a.name === 'GND') return -1;
     if (b.name === 'GND') return 1;
     if (a.type === 'power_ground' && b.type !== 'power_ground') return -1;
@@ -488,7 +546,7 @@ export function generateHybridNetlist(
     return a.name.localeCompare(b.name);
   });
   
-  console.log(`[HybridNetlist] Generated ${hybridNets.length} nets`);
+  console.log(`[HybridNetlist] Generated ${mergedNets.length} nets (after merging duplicates)`);
   
   // Build hybrid components with node_id references
   const hybridComponents: HybridComponent[] = [];
@@ -526,9 +584,9 @@ export function generateHybridNetlist(
         if (!isNaN(internalNodeId)) {
           nodeId = nodeIdToSemanticId.get(internalNodeId);
           
-          // If not found directly, search through all nets
+          // If not found directly, search through all nets (use mergedNets)
           if (!nodeId) {
-            for (const net of hybridNets) {
+            for (const net of mergedNets) {
               for (const node of net.nodes) {
                 if (node.connections.some(c => 
                   c.type === 'component_pin' && 
@@ -613,14 +671,21 @@ export function generateHybridNetlist(
   
   console.log(`[HybridNetlist] Generated ${hybridComponents.length} components`);
   
-  // Update test point node_ids to use semantic IDs
+  // Update test point node_ids to use semantic IDs and remove orphaned test points
+  const validTestPoints: HybridTestPoint[] = [];
   for (const tp of testPoints) {
     // Find which net this test point belongs to
-    for (const net of hybridNets) {
+    let found = false;
+    for (const net of mergedNets) {
       if (net.nodes.some(n => n.test_point_id === tp.id)) {
         tp.node_id = net.nodes[0].id;
+        validTestPoints.push(tp);
+        found = true;
         break;
       }
+    }
+    if (!found) {
+      console.log(`[HybridNetlist] Removed orphaned test point ${tp.id} (not connected to any net)`);
     }
   }
   
@@ -632,8 +697,8 @@ export function generateHybridNetlist(
       date: new Date().toISOString().split('T')[0]
     },
     components: hybridComponents,
-    nets: hybridNets,
-    test_points: testPoints
+    nets: mergedNets,
+    test_points: validTestPoints
   };
   
   // Return formatted JSON
