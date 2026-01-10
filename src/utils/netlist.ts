@@ -1050,13 +1050,13 @@ function readValueAndUnit(
   const combined = component[valueField] || '';
   if (typeof combined === 'string' && combined.trim() !== '') {
     // Try to match fractional values (e.g., "1/4W", "1/2W") or number followed by unit
-    const fractionalMatch = combined.trim().match(/^([\d]+\/[\d]+)\s*([a-zA-ZΩµμuW]+)?$/);
+    const fractionalMatch = combined.trim().match(/^([\d]+\/[\d]+)\s*([a-zA-ZOhmuW]+)?$/);
     if (fractionalMatch) {
       return { value: fractionalMatch[1], unit: fractionalMatch[2] || '' };
     }
     
-    // Try to match number followed by unit (handles k, M, m, µ, u, etc.)
-    const match = combined.trim().match(/^([\d.]+)\s*([a-zA-ZΩµμuW]+)?$/);
+    // Try to match number followed by unit (handles k, M, m, u, u, etc.)
+    const match = combined.trim().match(/^([\d.]+)\s*([a-zA-ZOhmuW]+)?$/);
     if (match) {
       return { value: match[1], unit: match[2] || '' };
     }
@@ -1082,15 +1082,15 @@ function combineValueAndUnit(value: string, unit: string): string {
  */
 export function getDefaultUnit(property: string): string {
   const unitMap: Record<string, string> = {
-    resistance: 'Ω',
+    resistance: 'Ohm',
     capacitance: 'F',
     inductance: 'H',
     voltage: 'V',
     current: 'A',
     power: 'W',
-    impedance: 'Ω',
+    impedance: 'Ohm',
     capacity: 'mAh',
-    esr: 'Ω',
+    esr: 'Ohm',
     coilVoltage: 'V',
     inputVoltage: 'V',
     outputVoltage: 'V',

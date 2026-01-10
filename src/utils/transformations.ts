@@ -439,7 +439,7 @@ export function applyViewTransform(
  * 1. Undo flip first (apply flip again, since scale(-1,1) applied twice = identity)
  * 2. Then undo rotation (rotate by negative angle)
  * 
- * Special case: When both flip and ±90° rotation are present, the combination
+ * Special case: When both flip and +/-90° rotation are present, the combination
  * results in a net vertical flip, so we need an additional 180° rotation to keep
  * indicators upright.
  * 
@@ -452,7 +452,7 @@ export function applyInverseViewTransform(
   rotation: number = 0,
   flipX: boolean = false
 ): void {
-  // Check if we have both flip and ±90° rotation (special case)
+  // Check if we have both flip and +/-90° rotation (special case)
   // When flip + 90° rotation are combined, the net effect is a vertical flip
   // which requires an additional 180° rotation to keep indicators upright
   const normalizedRotation = normalizeAngle(rotation);
@@ -466,7 +466,7 @@ export function applyInverseViewTransform(
     ctx.rotate(degToRad(-rotation));
   }
   
-  // Special case: if both flip and ±90° rotation are present, add 180° to correct
+  // Special case: if both flip and +/-90° rotation are present, add 180° to correct
   if (flipX && is90Rotation) {
     ctx.rotate(degToRad(180));
   }

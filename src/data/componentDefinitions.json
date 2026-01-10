@@ -21,11 +21,11 @@
           "units": [
             "pF",
             "nF",
-            "\u00b5F",
+            "uF",
             "mF",
             "F"
           ],
-          "defaultUnit": "\u00b5F",
+          "defaultUnit": "uF",
           "required": false
         },
         {
@@ -104,11 +104,11 @@
           "units": [
             "pF",
             "nF",
-            "\u00b5F",
+            "uF",
             "mF",
             "F"
           ],
-          "defaultUnit": "\u00b5F",
+          "defaultUnit": "uF",
           "required": false
         },
         {
@@ -127,7 +127,7 @@
           "name": "tolerance",
           "label": "Tolerance",
           "type": "string",
-          "defaultValue": "\u00b120%",
+          "defaultValue": "+/-20%",
           "required": false
         },
         {
@@ -135,10 +135,10 @@
           "label": "ESR",
           "type": "number",
           "units": [
-            "m\u03a9",
-            "\u03a9"
+            "mOhm",
+            "Ohm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -163,10 +163,10 @@
           "label": "Leakage Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -221,7 +221,7 @@
           "units": [
             "pF",
             "nF",
-            "\u00b5F",
+            "uF",
             "mF",
             "F"
           ],
@@ -244,7 +244,7 @@
           "name": "tolerance",
           "label": "Tolerance",
           "type": "string",
-          "defaultValue": "\u00b110%",
+          "defaultValue": "+/-10%",
           "required": false
         },
         {
@@ -315,11 +315,11 @@
           "units": [
             "pF",
             "nF",
-            "\u00b5F",
+            "uF",
             "mF",
             "F"
           ],
-          "defaultUnit": "\u00b5F",
+          "defaultUnit": "uF",
           "required": false
         },
         {
@@ -345,10 +345,10 @@
           "label": "ESR",
           "type": "number",
           "units": [
-            "m\u03a9",
-            "\u03a9"
+            "mOhm",
+            "Ohm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -356,10 +356,10 @@
           "label": "Leakage Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -426,7 +426,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -486,7 +486,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -628,7 +628,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -751,11 +751,11 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -803,12 +803,12 @@
           "label": "Resistance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9",
-            "M\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm",
+            "MOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -827,7 +827,7 @@
           "name": "tolerance",
           "label": "Tolerance",
           "type": "string",
-          "defaultValue": "\u00b15%",
+          "defaultValue": "+/-5%",
           "required": false
         },
         {
@@ -880,12 +880,12 @@
           "label": "Resistance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9",
-            "M\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm",
+            "MOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -950,12 +950,12 @@
           "label": "Resistance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9",
-            "M\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm",
+            "MOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -1016,12 +1016,12 @@
           "label": "Resistance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9",
-            "M\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm",
+            "MOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -1111,7 +1111,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1188,7 +1188,7 @@
           "label": "IC (Collector Current)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1319,7 +1319,7 @@
           "label": "IC (Collector Current)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1449,7 +1449,7 @@
           "label": "ID (Drain Current)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1461,10 +1461,10 @@
           "label": "RDS(on) (Drain-Source On-Resistance)",
           "type": "number",
           "units": [
-            "m\u03a9",
-            "\u03a9"
+            "mOhm",
+            "Ohm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -1507,7 +1507,7 @@
           "type": "number",
           "units": [
             "nC",
-            "\u00b5C"
+            "uC"
           ],
           "defaultUnit": "nC",
           "required": false
@@ -1587,7 +1587,7 @@
           "label": "ID (Drain Current)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1599,10 +1599,10 @@
           "label": "RDS(on) (Drain-Source On-Resistance)",
           "type": "number",
           "units": [
-            "m\u03a9",
-            "\u03a9"
+            "mOhm",
+            "Ohm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -1645,7 +1645,7 @@
           "type": "number",
           "units": [
             "nC",
-            "\u00b5C"
+            "uC"
           ],
           "defaultUnit": "nC",
           "required": false
@@ -1734,7 +1734,7 @@
           "label": "IDSS (Drain Current Saturation)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -1871,7 +1871,7 @@
           "label": "Input Offset Voltage (Vos)",
           "type": "number",
           "units": [
-            "\u00b5V",
+            "uV",
             "mV",
             "V"
           ],
@@ -1885,7 +1885,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -1898,7 +1898,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -1940,10 +1940,10 @@
           "label": "Slew Rate",
           "type": "number",
           "units": [
-            "V/\u00b5s",
+            "V/us",
             "V/ms"
           ],
-          "defaultUnit": "V/\u00b5s",
+          "defaultUnit": "V/us",
           "required": false
         },
         {
@@ -1963,11 +1963,11 @@
           "label": "Quiescent Current (Iq)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -2058,7 +2058,7 @@
           "label": "Input Offset Voltage (Vos)",
           "type": "number",
           "units": [
-            "\u00b5V",
+            "uV",
             "mV",
             "V"
           ],
@@ -2072,7 +2072,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -2085,7 +2085,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -2127,10 +2127,10 @@
           "label": "Slew Rate",
           "type": "number",
           "units": [
-            "V/\u00b5s",
+            "V/us",
             "V/ms"
           ],
-          "defaultUnit": "V/\u00b5s",
+          "defaultUnit": "V/us",
           "required": false
         },
         {
@@ -2150,11 +2150,11 @@
           "label": "Quiescent Current (Iq)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -2251,7 +2251,7 @@
           "label": "Input Offset Voltage (Vos)",
           "type": "number",
           "units": [
-            "\u00b5V",
+            "uV",
             "mV",
             "V"
           ],
@@ -2265,7 +2265,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -2278,7 +2278,7 @@
           "units": [
             "pA",
             "nA",
-            "\u00b5A",
+            "uA",
             "mA"
           ],
           "defaultUnit": "nA",
@@ -2320,10 +2320,10 @@
           "label": "Slew Rate",
           "type": "number",
           "units": [
-            "V/\u00b5s",
+            "V/us",
             "V/ms"
           ],
-          "defaultUnit": "V/\u00b5s",
+          "defaultUnit": "V/us",
           "required": false
         },
         {
@@ -2343,11 +2343,11 @@
           "label": "Quiescent Current (Iq)",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
-          "defaultUnit": "\u00b5A",
+          "defaultUnit": "uA",
           "required": false
         },
         {
@@ -2467,11 +2467,11 @@
           "type": "number",
           "units": [
             "nH",
-            "\u00b5H",
+            "uH",
             "mH",
             "H"
           ],
-          "defaultUnit": "\u00b5H",
+          "defaultUnit": "uH",
           "required": false
         },
         {
@@ -2479,7 +2479,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -2491,12 +2491,12 @@
           "label": "DC Resistance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9",
-            "M\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm",
+            "MOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -2549,11 +2549,11 @@
           "label": "Impedance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -2561,7 +2561,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -2765,7 +2765,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -2823,7 +2823,7 @@
           "label": "Current Rating",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -3003,7 +3003,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -3084,7 +3084,7 @@
           "label": "Contact Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -3199,11 +3199,11 @@
           "label": "Impedance",
           "type": "number",
           "units": [
-            "\u03a9",
-            "m\u03a9",
-            "k\u03a9"
+            "Ohm",
+            "mOhm",
+            "kOhm"
           ],
-          "defaultUnit": "\u03a9",
+          "defaultUnit": "Ohm",
           "required": false
         },
         {
@@ -3266,7 +3266,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -3366,7 +3366,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],
@@ -3428,7 +3428,7 @@
           "label": "Current",
           "type": "number",
           "units": [
-            "\u00b5A",
+            "uA",
             "mA",
             "A"
           ],

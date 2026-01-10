@@ -63,7 +63,7 @@ function readValueAndUnit(
 
 /**
  * Parse a value string to extract number and unit
- * Examples: "10kΩ" -> { value: "10", unit: "kΩ" }, "100" -> { value: "100", unit: "" }
+ * Examples: "10kOhm" -> { value: "10", unit: "kOhm" }, "100" -> { value: "100", unit: "" }
  * Also handles fractional values like "1/4W" -> { value: "1/4", unit: "W" }
  */
 export function parseValueWithUnit(valueStr: string | undefined): { value: string; unit: string } {
@@ -73,13 +73,13 @@ export function parseValueWithUnit(valueStr: string | undefined): { value: strin
   
   const trimmed = valueStr.trim();
   // Try to match fractional values (e.g., "1/4W", "1/2W") or number followed by unit
-  const fractionalMatch = trimmed.match(/^([\d]+\/[\d]+)\s*([a-zA-ZΩµμuW]+)?$/);
+  const fractionalMatch = trimmed.match(/^([\d]+\/[\d]+)\s*([a-zA-ZOhmuW]+)?$/);
   if (fractionalMatch) {
     return { value: fractionalMatch[1], unit: fractionalMatch[2] || '' };
   }
   
-  // Try to match number followed by unit (handles k, M, m, µ, u, etc.)
-  const match = trimmed.match(/^([\d.]+)\s*([a-zA-ZΩµμuW]+)?$/);
+  // Try to match number followed by unit (handles k, M, m, u, u, etc.)
+  const match = trimmed.match(/^([\d.]+)\s*([a-zA-ZOhmuW]+)?$/);
   if (match) {
     return { value: match[1], unit: match[2] || '' };
   }
@@ -118,24 +118,24 @@ export function useComponents() {
     // Type-specific fields (all optional, populated based on component type)
     // Resistor / ResistorNetwork / Thermistor / VariableResistor / Speaker / Transformer
     resistance?: string;
-    resistanceUnit?: string; // Ω, kΩ, MΩ
+    resistanceUnit?: string; // Ohm, kOhm, MOhm
     power?: string; // value only (e.g., "1/4", "1") - "W" is appended when saving
     tolerance?: string;
     // Capacitor
     capacitance?: string;
-    capacitanceUnit?: string; // pF, nF, µF, mF, F
+    capacitanceUnit?: string; // pF, nF, uF, mF, F
     voltage?: string;
     voltageUnit?: string; // V, mV, kV
     dielectric?: string;
     // Electrolytic Capacitor
     polarized?: boolean; // true if component is polarized (has positive/negative pins)
     esr?: string;
-    esrUnit?: string; // unit, e.g., "mΩ"
+    esrUnit?: string; // unit, e.g., "mOhm"
     temperature?: string;
     // Diode
     diodeType?: 'Standard' | 'Zener' | 'LED' | 'Schottky' | 'Infrared' | 'Photodiode' | 'Other';
     current?: string;
-    currentUnit?: string; // A, mA, µA
+    currentUnit?: string; // A, mA, uA
     ledColor?: string;
     // GenericComponent
     genericType?: 'Attenuator' | 'CircuitBreaker' | 'Thermocouple' | 'Tuner';
@@ -148,7 +148,7 @@ export function useComponents() {
     fuseType?: string;
     // FerriteBead
     impedance?: string;
-    impedanceUnit?: string; // unit, e.g., "Ω"
+    impedanceUnit?: string; // unit, e.g., "Ohm"
     // Connector
     connectorType?: string;
     gender?: 'Male' | 'Female' | 'N/A';
@@ -160,7 +160,7 @@ export function useComponents() {
     contactType?: string;
     // Inductor
     inductance?: string;
-    inductanceUnit?: string; // nH, µH, mH, H
+    inductanceUnit?: string; // nH, uH, mH, H
     // Speaker
     // (impedance already covered)
     // Motor
@@ -307,7 +307,7 @@ export function useComponents() {
       // Power is stored as combined "valueW" (e.g., "1/4W", "1W")
       const power = readValueAndUnit(r, 'power', 'powerUnit', 'W');
       editor.power = power.value || '1/4';
-      editor.tolerance = r.tolerance || '±5%';
+      editor.tolerance = r.tolerance || '+/-5%';
     } else if (compType === 'Capacitor') {
       const c = component as any;
       // Debug: Log component values before reading
@@ -323,7 +323,7 @@ export function useComponents() {
       const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
       editor.voltage = voltage.value;
       editor.voltageUnit = voltage.unit;
-      editor.tolerance = c.tolerance || '±10%';
+      editor.tolerance = c.tolerance || '+/-10%';
       editor.dielectric = c.dielectric || 'Ceramic';
     } else if (compType === 'Electrolytic Capacitor') {
       const c = component as any;
@@ -333,7 +333,7 @@ export function useComponents() {
       const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
       editor.voltage = voltage.value;
       editor.voltageUnit = voltage.unit;
-      editor.tolerance = c.tolerance || '±20%';
+      editor.tolerance = c.tolerance || '+/-20%';
       editor.polarized = (c as any).polarized !== undefined ? (c as any).polarized : true; // Default to true for electrolytic capacitors
       const esr = readValueAndUnit(c, 'esr', 'esrUnit', getDefaultUnit('esr'));
       editor.esr = esr.value;
@@ -347,7 +347,7 @@ export function useComponents() {
       const voltage = readValueAndUnit(c, 'voltage', 'voltageUnit', getDefaultUnit('voltage'));
       editor.voltage = voltage.value;
       editor.voltageUnit = voltage.unit;
-      editor.tolerance = c.tolerance || '±10%';
+      editor.tolerance = c.tolerance || '+/-10%';
       editor.filmType = c.filmType || 'Polyester';
     } else if (compType === 'Diode') {
       const d = component as any;

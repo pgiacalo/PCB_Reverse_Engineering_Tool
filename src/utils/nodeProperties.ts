@@ -41,7 +41,7 @@ export interface NodeOptionalFields {
   impedance?: {
     nominal: number;
     tolerance: number;
-    unit: string;  // "Ω"
+    unit: string;  // "Ohm"
   };
   frequency_range?: {
     min: number;
@@ -121,7 +121,7 @@ export function inferExpectedVoltage(
     const voltageMatch = netName.match(/([+-]?[\d.]+)\s*V/i);
     if (voltageMatch) {
       const nominal = parseFloat(voltageMatch[1]);
-      // Standard tolerance of ±5%
+      // Standard tolerance of +/-5%
       const tolerance = Math.abs(nominal) * 0.05;
       return {
         min: nominal - tolerance,

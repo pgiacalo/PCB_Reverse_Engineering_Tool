@@ -252,7 +252,7 @@ function getComponentValueString(comp: PCBComponent): string | undefined {
   // Resistor
   if (comp.componentType === 'Resistor' && 'resistance' in comp) {
     const resistance = (comp as any).resistance;
-    const unit = (comp as any).resistanceUnit || 'Ω';
+    const unit = (comp as any).resistanceUnit || 'Ohm';
     if (resistance && String(resistance).trim() !== '') {
       return `${resistance}${unit}`;
     }
@@ -707,8 +707,8 @@ export function generateHybridNetlist(
     // Ensure proper UTF-8 encoding by normalizing the tolerance string
     const tolerance = (comp as any).tolerance?.trim();
     if (tolerance) {
-      // Fix any double-encoded UTF-8 issues (Â± → ±)
-      const normalizedTolerance = tolerance.replace(/Â±/g, '±');
+      // Fix any double-encoded UTF-8 issues (Â+/- → +/-)
+      const normalizedTolerance = tolerance.replace(/Â\+\/-/g, '+/-');
       hybridComp.tolerance = normalizedTolerance;
     }
     

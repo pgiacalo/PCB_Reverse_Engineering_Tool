@@ -197,7 +197,7 @@ export function extractMeasurementData(
     // "Left channel output: 5.2V"
     
     const value = note.value.trim();
-    const match = value.match(/(?:([A-Z]\d+|TP\d+|Left|Right|Channel\s+\d+)[\s:]+)?([\d.]+)\s*([A-Za-zµΩ]+)/i);
+    const match = value.match(/(?:([A-Z]\d+|TP\d+|Left|Right|Channel\s+\d+)[\s:]+)?([\d.]+)\s*([A-Za-zuOhm]+)/i);
     
     if (match) {
       const [, designator, numValue, unit] = match;
@@ -209,9 +209,9 @@ export function extractMeasurementData(
         const unitLower = unit.toLowerCase();
         if (unitLower.includes('v') || unitLower === 'mv' || unitLower === 'kv') {
           measurementType = 'voltage';
-        } else if (unitLower.includes('a') || unitLower === 'ma' || unitLower === 'µa' || unitLower === 'ua') {
+        } else if (unitLower.includes('a') || unitLower === 'ma' || unitLower === 'ua' || unitLower === 'ua') {
           measurementType = 'current';
-        } else if (unitLower.includes('Ω') || unitLower === 'ohm' || unitLower === 'kohm' || unitLower === 'mohm') {
+        } else if (unitLower.includes('Ohm') || unitLower === 'ohm' || unitLower === 'kohm' || unitLower === 'mohm') {
           measurementType = 'resistance';
         }
         

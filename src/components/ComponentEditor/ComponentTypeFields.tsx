@@ -140,7 +140,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
       
       // Fields without units
       if (fieldName === 'tolerance' || fieldName === 'pinCount') {
-        return '60px'; // Short values: "±5%", "2", etc.
+        return '60px'; // Short values: "+/-5%", "2", etc.
       }
       if (fieldName === 'partNumber' || fieldName === 'manufacturer') {
         return '150px'; // Medium text fields
@@ -292,16 +292,16 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±5%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="±0.05%">±0.05%</option>
-              <option value="±0.1%">±0.1%</option>
-              <option value="±0.25%">±0.25%</option>
-              <option value="±0.5%">±0.5%</option>
-              <option value="±1%">±1%</option>
-              <option value="±2%">±2%</option>
-              <option value="±5%">±5%</option>
-              <option value="±10%">±10%</option>
-              <option value="±20%">±20%</option>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '+/-5%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="+/-0.05%">+/-0.05%</option>
+              <option value="+/-0.1%">+/-0.1%</option>
+              <option value="+/-0.25%">+/-0.25%</option>
+              <option value="+/-0.5%">+/-0.5%</option>
+              <option value="+/-1%">+/-1%</option>
+              <option value="+/-2%">+/-2%</option>
+              <option value="+/-5%">+/-5%</option>
+              <option value="+/-10%">+/-10%</option>
+              <option value="+/-20%">+/-20%</option>
             </select>
           </div>
         </>
@@ -343,13 +343,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="±0.5%">±0.5%</option>
-              <option value="±1%">±1%</option>
-              <option value="±2%">±2%</option>
-              <option value="±5%">±5%</option>
-              <option value="±10%">±10%</option>
-              <option value="±20%">±20%</option>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '+/-10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="+/-0.5%">+/-0.5%</option>
+              <option value="+/-1%">+/-1%</option>
+              <option value="+/-2%">+/-2%</option>
+              <option value="+/-5%">+/-5%</option>
+              <option value="+/-10%">+/-10%</option>
+              <option value="+/-20%">+/-20%</option>
             </select>
           </div>
         </>
@@ -390,13 +390,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="±0.5%">±0.5%</option>
-              <option value="±1%">±1%</option>
-              <option value="±2%">±2%</option>
-              <option value="±5%">±5%</option>
-              <option value="±10%">±10%</option>
-              <option value="±20%">±20%</option>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '+/-10%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="+/-0.5%">+/-0.5%</option>
+              <option value="+/-1%">+/-1%</option>
+              <option value="+/-2%">+/-2%</option>
+              <option value="+/-5%">+/-5%</option>
+              <option value="+/-10%">+/-10%</option>
+              <option value="+/-20%">+/-20%</option>
             </select>
           </div>
         </>
@@ -408,10 +408,10 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-capacitance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Capacitance:</label>
             <input id={`component-capacitance-${comp.id}`} type="text" value={componentEditor.capacitance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, capacitance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 100" />
-            <select value={componentEditor.capacitanceUnit || 'µF'} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+            <select value={componentEditor.capacitanceUnit || 'uF'} onChange={(e) => setComponentEditor({ ...componentEditor, capacitanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
               <option value="pF">pF</option>
               <option value="nF">nF</option>
-              <option value="µF">µF</option>
+              <option value="uF">uF</option>
               <option value="mF">mF</option>
               <option value="F">F</option>
             </select>
@@ -427,13 +427,13 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±20%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}>
-              <option value="±0.5%">±0.5%</option>
-              <option value="±1%">±1%</option>
-              <option value="±2%">±2%</option>
-              <option value="±5%">±5%</option>
-              <option value="±10%">±10%</option>
-              <option value="±20%">±20%</option>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '+/-20%'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }}>
+              <option value="+/-0.5%">+/-0.5%</option>
+              <option value="+/-1%">+/-1%</option>
+              <option value="+/-2%">+/-2%</option>
+              <option value="+/-5%">+/-5%</option>
+              <option value="+/-10%">+/-10%</option>
+              <option value="+/-20%">+/-20%</option>
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -474,7 +474,7 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-resistance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>DC Resistance:</label>
             <input id={`component-resistance-${comp.id}`} type="text" value={componentEditor.resistance || ''} onChange={(e) => setComponentEditor({ ...componentEditor, resistance: e.target.value })} disabled={areComponentsLocked} style={{ width: '90px', padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1 }} placeholder="e.g., 50" />
-            <select value={componentEditor.resistanceUnit || 'Ω'} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
+            <select value={componentEditor.resistanceUnit || 'Ohm'} onChange={(e) => setComponentEditor({ ...componentEditor, resistanceUnit: e.target.value })} disabled={areComponentsLocked} style={{ padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, width: '60px', marginRight: '12px' }}>
               {getPropertyUnits('resistance').map(unit => (
                 <option key={unit} value={unit}>{unit}</option>
               ))}
@@ -1050,12 +1050,12 @@ export const ComponentTypeFields: React.FC<ComponentTypeFieldsProps> = ({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <label htmlFor={`component-tolerance-${comp.id}`} style={{ fontSize: '11px', fontWeight: 600, color: '#333', whiteSpace: 'nowrap', width: '90px', flexShrink: 0 }}>Tolerance:</label>
-            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '±10ppm'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
-              <option value="±10ppm">±10ppm</option>
-              <option value="±20ppm">±20ppm</option>
-              <option value="±30ppm">±30ppm</option>
-              <option value="±50ppm">±50ppm</option>
-              <option value="±100ppm">±100ppm</option>
+            <select id={`component-tolerance-${comp.id}`} value={componentEditor.tolerance || '+/-10ppm'} onChange={(e) => setComponentEditor({ ...componentEditor, tolerance: e.target.value })} disabled={areComponentsLocked} style={{ flex: 1, padding: '2px 3px', background: '#f5f5f5', border: '1px solid #ddd', borderRadius: 2, fontSize: '11px', color: '#000', opacity: areComponentsLocked ? 0.6 : 1, marginRight: '8px' }}>
+              <option value="+/-10ppm">+/-10ppm</option>
+              <option value="+/-20ppm">+/-20ppm</option>
+              <option value="+/-30ppm">+/-30ppm</option>
+              <option value="+/-50ppm">+/-50ppm</option>
+              <option value="+/-100ppm">+/-100ppm</option>
             </select>
           </div>
         </>

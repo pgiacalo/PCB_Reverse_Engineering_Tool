@@ -8528,7 +8528,7 @@ function App() {
         }
         // If selectedImageForTransform is null or doesn't match, do nothing
       } else if (transformMode === 'slant') {
-        // Keystone (skew): Up/Down adjust vertical skew, Left/Right adjust horizontal; all at ±0.5°
+        // Keystone (skew): Up/Down adjust vertical skew, Left/Right adjust horizontal; all at +/-0.5°
         let skewXDeltaDeg = 0; // horizontal shear
         let skewYDeltaDeg = 0; // vertical shear
 
@@ -8551,7 +8551,7 @@ function App() {
 
         if (skewXDeltaDeg !== 0 || skewYDeltaDeg !== 0) {
           const toRad = degToRad;
-          const clamp = (v: number) => Math.max(-0.7, Math.min(0.7, v)); // clamp to ~±40° to avoid extremes
+          const clamp = (v: number) => Math.max(-0.7, Math.min(0.7, v)); // clamp to ~+/-40° to avoid extremes
           
           // Explicitly check which image(s) to skew based on selectedImageForTransform
           // Only skew the specifically selected image, not both
@@ -8599,7 +8599,7 @@ function App() {
           }
         }
       } else if (transformMode === 'keystone') {
-        // Perspective-like keystone: Up/Down = vertical keystone, Left/Right = horizontal keystone; ±0.5°
+        // Perspective-like keystone: Up/Down = vertical keystone, Left/Right = horizontal keystone; +/-0.5°
         let kHDeltaDeg = 0; // horizontal keystone
         let kVDeltaDeg = 0; // vertical keystone
 
@@ -8622,7 +8622,7 @@ function App() {
 
         if (kHDeltaDeg !== 0 || kVDeltaDeg !== 0) {
           const toRad = degToRad;
-          const clamp = (v: number) => Math.max(-0.35, Math.min(0.35, v)); // clamp to ~±20° to avoid extremes
+          const clamp = (v: number) => Math.max(-0.35, Math.min(0.35, v)); // clamp to ~+/-20° to avoid extremes
           
           // Explicitly check which image(s) to apply keystone based on selectedImageForTransform
           // Only apply keystone to the specifically selected image, not both
@@ -12480,6 +12480,23 @@ function App() {
 
   // Load project from JSON (images embedded)
   // Optional dirHandle parameter allows passing directory handle directly to avoid race condition
+  // Helper function to convert Unicode units to ASCII equivalents
+  // This ensures backward compatibility with old project files
+  const convertUnicodeUnitsToASCII = (value: string | undefined | null): string | undefined => {
+    if (!value || typeof value !== 'string') return value as undefined;
+    
+    // Replace Unicode characters with ASCII equivalents
+    // µ (U+00B5 micro sign) -> u
+    // μ (U+03BC Greek small letter mu) -> u  
+    // Ω (U+03A9 Greek capital letter omega) -> Ohm
+    // ± (U+00B1 plus-minus sign) -> +/-
+    return value
+      .replace(/µ/g, 'u')
+      .replace(/μ/g, 'u')
+      .replace(/Ω/g, 'Ohm')
+      .replace(/±/g, '+/-');
+  };
+
   const loadProject = useCallback(async (project: any, dirHandleOverride?: FileSystemDirectoryHandle | null) => {
     isLoadingProjectRef.current = true;
     try {
@@ -13183,8 +13200,36 @@ function App() {
       if (project.drawing?.componentsTop) {
         const compsTop = (project.drawing.componentsTop as PCBComponent[]).map(comp => {
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
+          
+          // Convert Unicode units to ASCII for backward compatibility
+          const convertedComp: any = { ...comp };
+          if (convertedComp.resistanceUnit) {
+            convertedComp.resistanceUnit = convertUnicodeUnitsToASCII(convertedComp.resistanceUnit);
+          }
+          if (convertedComp.capacitanceUnit) {
+            convertedComp.capacitanceUnit = convertUnicodeUnitsToASCII(convertedComp.capacitanceUnit);
+          }
+          if (convertedComp.inductanceUnit) {
+            convertedComp.inductanceUnit = convertUnicodeUnitsToASCII(convertedComp.inductanceUnit);
+          }
+          if (convertedComp.voltageUnit) {
+            convertedComp.voltageUnit = convertUnicodeUnitsToASCII(convertedComp.voltageUnit);
+          }
+          if (convertedComp.currentUnit) {
+            convertedComp.currentUnit = convertUnicodeUnitsToASCII(convertedComp.currentUnit);
+          }
+          if (convertedComp.powerUnit) {
+            convertedComp.powerUnit = convertUnicodeUnitsToASCII(convertedComp.powerUnit);
+          }
+          if (convertedComp.frequencyUnit) {
+            convertedComp.frequencyUnit = convertUnicodeUnitsToASCII(convertedComp.frequencyUnit);
+          }
+          if (convertedComp.tolerance) {
+            convertedComp.tolerance = convertUnicodeUnitsToASCII(convertedComp.tolerance);
+          }
+          
           const restoredComp = {
-            ...comp,
+            ...convertedComp,
             x: truncatedPos.x,
             y: truncatedPos.y,
             layer: comp.layer || 'top',
@@ -13227,8 +13272,36 @@ function App() {
       if (project.drawing?.componentsBottom) {
         const compsBottom = (project.drawing.componentsBottom as PCBComponent[]).map(comp => {
           const truncatedPos = truncatePoint({ x: comp.x, y: comp.y });
+          
+          // Convert Unicode units to ASCII for backward compatibility
+          const convertedComp: any = { ...comp };
+          if (convertedComp.resistanceUnit) {
+            convertedComp.resistanceUnit = convertUnicodeUnitsToASCII(convertedComp.resistanceUnit);
+          }
+          if (convertedComp.capacitanceUnit) {
+            convertedComp.capacitanceUnit = convertUnicodeUnitsToASCII(convertedComp.capacitanceUnit);
+          }
+          if (convertedComp.inductanceUnit) {
+            convertedComp.inductanceUnit = convertUnicodeUnitsToASCII(convertedComp.inductanceUnit);
+          }
+          if (convertedComp.voltageUnit) {
+            convertedComp.voltageUnit = convertUnicodeUnitsToASCII(convertedComp.voltageUnit);
+          }
+          if (convertedComp.currentUnit) {
+            convertedComp.currentUnit = convertUnicodeUnitsToASCII(convertedComp.currentUnit);
+          }
+          if (convertedComp.powerUnit) {
+            convertedComp.powerUnit = convertUnicodeUnitsToASCII(convertedComp.powerUnit);
+          }
+          if (convertedComp.frequencyUnit) {
+            convertedComp.frequencyUnit = convertUnicodeUnitsToASCII(convertedComp.frequencyUnit);
+          }
+          if (convertedComp.tolerance) {
+            convertedComp.tolerance = convertUnicodeUnitsToASCII(convertedComp.tolerance);
+          }
+          
           const restoredComp = {
-            ...comp,
+            ...convertedComp,
             x: truncatedPos.x,
             y: truncatedPos.y,
             layer: comp.layer || 'bottom',

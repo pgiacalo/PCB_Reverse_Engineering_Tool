@@ -175,7 +175,7 @@
         },
         "units": {
           "type": "array",
-          "description": "Array of available units for number fields (e.g., ['pF', 'nF', 'µF', 'mF', 'F'])",
+          "description": "Array of available units for number fields (e.g., ['pF', 'nF', 'uF', 'mF', 'F'])",
           "items": {
             "type": "string"
           }

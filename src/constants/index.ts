@@ -259,13 +259,13 @@ export const VIA = {
 export const COMPONENT_PROPERTY_UNITS = {
   // Resistance (Resistor, ResistorNetwork, Thermistor, VariableResistor, Inductor DC resistance)
   resistance: {
-    validUnits: ['Ω', 'mΩ', 'kΩ', 'MΩ'],
-    defaultUnit: 'Ω',
+    validUnits: ['Ohm', 'mOhm', 'kOhm', 'MOhm'],
+    defaultUnit: 'Ohm',
   },
   // Capacitance (Capacitor, Electrolytic Capacitor)
   capacitance: {
-    validUnits: ['pF', 'nF', 'µF', 'mF', 'F'],
-    defaultUnit: 'µF',
+    validUnits: ['pF', 'nF', 'uF', 'mF', 'F'],
+    defaultUnit: 'uF',
   },
   // Voltage (Capacitor, Electrolytic Capacitor, Diode, Battery, Fuse, Motor, PowerSupply, Transistor, Switch, Relay coilVoltage)
   voltage: {
@@ -274,7 +274,7 @@ export const COMPONENT_PROPERTY_UNITS = {
   },
   // Current (Diode, Fuse, FerriteBead, Relay, Inductor, Motor, PowerSupply, Transistor, Switch)
   current: {
-    validUnits: ['µA', 'mA', 'A'],
+    validUnits: ['uA', 'mA', 'A'],
     defaultUnit: 'A',
   },
   // Power (Resistor, Speaker, Transformer, VariableResistor)
@@ -284,13 +284,13 @@ export const COMPONENT_PROPERTY_UNITS = {
   },
   // Inductance (Inductor)
   inductance: {
-    validUnits: ['nH', 'µH', 'mH', 'H'],
-    defaultUnit: 'µH',
+    validUnits: ['nH', 'uH', 'mH', 'H'],
+    defaultUnit: 'uH',
   },
   // Impedance (FerriteBead, Speaker)
   impedance: {
-    validUnits: ['Ω', 'mΩ', 'kΩ'],
-    defaultUnit: 'Ω',
+    validUnits: ['Ohm', 'mOhm', 'kOhm'],
+    defaultUnit: 'Ohm',
   },
   // Capacity (Battery)
   capacity: {
@@ -324,8 +324,8 @@ export const COMPONENT_PROPERTY_UNITS = {
   },
   // ESR (Electrolytic Capacitor) - Equivalent Series Resistance
   esr: {
-    validUnits: ['mΩ', 'Ω'],
-    defaultUnit: 'Ω',
+    validUnits: ['mOhm', 'Ohm'],
+    defaultUnit: 'Ohm',
   },
 } as const;
 

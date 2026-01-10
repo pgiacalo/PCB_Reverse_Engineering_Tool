@@ -176,7 +176,7 @@ export interface Capacitor extends PCBComponentBase {
   capacitanceUnit?: string; // unit, e.g., "nF"
   voltage?: string; // value only, e.g., "50"
   voltageUnit?: string; // unit, e.g., "V"
-  tolerance?: string; // e.g., "±10%"
+  tolerance?: string; // e.g., "+/-10%"
   dielectric?: string; // e.g., "Ceramic", "Film", "Tantalum"
 }
 
@@ -186,13 +186,13 @@ export interface Capacitor extends PCBComponentBase {
 export interface ElectrolyticCapacitor extends PCBComponentBase {
   componentType: 'Electrolytic Capacitor';
   capacitance?: string; // value only, e.g., "100"
-  capacitanceUnit?: string; // unit, e.g., "µF"
+  capacitanceUnit?: string; // unit, e.g., "uF"
   voltage?: string; // value only, e.g., "25"
   voltageUnit?: string; // unit, e.g., "V"
-  tolerance?: string; // e.g., "±20%"
+  tolerance?: string; // e.g., "+/-20%"
   polarized?: boolean; // true if component is polarized (has positive/negative pins), false if non-polarized
   esr?: string; // value only, e.g., "50"
-  esrUnit?: string; // unit, e.g., "mΩ"
+  esrUnit?: string; // unit, e.g., "mOhm"
   temperature?: string; // operating temperature range, e.g., "-40°C to +85°C"
 }
 
@@ -202,10 +202,10 @@ export interface ElectrolyticCapacitor extends PCBComponentBase {
 export interface FilmCapacitor extends PCBComponentBase {
   componentType: 'Film Capacitor';
   capacitance?: string; // value only, e.g., "100"
-  capacitanceUnit?: string; // unit, e.g., "nF", "µF"
+  capacitanceUnit?: string; // unit, e.g., "nF", "uF"
   voltage?: string; // value only, e.g., "50"
   voltageUnit?: string; // unit, e.g., "V"
-  tolerance?: string; // e.g., "±10%"
+  tolerance?: string; // e.g., "+/-10%"
   filmType?: string; // e.g., "Polyester", "Polypropylene", "Polyethylene"
 }
 
@@ -241,7 +241,7 @@ export interface Fuse extends PCBComponentBase {
 export interface FerriteBead extends PCBComponentBase {
   componentType: 'FerriteBead';
   impedance?: string; // value only, e.g., "100"
-  impedanceUnit?: string; // unit, e.g., "Ω"
+  impedanceUnit?: string; // unit, e.g., "Ohm"
   current?: string; // value only
   currentUnit?: string; // unit, e.g., "A"
 }
@@ -281,11 +281,11 @@ export interface Relay extends PCBComponentBase {
 export interface Inductor extends PCBComponentBase {
   componentType: 'Inductor';
   inductance?: string; // value only, e.g., "10"
-  inductanceUnit?: string; // unit, e.g., "µH"
+  inductanceUnit?: string; // unit, e.g., "uH"
   current?: string; // value only
   currentUnit?: string; // unit, e.g., "A"
   resistance?: string; // value only
-  resistanceUnit?: string; // unit, e.g., "Ω"
+  resistanceUnit?: string; // unit, e.g., "Ohm"
 }
 
 /**
@@ -294,7 +294,7 @@ export interface Inductor extends PCBComponentBase {
 export interface Speaker extends PCBComponentBase {
   componentType: 'Speaker';
   impedance?: string; // value only, e.g., "8"
-  impedanceUnit?: string; // unit, e.g., "Ω"
+  impedanceUnit?: string; // unit, e.g., "Ohm"
   power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
 }
 
@@ -343,9 +343,9 @@ export interface Transistor extends PCBComponentBase {
 export interface Resistor extends PCBComponentBase {
   componentType: 'Resistor';
   resistance?: string; // value only, e.g., "10"
-  resistanceUnit?: string; // unit, e.g., "kΩ"
+  resistanceUnit?: string; // unit, e.g., "kOhm"
   power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
-  tolerance?: string; // e.g., "±5%"
+  tolerance?: string; // e.g., "+/-5%"
 }
 
 /**
@@ -354,7 +354,7 @@ export interface Resistor extends PCBComponentBase {
 export interface ResistorNetwork extends PCBComponentBase {
   componentType: 'ResistorNetwork';
   resistance?: string; // value only
-  resistanceUnit?: string; // unit, e.g., "Ω"
+  resistanceUnit?: string; // unit, e.g., "Ohm"
   configuration?: string; // e.g., "Isolated", "Bussed"
 }
 
@@ -364,7 +364,7 @@ export interface ResistorNetwork extends PCBComponentBase {
 export interface Thermistor extends PCBComponentBase {
   componentType: 'Thermistor';
   resistance?: string; // value only
-  resistanceUnit?: string; // unit, e.g., "Ω"
+  resistanceUnit?: string; // unit, e.g., "Ohm"
   thermistorType?: 'NTC' | 'PTC';
   beta?: string; // beta value (no unit)
 }
@@ -431,7 +431,7 @@ export interface VariableResistor extends PCBComponentBase {
   componentType: 'VariableResistor';
   vrType?: 'Potentiometer' | 'Varistor' | 'VoltageRegulator';
   resistance?: string; // value only
-  resistanceUnit?: string; // unit, e.g., "Ω"
+  resistanceUnit?: string; // unit, e.g., "Ohm"
   power?: string; // combined value+unit (e.g., "1/4W", "1W") since unit is always W
   taper?: string; // for potentiometers: "Linear", "Logarithmic"
 }

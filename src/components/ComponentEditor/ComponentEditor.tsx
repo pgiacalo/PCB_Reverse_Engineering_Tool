@@ -485,7 +485,7 @@ Example JSON format:
     "pinCount": 5
   },
   "summary": {
-    "datasheetSummary": "The LM358 is a dual operational amplifier featuring low power consumption and wide supply voltage range. It is designed for single supply operation from 3V to 32V or dual supplies from ±1.5V to ±16V. The device offers high gain bandwidth product and low input offset voltage."
+    "datasheetSummary": "The LM358 is a dual operational amplifier featuring low power consumption and wide supply voltage range. It is designed for single supply operation from 3V to 32V or dual supplies from +/-1.5V to +/-16V. The device offers high gain bandwidth product and low input offset voltage."
   }
 }
 

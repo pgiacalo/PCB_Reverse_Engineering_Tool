@@ -58,7 +58,7 @@
         },
         "value": {
           "type": "string",
-          "description": "Component value (e.g., '10k', '100nF', '1µH')"
+          "description": "Component value (e.g., '10k', '100nF', '1uH')"
         },
         "package": {
           "type": "string",

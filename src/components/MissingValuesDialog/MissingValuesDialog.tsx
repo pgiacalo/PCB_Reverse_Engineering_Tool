@@ -3,7 +3,6 @@
  */
 
 import React from 'react';
-import type { PCBComponent } from '../../types';
 
 export interface MissingValueInfo {
   designator: string;
