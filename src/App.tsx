@@ -15964,8 +15964,8 @@ function App() {
                   Browser Not Supported
                 </h2>
                 <p style={{ color: '#ccc', margin: '0 0 16px 0', fontSize: '15px', lineHeight: '1.6' }}>
-                  PCB Tracer requires a browser that supports <strong>File System Access</strong>.<br />
-                  This is needed to save and load PCB Tracer projects.
+                  PCB Tracer requires a browser that supports access to a local directory.<br />
+                  This is needed to save and load your PCB Tracer project files.
                 </p>
                 <p style={{ color: '#ccc', margin: '0 0 20px 0', fontSize: '15px', lineHeight: '1.6' }}>
                   Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>,<br />
