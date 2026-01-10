@@ -62,8 +62,13 @@ class ClaudeService implements AIService {
   getApiKey(): string | null {
     if (typeof window === 'undefined') return null;
     try {
+      const storageType = this.getStorageType();
       const storage = this.getStorage();
-      const key = storage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+      const keyName = `${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`;
+      const key = storage.getItem(keyName);
+      
+      console.log(`[Claude] getApiKey: storageType=${storageType}, keyName=${keyName}, found=${!!key}`);
+      
       return key?.trim() || null;
     } catch (error) {
       console.warn('Failed to read API key from storage:', error);
@@ -75,21 +80,29 @@ class ClaudeService implements AIService {
     if (typeof window === 'undefined') return;
     
     try {
+      const keyName = `${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`;
+      
       // Clear from both storages first (ignore errors)
       try {
-        sessionStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+        sessionStorage.removeItem(keyName);
       } catch (error) {
         // Ignore
       }
       try {
-        localStorage.removeItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`);
+        localStorage.removeItem(keyName);
       } catch (error) {
         // Ignore
       }
       
       // Save to the selected storage
       const storage = storageType === 'localStorage' ? localStorage : sessionStorage;
-      storage.setItem(`${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`, key.trim());
+      storage.setItem(keyName, key.trim());
+      
+      console.log(`[Claude] saveApiKey: storageType=${storageType}, keyName=${keyName}, saved=${key.trim().substring(0, 10)}...`);
+      
+      // Verify it was saved
+      const verification = storage.getItem(keyName);
+      console.log(`[Claude] saveApiKey verification: found=${!!verification}`);
     } catch (error) {
       console.warn('Failed to save API key to storage:', error);
     }
