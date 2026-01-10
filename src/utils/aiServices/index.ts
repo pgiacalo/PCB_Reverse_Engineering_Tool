@@ -174,6 +174,8 @@ export function getAllServiceInfo(): AIServiceInfo[] {
 export function migrateFromLegacyStorage(): void {
   if (typeof window === 'undefined') return;
   
+  console.log('[Migration] migrateFromLegacyStorage called');
+  
   try {
     // Check for old-style Gemini API key
     let oldSessionKey: string | null = null;
@@ -199,6 +201,7 @@ export function migrateFromLegacyStorage(): void {
     
     try {
       hasNewConfig = !!localStorage.getItem(STORAGE_KEYS.CONFIG);
+      console.log('[Migration] hasNewConfig:', hasNewConfig);
     } catch (error) {
       console.warn('Failed to check for new config:', error);
     }
@@ -206,9 +209,13 @@ export function migrateFromLegacyStorage(): void {
     try {
       hasNewGeminiKey = !!(sessionStorage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}gemini`) || 
                            localStorage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}gemini`));
+      console.log('[Migration] hasNewGeminiKey:', hasNewGeminiKey);
     } catch (error) {
       console.warn('Failed to check for new Gemini key:', error);
     }
+    
+    console.log('[Migration] oldSessionKey:', !!oldSessionKey, 'oldLocalKey:', !!oldLocalKey);
+    console.log('[Migration] Will migrate?', (oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey);
     
     // If we have old keys but no new config, migrate
     if ((oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey) {

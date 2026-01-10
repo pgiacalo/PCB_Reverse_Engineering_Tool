@@ -50,6 +50,7 @@ import { claudeService } from '../../utils/aiServices/claude';
 // Run migration on module load to preserve any existing Gemini API keys
 // Wrap in try-catch to prevent crashes if storage is corrupted
   if (typeof window !== 'undefined') {
+  console.log('[ComponentEditor] Module loaded, calling migrateFromLegacyStorage');
   try {
     migrateFromLegacyStorage();
   } catch (error) {
