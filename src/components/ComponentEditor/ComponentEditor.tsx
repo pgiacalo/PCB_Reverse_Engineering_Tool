@@ -46,7 +46,7 @@ import {
 
 // Run migration on module load to preserve any existing Gemini API keys
 // Wrap in try-catch to prevent crashes if storage is corrupted
-if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
   try {
     migrateFromLegacyStorage();
   } catch (error) {
@@ -881,7 +881,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
     const compExists = compInTop || compInBottom;
     
     if (!compExists) {
-      console.error('[ComponentEditor] Component not found:', { componentId: componentEditor.id, componentsTopCount: componentsTop.length, componentsBottomCount: componentsBottom.length });
+    console.error('[ComponentEditor] Component not found:', { componentId: componentEditor.id, componentsTopCount: componentsTop.length, componentsBottomCount: componentsBottom.length });
       // Component was deleted - close the editor to prevent rendering errors
       setComponentEditor(null);
       return null;
@@ -1078,7 +1078,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
     if (false) {
       // Type assertion for disabled code block - this code never executes
       const _componentEditor = componentEditor!;
-      if (comp.componentType === 'Resistor') {
+    if (comp.componentType === 'Resistor') {
       (updated as any).capacitance = _componentEditor.capacitance !== undefined ? _componentEditor.capacitance : undefined;
       (updated as any).capacitanceUnit = _componentEditor.capacitanceUnit !== undefined ? _componentEditor.capacitanceUnit : undefined;
       (updated as any).voltage = _componentEditor.voltage !== undefined ? _componentEditor.voltage : undefined;
@@ -3419,43 +3419,43 @@ Analyze the attached PDF datasheet and extract the information according to the 
       }}>
         {/* Right side - Cancel and Save buttons */}
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={() => {
-              setComponentEditor(null);
-              setConnectingPin(null); // Clear pin connection mode
-            }}
-            disabled={areComponentsLocked}
-            style={{
-              padding: '2px 5px',
-              background: areComponentsLocked ? '#f5f5f5' : '#fff',
-              color: areComponentsLocked ? '#999' : '#333',
-              border: '1px solid #ddd',
-              borderRadius: 2,
-              cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-              fontSize: '11px',
-              opacity: areComponentsLocked ? 0.6 : 1,
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={areComponentsLocked}
-            style={{
-              padding: '2px 5px',
-              background: areComponentsLocked ? '#f5f5f5' : '#0b5fff',
-              color: areComponentsLocked ? '#999' : '#fff',
-              border: '1px solid #ddd',
-              borderRadius: 2,
-              cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
-              fontSize: '11px',
-              opacity: areComponentsLocked ? 0.6 : 1,
-            }}
-          >
-            Save
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setComponentEditor(null);
+            setConnectingPin(null); // Clear pin connection mode
+          }}
+          disabled={areComponentsLocked}
+          style={{
+            padding: '2px 5px',
+            background: areComponentsLocked ? '#f5f5f5' : '#fff',
+            color: areComponentsLocked ? '#999' : '#333',
+            border: '1px solid #ddd',
+            borderRadius: 2,
+            cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+            fontSize: '11px',
+            opacity: areComponentsLocked ? 0.6 : 1,
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={areComponentsLocked}
+          style={{
+            padding: '2px 5px',
+            background: areComponentsLocked ? '#f5f5f5' : '#0b5fff',
+            color: areComponentsLocked ? '#999' : '#fff',
+            border: '1px solid #ddd',
+            borderRadius: 2,
+            cursor: areComponentsLocked ? 'not-allowed' : 'pointer',
+            fontSize: '11px',
+            opacity: areComponentsLocked ? 0.6 : 1,
+          }}
+        >
+          Save
+        </button>
       </div>
+    </div>
       
       {/* API Key Instructions Dialog */}
       {showApiKeyInstructions && (

@@ -38,7 +38,8 @@ import {
 import { generatePointId, setPointIdCounter, getPointIdCounter, truncatePoint, registerAllocatedId, resetPointIdCounter, unregisterAllocatedId, generateUniqueId } from './utils/coordinates';
 import { generateCenterCursor, generateTestPointCursor } from './utils/cursors';
 import { formatTimestamp, removeTimestampFromFilename } from './utils/fileOperations';
-import { migrateFromLegacyStorage } from './utils/aiServices';
+import { migrateFromLegacyStorage, getCurrentService } from './utils/aiServices';
+import { runTroubleshootingAnalysis, buildTroubleshootingPromptForPreview, extractTestPoints, type TroubleshootingPcbData } from './utils/troubleshooting';
 
 // Migrate any legacy Gemini API key storage to new multi-service format
 migrateFromLegacyStorage();
@@ -48,7 +49,8 @@ import { createNewProject, openProject } from './utils/projectOperations/project
 import { performAutoSave as performAutoSaveModule, configureAutoSave } from './utils/projectOperations/autoSave';
 import { isElectron, showDirectoryPicker as electronShowDirectoryPicker } from './utils/electronFileSystem';
 // Project history imports available if needed: restoreFromHistory, listHistoryFiles, HistoryFile
-import { generatePadsNetlist } from './utils/netlist';
+import { generateHybridNetlist } from './utils/hybridNetlist';
+import { type NodeOptionalFields, serializeNodeProperties, deserializeNodeProperties } from './utils/nodeProperties';
 import jsPDF from 'jspdf';
 import { createToolRegistry, getDefaultAbbreviation, saveToolSettings, saveToolLayerSettings } from './utils/toolRegistry';
 import { toolInstanceManager, type ToolInstanceId } from './utils/toolInstances';
@@ -59,6 +61,7 @@ import { ErrorDialog } from './components/ErrorDialog';
 import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
+import { TroubleshootingDialog } from './components/TroubleshootingDialog';
 import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
@@ -1497,16 +1500,26 @@ function App() {
   const [notesDialogDragOffset, setNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
   // Project Notes
   const [projectNotes, setProjectNotes] = useState<ProjectNote[]>([]);
-  const [projectMetadata, setProjectMetadata] = useState<{ productName: string; productVersion: string; manufacturer: string; date: string }>({
+  const [projectMetadata, setProjectMetadata] = useState<{ productName: string; modelNumber: string; manufacturer: string; dateManufactured: string }>({
     productName: '',
-    productVersion: '',
+    modelNumber: '',
     manufacturer: '',
-    date: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
+    dateManufactured: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
   });
   const [projectNotesDialogVisible, setProjectNotesDialogVisible] = useState(false);
   const [projectNotesDialogPosition, setProjectNotesDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingProjectNotesDialog, setIsDraggingProjectNotesDialog] = useState(false);
   const [projectNotesDialogDragOffset, setProjectNotesDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  // Troubleshooting
+  const [troubleshootingResults, setTroubleshootingResults] = useState<string | null>(null);
+  const [troubleshootingDialogVisible, setTroubleshootingDialogVisible] = useState(false);
+  const [troubleshootingDialogPosition, setTroubleshootingDialogPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingTroubleshootingDialog, setIsDraggingTroubleshootingDialog] = useState(false);
+  const [troubleshootingDialogDragOffset, setTroubleshootingDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [includePcbData, setIncludePcbData] = useState(false);
+  // Node Properties (optional fields for hybrid netlist)
+  const [nodeProperties, setNodeProperties] = useState<Map<number, NodeOptionalFields>>(new Map());
   // Test Points Dialog
   const [testPointsDialogVisible, setTestPointsDialogVisible] = useState(false);
   const [testPointsDialogPosition, setTestPointsDialogPosition] = useState<{ x: number; y: number } | null>(null);
@@ -8790,7 +8803,8 @@ function App() {
     setSelectedGroundIds(new Set());
     setIsSelecting(false);
     setProjectNotes([]);
-    setProjectMetadata({ productName: '', productVersion: '', manufacturer: '', date: new Date().toISOString().split('T')[0] });
+    setProjectMetadata({ productName: '', modelNumber: '', manufacturer: '', dateManufactured: new Date().toISOString().split('T')[0] });
+    setNodeProperties(new Map());
     setCurrentView('overlay');
     setViewScale(1);
     setCameraCenter(0, 0);
@@ -8982,10 +8996,12 @@ function App() {
     setProjectNotes([]);
     setProjectMetadata({
       productName: '',
-      productVersion: '',
+      modelNumber: '',
       manufacturer: '',
-      date: new Date().toISOString().split('T')[0], // Auto-fill with current date
+      dateManufactured: new Date().toISOString().split('T')[0], // Auto-fill with current date
     });
+    setTroubleshootingResults(null);
+    setNodeProperties(new Map());
     
     // === STEP 6: Reset view state ===
     setCurrentView('overlay');
@@ -9719,6 +9735,57 @@ function App() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingTestPointsDialog, testPointsDialogDragOffset]);
+
+  // Handle troubleshooting dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingTroubleshootingDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!troubleshootingDialogDragOffset) return;
+      const newPosition = {
+        x: e.clientX - troubleshootingDialogDragOffset.x,
+        y: e.clientY - troubleshootingDialogDragOffset.y,
+      };
+      setTroubleshootingDialogPosition(newPosition);
+      localStorage.setItem('troubleshootingDialogPosition', JSON.stringify(newPosition));
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingTroubleshootingDialog(false);
+      setTroubleshootingDialogDragOffset(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingTroubleshootingDialog, troubleshootingDialogDragOffset]);
+
+  // Initialize troubleshooting dialog position when it opens (load from localStorage or default)
+  React.useEffect(() => {
+    if (troubleshootingDialogVisible && troubleshootingDialogPosition === null) {
+      const saved = localStorage.getItem('troubleshootingDialogPosition');
+      if (saved) {
+        try {
+          const savedPosition = JSON.parse(saved);
+          setTroubleshootingDialogPosition(savedPosition);
+        } catch {
+          setTroubleshootingDialogPosition({
+            x: 100,
+            y: 100,
+          });
+        }
+      } else {
+        setTroubleshootingDialogPosition({
+          x: 100,
+          y: 100,
+        });
+      }
+    }
+  }, [troubleshootingDialogVisible, troubleshootingDialogPosition]);
 
   // Initialize test points dialog position when it opens (load from localStorage or default)
   React.useEffect(() => {
@@ -10834,12 +10901,14 @@ function App() {
         // Note: directory handle cannot be serialized, but project name is stored for persistence
       },
       projectNotes, // Save project notes (Name, Value pairs)
-      projectMetadata, // Save project metadata (Product Name, Version, Manufacturer, Date)
+      projectMetadata, // Save project metadata (Product Name, Model Number, Manufacturer, Date Manufactured)
+      troubleshootingResults, // Save troubleshooting analysis results
+      nodeProperties: serializeNodeProperties(nodeProperties), // Save node optional fields for hybrid netlist
       homeViews, // Save all home view locations (0-9)
       toolInstances: toolInstanceManager.getAll(), // Save all tool instances (single source of truth)
     };
     return { project, timestamp: ts };
-  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, projectMetadata, homeViews]);
+  }, [currentView, viewScale, cameraWorldCenter, showBothLayers, selectedDrawingLayer, topImage, bottomImage, drawingStrokes, vias, tracesTop, tracesBottom, componentsTop, componentsBottom, grounds, toolRegistry, areImagesLocked, areViasLocked, arePadsLocked, areTracesLocked, areComponentsLocked, areGroundNodesLocked, arePowerNodesLocked, powerBuses, groundBuses, getPointIdCounter, topTraceColor, bottomTraceColor, topTraceSize, bottomTraceSize, topPadColor, bottomPadColor, topPadSize, bottomPadSize, topComponentColor, bottomComponentColor, topComponentSize, bottomComponentSize, traceToolLayer, padToolLayer, testPointToolLayer, componentToolLayer, autoSaveEnabled, autoSaveInterval, autoSaveBaseName, projectName, showViasLayer, showTopPadsLayer, showBottomPadsLayer, showTopTracesLayer, showBottomTracesLayer, showTopComponents, showBottomComponents, showPowerLayer, showGroundLayer, showConnectionsLayer, autoAssignDesignators, useGlobalDesignatorCounters, projectNotes, projectMetadata, nodeProperties, homeViews]);
 
   // Ref to store the latest buildProjectData function to avoid recreating performAutoSave
   const buildProjectDataRef = useRef(buildProjectData);
@@ -10895,6 +10964,7 @@ function App() {
     // Project notes setter
     setProjectNotes,
     setProjectMetadata,
+    setTroubleshootingResults,
     // View setters
     setCurrentView,
     setViewScale,
@@ -11021,7 +11091,7 @@ function App() {
     // Selection setters
     setSelectedIds, setSelectedComponentIds, setSelectedPowerIds, setSelectedGroundIds, setIsSelecting,
     // Project notes setter
-    setProjectNotes, setProjectMetadata,
+    setProjectNotes, setProjectMetadata, setTroubleshootingResults,
     // View setters
     setCurrentView, setViewScale, setCameraCenter, setCameraWorldCenter, setShowBothLayers, setSelectedDrawingLayer, setHomeViews, setIsWaitingForHomeViewKey,
     // Transform setters
@@ -11549,15 +11619,16 @@ function App() {
       // Collect all components from both layers
       const allComponents = [...componentsTop, ...componentsBottom];
       
-      // Generate PADS JSON netlist
-      const netlistContent = generatePadsNetlist(
+      // Generate Hybrid Net-Centric netlist with explicit nodes
+      const netlistContent = generateHybridNetlist(
           allComponents,
           drawingStrokes,
           powers,
           grounds,
           powerBuses,
           groundBuses,
-          projectName
+          projectName,
+          nodeProperties
         );
       
       const filename = `${projectName}_netlist.json`;
@@ -11593,7 +11664,7 @@ function App() {
       console.error('Failed to export netlist:', e);
       alert(`Failed to export netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
     }
-  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName]);
+  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName, nodeProperties]);
 
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
@@ -12219,18 +12290,30 @@ function App() {
       if (project.projectMetadata) {
         setProjectMetadata({
           productName: project.projectMetadata.productName || '',
-          productVersion: project.projectMetadata.productVersion || '',
+          modelNumber: (project.projectMetadata as any).modelNumber || (project.projectMetadata as any).productVersion || '',
           manufacturer: project.projectMetadata.manufacturer || '',
-          date: project.projectMetadata.date || new Date().toISOString().split('T')[0],
+          dateManufactured: (project.projectMetadata as any).dateManufactured || (project.projectMetadata as any).date || new Date().toISOString().split('T')[0],
         });
       } else {
         // Initialize with current date if no metadata exists
         setProjectMetadata({
           productName: '',
-          productVersion: '',
+          modelNumber: '',
           manufacturer: '',
-          date: new Date().toISOString().split('T')[0],
+          dateManufactured: new Date().toISOString().split('T')[0],
         });
+      }
+      // Restore troubleshooting results
+      if ((project as any).troubleshootingResults) {
+        setTroubleshootingResults((project as any).troubleshootingResults);
+      } else {
+        setTroubleshootingResults(null);
+      }
+      // Restore node properties (optional fields for hybrid netlist)
+      if ((project as any).nodeProperties) {
+        setNodeProperties(deserializeNodeProperties((project as any).nodeProperties));
+      } else {
+        setNodeProperties(new Map());
       }
       // Restore trace colors, sizes, and layer choice
       if (project.traceColors) {
@@ -13639,6 +13722,90 @@ function App() {
     closeProjectWrapper();
   }, [hasUnsavedChanges, saveProject, projectDirHandle, closeProjectWrapper]);
 
+  // Troubleshooting handlers
+  const handleRunTroubleshooting = useCallback(() => {
+    setTroubleshootingDialogVisible(true);
+  }, []);
+
+  const handleViewTroubleshooting = useCallback(() => {
+    setTroubleshootingDialogVisible(true);
+  }, []);
+
+  const handleTroubleshootingAnalysis = useCallback(async (
+    selectedSymptomIndices: number[],
+    selectedMeasurementIndices: number[],
+    includePcbDataFlag: boolean
+  ) => {
+    setIsAnalyzing(true);
+    try {
+      const selectedSymptoms = selectedSymptomIndices.map(i => projectNotes[i]).filter(Boolean);
+      const selectedMeasurements = selectedMeasurementIndices.map(i => projectNotes[i]).filter(Boolean);
+      
+      let pcbData: TroubleshootingPcbData | undefined;
+      if (includePcbDataFlag) {
+        const allComponents = [...componentsTop, ...componentsBottom];
+        const testPoints = extractTestPoints(drawingStrokes);
+        pcbData = {
+          components: allComponents,
+          drawingStrokes,
+          testPoints,
+          powerNodes: powers.map(p => ({ id: p.id, name: powerNodeNames.find(n => n) || p.id, voltage: undefined })),
+          groundNodes: grounds.map(g => ({ id: g.id, name: groundNodeNames.find(n => n) || g.id })),
+        };
+      }
+      
+      const aiService = getCurrentService();
+      const result = await runTroubleshootingAnalysis(
+        projectMetadata,
+        selectedSymptoms,
+        includePcbDataFlag,
+        pcbData,
+        selectedMeasurements,
+        aiService
+      );
+      
+      if (result.success && result.results) {
+        setTroubleshootingResults(result.results);
+      } else {
+        alert(`Troubleshooting analysis failed: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Error running troubleshooting analysis: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [projectNotes, projectMetadata, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerNodeNames, groundNodeNames]);
+
+  const handleGetPrompt = useCallback(async (
+    selectedSymptomIndices: number[],
+    selectedMeasurementIndices: number[],
+    includePcbDataFlag: boolean
+  ): Promise<string> => {
+    const selectedSymptoms = selectedSymptomIndices.map(i => projectNotes[i]).filter(Boolean);
+    const selectedMeasurements = selectedMeasurementIndices.map(i => projectNotes[i]).filter(Boolean);
+    
+    let pcbData: TroubleshootingPcbData | undefined;
+    if (includePcbDataFlag) {
+      const allComponents = [...componentsTop, ...componentsBottom];
+      const testPoints = extractTestPoints(drawingStrokes);
+      pcbData = {
+        components: allComponents,
+        drawingStrokes,
+        testPoints,
+        powerNodes: powers.map(p => ({ id: p.id, name: powerNodeNames.find(n => n) || p.id, voltage: undefined })),
+        groundNodes: grounds.map(g => ({ id: g.id, name: groundNodeNames.find(n => n) || g.id })),
+      };
+    }
+    
+    return buildTroubleshootingPromptForPreview(
+      projectMetadata,
+      selectedSymptoms,
+      includePcbDataFlag,
+      pcbData,
+      selectedMeasurements
+    );
+  }, [projectNotes, projectMetadata, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerNodeNames, groundNodeNames]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -13776,6 +13943,9 @@ function App() {
         setShowPowerBusManager={setShowPowerBusManager}
         setShowGroundBusManager={setShowGroundBusManager}
         setShowPastMachine={setShowPastMachine}
+        troubleshootingResults={troubleshootingResults}
+        onRunTroubleshooting={handleRunTroubleshooting}
+        onViewTroubleshooting={handleViewTroubleshooting}
         showMemoryMonitor={showMemoryMonitor}
         setShowMemoryMonitor={setShowMemoryMonitor}
         toolRegistry={toolRegistry}
@@ -16156,6 +16326,41 @@ function App() {
             e.preventDefault();
           }
         }}
+      />
+
+      {/* Troubleshooting Dialog */}
+      <TroubleshootingDialog
+        visible={troubleshootingDialogVisible}
+        projectMetadata={projectMetadata}
+        projectNotes={projectNotes}
+        drawingStrokes={drawingStrokes}
+        troubleshootingResults={troubleshootingResults}
+        includePcbData={includePcbData}
+        onIncludePcbDataChange={setIncludePcbData}
+        onRunAnalysis={handleTroubleshootingAnalysis}
+        onGetPrompt={handleGetPrompt}
+        onClose={() => {
+          setTroubleshootingDialogVisible(false);
+        }}
+        position={troubleshootingDialogPosition}
+        isDragging={isDraggingTroubleshootingDialog}
+        onDragStart={(e) => {
+          if (troubleshootingDialogPosition) {
+            setTroubleshootingDialogDragOffset({
+              x: e.clientX - troubleshootingDialogPosition.x,
+              y: e.clientY - troubleshootingDialogPosition.y,
+            });
+            setIsDraggingTroubleshootingDialog(true);
+            e.preventDefault();
+          } else {
+            // Initialize position on first drag
+            setTroubleshootingDialogPosition({ x: e.clientX - 300, y: e.clientY - 200 });
+            setTroubleshootingDialogDragOffset({ x: 300, y: 200 });
+            setIsDraggingTroubleshootingDialog(true);
+            e.preventDefault();
+          }
+        }}
+        isAnalyzing={isAnalyzing}
       />
 
       {/* Test Points Dialog */}

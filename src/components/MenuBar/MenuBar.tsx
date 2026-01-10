@@ -149,6 +149,11 @@ export interface MenuBarProps {
   // PastMachine
   setShowPastMachine: (show: boolean) => void;
   
+  // Troubleshooting
+  troubleshootingResults: string | null;
+  onRunTroubleshooting: () => void;
+  onViewTroubleshooting: () => void;
+  
   // Tool registry
   toolRegistry: Map<string, ToolDefinition>;
   updateToolSettings: (toolId: string, settings: ToolSettings) => void;
@@ -304,6 +309,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   showMemoryMonitor: _showMemoryMonitor,
   setShowMemoryMonitor: _setShowMemoryMonitor,
   setShowPastMachine,
+  troubleshootingResults,
+  onRunTroubleshooting,
+  onViewTroubleshooting,
   toolRegistry,
   updateToolSettings,
   updateToolLayerSettings,
@@ -1317,6 +1325,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
             >
               {showCrosshairs ? '✓ ' : '   '}Show X-Y Axis Crosshairs
+            </button>
+            <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
+            <button
+              onClick={() => { if (isProjectActive) { onRunTroubleshooting(); setOpenMenu(null); } }}
+              disabled={!isProjectActive}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}
+            >
+              Run Troubleshooting Analysis…
+            </button>
+            <button
+              onClick={() => { if (troubleshootingResults !== null) { onViewTroubleshooting(); setOpenMenu(null); } }}
+              disabled={troubleshootingResults === null}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: troubleshootingResults === null ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: troubleshootingResults === null ? 'not-allowed' : 'pointer' }}
+            >
+              View Troubleshooting Results…
             </button>
           </div>
         )}

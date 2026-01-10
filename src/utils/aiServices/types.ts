@@ -47,6 +47,11 @@ export interface AIExtractionRequest {
   mimeType?: string;
 }
 
+// Request for text-only analysis (no PDF)
+export interface AITextAnalysisRequest {
+  prompt: string;
+}
+
 // Response from AI extraction
 export interface AIExtractionResponse {
   success: boolean;
@@ -82,6 +87,9 @@ export interface AIService {
   
   // Extract data from PDF using AI
   extractFromPDF(request: AIExtractionRequest): Promise<AIExtractionResponse>;
+  
+  // Analyze text using AI (no PDF attachment)
+  analyzeText(request: AITextAnalysisRequest): Promise<AIExtractionResponse>;
 }
 
 // Storage keys

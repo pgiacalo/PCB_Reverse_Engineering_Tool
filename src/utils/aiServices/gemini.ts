@@ -7,7 +7,8 @@
 import type { 
   AIService, 
   AIServiceInfo, 
-  AIExtractionRequest, 
+  AIExtractionRequest,
+  AITextAnalysisRequest,
   AIExtractionResponse,
   APIKeyStorageType 
 } from './types';
@@ -182,6 +183,74 @@ class GeminiService implements AIService {
                 (_match: string, base64: string) => `"[Base64 data truncated - ${base64.length} characters]"`);
             }
             errorMessage += `.\n\n${cleanMessage}`;
+          }
+        } catch {
+          if (errorText.length > 1000) {
+            errorMessage += `.\n\n${errorText.substring(0, 1000)}... [truncated]`;
+          } else {
+            errorMessage += `.\n\n${errorText}`;
+          }
+        }
+        return { success: false, error: errorMessage };
+      }
+      
+      const data = await response.json();
+      
+      // Extract response text
+      let responseText = '';
+      if (data.candidates?.[0]) {
+        if (data.candidates[0].finishReason && data.candidates[0].finishReason !== 'STOP') {
+          return { success: false, error: `Response blocked: ${data.candidates[0].finishReason}` };
+        }
+        
+        const parts = data.candidates[0].content?.parts;
+        if (parts?.[0]?.text) {
+          responseText = parts[0].text.trim();
+        }
+      }
+      
+      if (!responseText) {
+        return { success: false, error: 'No response text from API', rawResponse: data };
+      }
+      
+      return { success: true, text: responseText, rawResponse: data };
+      
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
+  }
+  
+  async analyzeText(request: AITextAnalysisRequest): Promise<AIExtractionResponse> {
+    const apiUrl = this.getApiUrl();
+    if (!apiUrl) {
+      return { success: false, error: 'API key not configured' };
+    }
+    
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: request.prompt }
+            ]
+          }]
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Gemini API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.message) {
+            errorMessage += `.\n\n${errorJson.error.message}`;
           }
         } catch {
           if (errorText.length > 1000) {

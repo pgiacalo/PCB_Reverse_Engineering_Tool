@@ -1634,12 +1634,16 @@ export function generateSpiceNetlist(
 }
 
 /**
- * Generate PADS-PCB ASCII Format (JSON)
+ * @deprecated Use generateHybridNetlist from hybridNetlist.ts instead.
+ * This function is kept for reference but is no longer used.
+ * 
+ * Generate PADS-PCB ASCII Format (JSON) - OLD FORMAT
  * CRITICAL: Uses Node ID-based connectivity, NOT coordinates.
  * When a Via and Power/Ground symbol share the same Node ID, they represent
  * the same electrical node. Component pins are connected via traces (shared Node IDs).
  */
-export function generatePadsNetlist(
+// @ts-ignore - Deprecated function kept for reference
+function generatePadsNetlist_DEPRECATED(
   components: PCBComponent[],
   drawingStrokes: DrawingStroke[],
   powerSymbols: PowerSymbol[],
@@ -1661,16 +1665,30 @@ export function generatePadsNetlist(
   );
   
   // Build connections from traces (connect consecutive points by Node ID)
+  // CRITICAL: Traces can ONLY connect through vias, pads, power, or ground nodes
+  // Regular trace points do NOT have Node IDs and cannot form connections
+  // This is by design: traces must connect through explicit connection points (vias/pads)
   const connections: Array<[number, number]> = [];
   for (const stroke of drawingStrokes) {
     if (stroke.type === 'trace' && stroke.points.length >= 2) {
-      for (let i = 0; i < stroke.points.length - 1; i++) {
-        const point1 = stroke.points[i];
-        const point2 = stroke.points[i + 1];
-        if (point1 && point2 && point1.id !== undefined && point2.id !== undefined) {
+      // Collect all points with Node IDs in this trace
+      const nodesInTrace: Array<{ index: number; nodeId: number }> = [];
+      for (let i = 0; i < stroke.points.length; i++) {
+        const point = stroke.points[i];
+        if (point && point.id !== undefined) {
+          nodesInTrace.push({ index: i, nodeId: point.id });
+        }
+      }
+      
+      // Connect all nodes in this trace (they're all connected through the trace path)
+      // Even if separated by intermediate points without Node IDs, they're on the same trace
+      for (let i = 0; i < nodesInTrace.length; i++) {
+        for (let j = i + 1; j < nodesInTrace.length; j++) {
+          const nodeId1 = nodesInTrace[i].nodeId;
+          const nodeId2 = nodesInTrace[j].nodeId;
           // Only connect if they have different Node IDs
-          if (point1.id !== point2.id) {
-            connections.push([point1.id, point2.id]);
+          if (nodeId1 !== nodeId2) {
+            connections.push([nodeId1, nodeId2]);
           }
         }
       }

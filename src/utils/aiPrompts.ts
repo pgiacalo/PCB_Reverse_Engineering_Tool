@@ -46,3 +46,11 @@ export function getAllAIPrompts(): Record<string, string> {
 export function hasAIPrompt(promptName: string): boolean {
   return promptName in aiPromptsData.prompts;
 }
+
+/**
+ * Get the troubleshooting analysis prompt
+ * @returns The troubleshooting prompt text, or undefined if not found
+ */
+export function getTroubleshootingPrompt(): string | undefined {
+  return getAIPrompt('troubleshooting_analysis');
+}

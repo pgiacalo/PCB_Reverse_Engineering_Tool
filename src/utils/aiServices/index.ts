@@ -25,6 +25,7 @@ export type {
   AIServiceConfig, 
   AIServiceInfo,
   AIExtractionRequest,
+  AITextAnalysisRequest,
   AIExtractionResponse,
   APIKeyStorageType,
   AIModel

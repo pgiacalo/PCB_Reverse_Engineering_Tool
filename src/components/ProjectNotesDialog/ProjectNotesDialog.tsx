@@ -27,9 +27,9 @@ export interface ProjectNote {
 
 export interface ProjectMetadata {
   productName: string;
-  productVersion: string;
+  modelNumber: string;
   manufacturer: string;
-  date: string;
+  dateManufactured: string;
 }
 
 export interface ProjectNotesDialogProps {
@@ -67,9 +67,9 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
   const [localNotes, setLocalNotes] = useState<ProjectNote[]>([]);
   const [localMetadata, setLocalMetadata] = useState<ProjectMetadata>({
     productName: '',
-    productVersion: '',
+    modelNumber: '',
     manufacturer: '',
-    date: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
+    dateManufactured: new Date().toISOString().split('T')[0], // Auto-fill with current date (YYYY-MM-DD)
   });
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingField, setEditingField] = useState<'name' | 'value' | null>(null);
@@ -84,11 +84,11 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
     if (visible) {
       setLocalNotes([...projectNotes]);
       setLocalMetadata({ ...projectMetadata });
-      // Auto-fill date if empty
-      if (!projectMetadata.date || projectMetadata.date.trim() === '') {
+      // Auto-fill dateManufactured if empty
+      if (!projectMetadata.dateManufactured || projectMetadata.dateManufactured.trim() === '') {
         setLocalMetadata(prev => ({
           ...prev,
-          date: new Date().toISOString().split('T')[0]
+          dateManufactured: new Date().toISOString().split('T')[0]
         }));
       }
       setEditingIndex(null);
@@ -488,13 +488,13 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
-            Product Version:
+            Model Number:
           </label>
           <input
             type="text"
-            value={localMetadata.productVersion}
-            onChange={(e) => setLocalMetadata({ ...localMetadata, productVersion: e.target.value })}
-            placeholder="Enter version"
+            value={localMetadata.modelNumber}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, modelNumber: e.target.value })}
+            placeholder="Enter model number"
             style={{
               padding: '6px 8px',
               border: '1px solid #ddd',
@@ -528,12 +528,12 @@ export const ProjectNotesDialog: React.FC<ProjectNotesDialogProps> = ({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '11px', fontWeight: 600, color: '#333' }}>
-            Date:
+            Date Manufactured:
           </label>
           <input
             type="date"
-            value={localMetadata.date}
-            onChange={(e) => setLocalMetadata({ ...localMetadata, date: e.target.value })}
+            value={localMetadata.dateManufactured}
+            onChange={(e) => setLocalMetadata({ ...localMetadata, dateManufactured: e.target.value })}
             style={{
               padding: '6px 8px',
               border: '1px solid #ddd',

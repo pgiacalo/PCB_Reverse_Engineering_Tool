@@ -90,6 +90,7 @@ export interface ProjectIsolationState {
   // Project notes setter
   setProjectNotes: (notes: any[]) => void;
   setProjectMetadata: (metadata: ProjectMetadata) => void;
+  setTroubleshootingResults: (results: string | null) => void;
   
   // View setters
   setCurrentView: (view: ViewMode) => void;
@@ -307,10 +308,11 @@ export function createCloseProject(state: ProjectIsolationState): () => void {
     state.setProjectNotes([]);
     state.setProjectMetadata({
       productName: '',
-      productVersion: '',
+      modelNumber: '',
       manufacturer: '',
-      date: new Date().toISOString().split('T')[0],
+      dateManufactured: new Date().toISOString().split('T')[0],
     });
+    state.setTroubleshootingResults(null);
     
     // === STEP 6: Reset view state ===
     state.setCurrentView('overlay');
