@@ -3,7 +3,7 @@
  * Analyzes netlist to suggest descriptive names for generic signal nets (N$1, N$2, etc.)
  */
 
-import { analyzeText } from './aiServices';
+import { getCurrentService } from './aiServices';
 
 export interface NetNameSuggestion {
   original_name: string;
@@ -51,8 +51,9 @@ export async function analyzeNetNames(
     // Replace placeholder with actual netlist
     const prompt = promptTemplate.replace('{netlist_json}', netlistJson);
     
-    // Call AI service
-    const response = await analyzeText({
+    // Get the current AI service and call analyzeText
+    const aiService = getCurrentService();
+    const response = await aiService.analyzeText({
       prompt,
       systemPrompt: 'You are an expert electronics engineer. Return ONLY valid JSON with no additional text or markdown formatting.',
       temperature: 0.3, // Lower temperature for more consistent, focused analysis
