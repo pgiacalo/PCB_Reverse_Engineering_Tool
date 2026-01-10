@@ -11671,6 +11671,7 @@ function App() {
         );
       
       // Try to get AI suggestions for net names (before saving)
+      let aiStatus = 'not_attempted'; // 'not_attempted' | 'failed' | 'no_suggestions' | 'pending_review'
       try {
         const { analyzeNetNames } = await import('./utils/netNameInference');
         console.log('[Export] Requesting AI net name suggestions...');
@@ -11683,18 +11684,19 @@ function App() {
           setNetNameSuggestions(result.suggestions);
           setNetNameSuggestionDialogVisible(true);
           setNetNameSuggestionDialogPosition({ x: 150, y: 150 });
+          aiStatus = 'pending_review';
           return; // Wait for user to review suggestions
         } else {
           console.log('[Export] No AI suggestions available, proceeding with export');
-          // No suggestions, proceed with export
+          aiStatus = 'no_suggestions';
         }
       } catch (aiError) {
         console.warn('[Export] AI net name analysis failed or was skipped:', aiError);
-        // Continue with export even if AI fails
+        aiStatus = 'failed';
       }
       
       // Save the netlist (either no AI suggestions or AI failed)
-      await saveNetlistToFile(netlistContent);
+      await saveNetlistToFile(netlistContent, aiStatus);
       
     } catch (e) {
       console.error('Failed to export netlist:', e);
@@ -11703,13 +11705,39 @@ function App() {
   }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName, nodeProperties]);
   
   // Helper function to save netlist to file
-  const saveNetlistToFile = useCallback(async (netlistContent: string) => {
+  const saveNetlistToFile = useCallback(async (
+    netlistContent: string, 
+    aiStatus: 'not_attempted' | 'failed' | 'no_suggestions' | 'user_cancelled' | 'applied' = 'not_attempted',
+    appliedCount: number = 0
+  ) => {
     if (!projectDirHandle) return;
     
     const filename = `${projectName}_netlist.json`;
     
     // Create blob with JSON MIME type
     const blob = new Blob([netlistContent], { type: 'application/json' });
+    
+    // Build success message with AI status
+    let successMessage = `Netlist exported successfully to netlists/${filename}!\n\n`;
+    
+    switch (aiStatus) {
+      case 'applied':
+        successMessage += `✅ AI Net Naming: ${appliedCount} net${appliedCount !== 1 ? 's' : ''} renamed with descriptive names.`;
+        break;
+      case 'user_cancelled':
+        successMessage += `ℹ️ AI Net Naming: Suggestions were available but not applied (user cancelled).`;
+        break;
+      case 'no_suggestions':
+        successMessage += `ℹ️ AI Net Naming: No generic signal nets found to rename (all nets already have descriptive names).`;
+        break;
+      case 'failed':
+        successMessage += `⚠️ AI Net Naming: AI analysis failed (network error or service unavailable). Netlist exported with original net names.`;
+        break;
+      case 'not_attempted':
+      default:
+        // No AI status message
+        break;
+    }
     
     // Try to save using File System Access API in netlists subdirectory
     try {
@@ -11721,7 +11749,7 @@ function App() {
       const writable = await fileHandle.createWritable();
       await writable.write(blob);
       await writable.close();
-      alert(`Netlist exported successfully to netlists/${filename}!`);
+      alert(successMessage);
     } catch (fsError) {
       // Fallback to download if File System Access API fails
       console.warn('File System Access API failed, using download fallback:', fsError);
@@ -11733,7 +11761,10 @@ function App() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      alert(`Netlist downloaded as ${filename}!`);
+      
+      // Update message for download fallback
+      successMessage = successMessage.replace('exported successfully to netlists/', 'downloaded as ');
+      alert(successMessage);
     }
   }, [projectDirHandle, projectName]);
 
@@ -13820,8 +13851,8 @@ function App() {
       setPendingNetlistContent(null);
       setNetNameSuggestions([]);
       
-      // Save the updated netlist
-      await saveNetlistToFile(updatedNetlist);
+      // Save the updated netlist with AI status
+      await saveNetlistToFile(updatedNetlist, 'applied', selectedSuggestions.length);
     } catch (error) {
       console.error('[Export] Failed to apply net name suggestions:', error);
       alert('Failed to apply net name suggestions. See console for details.');
@@ -13832,7 +13863,7 @@ function App() {
     if (!pendingNetlistContent) return;
     
     // User cancelled, save original netlist without AI suggestions
-    saveNetlistToFile(pendingNetlistContent);
+    saveNetlistToFile(pendingNetlistContent, 'user_cancelled');
     
     // Close dialog
     setNetNameSuggestionDialogVisible(false);
