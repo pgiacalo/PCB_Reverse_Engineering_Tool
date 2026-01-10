@@ -107,10 +107,12 @@ function generateProtelNetlist(netlist: HybridNetlist): string {
     const netCode = index + 1;
     lines.push(`    (net (code ${netCode}) (name ${escapeNetName(net.name)})`);
     
-    // Add all component pin connections
-    for (const conn of net.connections) {
-      if (conn.type === 'component_pin') {
-        lines.push(`      (node (ref ${conn.component_ref}) (pin ${conn.pin_number}))`);
+    // Add all component pin connections from all nodes in this net
+    for (const node of net.nodes) {
+      for (const conn of node.connections) {
+        if (conn.type === 'component_pin' && conn.component && conn.pin) {
+          lines.push(`      (node (ref ${conn.component}) (pin ${conn.pin}))`);
+        }
       }
     }
     
@@ -198,10 +200,12 @@ function generateSExpressionNetlist(netlist: HybridNetlist): string {
     const netCode = index + 1;
     lines.push(`    (net (code "${netCode}") (name "${escapeNetName(net.name)}")`);
     
-    // Add all component pin connections
-    for (const conn of net.connections) {
-      if (conn.type === 'component_pin') {
-        lines.push(`      (node (ref "${conn.component_ref}") (pin "${conn.pin_number}") (pinfunction "${conn.pin_name || ''}"))`);
+    // Add all component pin connections from all nodes in this net
+    for (const node of net.nodes) {
+      for (const conn of node.connections) {
+        if (conn.type === 'component_pin' && conn.component && conn.pin) {
+          lines.push(`      (node (ref "${conn.component}") (pin "${conn.pin}") (pinfunction "${conn.pin_name || ''}"))`);
+        }
       }
     }
     
@@ -260,9 +264,11 @@ export function validateNetlistForKiCad(netlist: HybridNetlist): string[] {
   // Check for unconnected component pins
   const allConnectedPins = new Set<string>();
   for (const net of netlist.nets) {
-    for (const conn of net.connections) {
-      if (conn.type === 'component_pin') {
-        allConnectedPins.add(`${conn.component_ref}:${conn.pin_number}`);
+    for (const node of net.nodes) {
+      for (const conn of node.connections) {
+        if (conn.type === 'component_pin' && conn.component && conn.pin) {
+          allConnectedPins.add(`${conn.component}:${conn.pin}`);
+        }
       }
     }
   }
@@ -278,9 +284,17 @@ export function validateNetlistForKiCad(netlist: HybridNetlist): string[] {
   }
   
   // Check for nets with no connections
-  const emptyNets = netlist.nets.filter(net => 
-    net.connections.filter(c => c.type === 'component_pin').length === 0
-  );
+  const emptyNets = netlist.nets.filter(net => {
+    let componentPinCount = 0;
+    for (const node of net.nodes) {
+      for (const conn of node.connections) {
+        if (conn.type === 'component_pin') {
+          componentPinCount++;
+        }
+      }
+    }
+    return componentPinCount === 0;
+  });
   if (emptyNets.length > 0) {
     warnings.push(`${emptyNets.length} net(s) with no component connections: ${emptyNets.map(n => n.name).join(', ')}`);
   }
