@@ -11731,7 +11731,7 @@ function App() {
         successMessage += `ℹ️ AI Net Naming: No generic signal nets found to rename (all nets already have descriptive names).`;
         break;
       case 'failed':
-        successMessage += `⚠️ AI Net Naming: AI analysis failed (network error or service unavailable). Netlist exported with original net names.`;
+        successMessage += `⚠️ AI Net Naming: AI analysis failed. Netlist exported with original net names.\n\nNote: AI net naming requires an API key. Configure it in File → AI Settings.`;
         break;
       case 'not_attempted':
       default:

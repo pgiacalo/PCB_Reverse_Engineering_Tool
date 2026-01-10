@@ -53,6 +53,12 @@ export async function analyzeNetNames(
     
     // Get the current AI service and call analyzeText
     const aiService = getCurrentService();
+    
+    // Check if API key is configured
+    if (!aiService.hasApiKey()) {
+      throw new Error('AI API key not configured. Please configure your API key in File → AI Settings before using AI net naming.');
+    }
+    
     const aiResponse = await aiService.analyzeText({
       prompt,
       systemPrompt: 'You are an expert electronics engineer. Return ONLY valid JSON with no additional text or markdown formatting.',
