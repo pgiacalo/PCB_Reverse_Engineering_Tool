@@ -2,7 +2,7 @@
  * Dialog for reviewing and approving AI-suggested net names
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import type { NetNameSuggestion } from '../../utils/netNameInference';
 
 interface NetNameSuggestionDialogProps {

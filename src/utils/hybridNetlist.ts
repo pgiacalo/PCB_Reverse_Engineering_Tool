@@ -27,8 +27,7 @@ import type { PCBComponent, DrawingStroke, GroundSymbol } from '../types';
 import { 
   buildConnectivityGraph, 
   groupNodesIntoNets, 
-  generateNetNames,
-  type NetlistNode 
+  generateNetNames
 } from './netlist';
 import {
   type NodeOptionalFields,
@@ -621,7 +620,7 @@ export function generateHybridNetlist(
       });
     }
     
-    const hybridComp: HybridComponent = {
+    const hybridComp: Partial<HybridComponent> & { designator: string; package: string } = {
       designator,
       package: (comp as any).packageType?.trim() || (comp as any).package?.trim() || ''
     };
@@ -651,7 +650,7 @@ export function generateHybridNetlist(
     }
     
     hybridComp.pins = hybridPins;
-    hybridComponents.push(hybridComp);
+    hybridComponents.push(hybridComp as HybridComponent);
   }
   
   // Sort components by designator

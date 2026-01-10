@@ -70,18 +70,20 @@ function generateProtelNetlist(netlist: HybridNetlist): string {
       lines.push(`      (footprint ${comp.package})`);
     }
     
-    if (comp.datasheet) {
-      lines.push(`      (datasheet ${comp.datasheet})`);
-    }
+    // Note: datasheet field not currently in HybridComponent interface
+    // if ((comp as any).datasheet) {
+    //   lines.push(`      (datasheet ${(comp as any).datasheet})`);
+    // }
     
     if (comp.description) {
       lines.push(`      (description ${escapeValue(comp.description)})`);
     }
     
-    // Add manufacturer and part number if available
-    if (comp.manufacturer) {
-      lines.push(`      (property "Manufacturer" "${comp.manufacturer}")`);
-    }
+    // Note: manufacturer field not currently in HybridComponent interface
+    // Add part number if available
+    // if ((comp as any).manufacturer) {
+    //   lines.push(`      (property "Manufacturer" "${(comp as any).manufacturer}")`);
+    // }
     if (comp.part_number) {
       lines.push(`      (property "PartNumber" "${comp.part_number}")`);
     }
@@ -152,20 +154,22 @@ function generateSExpressionNetlist(netlist: HybridNetlist): string {
       lines.push(`      (footprint "${comp.package}")`);
     }
     
-    if (comp.datasheet) {
-      lines.push(`      (datasheet "${comp.datasheet}")`);
-    }
+    // Note: datasheet field not currently in HybridComponent interface
+    // if ((comp as any).datasheet) {
+    //   lines.push(`      (datasheet "${(comp as any).datasheet}")`);
+    // }
     
     if (comp.description) {
       lines.push(`      (description "${escapeValue(comp.description)}")`);
     }
     
     // Properties
-    if (comp.manufacturer || comp.part_number) {
+    // Note: manufacturer field not currently in HybridComponent interface
+    if (comp.part_number) {
       lines.push('      (properties');
-      if (comp.manufacturer) {
-        lines.push(`        (property (name "Manufacturer") (value "${comp.manufacturer}"))`);
-      }
+      // if ((comp as any).manufacturer) {
+      //   lines.push(`        (property (name "Manufacturer") (value "${(comp as any).manufacturer}"))`);
+      // }
       if (comp.part_number) {
         lines.push(`        (property (name "PartNumber") (value "${comp.part_number}"))`);
       }

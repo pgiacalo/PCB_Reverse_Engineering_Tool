@@ -103,7 +103,7 @@ export interface TroubleshootingPcbData {
  */
 export function detectIdenticalSignalPaths(
   components: PCBComponent[],
-  drawingStrokes: DrawingStroke[]
+  _drawingStrokes: DrawingStroke[]
 ): IdenticalPathGroup[] {
   const pathGroups: IdenticalPathGroup[] = [];
   
@@ -131,7 +131,7 @@ export function detectIdenticalSignalPaths(
   }
   
   // Find groups with 2 or more identical components (potential duplicate paths)
-  for (const [key, comps] of componentGroups.entries()) {
+  for (const comps of componentGroups.values()) {
     if (comps.length >= 2) {
       // Check if these components form duplicate signal paths
       // This is a simplified detection - in practice, you'd analyze connectivity
@@ -323,24 +323,10 @@ export function buildTroubleshootingPrompt(
     throw new Error('Troubleshooting prompt template not found');
   }
   
-  // Build product information section
-  const productInfo = `
-Product Information:
-- Product Name: ${metadata.productName || 'Not specified'}
-- Model Number: ${metadata.modelNumber || 'Not specified'}
-- Manufacturer: ${metadata.manufacturer || 'Not specified'}
-- Date Manufactured: ${metadata.dateManufactured || 'Not specified'}
-`.trim();
-  
-  // Build symptoms section
+  // Build symptoms list for the prompt
   const symptomsList = selectedSymptoms.map((note, index) => 
     `${index + 1}. ${note.name}: ${note.value}`
   ).join('\n');
-  
-  const symptomsSection = `
-Reported Symptoms:
-${symptomsList}
-`.trim();
   
   // Build PCB data section (if included)
   let pcbDataSection = '';

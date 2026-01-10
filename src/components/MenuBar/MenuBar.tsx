@@ -241,7 +241,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   bomExportFormat: _bomExportFormat,
   setBomExportFormat: _setBomExportFormat,
   onExportNetlist,
-  onExportKiCadNetlist,
+  onExportKiCadNetlist: _onExportKiCadNetlist,
   setNewProjectDialog,
   setAutoSaveDialog,
   onShowAiSettings,

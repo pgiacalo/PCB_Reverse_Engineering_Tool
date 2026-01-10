@@ -179,6 +179,71 @@ class OpenAIService implements AIService {
       };
     }
   }
+
+  async analyzeText(request: import('./types').AITextAnalysisRequest): Promise<AIExtractionResponse> {
+    const apiKey = this.getApiKey();
+    const apiUrl = this.getApiUrl();
+    
+    if (!apiKey || !apiUrl) {
+      return { success: false, error: 'API key not configured' };
+    }
+    
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.getModel(),
+          max_tokens: 4096,
+          messages: [{
+            role: 'user',
+            content: request.prompt
+          }]
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `OpenAI API error: ${response.status} ${response.statusText}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.message) {
+            errorMessage += `.\n\n${errorJson.error.message}`;
+          }
+        } catch {
+          if (errorText.length > 1000) {
+            errorMessage += `.\n\n${errorText.substring(0, 1000)}... [truncated]`;
+          } else {
+            errorMessage += `.\n\n${errorText}`;
+          }
+        }
+        return { success: false, error: errorMessage };
+      }
+      
+      const data = await response.json();
+      
+      // Extract response text from OpenAI's format
+      let responseText = '';
+      if (data.choices?.[0]?.message?.content) {
+        responseText = data.choices[0].message.content;
+      }
+      
+      if (!responseText) {
+        return { success: false, error: 'No response text from API', rawResponse: data };
+      }
+      
+      return { success: true, text: responseText.trim(), rawResponse: data };
+      
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error occurred' 
+      };
+    }
+  }
 }
 
 export const openaiService = new OpenAIService();

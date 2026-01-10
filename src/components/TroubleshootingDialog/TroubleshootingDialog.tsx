@@ -18,7 +18,7 @@
  * and AI-powered root cause analysis results.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { ProjectMetadata, ProjectNote } from '../ProjectNotesDialog/ProjectNotesDialog';
 import type { DrawingStroke } from '../../types';
 
@@ -57,7 +57,7 @@ export const TroubleshootingDialog: React.FC<TroubleshootingDialogProps> = ({
   visible,
   projectMetadata,
   projectNotes,
-  drawingStrokes,
+  drawingStrokes: _drawingStrokes,
   troubleshootingResults,
   includePcbData,
   onIncludePcbDataChange,

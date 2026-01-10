@@ -11686,7 +11686,7 @@ function App() {
         );
       
       // Try to get AI suggestions for net names (before saving)
-      let aiStatus = 'not_attempted'; // 'not_attempted' | 'failed' | 'no_suggestions' | 'pending_review'
+      let aiStatus: 'not_attempted' | 'failed' | 'no_suggestions' | 'user_cancelled' | 'applied' = 'not_attempted';
       try {
         // Show loading dialog
         setAiAnalysisDialogVisible(true);
@@ -11705,7 +11705,7 @@ function App() {
           setNetNameSuggestions(result.suggestions);
           setNetNameSuggestionDialogVisible(true);
           setNetNameSuggestionDialogPosition({ x: 150, y: 150 });
-          aiStatus = 'pending_review';
+          // Don't set aiStatus here - we're waiting for user review
           return; // Wait for user to review suggestions
         } else {
           console.log('[Export] No AI suggestions available, proceeding with export');

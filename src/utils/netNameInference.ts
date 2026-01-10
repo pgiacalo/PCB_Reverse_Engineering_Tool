@@ -60,10 +60,7 @@ export async function analyzeNetNames(
     }
     
     const aiResponse = await aiService.analyzeText({
-      prompt,
-      systemPrompt: 'You are an expert electronics engineer. Return ONLY valid JSON with no additional text or markdown formatting.',
-      temperature: 0.3, // Lower temperature for more consistent, focused analysis
-      maxTokens: 4000
+      prompt
     });
     
     // Check if AI call was successful
@@ -148,21 +145,8 @@ export function applyNetNameSuggestions(
     
     // Also update component pin node_id references if they match old net names
     if (netlist.components && Array.isArray(netlist.components)) {
-      for (const component of netlist.components) {
-        if (component.pins && Array.isArray(component.pins)) {
-          for (const pin of component.pins) {
-            if (pin.node_id) {
-              // Extract net name from semantic node ID (e.g., "node_n_1_5" → "N$1")
-              // This is a simplified approach; actual implementation may need more sophisticated parsing
-              for (const [oldName, newName] of nameMap.entries()) {
-                // If the node_id contains a reference to the old net name, we may need to update it
-                // For now, we'll leave node_ids as-is since they use semantic IDs
-                // The net name change is sufficient for readability
-              }
-            }
-          }
-        }
-      }
+      // Note: We don't update node_ids since they use semantic IDs (e.g., "node_n_1_5")
+      // The net name change is sufficient for readability
     }
     
     console.log(`[NetNameInference] Applied ${changedCount} net name changes`);
