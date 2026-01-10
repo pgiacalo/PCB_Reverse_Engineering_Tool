@@ -3442,7 +3442,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       {/* Fixed footer with buttons */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'space-between',
+        justifyContent: 'flex-end',
         alignItems: 'center',
         gap: '6px',
         padding: '6px',
@@ -3451,8 +3451,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         borderTop: '1px solid #e0e0e0',
         flexShrink: 0,
       }}>
-        {/* Right side - Cancel and Save buttons */}
-        <div style={{ display: 'flex', gap: '6px' }}>
+        {/* Cancel and Save buttons - aligned to the right */}
         <button
           onClick={() => {
             setComponentEditor(null);
@@ -3488,7 +3487,6 @@ Analyze the attached PDF datasheet and extract the information according to the 
         >
           Save
         </button>
-      </div>
     </div>
       
       {/* API Key Instructions Dialog */}
