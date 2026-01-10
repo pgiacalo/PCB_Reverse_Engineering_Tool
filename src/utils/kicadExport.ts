@@ -54,8 +54,8 @@ function generateProtelNetlist(netlist: HybridNetlist): string {
   lines.push('  (export (version D)');
   lines.push(`    (design`);
   lines.push(`      (source "PCBTracer")`);
-  lines.push(`      (date "${new Date().toISOString()}")`);
-  lines.push(`      (tool "PCBTracer v${netlist.metadata.version}")`);
+  lines.push(`      (date "${netlist.design_info.date}")`);
+  lines.push(`      (tool "PCBTracer v${netlist.design_info.version}")`);
   lines.push(`    )`);
   lines.push('  )');
   lines.push('');
@@ -64,10 +64,10 @@ function generateProtelNetlist(netlist: HybridNetlist): string {
   lines.push('  (components');
   for (const comp of netlist.components) {
     lines.push(`    (comp (ref ${comp.designator})`);
-    lines.push(`      (value ${escapeValue(comp.value || comp.type)})`);
+    lines.push(`      (value ${escapeValue(comp.value || comp.package || 'Unknown')})`);
     
-    if (comp.footprint) {
-      lines.push(`      (footprint ${comp.footprint})`);
+    if (comp.package) {
+      lines.push(`      (footprint ${comp.package})`);
     }
     
     if (comp.datasheet) {
@@ -82,8 +82,8 @@ function generateProtelNetlist(netlist: HybridNetlist): string {
     if (comp.manufacturer) {
       lines.push(`      (property "Manufacturer" "${comp.manufacturer}")`);
     }
-    if (comp.partNumber) {
-      lines.push(`      (property "PartNumber" "${comp.partNumber}")`);
+    if (comp.part_number) {
+      lines.push(`      (property "PartNumber" "${comp.part_number}")`);
     }
     
     lines.push(`    )`);
@@ -136,8 +136,8 @@ function generateSExpressionNetlist(netlist: HybridNetlist): string {
   lines.push('(export (version "E")');
   lines.push('  (design');
   lines.push('    (source "PCBTracer")');
-  lines.push(`    (date "${new Date().toISOString()}")`);
-  lines.push(`    (tool "PCBTracer v${netlist.metadata.version}")`);
+  lines.push(`    (date "${netlist.design_info.date}")`);
+  lines.push(`    (tool "PCBTracer v${netlist.design_info.version}")`);
   lines.push(`    (sheet (number "1") (name "/") (tstamps "/"))`);
   lines.push('  )');
   lines.push('');
@@ -146,10 +146,10 @@ function generateSExpressionNetlist(netlist: HybridNetlist): string {
   lines.push('  (components');
   for (const comp of netlist.components) {
     lines.push(`    (comp (ref "${comp.designator}")`);
-    lines.push(`      (value "${escapeValue(comp.value || comp.type)}")`);
+    lines.push(`      (value "${escapeValue(comp.value || comp.package || 'Unknown')}")`);
     
-    if (comp.footprint) {
-      lines.push(`      (footprint "${comp.footprint}")`);
+    if (comp.package) {
+      lines.push(`      (footprint "${comp.package}")`);
     }
     
     if (comp.datasheet) {
@@ -161,13 +161,13 @@ function generateSExpressionNetlist(netlist: HybridNetlist): string {
     }
     
     // Properties
-    if (comp.manufacturer || comp.partNumber) {
+    if (comp.manufacturer || comp.part_number) {
       lines.push('      (properties');
       if (comp.manufacturer) {
         lines.push(`        (property (name "Manufacturer") (value "${comp.manufacturer}"))`);
       }
-      if (comp.partNumber) {
-        lines.push(`        (property (name "PartNumber") (value "${comp.partNumber}"))`);
+      if (comp.part_number) {
+        lines.push(`        (property (name "PartNumber") (value "${comp.part_number}"))`);
       }
       lines.push('      )');
     }
