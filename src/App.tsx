@@ -62,6 +62,7 @@ import { DetailedInfoDialog } from './components/DetailedInfoDialog';
 import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { TroubleshootingDialog } from './components/TroubleshootingDialog';
+import { NetNameSuggestionDialog } from './components/NetNameSuggestionDialog/NetNameSuggestionDialog';
 import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
@@ -1516,6 +1517,19 @@ function App() {
   const [troubleshootingDialogPosition, setTroubleshootingDialogPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDraggingTroubleshootingDialog, setIsDraggingTroubleshootingDialog] = useState(false);
   const [troubleshootingDialogDragOffset, setTroubleshootingDialogDragOffset] = useState<{ x: number; y: number } | null>(null);
+  
+  // Net Name Suggestion Dialog state
+  const [netNameSuggestionDialogVisible, setNetNameSuggestionDialogVisible] = useState(false);
+  const [netNameSuggestionDialogPosition, setNetNameSuggestionDialogPosition] = useState({ x: 150, y: 150 });
+  const [isDraggingNetNameSuggestionDialog, setIsDraggingNetNameSuggestionDialog] = useState(false);
+  const [netNameSuggestionDialogDragOffset, setNetNameSuggestionDialogDragOffset] = useState({ x: 0, y: 0 });
+  const [pendingNetlistContent, setPendingNetlistContent] = useState<string | null>(null);
+  const [netNameSuggestions, setNetNameSuggestions] = useState<Array<{
+    original_name: string;
+    suggested_name: string;
+    confidence: number;
+    reasoning: string;
+  }>>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [includePcbData, setIncludePcbData] = useState(false);
   // Node Properties (optional fields for hybrid netlist)
@@ -9763,6 +9777,31 @@ function App() {
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingTroubleshootingDialog, troubleshootingDialogDragOffset]);
+  
+  // Handle net name suggestion dialog dragging
+  React.useEffect(() => {
+    if (!isDraggingNetNameSuggestionDialog) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newPosition = {
+        x: e.clientX - netNameSuggestionDialogDragOffset.x,
+        y: e.clientY - netNameSuggestionDialogDragOffset.y,
+      };
+      setNetNameSuggestionDialogPosition(newPosition);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingNetNameSuggestionDialog(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingNetNameSuggestionDialog, netNameSuggestionDialogDragOffset]);
 
   // Initialize troubleshooting dialog position when it opens (load from localStorage or default)
   React.useEffect(() => {
@@ -11631,40 +11670,72 @@ function App() {
           nodeProperties
         );
       
-      const filename = `${projectName}_netlist.json`;
-      
-      // Create blob with JSON MIME type
-      const blob = new Blob([netlistContent], { type: 'application/json' });
-      
-      // Try to save using File System Access API in netlists subdirectory
+      // Try to get AI suggestions for net names (before saving)
       try {
-        // Create or get the netlists subdirectory
-        const netlistsDirHandle = await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+        const { analyzeNetNames } = await import('./utils/netNameInference');
+        console.log('[Export] Requesting AI net name suggestions...');
+        const result = await analyzeNetNames(netlistContent, 0.5); // Lower threshold to show more suggestions
         
-        // Save file in netlists subdirectory
-        const fileHandle = await netlistsDirHandle.getFileHandle(filename, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        alert(`Netlist exported successfully to netlists/${filename}!`);
-      } catch (fsError) {
-        // Fallback to download if File System Access API fails
-        console.warn('File System Access API failed, using download fallback:', fsError);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        alert(`Netlist downloaded as ${filename}!`);
+        if (result.suggestions.length > 0) {
+          console.log(`[Export] AI suggested ${result.suggestions.length} net name improvements`);
+          // Store the netlist and suggestions, show dialog
+          setPendingNetlistContent(netlistContent);
+          setNetNameSuggestions(result.suggestions);
+          setNetNameSuggestionDialogVisible(true);
+          setNetNameSuggestionDialogPosition({ x: 150, y: 150 });
+          return; // Wait for user to review suggestions
+        } else {
+          console.log('[Export] No AI suggestions available, proceeding with export');
+          // No suggestions, proceed with export
+        }
+      } catch (aiError) {
+        console.warn('[Export] AI net name analysis failed or was skipped:', aiError);
+        // Continue with export even if AI fails
       }
+      
+      // Save the netlist (either no AI suggestions or AI failed)
+      await saveNetlistToFile(netlistContent);
+      
     } catch (e) {
       console.error('Failed to export netlist:', e);
       alert(`Failed to export netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
     }
   }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName, nodeProperties]);
+  
+  // Helper function to save netlist to file
+  const saveNetlistToFile = useCallback(async (netlistContent: string) => {
+    if (!projectDirHandle) return;
+    
+    const filename = `${projectName}_netlist.json`;
+    
+    // Create blob with JSON MIME type
+    const blob = new Blob([netlistContent], { type: 'application/json' });
+    
+    // Try to save using File System Access API in netlists subdirectory
+    try {
+      // Create or get the netlists subdirectory
+      const netlistsDirHandle = await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+      
+      // Save file in netlists subdirectory
+      const fileHandle = await netlistsDirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      alert(`Netlist exported successfully to netlists/${filename}!`);
+    } catch (fsError) {
+      // Fallback to download if File System Access API fails
+      console.warn('File System Access API failed, using download fallback:', fsError);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert(`Netlist downloaded as ${filename}!`);
+    }
+  }, [projectDirHandle, projectName]);
 
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
@@ -13731,6 +13802,44 @@ function App() {
     setTroubleshootingDialogVisible(true);
   }, []);
 
+  // Handle Net Name Suggestion Dialog
+  const handleApplyNetNameSuggestions = useCallback(async (selectedSuggestions: Array<{
+    original_name: string;
+    suggested_name: string;
+    confidence: number;
+    reasoning: string;
+  }>) => {
+    if (!pendingNetlistContent) return;
+    
+    try {
+      const { applyNetNameSuggestions } = await import('./utils/netNameInference');
+      const updatedNetlist = applyNetNameSuggestions(pendingNetlistContent, selectedSuggestions);
+      
+      // Close dialog
+      setNetNameSuggestionDialogVisible(false);
+      setPendingNetlistContent(null);
+      setNetNameSuggestions([]);
+      
+      // Save the updated netlist
+      await saveNetlistToFile(updatedNetlist);
+    } catch (error) {
+      console.error('[Export] Failed to apply net name suggestions:', error);
+      alert('Failed to apply net name suggestions. See console for details.');
+    }
+  }, [pendingNetlistContent, saveNetlistToFile]);
+  
+  const handleCancelNetNameSuggestions = useCallback(() => {
+    if (!pendingNetlistContent) return;
+    
+    // User cancelled, save original netlist without AI suggestions
+    saveNetlistToFile(pendingNetlistContent);
+    
+    // Close dialog
+    setNetNameSuggestionDialogVisible(false);
+    setPendingNetlistContent(null);
+    setNetNameSuggestions([]);
+  }, [pendingNetlistContent, saveNetlistToFile]);
+  
   const handleTroubleshootingAnalysis = useCallback(async (
     selectedSymptomIndices: number[],
     selectedMeasurementIndices: number[],
@@ -16362,6 +16471,23 @@ function App() {
         }}
         isAnalyzing={isAnalyzing}
       />
+      
+      {/* Net Name Suggestion Dialog */}
+      {netNameSuggestionDialogVisible && (
+        <NetNameSuggestionDialog
+          suggestions={netNameSuggestions}
+          onApply={handleApplyNetNameSuggestions}
+          onCancel={handleCancelNetNameSuggestions}
+          position={netNameSuggestionDialogPosition}
+          onDragStart={(e) => {
+            setNetNameSuggestionDialogDragOffset({
+              x: e.clientX - netNameSuggestionDialogPosition.x,
+              y: e.clientY - netNameSuggestionDialogPosition.y,
+            });
+            setIsDraggingNetNameSuggestionDialog(true);
+          }}
+        />
+      )}
 
       {/* Test Points Dialog */}
       <TestPointsDialog
