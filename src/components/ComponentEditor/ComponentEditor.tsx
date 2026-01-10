@@ -2242,8 +2242,8 @@ Analyze the attached PDF datasheet and extract the information according to the 
       }}
       style={{
         position: 'fixed',
-        top: componentDialogPosition ? `${componentDialogPosition.y}px` : '90px',
-        left: componentDialogPosition ? `${componentDialogPosition.x}px` : `${window.innerWidth - 280}px`,
+        top: componentDialogPosition ? `${componentDialogPosition.y}px` : '16px',
+        left: componentDialogPosition ? `${componentDialogPosition.x}px` : '254px',
         transform: 'none', // Position from top-left corner, not centered
         background: connectingPin && connectingPin.componentId === comp.id ? 'rgba(255, 255, 255, 0.95)' : '#fff',
         border: '1px solid #0b5fff',

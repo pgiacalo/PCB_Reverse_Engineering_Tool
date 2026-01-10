@@ -9905,7 +9905,7 @@ function App() {
     setDebugDialog({ visible: true, text: debugText });
   }, [selectedIds, selectedComponentIds, selectedPowerIds, selectedGroundIds, setDebugDialog]);
 
-  // Initialize dialog position when it opens (load from localStorage or center of screen)
+  // Initialize dialog position when it opens (load from localStorage or use default)
   React.useEffect(() => {
     if (componentEditor && componentEditor.visible && componentDialogPosition === null) {
       // Try to load saved position from localStorage
@@ -9918,13 +9918,27 @@ function App() {
           position = constrainDialogPosition(savedPosition.x, savedPosition.y, 250, window.innerHeight * 0.4);
           setComponentDialogPosition(position);
         } catch {
-          // If parsing fails, use default upper right position (to the right of canvas, below menu bar)
-          position = constrainDialogPosition(window.innerWidth - 280, 90, 250, window.innerHeight * 0.4);
+          // If parsing fails, use default upper left of canvas
+          const canvas = document.querySelector('.pcb-canvas') as HTMLCanvasElement;
+          if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            position = { x: rect.left + 10, y: rect.top + 10 };
+          } else {
+            // Fallback: use known canvas position (left: 244px, top: 6px)
+            position = { x: 254, y: 16 };
+          }
           setComponentDialogPosition(position);
         }
       } else {
-        // No saved position, use default upper right position (to the right of canvas, below menu bar)
-        position = constrainDialogPosition(window.innerWidth - 280, 90, 250, window.innerHeight * 0.4);
+        // No saved position, use default upper left of canvas
+        const canvas = document.querySelector('.pcb-canvas') as HTMLCanvasElement;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          position = { x: rect.left + 10, y: rect.top + 10 };
+        } else {
+          // Fallback: use known canvas position (left: 244px, top: 6px)
+          position = { x: 254, y: 16 };
+        }
         setComponentDialogPosition(position);
       }
     } else if (!componentEditor || !componentEditor.visible) {
