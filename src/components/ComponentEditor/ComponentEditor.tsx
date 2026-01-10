@@ -321,7 +321,8 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
   // Function to save API key, model, and settings - moved to top level (before early return)
   const handleSaveApiKey = () => {
       if (typeof window !== 'undefined') {
-      // Save the provider and storage type preference
+      // CRITICAL: Save the provider and storage type preference FIRST
+      // This ensures getApiKey() reads from the correct storage
       saveAIConfig({
         provider: selectedProvider,
         model: modelInput,
@@ -330,7 +331,12 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       setApiKeyStorageType(storageType);
       setCurrentProvider(selectedProvider);
       
-      const service = getCurrentService();
+      // Get the service registry (need direct access to ensure we use the right provider)
+      const services: Record<AIServiceProvider, AIService> = {
+        gemini: geminiService,
+        claude: claudeService,
+      };
+      const service = services[selectedProvider];
       const serviceInfo = SERVICE_INFO[selectedProvider];
       
       if (apiKeyInput.trim()) {
