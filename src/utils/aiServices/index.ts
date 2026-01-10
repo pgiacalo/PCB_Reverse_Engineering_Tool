@@ -54,19 +54,24 @@ export function getAIConfig(): AIServiceConfig {
   if (typeof window === 'undefined') return DEFAULT_CONFIG;
   
   try {
+    console.log('[AIServices] getAIConfig: Reading key:', STORAGE_KEYS.CONFIG);
     const stored = localStorage.getItem(STORAGE_KEYS.CONFIG);
+    console.log('[AIServices] getAIConfig: Raw value:', stored);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
+        console.log('[AIServices] getAIConfig: Parsed config:', parsed);
         return {
           provider: parsed.provider || DEFAULT_CONFIG.provider,
           model: parsed.model || DEFAULT_CONFIG.model,
           apiKeyStorageType: parsed.apiKeyStorageType || DEFAULT_CONFIG.apiKeyStorageType,
         };
       } catch {
+        console.log('[AIServices] getAIConfig: Parse failed, returning default');
         return DEFAULT_CONFIG;
       }
     }
+    console.log('[AIServices] getAIConfig: No config found, returning default');
   } catch (error) {
     // localStorage may be blocked or corrupted - return defaults
     console.warn('Failed to read AI config from localStorage:', error);
@@ -82,10 +87,13 @@ export function saveAIConfig(config: Partial<AIServiceConfig>): void {
   if (typeof window === 'undefined') return;
   
   try {
+    console.log('[AIServices] saveAIConfig: Saving to key:', STORAGE_KEYS.CONFIG);
     const current = getAIConfig();
+    console.log('[AIServices] saveAIConfig: Current config:', current);
     const updated = { ...current, ...config };
+    console.log('[AIServices] saveAIConfig: Updated config:', updated);
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
-    console.log('[AIServices] saveAIConfig:', updated);
+    console.log('[AIServices] saveAIConfig: Saved successfully');
     
     // Verify it was saved
     const verification = localStorage.getItem(STORAGE_KEYS.CONFIG);
