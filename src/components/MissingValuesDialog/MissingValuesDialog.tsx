@@ -117,48 +117,34 @@ export const MissingValuesDialog: React.FC<MissingValuesDialogProps> = ({
     <div
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        left: dialogPosition.x,
+        top: dialogPosition.y,
+        backgroundColor: '#fff',
+        borderRadius: '4px',
+        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+        width: `${dialogSize.width}px`,
+        height: `${dialogSize.height}px`,
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        flexDirection: 'column',
+        border: '1px solid #ddd',
         zIndex: 10000
       }}
-      onClick={onClose}
     >
-      <div
-        style={{
-          position: 'absolute',
-          left: dialogPosition.x,
-          top: dialogPosition.y,
-          backgroundColor: '#fff',
-          borderRadius: '4px',
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
-          width: `${dialogSize.width}px`,
-          height: `${dialogSize.height}px`,
-          display: 'flex',
-          flexDirection: 'column',
-          cursor: isDragging ? 'grabbing' : 'default',
-          border: '1px solid #ccc'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
+        {/* Grabbable Border */}
         <div
           style={{
-            padding: '8px 12px',
-            borderBottom: '1px solid #ccc',
-            backgroundColor: '#e8e8e8',
+            padding: '6px',
+            borderBottom: '1px solid #e0e0e0',
+            background: '#888',
+            cursor: isDragging ? 'grabbing' : 'grab',
+            userSelect: 'none',
+            flexShrink: 0,
             borderTopLeftRadius: '4px',
-            borderTopRightRadius: '4px',
-            cursor: 'move'
+            borderTopRightRadius: '4px'
           }}
           onMouseDown={handleMouseDown}
         >
-          <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#d32f2f' }}>
+          <h2 style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: '#fff' }}>
             ⚠️ Missing Component Values ({missingValues.length})
           </h2>
         </div>
@@ -296,7 +282,6 @@ export const MissingValuesDialog: React.FC<MissingValuesDialogProps> = ({
             borderBottomRightRadius: '4px'
           }}
         />
-      </div>
     </div>
   );
 };
