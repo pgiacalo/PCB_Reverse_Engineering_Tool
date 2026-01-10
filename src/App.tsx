@@ -63,6 +63,7 @@ import { NotesDialog } from './components/NotesDialog';
 import { ProjectNotesDialog, type ProjectNote } from './components/ProjectNotesDialog';
 import { TroubleshootingDialog } from './components/TroubleshootingDialog';
 import { NetNameSuggestionDialog } from './components/NetNameSuggestionDialog/NetNameSuggestionDialog';
+import { MissingValuesDialog, type MissingValueInfo } from './components/MissingValuesDialog/MissingValuesDialog';
 import { TestPointsDialog } from './components/TestPointsDialog';
 import { BoardDimensionsDialog, type BoardDimensions } from './components/BoardDimensionsDialog';
 import { TransformImagesDialog } from './components/TransformImagesDialog';
@@ -1572,6 +1573,10 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysisDialogVisible, setAiAnalysisDialogVisible] = useState(false);
   const [includePcbData, setIncludePcbData] = useState(false);
+  // Missing Values Dialog
+  const [missingValuesDialogVisible, setMissingValuesDialogVisible] = useState(false);
+  const [missingValuesInfo, setMissingValuesInfo] = useState<MissingValueInfo[]>([]);
+  const [pendingNetlistForExport, setPendingNetlistForExport] = useState<string | null>(null);
   // Node Properties (optional fields for hybrid netlist)
   const [nodeProperties, setNodeProperties] = useState<Map<number, NodeOptionalFields>>(new Map());
   // Test Points Dialog
@@ -11727,15 +11732,11 @@ function App() {
       // Check for warnings from netlist generation
       const warnings = (generateHybridNetlist as any).lastWarnings;
       if (warnings?.missingValues?.length > 0) {
-        const proceed = confirm(
-          `Warning: ${warnings.missingValues.length} component(s) are missing values:\n\n` +
-          warnings.missingValues.join(', ') +
-          '\n\nThese components will not have value information in the exported netlist.\n\n' +
-          'Do you want to continue with the export?'
-        );
-        if (!proceed) {
-          return;
-        }
+        // Show the enhanced missing values dialog
+        setMissingValuesInfo(warnings.missingValues);
+        setPendingNetlistForExport(netlistContent);
+        setMissingValuesDialogVisible(true);
+        return; // Wait for user to either fix components or proceed
       }
       
       // Try to get AI suggestions for net names (before saving)
@@ -11779,6 +11780,88 @@ function App() {
       alert(`Failed to export netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
     }
   }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName, nodeProperties]);
+  
+  // Handler for fixing a component from the missing values dialog
+  const handleFixComponent = useCallback((componentId: string, layer: 'top' | 'bottom', focusField?: string) => {
+    // Find the component
+    const component = layer === 'top' 
+      ? componentsTop.find(c => c.id === componentId)
+      : componentsBottom.find(c => c.id === componentId);
+    
+    if (!component) {
+      console.error(`[handleFixComponent] Component not found: ${componentId} on ${layer}`);
+      return;
+    }
+    
+    // Highlight the component by selecting it
+    setSelectedComponentIds(new Set([componentId]));
+    
+    // Center the canvas on the component
+    const canvasWidth = window.innerWidth - 2 * CONTENT_BORDER;
+    const canvasHeight = window.innerHeight - 2 * CONTENT_BORDER - 50; // Account for toolbar
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
+    
+    // Calculate pan to center the component
+    const targetPanX = centerX - component.x * zoom;
+    const targetPanY = centerY - component.y * zoom;
+    setPan({ x: targetPanX, y: targetPanY });
+    
+    // Open the component editor
+    openComponentEditor(component, layer);
+    
+    // Store the field to focus for the component editor to use
+    if (focusField) {
+      // We'll need to pass this to the component editor somehow
+      // For now, the component editor will need to be enhanced to accept a focusField prop
+      console.log(`[handleFixComponent] Should focus field: ${focusField}`);
+    }
+  }, [componentsTop, componentsBottom, zoom, openComponentEditor, CONTENT_BORDER]);
+  
+  // Handler for proceeding with export despite missing values
+  const handleProceedWithMissingValues = useCallback(async () => {
+    setMissingValuesDialogVisible(false);
+    
+    if (!pendingNetlistForExport) {
+      console.error('[handleProceedWithMissingValues] No pending netlist content');
+      return;
+    }
+    
+    // Continue with the export flow (AI net naming)
+    const netlistContent = pendingNetlistForExport;
+    setPendingNetlistForExport(null);
+    
+    // Try to get AI suggestions for net names
+    let aiStatus: 'not_attempted' | 'failed' | 'no_suggestions' | 'user_cancelled' | 'applied' = 'not_attempted';
+    try {
+      setAiAnalysisDialogVisible(true);
+      
+      const { analyzeNetNames } = await import('./utils/netNameInference');
+      console.log('[Export] Requesting AI net name suggestions...');
+      const result = await analyzeNetNames(netlistContent, 0.5);
+      
+      setAiAnalysisDialogVisible(false);
+      
+      if (result.suggestions.length > 0) {
+        console.log(`[Export] AI suggested ${result.suggestions.length} net name improvements`);
+        setPendingNetlistContent(netlistContent);
+        setNetNameSuggestions(result.suggestions);
+        setNetNameSuggestionDialogVisible(true);
+        setNetNameSuggestionDialogPosition({ x: 150, y: 150 });
+        return;
+      } else {
+        console.log('[Export] No AI suggestions available, proceeding with export');
+        aiStatus = 'no_suggestions';
+      }
+    } catch (aiError) {
+      console.warn('[Export] AI net name analysis failed or was skipped:', aiError);
+      aiStatus = 'failed';
+      setAiAnalysisDialogVisible(false);
+    }
+    
+    // Save the netlist
+    await saveNetlistToFile(netlistContent, aiStatus);
+  }, [pendingNetlistForExport]);
   
   // Helper function to save netlist to file
   const saveNetlistToFile = useCallback(async (
@@ -16805,6 +16888,19 @@ function App() {
             });
             setIsDraggingNetNameSuggestionDialog(true);
           }}
+        />
+      )}
+
+      {/* Missing Values Dialog */}
+      {missingValuesDialogVisible && (
+        <MissingValuesDialog
+          missingValues={missingValuesInfo}
+          onClose={() => {
+            setMissingValuesDialogVisible(false);
+            setPendingNetlistForExport(null);
+          }}
+          onProceed={handleProceedWithMissingValues}
+          onFixComponent={handleFixComponent}
         />
       )}
 

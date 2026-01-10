@@ -199,6 +199,53 @@ function determineNetType(netName: string): 'power' | 'power_ground' | 'signal' 
 }
 
 /**
+ * Get list of missing required fields for a component
+ * Returns array of field names that are required but missing/empty
+ */
+function getMissingRequiredFields(comp: PCBComponent): string[] {
+  const missing: string[] = [];
+  const compAny = comp as any;
+  
+  switch (comp.componentType) {
+    case 'Resistor':
+      if (!compAny.resistance || String(compAny.resistance).trim() === '') {
+        missing.push('resistance');
+      }
+      break;
+      
+    case 'Capacitor':
+    case 'Electrolytic Capacitor':
+    case 'Film Capacitor':
+      if (!compAny.capacitance || String(compAny.capacitance).trim() === '') {
+        missing.push('capacitance');
+      }
+      break;
+      
+    case 'Inductor':
+      if (!compAny.inductance || String(compAny.inductance).trim() === '') {
+        missing.push('inductance');
+      }
+      break;
+      
+    case 'Battery':
+      if (!compAny.voltage || String(compAny.voltage).trim() === '') {
+        missing.push('voltage');
+      }
+      if (!compAny.capacity || String(compAny.capacity).trim() === '') {
+        missing.push('capacity');
+      }
+      break;
+      
+    // Add more component types as needed
+    default:
+      // No required fields for other component types
+      break;
+  }
+  
+  return missing;
+}
+
+/**
  * Get component value string with units
  */
 function getComponentValueString(comp: PCBComponent): string | undefined {
@@ -549,7 +596,13 @@ export function generateHybridNetlist(
   
   // Build hybrid components with node_id references
   const hybridComponents: HybridComponent[] = [];
-  const missingValueComponents: string[] = [];
+  const missingValueComponents: Array<{
+    designator: string;
+    componentType: string;
+    missingFields: string[];
+    componentId: string;
+    layer: 'top' | 'bottom';
+  }> = [];
   
   for (const comp of components) {
     const designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
@@ -632,19 +685,21 @@ export function generateHybridNetlist(
       hybridComp.part_number = partNumber;
     }
     
-    // Add value if available
+    // Add value if available and track missing fields
     const value = getComponentValueString(comp);
     if (value) {
       hybridComp.value = value;
     } else {
       // Track components that should have values but don't
-      if (comp.componentType === 'Resistor' || 
-          comp.componentType === 'Capacitor' ||
-          comp.componentType === 'Electrolytic Capacitor' ||
-          comp.componentType === 'Film Capacitor' ||
-          comp.componentType === 'Inductor' ||
-          comp.componentType === 'Battery') {
-        missingValueComponents.push(designator);
+      const missingFields = getMissingRequiredFields(comp);
+      if (missingFields.length > 0) {
+        missingValueComponents.push({
+          designator,
+          componentType: comp.componentType,
+          missingFields,
+          componentId: comp.id,
+          layer: comp.layer
+        });
       }
     }
     
@@ -705,7 +760,8 @@ export function generateHybridNetlist(
   // Log warning if components are missing values
   if (missingValueComponents.length > 0) {
     console.warn(
-      `[HybridNetlist] Warning: ${missingValueComponents.length} component(s) missing values: ${missingValueComponents.join(', ')}`
+      `[HybridNetlist] Warning: ${missingValueComponents.length} component(s) missing values:`,
+      missingValueComponents.map(c => `${c.designator} (${c.missingFields.join(', ')})`).join(', ')
     );
   }
   

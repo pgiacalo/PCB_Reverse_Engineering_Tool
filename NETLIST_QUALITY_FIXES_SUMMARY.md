@@ -1,6 +1,7 @@
 # Netlist Quality Fixes - Summary
 
 ## Date: January 10, 2026
+## Updated: January 10, 2026 - Enhanced UI with Interactive Dialog
 
 ## Issues Addressed
 
@@ -115,11 +116,21 @@ if (warnings?.missingValues?.length > 0) {
 - No warning about data quality issues
 - External tools and AI analysis would fail or produce incorrect results
 
-### After Fixes
+### After Initial Fixes (v3.5.0)
 - Users are warned about missing component values before export
 - Tolerance values are correctly encoded in UTF-8
 - Clear indication of which components need attention
 - Improved data quality for external tools and AI analysis
+
+### After Enhanced UI (v3.5.1+)
+- **Interactive dialog** shows detailed list of components with missing values
+- **"Fix" buttons** for each component that:
+  - Highlight the component on canvas
+  - Center the view on the component
+  - Open the Component Properties dialog
+- **Field-specific feedback**: Dialog shows exactly which fields are missing (e.g., "resistance", "capacitance")
+- **Streamlined workflow**: Users can quickly navigate to and fix each component without searching
+- **Better UX**: Visual feedback and one-click navigation vs. reading a list of designators
 
 ## Testing Recommendations
 
@@ -158,13 +169,113 @@ To verify the fixes work correctly:
 - KiCad Netlist Export - Depends on proper component values
 - BOM Export - Should also validate component values
 
+## Enhanced Features (v3.5.1+)
+
+### New MissingValuesDialog Component
+
+**Location**: `src/components/MissingValuesDialog/MissingValuesDialog.tsx`
+
+**Features**:
+- Draggable dialog with modern UI
+- Color-coded component list (orange warning theme)
+- Layer badges (Top/Bottom) for each component
+- Specific missing field names displayed
+- Individual "Fix →" buttons for each component
+- "Cancel Export" and "Proceed Anyway" action buttons
+
+**Integration**:
+- Replaces simple `confirm()` dialog
+- Integrated into netlist export flow in `App.tsx`
+- Calls `handleFixComponent()` which:
+  1. Selects the component
+  2. Centers canvas on component
+  3. Opens Component Properties dialog
+
+### Enhanced Validation
+
+**getMissingRequiredFields() Function**:
+- Returns array of specific field names that are missing
+- Checks for empty strings, null, undefined, and whitespace-only values
+- Component-type specific validation:
+  - Resistor: `resistance`
+  - Capacitor: `capacitance`
+  - Inductor: `inductance`
+  - Battery: `voltage` AND `capacity`
+
+**Detailed Warnings Structure**:
+```typescript
+{
+  designator: string;      // e.g., "R1"
+  componentType: string;   // e.g., "Resistor"
+  missingFields: string[]; // e.g., ["resistance"]
+  componentId: string;     // Internal ID for lookup
+  layer: 'top' | 'bottom'; // Component layer
+}
+```
+
 ## Conclusion
 
-Both issues have been successfully addressed with defensive coding practices and user-friendly validation. The fixes ensure that:
+Both issues have been successfully addressed with defensive coding practices and user-friendly validation. The enhanced implementation ensures that:
 
 1. ✅ Tolerance values are always correctly encoded
-2. ✅ Users are aware of missing component values
-3. ✅ Netlist data quality is improved for downstream tools
-4. ✅ AI analysis can process netlists without encoding errors
+2. ✅ Users are aware of missing component values with detailed feedback
+3. ✅ Interactive UI guides users to fix issues quickly
+4. ✅ Field-specific validation shows exactly what's missing
+5. ✅ Netlist data quality is improved for downstream tools
+6. ✅ AI analysis can process netlists without encoding errors
 
 The implementation is backward-compatible and does not break existing functionality.
+
+## Answers to User Questions
+
+### Q: Is the missing value check implemented for every type of component?
+
+**A**: No, only for component types that have simple "value" fields:
+- **Resistor**: Checks for `resistance`
+- **Capacitor** (all types): Checks for `capacitance`
+- **Inductor**: Checks for `inductance`
+- **Battery**: Checks for `voltage` AND `capacity`
+
+Other component types (ICs, connectors, transistors, etc.) are **not** validated because:
+- They don't have simple "value" fields
+- Their key properties are part numbers, manufacturers, pin configurations
+- Validation would be complex and component-specific
+
+### Q: How does the code decide which values are not allowed to be null (or zero)?
+
+**A**: The decision is made in the `getMissingRequiredFields()` function in `hybridNetlist.ts`:
+
+1. **Component Type Switch**: Uses a `switch` statement on `comp.componentType`
+2. **Field Existence Check**: For each component type, checks if the primary value field exists
+3. **Empty Value Detection**: Considers a field missing if:
+   - It's `null` or `undefined`
+   - It's an empty string (`''`)
+   - It's a whitespace-only string (e.g., `'   '`)
+   - Note: Zero (`0`) is considered a **valid value** (e.g., 0Ω resistor)
+
+4. **Field Name Tracking**: Returns an array of field names that failed the checks
+
+The validation is **intentionally conservative**:
+- Only checks the most critical field for each component type
+- Doesn't validate optional fields like tolerance, power rating, voltage rating
+- Focuses on the field that defines the component's primary electrical characteristic
+
+### Q: Can we add more component types to validation?
+
+**A**: Yes! To add validation for more component types, update the `getMissingRequiredFields()` function:
+
+```typescript
+case 'Diode':
+  if (!compAny.voltage || String(compAny.voltage).trim() === '') {
+    missing.push('voltage');
+  }
+  break;
+
+case 'Transistor':
+  if (!compAny.partNumber || String(compAny.partNumber).trim() === '') {
+    missing.push('partNumber');
+  }
+  break;
+```
+
+The system is designed to be easily extensible.

@@ -55,29 +55,116 @@ hybridComp.tolerance = normalizedTolerance;
 The following component types should have their primary value fields filled in:
 
 1. **Resistors** (`Resistor`, `Thermistor`, `VariableResistor`):
-   - `resistance` + `resistanceUnit` (e.g., "10kΩ")
-   - `power` (e.g., "1/4W")
-   - `tolerance` (e.g., "±5%")
+   - **Required**: `resistance` + `resistanceUnit` (e.g., "10kΩ")
+   - Optional: `power` (e.g., "1/4W")
+   - Optional: `tolerance` (e.g., "±5%")
 
 2. **Capacitors** (`Capacitor`, `Electrolytic Capacitor`, `Film Capacitor`):
-   - `capacitance` + `capacitanceUnit` (e.g., "100µF")
-   - `voltage` + `voltageUnit` (e.g., "25V")
-   - `tolerance` (e.g., "±10%")
+   - **Required**: `capacitance` + `capacitanceUnit` (e.g., "100µF")
+   - Optional: `voltage` + `voltageUnit` (e.g., "25V")
+   - Optional: `tolerance` (e.g., "±10%")
 
 3. **Inductors** (`Inductor`):
-   - `inductance` + `inductanceUnit` (e.g., "10µH")
+   - **Required**: `inductance` + `inductanceUnit` (e.g., "10µH")
 
 4. **Batteries** (`Battery`):
-   - `voltage` + `voltageUnit` (e.g., "3.7V")
-   - `capacity` + `capacityUnit` (e.g., "2000mAh")
+   - **Required**: `voltage` + `voltageUnit` (e.g., "3.7V")
+   - **Required**: `capacity` + `capacityUnit` (e.g., "2000mAh")
+
+### Validation Logic
+
+The validation is implemented in `getMissingRequiredFields()` function in `hybridNetlist.ts`:
+
+```typescript
+function getMissingRequiredFields(comp: PCBComponent): string[] {
+  const missing: string[] = [];
+  
+  switch (comp.componentType) {
+    case 'Resistor':
+      if (!comp.resistance || String(comp.resistance).trim() === '') {
+        missing.push('resistance');
+      }
+      break;
+      
+    case 'Capacitor':
+    case 'Electrolytic Capacitor':
+    case 'Film Capacitor':
+      if (!comp.capacitance || String(comp.capacitance).trim() === '') {
+        missing.push('capacitance');
+      }
+      break;
+      
+    case 'Inductor':
+      if (!comp.inductance || String(comp.inductance).trim() === '') {
+        missing.push('inductance');
+      }
+      break;
+      
+    case 'Battery':
+      if (!comp.voltage || String(comp.voltage).trim() === '') {
+        missing.push('voltage');
+      }
+      if (!comp.capacity || String(comp.capacity).trim() === '') {
+        missing.push('capacity');
+      }
+      break;
+  }
+  
+  return missing;
+}
+```
+
+**Key Points**:
+- Only checks for **primary value fields** that define the component's electrical characteristics
+- Empty strings, null, or undefined values are considered missing
+- Whitespace-only values are considered missing
+- Other component types (ICs, connectors, etc.) are not validated as they don't have simple "value" fields
 
 ### Best Practices
+
+### Enhanced User Interface (v3.5.1+)
+
+**Interactive Missing Values Dialog**:
+
+When exporting a netlist with components missing required values, an enhanced dialog appears with:
+
+1. **Component List**: Each component is shown with:
+   - Designator (e.g., "R1")
+   - Component type (e.g., "Resistor")
+   - Layer (Top/Bottom)
+   - Specific missing fields (e.g., "resistance")
+
+2. **Fix Button**: Each component has a "Fix →" button that:
+   - Closes the validation dialog
+   - Highlights the component on the canvas
+   - Centers the canvas view on the component
+   - Opens the Component Properties dialog
+   - (Future) Sets focus to the missing field
+
+3. **Action Buttons**:
+   - **Cancel Export**: Closes dialog without exporting
+   - **Proceed Anyway**: Continues with export despite missing values
+
+**User Workflow**:
+```
+1. User clicks File → Export Netlist (JSON)
+2. System validates all components
+3. If missing values found:
+   a. Dialog shows list of components with issues
+   b. User clicks "Fix →" on a component
+   c. Component is highlighted and properties dialog opens
+   d. User fills in missing values
+   e. User clicks File → Export Netlist again
+4. If no missing values (or user proceeds anyway):
+   a. AI net name analysis runs
+   b. Netlist is exported
+```
 
 1. **Fill in component values as you place components**: Use the Component Properties dialog to enter values immediately after placing components.
 
 2. **Use AI datasheet extraction**: For complex components, use the AI feature to extract values from datasheets automatically.
 
-3. **Review before export**: Check the console for warnings about missing values before exporting netlists.
+3. **Review validation dialog**: When the missing values dialog appears, use the "Fix" buttons to quickly navigate to and update each component.
 
 4. **Consistent tolerance values**: Use the dropdown menus in the Component Properties dialog to ensure consistent tolerance encoding.
 
