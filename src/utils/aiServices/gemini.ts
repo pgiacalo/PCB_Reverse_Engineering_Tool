@@ -22,7 +22,6 @@ export const GEMINI_SERVICE_INFO: AIServiceInfo = {
   description: 'Google\'s multimodal AI with native PDF support',
   models: [
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Fast and efficient', supportsPDF: true },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash Lite', description: 'Lightweight and fast', supportsPDF: true },
     { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', description: 'Previous generation flash', supportsPDF: true },
     { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', description: 'More capable, slower', supportsPDF: true },
   ],
