@@ -49,6 +49,10 @@ export interface MenuBarProps {
   // Splash screen dismissal callback
   onDismissSplash?: () => void;
   
+  // External control for About dialog (e.g., from Browser Compatibility Dialog)
+  openAboutDialogFromBrowser?: boolean;
+  setOpenAboutDialogFromBrowser?: React.Dispatch<React.SetStateAction<boolean>>;
+  
   // Settings
   bomExportFormat: 'json' | 'pdf';
   setBomExportFormat: (format: 'json' | 'pdf') => void;
@@ -360,6 +364,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onOpenProjectNotes,
   onOpenTransformImages,
   onOpenTransformAll,
+  openAboutDialogFromBrowser,
+  setOpenAboutDialogFromBrowser,
 }) => {
   // Track which node selection submenu is open (power or ground)
   const [openSelectNodesSubmenu, setOpenSelectNodesSubmenu] = React.useState<'power' | 'ground' | null>(null);
@@ -376,6 +382,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   const [showAboutDialog, setShowAboutDialog] = React.useState(false);
   const [showDocumentationDialog, setShowDocumentationDialog] = React.useState(false);
   const [showFeedbackDialog, setShowFeedbackDialog] = React.useState(false);
+  
+  // Handle external request to open About dialog (e.g., from Browser Compatibility Dialog)
+  React.useEffect(() => {
+    if (openAboutDialogFromBrowser) {
+      setShowAboutDialog(true);
+      setOpenAboutDialogFromBrowser?.(false);
+    }
+  }, [openAboutDialogFromBrowser, setOpenAboutDialogFromBrowser]);
 
   // Helper function to check if project is active before allowing menu actions
   // Returns true if action should proceed, false if blocked

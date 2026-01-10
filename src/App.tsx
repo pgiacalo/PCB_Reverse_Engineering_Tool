@@ -837,6 +837,7 @@ function App() {
   const [hasDismissedComponentDialog, setHasDismissedComponentDialog] = useState(false);
   const [hasDismissedSplash, setHasDismissedSplash] = useState(false);
   const [showBrowserCompatibilityDialog, setShowBrowserCompatibilityDialog] = useState(false);
+  const [openAboutDialogFromBrowser, setOpenAboutDialogFromBrowser] = useState(false);
 
   // Check for browser compatibility on first load
   // PCB Tracer requires the File System Access API (showDirectoryPicker)
@@ -14340,6 +14341,8 @@ function App() {
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}
         onShowAiSettings={() => setShowAiSettingsDialog(true)}
+        openAboutDialogFromBrowser={openAboutDialogFromBrowser}
+        setOpenAboutDialogFromBrowser={setOpenAboutDialogFromBrowser}
         topImage={topImage}
         bottomImage={bottomImage}
         setCurrentTool={setCurrentTool}
@@ -15961,19 +15964,32 @@ function App() {
                   Browser Not Supported
                 </h2>
                 <p style={{ color: '#ccc', margin: '0 0 16px 0', fontSize: '15px', lineHeight: '1.6' }}>
-                  PCB Tracer requires a browser that supports the<br />
-                  <strong>File System Access API</strong> for saving and loading projects.
+                  PCB Tracer requires a browser that supports <strong>File System Access</strong>.<br />
+                  This is needed to save and load PCB Tracer projects.
                 </p>
                 <p style={{ color: '#ccc', margin: '0 0 20px 0', fontSize: '15px', lineHeight: '1.6' }}>
                   Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>,<br />
                   or another Chromium-based browser for the best experience.
                 </p>
-                <p style={{ color: '#aaa', margin: '0 0 24px 0', fontSize: '14px', lineHeight: '1.5' }}>
-                  You can <strong>Continue Anyway</strong> to explore PCB Tracer's features.<br />
-                  Use the <strong>Help</strong> menu to learn how PCB Tracer can assist with<br />
-                  troubleshooting and reverse engineering electronics.
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                  <button
+                    onClick={() => {
+                      setShowBrowserCompatibilityDialog(false);
+                      setOpenAboutDialogFromBrowser(true);
+                    }}
+                    style={{
+                      padding: '10px 24px',
+                      background: '#4a90e2',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Learn about PCB Tracer
+                  </button>
                   <button
                     onClick={() => setShowBrowserCompatibilityDialog(false)}
                     style={{
@@ -15987,7 +16003,7 @@ function App() {
                       fontWeight: 500,
                     }}
                   >
-                    Continue Anyway
+                    Exit
                   </button>
                 </div>
               </div>
