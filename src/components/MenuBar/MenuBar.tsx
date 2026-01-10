@@ -995,6 +995,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               >
               Export Netlist (JSON)…
               </button>
+              {/* TODO: Re-enable KiCad export once nl2sch integration is working
               <button
               onClick={async () => {
                   if (isReadOnlyMode || !isProjectActive) {
@@ -1025,6 +1026,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               >
               Export Netlist (KiCad)…
               </button>
+              */}
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Printer Settings…</button>
@@ -1627,14 +1629,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <div style={{ marginBottom: 20 }}>
                   <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>AI Features</p>
                   <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                    PCBTracer uses AI to enhance your workflow in two key areas:
+                    PCBTracer uses AI to enhance your workflow in three key areas:
                   </p>
                   <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
                     <li><strong>Datasheet Extraction</strong> — Upload PDF datasheets to automatically extract and persist component properties (pin names, types, descriptions)</li>
                     <li><strong>Intelligent Net Naming</strong> — When exporting netlists, AI analyzes your circuit connectivity and suggests descriptive names for signal nets (e.g., "N$5" → "CLOCK_SIGNAL" or "SPI_MOSI") with confidence scores. Review and approve suggestions before export.</li>
+                    <li><strong>Troubleshooting Analysis (Beta)</strong> — AI-powered circuit troubleshooting assistant available via <strong>Tools → Run Troubleshooting Analysis</strong>. Analyzes your circuit netlist, component data, symptoms, and measurements to suggest probable causes and recommended troubleshooting steps. This feature is in beta development and exposed for user testing and feedback.</li>
                   </ul>
                   <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '13px', lineHeight: '1.6' }}>
-                    Configure your AI provider (Gemini or Claude) and API key in <strong>File → AI Settings</strong>. Future enhancements will include circuit analysis using component properties, netlists, and measurement data.
+                    Configure your AI provider (Gemini or Claude) and API key in <strong>File → AI Settings</strong>. Future enhancements will include additional circuit analysis capabilities.
                   </p>
                 </div>
 
@@ -1950,6 +1953,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <li><strong>Place Component:</strong> Click the Component tool (<code>C</code>), select component type, then click on the PCB.</li>
                   <li><strong>Edit Component:</strong> Double-click a component or select a component and press <code>A</code> to open the Component Properties dialog. If multiple components are selected, opens the most recently selected one.</li>
                   <li><strong>Set Properties:</strong> Enter designator (e.g., R1, C2), value, and other component details.</li>
+                  <li><strong>AI Datasheet Extraction:</strong> In the Component Properties dialog, upload a PDF datasheet to automatically extract and populate component properties including pin names, pin types, and pin descriptions. Configure your AI provider (Gemini or Claude) and API key in File → AI Settings before using this feature.</li>
                   <li><strong>Connect Pins:</strong> Click on pads or vias to connect component pins to the circuit.</li>
                 </ul>
               </div>
@@ -1975,7 +1979,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </div>
 
               <div style={{ marginBottom: 20 }}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 9: Save Your Work</h3>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 9: AI Troubleshooting Analysis (Beta)</h3>
+                <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
+                  <li><strong>Run Analysis:</strong> Tools → Run Troubleshooting Analysis to start AI-powered circuit troubleshooting.</li>
+                  <li><strong>Configure Analysis:</strong> Select symptoms, include measurement data, and optionally include PCB netlist data for deeper analysis.</li>
+                  <li><strong>View Results:</strong> Tools → View Troubleshooting Results to see the AI's analysis, probable causes, and recommended troubleshooting steps.</li>
+                  <li><strong>Beta Status:</strong> This feature is in active development and exposed for user testing. Feedback is welcome via the Help → Send Feedback menu.</li>
+                  <li><strong>Requirements:</strong> AI provider (Gemini or Claude) and API key must be configured in File → AI Settings.</li>
+                </ul>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Step 10: Save Your Work</h3>
                 <ul style={{ margin: '0 0 12px 0', paddingLeft: '20px', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
                   <li><strong>Manual Save:</strong> File → Save Project to save your work manually.</li>
                   <li><strong>Auto-Save:</strong> If enabled, your project is automatically saved at regular intervals.</li>

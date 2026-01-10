@@ -1531,6 +1531,7 @@ function App() {
     reasoning: string;
   }>>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysisDialogVisible, setAiAnalysisDialogVisible] = useState(false);
   const [includePcbData, setIncludePcbData] = useState(false);
   // Node Properties (optional fields for hybrid netlist)
   const [nodeProperties, setNodeProperties] = useState<Map<number, NodeOptionalFields>>(new Map());
@@ -11687,9 +11688,15 @@ function App() {
       // Try to get AI suggestions for net names (before saving)
       let aiStatus = 'not_attempted'; // 'not_attempted' | 'failed' | 'no_suggestions' | 'pending_review'
       try {
+        // Show loading dialog
+        setAiAnalysisDialogVisible(true);
+        
         const { analyzeNetNames } = await import('./utils/netNameInference');
         console.log('[Export] Requesting AI net name suggestions...');
         const result = await analyzeNetNames(netlistContent, 0.5); // Lower threshold to show more suggestions
+        
+        // Hide loading dialog
+        setAiAnalysisDialogVisible(false);
         
         if (result.suggestions.length > 0) {
           console.log(`[Export] AI suggested ${result.suggestions.length} net name improvements`);
@@ -11707,6 +11714,8 @@ function App() {
       } catch (aiError) {
         console.warn('[Export] AI net name analysis failed or was skipped:', aiError);
         aiStatus = 'failed';
+        // Hide loading dialog on error
+        setAiAnalysisDialogVisible(false);
       }
       
       // Save the netlist (either no AI suggestions or AI failed)
@@ -16607,6 +16616,57 @@ function App() {
         isAnalyzing={isAnalyzing}
       />
       
+      {/* AI Analysis Loading Dialog */}
+      {aiAnalysisDialogVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: '#2a2a2a',
+            border: '1px solid #555',
+            borderRadius: '8px',
+            padding: '30px 40px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+            zIndex: 10000,
+            minWidth: '400px',
+            textAlign: 'center',
+          }}
+        >
+          <div style={{ marginBottom: '20px' }}>
+            <div
+              style={{
+                width: '50px',
+                height: '50px',
+                border: '4px solid #555',
+                borderTop: '4px solid #4CAF50',
+                borderRadius: '50%',
+                margin: '0 auto 20px',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            <style>
+              {`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}
+            </style>
+          </div>
+          <h3 style={{ color: '#f2f2f2', margin: '0 0 12px 0', fontSize: '18px', fontWeight: 600 }}>
+            Analyzing Netlist with AI
+          </h3>
+          <p style={{ color: '#ccc', margin: '0', fontSize: '14px', lineHeight: '1.6' }}>
+            AI is analyzing your circuit netlist to suggest improved net names based on connectivity patterns and component relationships.
+          </p>
+          <p style={{ color: '#999', margin: '12px 0 0 0', fontSize: '13px', fontStyle: 'italic' }}>
+            This may take a few moments...
+          </p>
+        </div>
+      )}
+
       {/* Net Name Suggestion Dialog */}
       {netNameSuggestionDialogVisible && (
         <NetNameSuggestionDialog
