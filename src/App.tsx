@@ -11796,17 +11796,6 @@ function App() {
     // Highlight the component by selecting it
     setSelectedComponentIds(new Set([componentId]));
     
-    // Center the canvas on the component
-    const canvasWidth = window.innerWidth - 2 * CONTENT_BORDER;
-    const canvasHeight = window.innerHeight - 2 * CONTENT_BORDER - 50; // Account for toolbar
-    const centerX = canvasWidth / 2;
-    const centerY = canvasHeight / 2;
-    
-    // Calculate pan to center the component
-    const targetPanX = centerX - component.x * zoom;
-    const targetPanY = centerY - component.y * zoom;
-    setPan({ x: targetPanX, y: targetPanY });
-    
     // Open the component editor
     openComponentEditor(component, layer);
     
@@ -11816,7 +11805,7 @@ function App() {
       // For now, the component editor will need to be enhanced to accept a focusField prop
       console.log(`[handleFixComponent] Should focus field: ${focusField}`);
     }
-  }, [componentsTop, componentsBottom, zoom, openComponentEditor, CONTENT_BORDER]);
+  }, [componentsTop, componentsBottom, openComponentEditor]);
   
   // Handler for proceeding with export despite missing values
   const handleProceedWithMissingValues = useCallback(async () => {
