@@ -42,7 +42,10 @@ import {
   SERVICE_INFO,
   type AIServiceProvider,
   type APIKeyStorageType,
+  type AIService,
 } from '../../utils/aiServices';
+import { geminiService } from '../../utils/aiServices/gemini';
+import { claudeService } from '../../utils/aiServices/claude';
 
 // Run migration on module load to preserve any existing Gemini API keys
 // Wrap in try-catch to prevent crashes if storage is corrupted
@@ -260,6 +263,31 @@ export const ComponentEditor: React.FC<ComponentEditorProps> = ({
       return () => clearTimeout(timer);
     }
   }, [showAiSettingsDialog]);
+  
+  // Handle provider changes - load API key and model for the selected provider
+  useEffect(() => {
+    if (showApiKeyDialog && typeof window !== 'undefined') {
+      try {
+        // Get the service registry
+        const services: Record<AIServiceProvider, AIService> = {
+          gemini: geminiService,
+          claude: claudeService,
+        };
+        
+        const service = services[selectedProvider];
+        if (service) {
+          const savedKey = service.getApiKey();
+          const savedModel = service.getModel();
+          
+          setApiKeyInput(savedKey || '');
+          setModelInput(savedModel);
+          setHasStoredApiKey(!!savedKey);
+        }
+      } catch (error) {
+        console.warn('Failed to load settings for provider:', selectedProvider, error);
+      }
+    }
+  }, [selectedProvider, showApiKeyDialog]);
 
   // Update hasStoredApiKey when provider changes
   useEffect(() => {
