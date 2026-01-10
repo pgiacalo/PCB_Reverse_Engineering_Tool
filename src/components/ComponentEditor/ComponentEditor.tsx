@@ -3442,7 +3442,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
       {/* Fixed footer with buttons */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'flex-end',
+        justifyContent: 'flex-end', 
         alignItems: 'center',
         gap: '6px',
         padding: '6px',
@@ -3487,7 +3487,7 @@ Analyze the attached PDF datasheet and extract the information according to the 
         >
           Save
         </button>
-    </div>
+      </div>
       
       {/* API Key Instructions Dialog */}
       {showApiKeyInstructions && (

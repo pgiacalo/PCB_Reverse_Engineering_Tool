@@ -54,18 +54,18 @@ export function getAIConfig(): AIServiceConfig {
   if (typeof window === 'undefined') return DEFAULT_CONFIG;
   
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        return {
-          provider: parsed.provider || DEFAULT_CONFIG.provider,
-          model: parsed.model || DEFAULT_CONFIG.model,
-          apiKeyStorageType: parsed.apiKeyStorageType || DEFAULT_CONFIG.apiKeyStorageType,
-        };
-      } catch {
-        return DEFAULT_CONFIG;
-      }
+  const stored = localStorage.getItem(STORAGE_KEYS.CONFIG);
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      return {
+        provider: parsed.provider || DEFAULT_CONFIG.provider,
+        model: parsed.model || DEFAULT_CONFIG.model,
+        apiKeyStorageType: parsed.apiKeyStorageType || DEFAULT_CONFIG.apiKeyStorageType,
+      };
+    } catch {
+      return DEFAULT_CONFIG;
+    }
     }
   } catch (error) {
     // localStorage may be blocked or corrupted - return defaults
@@ -82,9 +82,9 @@ export function saveAIConfig(config: Partial<AIServiceConfig>): void {
   if (typeof window === 'undefined') return;
   
   try {
-    const current = getAIConfig();
-    const updated = { ...current, ...config };
-    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
+  const current = getAIConfig();
+  const updated = { ...current, ...config };
+  localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
   } catch (error) {
     // localStorage may be blocked or corrupted - log warning but don't crash
     console.warn('Failed to save AI config to localStorage:', error);
@@ -162,7 +162,7 @@ export function migrateFromLegacyStorage(): void {
   if (typeof window === 'undefined') return;
   
   try {
-    // Check for old-style Gemini API key
+  // Check for old-style Gemini API key
     let oldSessionKey: string | null = null;
     let oldLocalKey: string | null = null;
     let oldModel: string | null = null;
@@ -179,8 +179,8 @@ export function migrateFromLegacyStorage(): void {
     } catch (error) {
       console.warn('Failed to read from localStorage:', error);
     }
-    
-    // Check if we already have new-style storage
+  
+  // Check if we already have new-style storage
     let hasNewConfig = false;
     let hasNewGeminiKey = false;
     
@@ -196,45 +196,45 @@ export function migrateFromLegacyStorage(): void {
     } catch (error) {
       console.warn('Failed to check for new Gemini key:', error);
     }
+  
+  // If we have old keys but no new config, migrate
+  if ((oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey) {
     
-    // If we have old keys but no new config, migrate
-    if ((oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey) {
-      
-      // Determine storage type based on where the old key was
-      const storageType: APIKeyStorageType = oldSessionKey ? 'sessionStorage' : 'localStorage';
-      const apiKey = oldSessionKey || oldLocalKey;
-      
-      // Save new config
-      saveAIConfig({
-        provider: 'gemini',
-        model: oldModel || 'gemini-2.0-flash',
-        apiKeyStorageType: storageType,
-      });
-      
-      // Save API key in new format
-      if (apiKey) {
-        geminiService.saveApiKey(apiKey, storageType);
-      }
-      
-      // Save model in new format
-      if (oldModel) {
-        geminiService.saveModel(oldModel);
-      }
-      
+    // Determine storage type based on where the old key was
+    const storageType: APIKeyStorageType = oldSessionKey ? 'sessionStorage' : 'localStorage';
+    const apiKey = oldSessionKey || oldLocalKey;
+    
+    // Save new config
+    saveAIConfig({
+      provider: 'gemini',
+      model: oldModel || 'gemini-2.0-flash',
+      apiKeyStorageType: storageType,
+    });
+    
+    // Save API key in new format
+    if (apiKey) {
+      geminiService.saveApiKey(apiKey, storageType);
+    }
+    
+    // Save model in new format
+    if (oldModel) {
+      geminiService.saveModel(oldModel);
+    }
+    
       // Clean up old keys (ignore errors)
       try {
-        sessionStorage.removeItem('geminiApiKey');
+    sessionStorage.removeItem('geminiApiKey');
       } catch (error) {
         // Ignore
       }
       try {
-        localStorage.removeItem('geminiApiKey');
-        localStorage.removeItem('geminiModel');
+    localStorage.removeItem('geminiApiKey');
+    localStorage.removeItem('geminiModel');
       } catch (error) {
         // Ignore
       }
-      
-      console.log('Migration complete.');
+    
+    console.log('Migration complete.');
     }
   } catch (error) {
     // If migration fails, log but don't crash the app

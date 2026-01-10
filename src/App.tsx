@@ -835,6 +835,45 @@ function App() {
   // so it is not auto-reopened while the Component tool remains active.
   const [hasDismissedComponentDialog, setHasDismissedComponentDialog] = useState(false);
   const [hasDismissedSplash, setHasDismissedSplash] = useState(false);
+  const [showBrowserCompatibilityDialog, setShowBrowserCompatibilityDialog] = useState(false);
+
+  // Check for browser compatibility on first load
+  // PCB Tracer requires the File System Access API (showDirectoryPicker)
+  React.useEffect(() => {
+    // Check if we're in Electron (which has its own file system handling)
+    if (isElectron()) {
+      return; // Electron handles file system differently
+    }
+    
+    // Async function to check browser compatibility
+    const checkBrowserCompatibility = async () => {
+      // Detect browser type
+      const userAgent = navigator.userAgent;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(userAgent);
+      const isFirefox = /firefox/i.test(userAgent);
+      
+      // Brave detection requires async check
+      let isBrave = false;
+      try {
+        if ((navigator as any).brave && typeof (navigator as any).brave.isBrave === 'function') {
+          isBrave = await (navigator as any).brave.isBrave();
+        }
+      } catch (e) {
+        // Brave detection failed, assume not Brave
+      }
+      
+      // Check if the browser supports showDirectoryPicker
+      const supportsFileSystemAccess = 'showDirectoryPicker' in window;
+      
+      // Safari, Firefox, and Brave don't support File System Access API
+      // Even if the API exists in window, it won't work properly in these browsers
+      if (isSafari || isFirefox || isBrave || !supportsFileSystemAccess) {
+        setShowBrowserCompatibilityDialog(true);
+      }
+    };
+    
+    checkBrowserCompatibility();
+  }, []);
 
   // Show component selection dialog when component tool is selected,
   // unless the user has manually dismissed it for the current tool session.
@@ -15714,6 +15753,90 @@ function App() {
               )}
             </div>
           </div>
+
+          {/* Browser Compatibility Dialog - shown if browser doesn't support File System Access API */}
+          {showBrowserCompatibilityDialog && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.7)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 999999,
+              }}
+            >
+              <div
+                style={{
+                  background: '#2a2a2a',
+                  border: '1px solid #555',
+                  borderRadius: '8px',
+                  padding: '30px 40px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+                  maxWidth: '500px',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ marginBottom: '20px' }}>
+                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2" style={{ margin: '0 auto' }}>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                </div>
+                <h2 style={{ color: '#f2f2f2', margin: '0 0 16px 0', fontSize: '22px', fontWeight: 600 }}>
+                  Browser Not Supported
+                </h2>
+                <p style={{ color: '#ccc', margin: '0 0 16px 0', fontSize: '15px', lineHeight: '1.6' }}>
+                  PCB Tracer requires a browser that supports the <strong>File System Access API</strong> for saving and loading projects.
+                </p>
+                <p style={{ color: '#ccc', margin: '0 0 20px 0', fontSize: '15px', lineHeight: '1.6' }}>
+                  Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>, or another Chromium-based browser for the best experience.
+                </p>
+                <div style={{ 
+                  background: '#1f1f1f', 
+                  borderRadius: '6px', 
+                  padding: '12px 16px', 
+                  marginBottom: '20px',
+                  fontSize: '13px',
+                  color: '#999',
+                  lineHeight: '1.5'
+                }}>
+                  <strong style={{ color: '#f2f2f2' }}>Detected Browser:</strong> {
+                    (() => {
+                      const ua = navigator.userAgent;
+                      if (/firefox/i.test(ua)) return 'Firefox';
+                      if (/^((?!chrome|android).)*safari/i.test(ua)) return 'Safari';
+                      if (/edg/i.test(ua)) return 'Microsoft Edge';
+                      if (/chrome/i.test(ua)) return 'Chrome-based (but unsupported)';
+                      return 'Unknown';
+                    })()
+                  }
+                  <br />
+                  <strong style={{ color: '#f2f2f2' }}>Required Feature:</strong> showDirectoryPicker API
+                </div>
+                <button
+                  onClick={() => setShowBrowserCompatibilityDialog(false)}
+                  style={{
+                    padding: '10px 24px',
+                    background: '#555',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                  }}
+                >
+                  I Understand (Continue Anyway)
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Canvas welcome note - shown when no project is loaded */}
           <WelcomeDialog 
