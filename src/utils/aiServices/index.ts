@@ -54,24 +54,19 @@ export function getAIConfig(): AIServiceConfig {
   if (typeof window === 'undefined') return DEFAULT_CONFIG;
   
   try {
-    console.log('[AIServices] getAIConfig: Reading key:', STORAGE_KEYS.CONFIG);
     const stored = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    console.log('[AIServices] getAIConfig: Raw value:', stored);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        console.log('[AIServices] getAIConfig: Parsed config:', parsed);
         return {
           provider: parsed.provider || DEFAULT_CONFIG.provider,
           model: parsed.model || DEFAULT_CONFIG.model,
           apiKeyStorageType: parsed.apiKeyStorageType || DEFAULT_CONFIG.apiKeyStorageType,
         };
       } catch {
-        console.log('[AIServices] getAIConfig: Parse failed, returning default');
         return DEFAULT_CONFIG;
       }
     }
-    console.log('[AIServices] getAIConfig: No config found, returning default');
   } catch (error) {
     // localStorage may be blocked or corrupted - return defaults
     console.warn('Failed to read AI config from localStorage:', error);
@@ -87,17 +82,9 @@ export function saveAIConfig(config: Partial<AIServiceConfig>): void {
   if (typeof window === 'undefined') return;
   
   try {
-    console.log('[AIServices] saveAIConfig: Saving to key:', STORAGE_KEYS.CONFIG);
     const current = getAIConfig();
-    console.log('[AIServices] saveAIConfig: Current config:', current);
     const updated = { ...current, ...config };
-    console.log('[AIServices] saveAIConfig: Updated config:', updated);
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
-    console.log('[AIServices] saveAIConfig: Saved successfully');
-    
-    // Verify it was saved
-    const verification = localStorage.getItem(STORAGE_KEYS.CONFIG);
-    console.log('[AIServices] saveAIConfig verification:', verification);
   } catch (error) {
     // localStorage may be blocked or corrupted - log warning but don't crash
     console.warn('Failed to save AI config to localStorage:', error);
@@ -174,8 +161,6 @@ export function getAllServiceInfo(): AIServiceInfo[] {
 export function migrateFromLegacyStorage(): void {
   if (typeof window === 'undefined') return;
   
-  console.log('[Migration] migrateFromLegacyStorage called');
-  
   try {
     // Check for old-style Gemini API key
     let oldSessionKey: string | null = null;
@@ -201,7 +186,6 @@ export function migrateFromLegacyStorage(): void {
     
     try {
       hasNewConfig = !!localStorage.getItem(STORAGE_KEYS.CONFIG);
-      console.log('[Migration] hasNewConfig:', hasNewConfig);
     } catch (error) {
       console.warn('Failed to check for new config:', error);
     }
@@ -209,17 +193,12 @@ export function migrateFromLegacyStorage(): void {
     try {
       hasNewGeminiKey = !!(sessionStorage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}gemini`) || 
                            localStorage.getItem(`${STORAGE_KEYS.API_KEY_PREFIX}gemini`));
-      console.log('[Migration] hasNewGeminiKey:', hasNewGeminiKey);
     } catch (error) {
       console.warn('Failed to check for new Gemini key:', error);
     }
     
-    console.log('[Migration] oldSessionKey:', !!oldSessionKey, 'oldLocalKey:', !!oldLocalKey);
-    console.log('[Migration] Will migrate?', (oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey);
-    
     // If we have old keys but no new config, migrate
     if ((oldSessionKey || oldLocalKey) && !hasNewConfig && !hasNewGeminiKey) {
-      console.log('Migrating legacy Gemini API key storage to new format...');
       
       // Determine storage type based on where the old key was
       const storageType: APIKeyStorageType = oldSessionKey ? 'sessionStorage' : 'localStorage';

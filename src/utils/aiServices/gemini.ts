@@ -39,20 +39,14 @@ class GeminiService implements AIService {
     if (typeof window === 'undefined') return 'localStorage';
     try {
       const config = localStorage.getItem(STORAGE_KEYS.CONFIG);
-      console.log('[Gemini] getStorageType: raw config from localStorage:', config);
       if (config) {
         try {
           const parsed = JSON.parse(config);
-          console.log('[Gemini] getStorageType: parsed config:', parsed);
-          const storageType = parsed.apiKeyStorageType || 'localStorage';
-          console.log('[Gemini] getStorageType: returning:', storageType);
-          return storageType;
+          return parsed.apiKeyStorageType || 'localStorage';
         } catch {
-          console.log('[Gemini] getStorageType: parse failed, returning localStorage');
           return 'localStorage';
         }
       }
-      console.log('[Gemini] getStorageType: no config found, returning localStorage');
     } catch (error) {
       console.warn('Failed to read storage type from localStorage:', error);
     }
@@ -67,13 +61,9 @@ class GeminiService implements AIService {
   getApiKey(): string | null {
     if (typeof window === 'undefined') return null;
     try {
-      const storageType = this.getStorageType();
       const storage = this.getStorage();
       const keyName = `${STORAGE_KEYS.API_KEY_PREFIX}${SERVICE_ID}`;
       const key = storage.getItem(keyName);
-      
-      console.log(`[Gemini] getApiKey: storageType=${storageType}, keyName=${keyName}, found=${!!key}`);
-      
       return key?.trim() || null;
     } catch (error) {
       console.warn('Failed to read API key from storage:', error);
@@ -102,12 +92,6 @@ class GeminiService implements AIService {
       // Save to the selected storage
       const storage = storageType === 'localStorage' ? localStorage : sessionStorage;
       storage.setItem(keyName, key.trim());
-      
-      console.log(`[Gemini] saveApiKey: storageType=${storageType}, keyName=${keyName}, saved=${key.trim().substring(0, 10)}...`);
-      
-      // Verify it was saved
-      const verification = storage.getItem(keyName);
-      console.log(`[Gemini] saveApiKey verification: found=${!!verification}`);
     } catch (error) {
       console.warn('Failed to save API key to storage:', error);
     }
