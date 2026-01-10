@@ -55,6 +55,7 @@ export interface MenuBarProps {
   
   // Netlist export
   onExportNetlist: () => Promise<void>;
+  onExportKiCadNetlist: () => Promise<void>;
   
   // Dialogs
   setNewProjectDialog: (dialog: { visible: boolean }) => void;
@@ -240,6 +241,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   bomExportFormat: _bomExportFormat,
   setBomExportFormat: _setBomExportFormat,
   onExportNetlist,
+  onExportKiCadNetlist,
   setNewProjectDialog,
   setAutoSaveDialog,
   onShowAiSettings,
@@ -992,6 +994,36 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 }}
               >
               Export Netlist (JSON)…
+              </button>
+              <button
+              onClick={async () => {
+                  if (isReadOnlyMode || !isProjectActive) {
+                    if (!isProjectActive) {
+                      alert('Please create a new project (File → New Project) or open an existing project (File → Open Project) before using this feature.');
+                      setOpenMenu(null);
+                    }
+                    return;
+                  }
+                setOpenMenu(null);
+                try {
+                  await onExportKiCadNetlist();
+                } catch (e) {
+                  console.error('Error exporting KiCad netlist:', e);
+                }
+                }}
+                disabled={isReadOnlyMode || !isProjectActive}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '6px 10px',
+                  color: (isReadOnlyMode || !isProjectActive) ? '#777' : '#f2f2f2',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: (isReadOnlyMode || !isProjectActive) ? 'not-allowed' : 'pointer',
+                }}
+              >
+              Export Netlist (KiCad)…
               </button>
             <div style={{ height: 1, background: '#eee', margin: '6px 0' }} />
             <button onClick={() => { requireProject(() => { onPrint(); setOpenMenu(null); }); }} disabled={!isProjectActive} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', color: !isProjectActive ? '#777' : '#f2f2f2', background: 'transparent', border: 'none', cursor: !isProjectActive ? 'not-allowed' : 'pointer' }}>Print…</button>

@@ -11782,6 +11782,95 @@ function App() {
     }
   }, [projectDirHandle, projectName]);
 
+  // Export KiCad netlist function
+  const handleExportKiCadNetlist = useCallback(async () => {
+    if (!projectDirHandle) {
+      alert('Please create or open a project before exporting netlist.');
+      return;
+    }
+
+    try {
+      // Collect all components from both layers
+      const allComponents = [...componentsTop, ...componentsBottom];
+      
+      // Generate Hybrid Net-Centric netlist with explicit nodes
+      const hybridNetlistJson = generateHybridNetlist(
+          allComponents,
+          drawingStrokes,
+          powers,
+          grounds,
+          powerBuses,
+          groundBuses,
+          projectName,
+          nodeProperties
+        );
+      
+      // Parse the JSON to get the hybrid netlist object
+      const hybridNetlist = JSON.parse(hybridNetlistJson);
+      
+      // Import KiCad export module
+      const { generateKiCadNetlist, validateNetlistForKiCad } = await import('./utils/kicadExport');
+      
+      // Validate netlist
+      const warnings = validateNetlistForKiCad(hybridNetlist);
+      if (warnings.length > 0) {
+        const proceed = confirm(
+          `Netlist validation found ${warnings.length} warning(s):\n\n` +
+          warnings.join('\n') +
+          '\n\nDo you want to continue with the export?'
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+      
+      // Generate KiCad netlist (Protel format by default)
+      const kicadNetlistContent = generateKiCadNetlist(hybridNetlist, 'protel');
+      
+      const filename = `${projectName}.net`;
+      
+      // Create blob with text MIME type
+      const blob = new Blob([kicadNetlistContent], { type: 'text/plain' });
+      
+      // Try to save using File System Access API in netlists subdirectory
+      try {
+        // Create or get the netlists subdirectory
+        const netlistsDirHandle = await projectDirHandle.getDirectoryHandle('netlists', { create: true });
+        
+        // Save file in netlists subdirectory
+        const fileHandle = await netlistsDirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        
+        let successMessage = `KiCad netlist exported successfully to netlists/${filename}!\n\n`;
+        successMessage += `Format: KiCad Protel (.net)\n`;
+        successMessage += `Components: ${hybridNetlist.components.length}\n`;
+        successMessage += `Nets: ${hybridNetlist.nets.length}\n\n`;
+        successMessage += `You can now import this netlist into KiCad or use it with tools like nl2sch.`;
+        
+        alert(successMessage);
+      } catch (fsError) {
+        // Fallback to download if File System Access API fails
+        console.warn('File System Access API failed, using download fallback:', fsError);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert(`KiCad netlist downloaded as ${filename}!`);
+      }
+      
+    } catch (e) {
+      console.error('Failed to export KiCad netlist:', e);
+      alert(`Failed to export KiCad netlist: ${e instanceof Error ? e.message : String(e)}. See console for details.`);
+    }
+  }, [projectDirHandle, componentsTop, componentsBottom, drawingStrokes, powers, grounds, powerBuses, groundBuses, projectName, nodeProperties]);
+
   // Manage auto save interval (must be after performAutoSave is defined)
   // Note: We don't include performAutoSave in dependencies to avoid resetting interval on every state change
   // Autosave is only active when the most recent file is the current file (currentFileIndex === 0)
@@ -14029,6 +14118,7 @@ function App() {
         bomExportFormat={bomExportFormat}
         setBomExportFormat={setBomExportFormat}
         onExportNetlist={handleExportNetlist}
+        onExportKiCadNetlist={handleExportKiCadNetlist}
         hasUnsavedChanges={hasUnsavedChanges}
         setNewProjectDialog={setNewProjectDialog}
         setAutoSaveDialog={setAutoSaveDialog}
