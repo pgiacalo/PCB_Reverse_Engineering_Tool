@@ -53,23 +53,28 @@ export async function analyzeNetNames(
     
     // Get the current AI service and call analyzeText
     const aiService = getCurrentService();
-    const response = await aiService.analyzeText({
+    const aiResponse = await aiService.analyzeText({
       prompt,
       systemPrompt: 'You are an expert electronics engineer. Return ONLY valid JSON with no additional text or markdown formatting.',
       temperature: 0.3, // Lower temperature for more consistent, focused analysis
       maxTokens: 4000
     });
     
+    // Check if AI call was successful
+    if (!aiResponse.success || !aiResponse.text) {
+      throw new Error(aiResponse.error || 'AI service returned no response');
+    }
+    
     console.log('[NetNameInference] AI response received');
     
-    // Parse the AI response
+    // Parse the AI response text
     let result: NetNameInferenceResult;
     try {
       // Try to parse as JSON directly
-      result = JSON.parse(response);
+      result = JSON.parse(aiResponse.text);
     } catch (parseError) {
       // If direct parse fails, try to extract JSON from markdown code blocks
-      const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+      const jsonMatch = aiResponse.text.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
       if (jsonMatch) {
         result = JSON.parse(jsonMatch[1]);
       } else {
