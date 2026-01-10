@@ -39,14 +39,20 @@ class GeminiService implements AIService {
     if (typeof window === 'undefined') return 'localStorage';
     try {
       const config = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      console.log('[Gemini] getStorageType: raw config from localStorage:', config);
       if (config) {
         try {
           const parsed = JSON.parse(config);
-          return parsed.apiKeyStorageType || 'localStorage';
+          console.log('[Gemini] getStorageType: parsed config:', parsed);
+          const storageType = parsed.apiKeyStorageType || 'localStorage';
+          console.log('[Gemini] getStorageType: returning:', storageType);
+          return storageType;
         } catch {
+          console.log('[Gemini] getStorageType: parse failed, returning localStorage');
           return 'localStorage';
         }
       }
+      console.log('[Gemini] getStorageType: no config found, returning localStorage');
     } catch (error) {
       console.warn('Failed to read storage type from localStorage:', error);
     }

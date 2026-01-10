@@ -85,6 +85,11 @@ export function saveAIConfig(config: Partial<AIServiceConfig>): void {
     const current = getAIConfig();
     const updated = { ...current, ...config };
     localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(updated));
+    console.log('[AIServices] saveAIConfig:', updated);
+    
+    // Verify it was saved
+    const verification = localStorage.getItem(STORAGE_KEYS.CONFIG);
+    console.log('[AIServices] saveAIConfig verification:', verification);
   } catch (error) {
     // localStorage may be blocked or corrupted - log warning but don't crash
     console.warn('Failed to save AI config to localStorage:', error);
