@@ -11724,6 +11724,20 @@ function App() {
           nodeProperties
         );
       
+      // Check for warnings from netlist generation
+      const warnings = (generateHybridNetlist as any).lastWarnings;
+      if (warnings?.missingValues?.length > 0) {
+        const proceed = confirm(
+          `Warning: ${warnings.missingValues.length} component(s) are missing values:\n\n` +
+          warnings.missingValues.join(', ') +
+          '\n\nThese components will not have value information in the exported netlist.\n\n' +
+          'Do you want to continue with the export?'
+        );
+        if (!proceed) {
+          return;
+        }
+      }
+      
       // Try to get AI suggestions for net names (before saving)
       let aiStatus: 'not_attempted' | 'failed' | 'no_suggestions' | 'user_cancelled' | 'applied' = 'not_attempted';
       try {

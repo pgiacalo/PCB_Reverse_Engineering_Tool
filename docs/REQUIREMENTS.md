@@ -599,6 +599,26 @@ Based on standard PCB designator prefixes (from "PCB Reverse Engineering Tips" d
 - Exclude components with empty designators (with warning)
 - Export to CSV or JSON format
 
+### Netlist Data Quality
+
+**REQ-COMP-013**: Component Value Requirements:
+- **Resistors** (R prefix): Must have resistance value and unit (e.g., "10kΩ")
+- **Capacitors** (C prefix): Must have capacitance value and unit (e.g., "100µF")
+- **Inductors** (L prefix): Must have inductance value and unit (e.g., "10µH")
+- **Batteries** (B, BT prefix): Must have voltage and capacity values
+- The tool shall warn users when exporting netlists with components missing required values
+
+**REQ-COMP-014**: Tolerance Encoding:
+- All tolerance values shall use proper UTF-8 encoding for the ± (plus-minus) symbol
+- The tool shall normalize tolerance strings to prevent double-encoding issues
+- Standard tolerance values: ±0.5%, ±1%, ±2%, ±5%, ±10%, ±20%
+
+**REQ-COMP-015**: Netlist Validation:
+- Before exporting, the tool shall validate that all passive components have values
+- A confirmation dialog shall appear listing components with missing values
+- Users may proceed with export after acknowledging missing values
+- Console warnings shall be logged for all validation issues
+
 ## Core Functional Requirements
 
 ### 1. Image Management

@@ -549,6 +549,7 @@ export function generateHybridNetlist(
   
   // Build hybrid components with node_id references
   const hybridComponents: HybridComponent[] = [];
+  const missingValueComponents: string[] = [];
   
   for (const comp of components) {
     const designator = comp.designator?.trim() || (comp as any).abbreviation?.trim();
@@ -635,12 +636,25 @@ export function generateHybridNetlist(
     const value = getComponentValueString(comp);
     if (value) {
       hybridComp.value = value;
+    } else {
+      // Track components that should have values but don't
+      if (comp.componentType === 'Resistor' || 
+          comp.componentType === 'Capacitor' ||
+          comp.componentType === 'Electrolytic Capacitor' ||
+          comp.componentType === 'Film Capacitor' ||
+          comp.componentType === 'Inductor' ||
+          comp.componentType === 'Battery') {
+        missingValueComponents.push(designator);
+      }
     }
     
     // Add tolerance if available (for resistors/capacitors)
+    // Ensure proper UTF-8 encoding by normalizing the tolerance string
     const tolerance = (comp as any).tolerance?.trim();
     if (tolerance) {
-      hybridComp.tolerance = tolerance;
+      // Fix any double-encoded UTF-8 issues (Â± → ±)
+      const normalizedTolerance = tolerance.replace(/Â±/g, '±');
+      hybridComp.tolerance = normalizedTolerance;
     }
     
     // Add description if available
@@ -688,6 +702,13 @@ export function generateHybridNetlist(
     }
   }
   
+  // Log warning if components are missing values
+  if (missingValueComponents.length > 0) {
+    console.warn(
+      `[HybridNetlist] Warning: ${missingValueComponents.length} component(s) missing values: ${missingValueComponents.join(', ')}`
+    );
+  }
+  
   // Build final hybrid netlist structure
   const hybridNetlist: HybridNetlist = {
     design_info: {
@@ -700,6 +721,17 @@ export function generateHybridNetlist(
     test_points: validTestPoints
   };
   
-  // Return formatted JSON
-  return JSON.stringify(hybridNetlist, null, 2);
+  // Return formatted JSON with metadata about missing values
+  const result = JSON.stringify(hybridNetlist, null, 2);
+  
+  // Store warning in a way that can be retrieved by the caller
+  if (missingValueComponents.length > 0) {
+    (generateHybridNetlist as any).lastWarnings = {
+      missingValues: missingValueComponents
+    };
+  } else {
+    (generateHybridNetlist as any).lastWarnings = null;
+  }
+  
+  return result;
 }
