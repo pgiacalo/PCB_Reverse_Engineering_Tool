@@ -1586,9 +1586,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <h3 style={{ margin: '0 0 10px 0', color: '#f2f2f2', fontSize: '16px', fontWeight: 600 }}>Features</h3>
                 
                 <div style={{ marginBottom: 20 }}>
-                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Nodelist</p>
+                  <p style={{ margin: '0 0 8px 0', color: '#f2f2f2', fontSize: '14px', fontWeight: 600 }}>Netlist</p>
                   <p style={{ margin: '0 0 12px 0', color: '#f2f2f2', fontSize: '14px', lineHeight: '1.6' }}>
-                    PCB Tracer connects and maintains detailed information about components, traces, vias, and other circuit elements, including node-to-node persistence of all connections across the project. Future releases will utilize this nodelist to export to 3rd party PCB schematic formats.
+                    PCB Tracer connects and maintains detailed information about components, traces, vias, and other circuit elements, including node-to-node persistence of all connections across the project. The netlist can be exported in JSON format (File → Export Netlist) with optional AI-powered intelligent net naming. Future releases will support additional schematic formats.
                   </p>
                 </div>
 
