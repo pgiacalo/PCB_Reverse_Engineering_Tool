@@ -19,10 +19,10 @@ export interface NetNameInferenceResult {
 /**
  * Extract the AI prompt for net name inference
  */
-function getNetNameInferencePrompt(): string {
+async function getNetNameInferencePrompt(): Promise<string> {
   try {
-    const prompts = require('../data/aiPrompts.json');
-    return prompts.prompts.net_name_inference || '';
+    const prompts = await import('../data/aiPrompts.json');
+    return prompts.default?.prompts?.net_name_inference || prompts.prompts?.net_name_inference || '';
   } catch (error) {
     console.error('[NetNameInference] Failed to load AI prompt:', error);
     return '';
@@ -43,7 +43,7 @@ export async function analyzeNetNames(
     console.log('[NetNameInference] Starting AI analysis for net names...');
     
     // Get the prompt template
-    const promptTemplate = getNetNameInferencePrompt();
+    const promptTemplate = await getNetNameInferencePrompt();
     if (!promptTemplate) {
       throw new Error('Net name inference prompt not found');
     }
