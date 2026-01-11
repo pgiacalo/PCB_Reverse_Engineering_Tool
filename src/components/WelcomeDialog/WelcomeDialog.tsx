@@ -132,10 +132,10 @@ export const WelcomeDialog: React.FC<WelcomeDialogProps> = ({
         cursor: 'pointer',
     }}>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '12px' }}>
-        PCB Tracer: Virtual Circuit X-Ray
+        PCB Tracer
       </div>
       <div style={{ fontSize: '16px', fontWeight: 600, color: '#000', marginBottom: '16px', lineHeight: '1.5' }}>
-        Trace Connections, Find Faults, Decode Designs
+        Reverse Engineer, Trace Connections, Find Faults
       </div>
       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', lineHeight: '1.5', textAlign: 'left' }}>
         1. PCB Tracer is a free, browser-based application.
