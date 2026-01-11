@@ -15996,7 +15996,7 @@ function App() {
                     }}
                     style={{
                       padding: '10px 24px',
-                      background: '#ff0000',
+                      background: '#4a90e2',
                       color: '#fff',
                       border: 'none',
                       borderRadius: '4px',
