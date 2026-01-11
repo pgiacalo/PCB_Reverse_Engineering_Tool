@@ -15971,7 +15971,7 @@ function App() {
                   Please use <strong style={{ color: '#4CAF50' }}>Google Chrome</strong>, <strong style={{ color: '#4CAF50' }}>Microsoft Edge</strong>,<br />
                   or another Chromium-based browser for the best experience.
                 </p>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   <button
                     onClick={() => {
                       setShowBrowserCompatibilityDialog(false);
@@ -15989,6 +15989,23 @@ function App() {
                     }}
                   >
                     Learn about PCB Tracer
+                  </button>
+                  <button
+                    onClick={() => {
+                      window.open('https://www.youtube.com/watch?v=fBzjK3RsrAw&list=PL9pyFBJOY-8z-iKa6T6HZMkzY2j7JyZj3&index=4&t=2s', '_blank', 'noopener,noreferrer');
+                    }}
+                    style={{
+                      padding: '10px 24px',
+                      background: '#ff0000',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Watch Features Video
                   </button>
                   <button
                     onClick={() => setShowBrowserCompatibilityDialog(false)}
